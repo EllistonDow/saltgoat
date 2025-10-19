@@ -54,44 +54,72 @@
 
 ## 🚀 快速开始
 
+### 方式一：系统安装（推荐）
+
+```bash
+# 克隆项目
+git clone https://github.com/EllistonDow/saltgoat.git
+cd saltgoat
+
+# 安装到系统路径（无需 ./ 和 sudo）
+./install-saltgoat.sh
+
+# 重新加载环境
+source ~/.bashrc
+
+# 现在可以直接使用
+saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!' --webmin-password 'Webmin123!' --phpmyadmin-password 'phpMyAdmin123!'
+```
+
+### 方式二：直接使用
+
+```bash
+# 克隆项目
+git clone https://github.com/EllistonDow/saltgoat.git
+cd saltgoat
+
+# 直接运行（需要 ./ 和 sudo）
+sudo ./saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!' --webmin-password 'Webmin123!' --phpmyadmin-password 'phpMyAdmin123!'
+```
+
 ### 1. 基础安装（Salt 原生方式）
 ```bash
 # 设置密码并安装所有组件（推荐）
-sudo ./saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!' --webmin-password 'Webmin123!' --phpmyadmin-password 'phpMyAdmin123!'
+saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!' --webmin-password 'Webmin123!' --phpmyadmin-password 'phpMyAdmin123!'
 
 # 或者分步安装
-sudo ./saltgoat install core --mysql-password 'MyPass123!'
-sudo ./saltgoat install optional --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!'
+saltgoat install core --mysql-password 'MyPass123!'
+saltgoat install optional --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!'
 ```
 
 ### 2. Magento 优化（智能检测）
 ```bash
 # 使用 Salt 原生方式优化
-sudo ./saltgoat optimize magento
+saltgoat optimize magento
 ```
 
 ### 3. 服务状态检查
 ```bash
 # 检查所有服务状态
-sudo ./saltgoat status
+saltgoat status
 
 # 查看组件版本信息
-sudo ./saltgoat versions
+saltgoat versions
 
 # 查看配置的密码
-sudo ./saltgoat passwords
+saltgoat passwords
 ```
 
 ### 4. 多站点管理
 ```bash
 # 创建新站点数据库
-sudo ./manage-mysql.sh create mysite mypassword
+manage-mysql create mysite mypassword
 
 # 创建新站点 Nginx 配置
-sudo ./manage-nginx.sh create mysite example.com
+manage-nginx create mysite example.com
 
 # 创建新站点 RabbitMQ 用户
-sudo ./manage-rabbitmq.sh create mysite mypassword
+manage-rabbitmq create mysite mypassword
 ```
 
 ## 多站点管理
@@ -101,46 +129,69 @@ SaltGoat 支持多站点环境，提供专门的管理脚本：
 ### 数据库管理
 ```bash
 # 创建站点数据库和用户
-sudo ./manage-mysql.sh create mysite mypassword
+manage-mysql create mysite mypassword
 
 # 列出所有站点
-sudo ./manage-mysql.sh list
+manage-mysql list
 
 # 备份站点数据库
-sudo ./manage-mysql.sh backup mysite
+manage-mysql backup mysite
 
 # 删除站点
-sudo ./manage-mysql.sh delete mysite
+manage-mysql delete mysite
 ```
 
 ### RabbitMQ 管理
 ```bash
 # 创建站点用户和虚拟主机
-sudo ./manage-rabbitmq.sh create mysite mypassword
+manage-rabbitmq create mysite mypassword
 
 # 列出所有站点
-sudo ./manage-rabbitmq.sh list
+manage-rabbitmq list
 
 # 设置用户权限
-sudo ./manage-rabbitmq.sh set-permissions mysite mysite
+manage-rabbitmq set-permissions mysite mysite
 
 # 删除站点
-sudo ./manage-rabbitmq.sh delete mysite
+manage-rabbitmq delete mysite
 ```
 
 ### Nginx 管理
 ```bash
 # 创建站点配置
-sudo ./manage-nginx.sh create mysite example.com
+manage-nginx create mysite example.com
 
 # 列出所有站点
-sudo ./manage-nginx.sh list
+manage-nginx list
 
 # 添加 SSL 证书
-sudo ./manage-nginx.sh add-ssl mysite example.com
+manage-nginx add-ssl mysite example.com
 
 # 删除站点
-sudo ./manage-nginx.sh delete mysite
+manage-nginx delete mysite
+```
+
+## 卸载方式
+
+### 系统卸载（推荐）
+```bash
+# 卸载系统安装的 SaltGoat
+./uninstall-saltgoat.sh
+```
+
+### 手动卸载
+```bash
+# 移除符号链接
+sudo rm -f /usr/local/bin/saltgoat
+sudo rm -f /usr/local/bin/manage-mysql
+sudo rm -f /usr/local/bin/manage-nginx
+sudo rm -f /usr/local/bin/manage-rabbitmq
+
+# 移除 sudo 配置
+sudo rm -f /etc/sudoers.d/saltgoat
+
+# 移除用户别名（编辑 ~/.bashrc）
+# 删除 SaltGoat 相关别名行
 ```
 
 ## 目录结构
@@ -149,6 +200,8 @@ sudo ./manage-nginx.sh delete mysite
 saltgoat/
 ├── README.md              # 项目说明
 ├── saltgoat               # SaltGoat 主安装脚本
+├── install-saltgoat.sh    # 系统安装脚本（推荐）
+├── uninstall-saltgoat.sh  # 系统卸载脚本
 ├── manage-mysql.sh        # MySQL 多站点管理
 ├── manage-rabbitmq.sh     # RabbitMQ 多站点管理
 ├── manage-nginx.sh        # Nginx 多站点管理
@@ -173,7 +226,7 @@ SaltGoat 完全支持 Magento 2.4.8 的官方推荐配置优化，基于 Salt St
 
 ```bash
 # 使用 Salt 原生方式优化（推荐）
-sudo ./saltgoat optimize magento
+saltgoat optimize magento
 ```
 
 **特点：**
