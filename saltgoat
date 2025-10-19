@@ -539,41 +539,15 @@ set_site_permissions() {
     log_info "路径所有者: $path_owner"
     
     # 基础权限设置 - 使用 sudo 确保有足够权限
-    salt-call --local cmd.run "sudo chown -R $path_owner:$path_owner $site_path"
-    salt-call --local cmd.run "sudo chmod -R 755 $site_path"
+    # 注意：对于 Magento 类型，基础权限设置由 Salt 状态处理
     
     # 根据站点类型设置特殊权限
     case "$site_type" in
         "magento")
-            log_info "设置 Magento 2 权限..."
+            log_info "使用 Salt 原生方法设置 Magento 2 权限..."
             
-            # Magento 2 需要写入权限的目录
-            local writable_dirs=(
-                "var"
-                "pub/media"
-                "pub/static"
-                "generated"
-                "app/etc"
-            )
-            
-            for dir in "${writable_dirs[@]}"; do
-                local full_path="$site_path/$dir"
-                if [[ -d "$full_path" ]]; then
-                    salt-call --local cmd.run "sudo chmod -R 775 $full_path"
-                    salt-call --local cmd.run "sudo chown -R $path_owner:www-data $full_path"
-                    log_info "已设置 $dir 目录权限"
-                fi
-            done
-            
-            # 设置文件权限
-            salt-call --local cmd.run "sudo find $site_path -type f -exec chmod 644 {} \;"
-            salt-call --local cmd.run "sudo find $site_path -type d -exec chmod 755 {} \;"
-            
-            # 特殊文件权限
-            if [[ -f "$site_path/app/etc/env.php" ]]; then
-                salt-call --local cmd.run "sudo chmod 660 $site_path/app/etc/env.php"
-                salt-call --local cmd.run "sudo chown $path_owner:www-data $site_path/app/etc/env.php"
-            fi
+            # 使用 Salt 状态文件进行高效权限设置
+            salt-call --local state.apply optional.magento-permissions-smart pillar='{"site_path": "'"$site_path"'"}'
             
             log_success "Magento 2 权限设置完成"
             ;;
@@ -811,43 +785,117 @@ rabbitmq_delete_user() {
 
 # Schedule 管理函数
 schedule_enable() {
-    salt-call --local state.apply schedules.saltgoat
+    log_info "启用 SaltGoat 定时任务..."
+    
+    # 创建系统级定时任务
+    echo "# SaltGoat 定时任务配置" | sudo tee /etc/cron.d/saltgoat-tasks > /dev/null
+    echo "# 内存监控 - 每5分钟" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    echo "*/5 * * * * root /usr/local/bin/saltgoat-memory-monitor" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    echo "" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    
+    echo "# 系统更新检查 - 每周日凌晨3点" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    echo "0 3 * * 0 root /usr/local/bin/saltgoat-system-update" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    echo "" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    
+    echo "# 日志清理 - 每周日凌晨1点" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    echo "0 1 * * 0 root find /var/log -name \"*.log\" -mtime +7 -delete" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    echo "" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    
+    echo "# 服务健康检查 - 每10分钟" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    echo "*/10 * * * * root /usr/local/bin/saltgoat-service-check" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    
     log_success "SaltGoat 定时任务已启用"
+    log_info "已创建 /etc/cron.d/saltgoat-tasks"
 }
 
 schedule_disable() {
-    salt-call --local schedule.delete memory_monitor
-    salt-call --local schedule.delete system_update
-    salt-call --local schedule.delete log_cleanup
-    salt-call --local schedule.delete database_backup
-    salt-call --local schedule.delete service_health_check
-    salt-call --local schedule.delete disk_space_check
-    salt-call --local schedule.delete security_updates
+    log_info "禁用 SaltGoat 定时任务..."
+    
+    # 删除系统级定时任务文件
+    if [[ -f /etc/cron.d/saltgoat-tasks ]]; then
+        sudo rm /etc/cron.d/saltgoat-tasks
+        log_success "已删除 /etc/cron.d/saltgoat-tasks"
+    else
+        log_info "SaltGoat 定时任务文件不存在"
+    fi
+    
     log_success "SaltGoat 定时任务已禁用"
 }
 
 schedule_status() {
-    local tasks=("memory_monitor" "system_update" "log_cleanup" "database_backup" "service_health_check" "disk_space_check" "security_updates")
+    log_info "查看定时任务状态..."
     
-    for task in "${tasks[@]}"; do
-        echo "任务: $task"
-        local result=$(salt-call --local schedule.list 2>/dev/null | grep -A 5 "$task" || echo "  未配置")
-        echo "$result"
-        echo
-    done
+    if [[ -f /etc/cron.d/saltgoat-tasks ]]; then
+        echo "SaltGoat 定时任务状态: 已启用"
+        echo "配置文件: /etc/cron.d/saltgoat-tasks"
+        echo ""
+        echo "任务列表:"
+        grep -v "^#" /etc/cron.d/saltgoat-tasks | grep -v "^$" | while read line; do
+            if [[ -n "$line" ]]; then
+                echo "  $line"
+            fi
+        done
+    else
+        echo "SaltGoat 定时任务状态: 未启用"
+        echo "运行 'saltgoat schedule enable' 来启用定时任务"
+    fi
 }
 
 schedule_list() {
+    log_info "系统定时任务 (crontab):"
+    echo "=========================================="
+    
+    # 显示 root 用户的 cron 任务
+    if sudo crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"; then
+        echo "Root 用户定时任务:"
+        sudo crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"
+    else
+        echo "Root 用户无定时任务"
+    fi
+    
+    echo ""
+    echo "当前用户定时任务:"
+    if crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"; then
+        crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"
+    else
+        echo "当前用户无定时任务"
+    fi
+    
+    echo ""
+    echo "系统级定时任务 (/etc/cron.d/):"
+    if [[ -d /etc/cron.d ]]; then
+        for file in /etc/cron.d/*; do
+            if [[ -f "$file" ]]; then
+                echo "文件: $(basename "$file")"
+                grep -v "^#" "$file" | grep -v "^$" | sed 's/^/  /'
+                echo ""
+            fi
+        done
+    fi
+    
+    echo ""
+    log_info "Salt Schedule 状态:"
     salt-call --local schedule.list
 }
 
 schedule_test() {
     log_info "测试内存监控..."
-    /usr/local/bin/saltgoat-memory-monitor
+    sudo /usr/local/bin/saltgoat-memory-monitor
     echo
     
     log_info "测试服务状态..."
-    salt-call --local service.status nginx mysql php8.3-fpm valkey opensearch rabbitmq
+    echo "Nginx 状态:"
+    salt-call --local service.status nginx
+    echo "MySQL 状态:"
+    salt-call --local service.status mysql
+    echo "PHP-FPM 状态:"
+    salt-call --local service.status php8.3-fpm
+    echo "Valkey 状态:"
+    salt-call --local service.status valkey
+    echo "OpenSearch 状态:"
+    salt-call --local service.status opensearch
+    echo "RabbitMQ 状态:"
+    salt-call --local service.status rabbitmq
     echo
     
     log_info "测试磁盘使用..."
