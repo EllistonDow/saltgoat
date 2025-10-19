@@ -35,11 +35,23 @@ log_highlight() {
     echo -e "${CYAN}[HIGHLIGHT]${NC} $1"
 }
 
-# 检查是否为 root 用户
-check_root() {
+# 检查权限（系统安装后无需 sudo）
+check_permissions() {
+    # 如果是 system install/uninstall 命令，跳过权限检查
+    if [[ "$1" == "system" && ("$2" == "install" || "$2" == "uninstall") ]]; then
+        return 0
+    fi
+    
+    # 如果是系统安装的 saltgoat，且配置了 sudoers，则不需要检查 root
+    if [[ "$0" == "/usr/local/bin/saltgoat" ]] && sudo -n true 2>/dev/null; then
+        return 0
+    fi
+    
+    # 否则需要 root 权限
     if [[ $EUID -ne 0 ]]; then
         log_error "此脚本需要 root 权限运行"
         log_info "请使用: sudo $0 $@"
+        log_info "首次使用请运行: sudo ./saltgoat system install"
         exit 1
     fi
 }
@@ -428,103 +440,313 @@ show_passwords() {
 
 # MySQL 管理函数（Salt 原生方式）
 mysql_create_site() {
-    local site="$1"
-    local password="$2"
+    local dbname="$1"
+    local username="$2"
+    local password="$3"
     
-    # 使用 Salt 创建数据库
-    salt-call --local mysql.db_create "${site}_db"
+    if [[ -z "$dbname" || -z "$username" || -z "$password" ]]; then
+        log_error "用法: $0 mysql create <dbname> <username> <password>"
+        log_info "示例: $0 mysql create hawkmage hawk 'hawk.2010'"
+        exit 1
+    fi
     
-    # 使用 Salt 创建用户（使用 caching_sha2_password 插件）
-    salt-call --local mysql.user_create "${site}_user" password="$password" host="localhost" auth_plugin="caching_sha2_password"
+    # 获取 MySQL root 密码
+    local mysql_root_password=$(salt-call --local grains.get pillar_mysql_root_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
+    if [[ -z "$mysql_root_password" ]]; then
+        mysql_root_password="MyPass123!"
+    fi
     
-    # 使用 Salt 授权
-    salt-call --local mysql.grant_add "${site}_user" "${site}_db" "ALL PRIVILEGES" host="localhost"
+    # 使用 Salt 执行 MySQL 命令（更安全的方式）
+    log_info "创建数据库: $dbname"
+    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e \"CREATE DATABASE IF NOT EXISTS $dbname CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\""
     
-    log_success "MySQL 数据库和用户创建成功: ${site}_db / ${site}_user"
+    log_info "创建用户: $username"
+    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e \"CREATE USER IF NOT EXISTS '$username'@'localhost' IDENTIFIED WITH caching_sha2_password BY '$password';\""
+    
+    log_info "授权用户访问数据库"
+    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e \"GRANT ALL PRIVILEGES ON $dbname.* TO '$username'@'localhost';\""
+    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e \"FLUSH PRIVILEGES;\""
+    
+    log_success "MySQL 数据库和用户创建成功: $dbname / $username"
 }
 
 mysql_list_sites() {
-    # 使用 Salt 列出数据库
+    # 获取 MySQL root 密码
+    local mysql_root_password=$(salt-call --local grains.get pillar_mysql_root_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
+    if [[ -z "$mysql_root_password" ]]; then
+        mysql_root_password="MyPass123!"
+    fi
+    
+    # 使用 Salt 执行 MySQL 命令列出数据库
     echo "MySQL 数据库列表:"
-    salt-call --local mysql.db_list | grep -v "local:" | tail -1 | xargs
+    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e 'SHOW DATABASES;'" | grep -v "local:" | tail -1 | sed 's/^[[:space:]]*//'
+    
+    echo ""
+    echo "MySQL 用户列表:"
+    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e 'SELECT User, Host FROM mysql.user WHERE User NOT LIKE \"%mysql%\" AND User != \"root\";'" | grep -v "local:" | tail -1 | sed 's/^[[:space:]]*//'
 }
 
 mysql_backup_site() {
-    local site="$1"
+    local dbname="$1"
+    
+    # 获取 MySQL root 密码
+    local mysql_root_password=$(salt-call --local grains.get pillar_mysql_root_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
+    if [[ -z "$mysql_root_password" ]]; then
+        mysql_root_password="MyPass123!"
+    fi
     
     # 创建备份目录
-    mkdir -p /backup/mysql
+    salt-call --local file.makedirs /backup/mysql
     
-    # 使用 Salt 备份数据库
-    local backup_file="/backup/mysql/${site}_db_$(date +%Y%m%d_%H%M%S).sql"
-    salt-call --local mysql.dump "${site}_db" > "$backup_file"
+    # 使用 Salt 执行 mysqldump 命令
+    local backup_file="/backup/mysql/${dbname}_$(date +%Y%m%d_%H%M%S).sql"
+    salt-call --local cmd.run "mysqldump -u root -p'$mysql_root_password' --single-transaction --routines --triggers $dbname > $backup_file"
     
     log_success "数据库备份完成: $backup_file"
 }
 
 mysql_delete_site() {
-    local site="$1"
+    local dbname="$1"
     
-    # 使用 Salt 删除数据库
-    salt-call --local mysql.db_remove "${site}_db"
+    # 获取 MySQL root 密码
+    local mysql_root_password=$(salt-call --local grains.get pillar_mysql_root_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
+    if [[ -z "$mysql_root_password" ]]; then
+        mysql_root_password="MyPass123!"
+    fi
     
-    # 使用 Salt 删除用户
-    salt-call --local mysql.user_remove "${site}_user" host="localhost"
+    # 使用 Salt 执行 MySQL 命令删除数据库
+    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e \"DROP DATABASE IF EXISTS $dbname;\""
     
-    log_success "MySQL 数据库和用户删除成功: ${site}_db / ${site}_user"
+    # 注意：这里不删除用户，因为用户可能被其他数据库使用
+    log_success "MySQL 数据库删除成功: $dbname"
+    log_warning "注意：相关用户需要手动删除（如果不再需要）"
+}
+
+# 权限管理函数
+set_site_permissions() {
+    local site_path="$1"
+    local site_type="${2:-generic}"  # generic, magento, wordpress, etc.
+    
+    log_info "设置站点权限: $site_path (类型: $site_type)"
+    
+    # 获取路径所有者
+    local path_owner=$(stat -c '%U' "$(dirname "$site_path")")
+    log_info "路径所有者: $path_owner"
+    
+    # 基础权限设置 - 使用 sudo 确保有足够权限
+    salt-call --local cmd.run "sudo chown -R $path_owner:$path_owner $site_path"
+    salt-call --local cmd.run "sudo chmod -R 755 $site_path"
+    
+    # 根据站点类型设置特殊权限
+    case "$site_type" in
+        "magento")
+            log_info "设置 Magento 2 权限..."
+            
+            # Magento 2 需要写入权限的目录
+            local writable_dirs=(
+                "var"
+                "pub/media"
+                "pub/static"
+                "generated"
+                "app/etc"
+            )
+            
+            for dir in "${writable_dirs[@]}"; do
+                local full_path="$site_path/$dir"
+                if [[ -d "$full_path" ]]; then
+                    salt-call --local cmd.run "sudo chmod -R 775 $full_path"
+                    salt-call --local cmd.run "sudo chown -R $path_owner:www-data $full_path"
+                    log_info "已设置 $dir 目录权限"
+                fi
+            done
+            
+            # 设置文件权限
+            salt-call --local cmd.run "sudo find $site_path -type f -exec chmod 644 {} \;"
+            salt-call --local cmd.run "sudo find $site_path -type d -exec chmod 755 {} \;"
+            
+            # 特殊文件权限
+            if [[ -f "$site_path/app/etc/env.php" ]]; then
+                salt-call --local cmd.run "sudo chmod 660 $site_path/app/etc/env.php"
+                salt-call --local cmd.run "sudo chown $path_owner:www-data $site_path/app/etc/env.php"
+            fi
+            
+            log_success "Magento 2 权限设置完成"
+            ;;
+            
+        "wordpress")
+            log_info "设置 WordPress 权限..."
+            
+            # WordPress 需要写入权限的目录
+            local writable_dirs=(
+                "wp-content/uploads"
+                "wp-content/cache"
+                "wp-content/backup-db"
+                "wp-content/backups"
+                "wp-content/upgrade"
+                "wp-content/debug.log"
+            )
+            
+            for dir in "${writable_dirs[@]}"; do
+                local full_path="$site_path/$dir"
+                if [[ -d "$full_path" ]]; then
+                    salt-call --local cmd.run "sudo chmod -R 775 $full_path"
+                    salt-call --local cmd.run "sudo chown -R $path_owner:www-data $full_path"
+                    log_info "已设置 $dir 目录权限"
+                fi
+            done
+            
+            # wp-config.php 特殊权限
+            if [[ -f "$site_path/wp-config.php" ]]; then
+                salt-call --local cmd.run "sudo chmod 640 $site_path/wp-config.php"
+                salt-call --local cmd.run "sudo chown $path_owner:www-data $site_path/wp-config.php"
+            fi
+            
+            log_success "WordPress 权限设置完成"
+            ;;
+            
+        "generic"|*)
+            log_info "设置通用 Web 站点权限..."
+            
+            # 通用权限：允许 www-data 读取
+            salt-call --local cmd.run "sudo chmod -R 755 $site_path"
+            salt-call --local cmd.run "sudo chown -R $path_owner:$path_owner $site_path"
+            
+            # 如果有上传目录，设置特殊权限
+            local upload_dirs=("uploads" "files" "media" "images" "assets")
+            for dir in "${upload_dirs[@]}"; do
+                local full_path="$site_path/$dir"
+                if [[ -d "$full_path" ]]; then
+                    salt-call --local cmd.run "sudo chmod -R 775 $full_path"
+                    salt-call --local cmd.run "sudo chown -R $path_owner:www-data $full_path"
+                    log_info "已设置上传目录 $dir 权限"
+                fi
+            done
+            
+            log_success "通用站点权限设置完成"
+            ;;
+    esac
+    
+    # 确保 www-data 可以访问整个站点
+    salt-call --local cmd.run "sudo chmod o+x $site_path"
+    if [[ -d "$(dirname "$site_path")" ]]; then
+        salt-call --local cmd.run "sudo chmod o+x $(dirname "$site_path")"
+    fi
+    
+    log_success "站点权限设置完成: $site_path"
+}
+
+# 检查站点类型
+detect_site_type() {
+    local site_path="$1"
+    
+    if [[ -f "$site_path/composer.json" ]] && grep -q "magento" "$site_path/composer.json"; then
+        echo "magento"
+    elif [[ -f "$site_path/wp-config.php" ]]; then
+        echo "wordpress"
+    elif [[ -f "$site_path/index.php" ]] || [[ -f "$site_path/index.html" ]]; then
+        echo "generic"
+    else
+        echo "unknown"
+    fi
 }
 
 # Nginx 管理函数（Salt 原生方式）
 nginx_create_site() {
     local site="$1"
     local domain="$2"
+    local custom_path="$3"
     
-    # 使用 Salt 创建站点配置
+    # 确定站点路径
+    local site_path
+    if [[ -n "$custom_path" ]]; then
+        site_path="$custom_path"
+        log_info "使用自定义路径: $site_path"
+    else
+        site_path="/var/www/$site"
+        log_info "使用默认路径: $site_path"
+    fi
+    
+    # 生成双域名配置（主域名 + www.主域名）
+    local www_domain="www.$domain"
+    
+    # 使用 Salt 创建站点配置（支持双域名）
     salt-call --local file.write "/usr/local/nginx/conf/sites-available/${site}" "server {
     listen 80;
-    server_name $domain;
-    root /var/www/$site;
+    server_name $domain $www_domain;
+    root $site_path;
     index index.php index.html index.htm;
+
+    # 主域名重定向到 www 域名
+    if (\$host = $domain) {
+        return 301 http://$www_domain\$request_uri;
+    }
 
     location / {
         try_files \$uri \$uri/ =404;
     }
 
     location ~ \.php$ {
-        include snippets/fastcgi-php.conf;
+        include /usr/local/nginx/conf/snippets/fastcgi-php.conf;
         fastcgi_pass unix:/run/php/php8.3-fpm.sock;
-        fastcgi_index index.php;
     }
 }"
     
     # 使用 Salt 创建符号链接
     salt-call --local file.symlink "/usr/local/nginx/conf/sites-available/${site}" "/usr/local/nginx/conf/sites-enabled/${site}"
     
+    # 同时创建到系统默认 Nginx 目录的链接（方便查看）
+    salt-call --local cmd.run "sudo ln -sf /usr/local/nginx/conf/sites-available/${site} /etc/nginx/sites-available/${site}"
+    salt-call --local cmd.run "sudo ln -sf /usr/local/nginx/conf/sites-enabled/${site} /etc/nginx/sites-enabled/${site}"
+    
     # 使用 Salt 创建网站目录
-    salt-call --local file.mkdir "/var/www/$site"
-    salt-call --local file.write "/var/www/$site/index.html" "<h1>Welcome to $site</h1>"
-    salt-call --local file.chown "/var/www/$site" user="www-data" group="www-data" recurse=True
+    salt-call --local cmd.run "sudo mkdir -p $site_path"
+    salt-call --local cmd.run "sudo bash -c 'echo \"<h1>Welcome to $site</h1>\" > $site_path/index.html'"
+    
+    # 设置权限
+    if [[ "$site_path" == /home/* ]]; then
+        # 自定义路径：设置用户权限，并允许 www-data 读取
+        local path_owner=$(stat -c '%U' "$(dirname "$site_path")")
+        salt-call --local cmd.run "sudo chown -R $path_owner:$path_owner $site_path"
+        salt-call --local cmd.run "sudo chmod -R 755 $site_path"
+        log_info "已设置用户权限: $path_owner"
+        
+        # 自动检测站点类型并设置权限
+        local site_type=$(detect_site_type "$site_path")
+        if [[ "$site_type" != "unknown" ]]; then
+            log_info "检测到站点类型: $site_type"
+            set_site_permissions "$site_path" "$site_type"
+        fi
+    else
+        # 默认路径：使用 www-data
+        salt-call --local cmd.run "sudo chown -R www-data:www-data $site_path"
+        salt-call --local cmd.run "sudo chmod -R 755 $site_path"
+        log_info "已设置 Web 服务器权限: www-data"
+    fi
     
     # 测试配置并重载
-    salt-call --local cmd.run "/usr/local/nginx/sbin/nginx -t"
-    salt-call --local service.reload nginx
+    salt-call --local cmd.run "sudo /usr/local/nginx/sbin/nginx -t"
+    salt-call --local cmd.run "sudo systemctl reload nginx"
     
-    log_success "Nginx 站点创建成功: $site ($domain)"
+    log_success "Nginx 站点创建成功: $site ($domain) -> $site_path"
 }
 
 nginx_list_sites() {
     echo "Nginx 站点列表:"
-    salt-call --local file.readlink "/usr/local/nginx/conf/sites-enabled/" | grep -v "default" | awk '{print $9}' | grep -v "^$"
+    ls -la /usr/local/nginx/conf/sites-enabled/ | grep -v "default" | awk '{print $9}' | grep -v "^$" | grep -v "^\.$" | grep -v "^\.\.$"
 }
 
 nginx_add_ssl() {
     local site="$1"
     local domain="$2"
+    local email="${3:-admin@$domain}"
     
-    # 使用 Salt 运行 certbot
-    salt-call --local cmd.run "certbot --nginx -d $domain --non-interactive --agree-tos --email admin@example.com"
+    # 生成双域名（主域名 + www.主域名）
+    local www_domain="www.$domain"
     
-    log_success "SSL 证书添加成功: $site ($domain)"
+    # 使用 Salt 运行 certbot（需要 sudo 权限，指定 SaltGoat 的 Nginx 配置和二进制文件，支持双域名）
+    salt-call --local cmd.run "sudo certbot --nginx -d $domain -d $www_domain --non-interactive --agree-tos --email $email --nginx-server-root /usr/local/nginx/conf --nginx-ctl /usr/local/nginx/sbin/nginx"
+    
+    log_success "SSL 证书添加成功: $site ($domain + $www_domain)"
 }
 
 nginx_delete_site() {
@@ -534,11 +756,15 @@ nginx_delete_site() {
     salt-call --local file.remove "/usr/local/nginx/conf/sites-available/${site}"
     salt-call --local file.remove "/usr/local/nginx/conf/sites-enabled/${site}"
     
+    # 同时删除系统默认 Nginx 目录中的链接
+    salt-call --local cmd.run "sudo rm -f /etc/nginx/sites-available/${site}"
+    salt-call --local cmd.run "sudo rm -f /etc/nginx/sites-enabled/${site}"
+    
     # 使用 Salt 删除网站目录
-    salt-call --local file.remove "/var/www/$site"
+    salt-call --local cmd.run "sudo rm -rf /var/www/$site"
     
     # 重载 Nginx
-    salt-call --local service.reload nginx
+    salt-call --local cmd.run "sudo systemctl reload nginx"
     
     log_success "Nginx 站点删除成功: $site"
 }
@@ -628,13 +854,6 @@ schedule_test() {
 
 # 系统管理函数
 system_install() {
-    # 检查是否以 root 运行
-    if [[ $EUID -eq 0 ]]; then
-        log_error "请不要以 root 用户运行此命令"
-        log_info "请使用普通用户运行: saltgoat system install"
-        exit 1
-    fi
-    
     # 获取 SaltGoat 安装路径
     local saltgoat_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     log_info "SaltGoat 路径: $saltgoat_path"
@@ -715,13 +934,6 @@ EOF
 }
 
 system_uninstall() {
-    # 检查是否以 root 运行
-    if [[ $EUID -eq 0 ]]; then
-        log_error "请不要以 root 用户运行此命令"
-        log_info "请使用普通用户运行: saltgoat system uninstall"
-        exit 1
-    fi
-    
     log_info "正在移除符号链接..."
     
     # 移除 saltgoat 符号链接
@@ -790,24 +1002,21 @@ show_help() {
     echo "  system uninstall               - 卸载 SaltGoat 系统安装"
     echo ""
     echo "多站点管理:"
-    echo "  mysql create <site> <password>  - 创建 MySQL 数据库和用户"
+    echo "  mysql create <dbname> <username> <password>  - 创建 MySQL 数据库和用户"
     echo "  mysql list                    - 列出所有数据库"
-    echo "  mysql backup <site>           - 备份数据库"
-    echo "  mysql delete <site>           - 删除数据库"
-    echo "  nginx create <site> <domain>  - 创建 Nginx 站点配置"
+    echo "  mysql backup <dbname>         - 备份数据库"
+    echo "  mysql delete <dbname>         - 删除数据库"
+    echo "  nginx create <site> <domain> [custom_path] - 创建 Nginx 站点配置（自动支持 www.域名）"
     echo "  nginx list                    - 列出所有站点"
-    echo "  nginx add-ssl <site> <domain> - 添加 SSL 证书"
+    echo "  nginx add-ssl <site> <domain> [email] - 添加 SSL 证书"
     echo "  nginx delete <site>           - 删除站点"
     echo "  rabbitmq create <site> <pass> - 创建 RabbitMQ 用户"
     echo "  rabbitmq list                 - 列出所有用户"
     echo "  rabbitmq delete <site>        - 删除用户"
     echo ""
-    echo "定时任务管理:"
-    echo "  schedule enable               - 启用 SaltGoat 定时任务"
-    echo "  schedule disable              - 禁用 SaltGoat 定时任务"
-    echo "  schedule status               - 查看定时任务状态"
-    echo "  schedule list                 - 列出所有定时任务"
-    echo "  schedule test                 - 测试定时任务配置"
+    echo "权限管理:"
+    echo "  permissions set <path> [type]    - 设置站点权限"
+    echo "  permissions detect <path>        - 检测站点类型"
     echo ""
     echo "选项:"
     echo "  --mysql-password <password>    - MySQL root 密码"
@@ -835,7 +1044,7 @@ main() {
         exit 0
     fi
     
-    check_root
+    check_permissions "$@"
     
     # 解析密码参数
     while [[ $# -gt 0 ]]; do
@@ -934,12 +1143,13 @@ main() {
         "mysql")
             case "$2" in
                 "create")
-                    if [[ -z "$3" || -z "$4" ]]; then
-                        log_error "用法: $0 mysql create <site> <password>"
+                    if [[ -z "$3" || -z "$4" || -z "$5" ]]; then
+                        log_error "用法: $0 mysql create <dbname> <username> <password>"
+                        log_info "示例: $0 mysql create hawkmage hawk 'hawk.2010'"
                         exit 1
                     fi
-                    log_highlight "创建 MySQL 数据库和用户: $3"
-                    mysql_create_site "$3" "$4"
+                    log_highlight "创建 MySQL 数据库和用户: $3 / $4"
+                    mysql_create_site "$3" "$4" "$5"
                     ;;
                 "list")
                     log_highlight "列出所有 MySQL 数据库..."
@@ -947,7 +1157,7 @@ main() {
                     ;;
                 "backup")
                     if [[ -z "$3" ]]; then
-                        log_error "用法: $0 mysql backup <site>"
+                        log_error "用法: $0 mysql backup <dbname>"
                         exit 1
                     fi
                     log_highlight "备份数据库: $3"
@@ -955,7 +1165,7 @@ main() {
                     ;;
                 "delete")
                     if [[ -z "$3" ]]; then
-                        log_error "用法: $0 mysql delete <site>"
+                        log_error "用法: $0 mysql delete <dbname>"
                         exit 1
                     fi
                     log_highlight "删除数据库: $3"
@@ -972,11 +1182,14 @@ main() {
             case "$2" in
                 "create")
                     if [[ -z "$3" || -z "$4" ]]; then
-                        log_error "用法: $0 nginx create <site> <domain>"
+                        log_error "用法: $0 nginx create <site> <domain> [custom_path]"
+                        log_info "示例: $0 nginx create mysite example.com"
+                        log_info "示例: $0 nginx create hawk hawktattoosupply.com /home/doge/hawk"
+                        log_info "注意: 自动支持 example.com 和 www.example.com 双域名"
                         exit 1
                     fi
-                    log_highlight "创建 Nginx 站点配置: $3"
-                    nginx_create_site "$3" "$4"
+                    log_highlight "创建 Nginx 站点配置: $3 (支持 $4 和 www.$4)"
+                    nginx_create_site "$3" "$4" "$5"
                     ;;
                 "list")
                     log_highlight "列出所有 Nginx 站点..."
@@ -984,11 +1197,13 @@ main() {
                     ;;
                 "add-ssl")
                     if [[ -z "$3" || -z "$4" ]]; then
-                        log_error "用法: $0 nginx add-ssl <site> <domain>"
+                        log_error "用法: $0 nginx add-ssl <site> <domain> [email]"
+                        log_info "示例: $0 nginx add-ssl mysite example.com"
+                        log_info "示例: $0 nginx add-ssl mysite example.com admin@example.com"
                         exit 1
                     fi
                     log_highlight "为站点添加 SSL: $3"
-                    nginx_add_ssl "$3" "$4"
+                    nginx_add_ssl "$3" "$4" "$5"
                     ;;
                 "delete")
                     if [[ -z "$3" ]]; then
@@ -1063,19 +1278,32 @@ main() {
                     ;;
             esac
             ;;
-        "system")
+        "permissions")
             case "$2" in
-                "install")
-                    log_highlight "安装 SaltGoat 到系统路径..."
-                    system_install
+                "set")
+                    if [[ -z "$3" ]]; then
+                        log_error "用法: $0 permissions set <site_path> [site_type]"
+                        log_info "示例: $0 permissions set /var/www/mysite"
+                        log_info "示例: $0 permissions set /home/doge/hawk magento"
+                        log_info "支持的类型: generic, magento, wordpress"
+                        exit 1
+                    fi
+                    local site_type="${4:-generic}"
+                    log_highlight "设置站点权限: $3 (类型: $site_type)"
+                    set_site_permissions "$3" "$site_type"
                     ;;
-                "uninstall")
-                    log_highlight "卸载 SaltGoat 系统安装..."
-                    system_uninstall
+                "detect")
+                    if [[ -z "$3" ]]; then
+                        log_error "用法: $0 permissions detect <site_path>"
+                        exit 1
+                    fi
+                    log_highlight "检测站点类型: $3"
+                    local site_type=$(detect_site_type "$3")
+                    echo "检测结果: $site_type"
                     ;;
                 *)
-                    log_error "未知的 System 操作: $2"
-                    log_info "支持: install, uninstall"
+                    log_error "未知的权限操作: $2"
+                    log_info "支持: set, detect"
                     exit 1
                     ;;
             esac

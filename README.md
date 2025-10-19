@@ -113,13 +113,17 @@ saltgoat passwords
 ### 4. 多站点管理
 ```bash
 # 创建新站点数据库
-saltgoat mysql create mysite mypassword
+saltgoat mysql create hawkmage hawk 'hawk.2010'
 
-# 创建新站点 Nginx 配置
+# 创建新站点 Nginx 配置（推荐使用 /var/www）
 saltgoat nginx create mysite example.com
 
 # 创建新站点 RabbitMQ 用户
 saltgoat rabbitmq create mysite mypassword
+
+# 站点权限管理（迁移站点必备）
+saltgoat permissions detect /var/www/mysite
+saltgoat permissions set /var/www/mysite magento
 ```
 
 ### 5. 定时任务管理
@@ -171,16 +175,16 @@ SaltGoat 支持多站点环境，提供专门的管理脚本：
 ### 数据库管理
 ```bash
 # 创建站点数据库和用户
-saltgoat mysql create mysite mypassword
+saltgoat mysql create hawkmage hawk 'hawk.2010'
 
 # 列出所有站点
 saltgoat mysql list
 
 # 备份站点数据库
-saltgoat mysql backup mysite
+saltgoat mysql backup hawkmage
 
 # 删除站点
-saltgoat mysql delete mysite
+saltgoat mysql delete hawkmage
 ```
 
 ### RabbitMQ 管理
@@ -200,41 +204,68 @@ saltgoat rabbitmq delete mysite
 
 ### Nginx 管理
 ```bash
-# 创建站点配置
+# 创建站点配置（推荐使用 /var/www，自动支持双域名）
 saltgoat nginx create mysite example.com
+
+# 创建站点到自定义路径
+saltgoat nginx create mysite example.com /home/user/mysite
 
 # 列出所有站点
 saltgoat nginx list
 
-# 添加 SSL 证书
+# 添加 SSL 证书（自动支持双域名）
 saltgoat nginx add-ssl mysite example.com
 
 # 删除站点
 saltgoat nginx delete mysite
 ```
 
-## 卸载方式
+#### 双域名支持
 
-### 系统卸载（推荐）
+SaltGoat 自动支持双域名配置：
+- **主域名**：`example.com`
+- **WWW 域名**：`www.example.com`
+- **自动重定向**：`example.com` → `https://www.example.com`
+- **SSL 证书**：同时支持两个域名的 SSL 证书
+
+**访问流程**：
+1. `http://example.com` → `https://www.example.com`
+2. `http://www.example.com` → `https://www.example.com`
+3. `https://example.com` → `https://www.example.com`
+4. `https://www.example.com` → 正常访问
+
+### 站点权限管理
 ```bash
-# 卸载系统安装的 SaltGoat
-./uninstall-saltgoat.sh
+# 检测站点类型（自动识别 Magento/WordPress/通用）
+saltgoat permissions detect /var/www/mysite
+
+# 设置站点权限（自动检测类型）
+saltgoat permissions set /var/www/mysite
+
+# 手动指定站点类型
+saltgoat permissions set /var/www/mysite magento
+saltgoat permissions set /var/www/mysite wordpress
+saltgoat permissions set /var/www/mysite generic
 ```
 
-### 手动卸载
-```bash
-# 移除符号链接
-sudo rm -f /usr/local/bin/saltgoat
-sudo rm -f /usr/local/bin/manage-mysql
-sudo rm -f /usr/local/bin/manage-nginx
-sudo rm -f /usr/local/bin/manage-rabbitmq
+#### 权限管理说明
 
-# 移除 sudo 配置
-sudo rm -f /etc/sudoers.d/saltgoat
+**推荐使用 `/var/www` 目录**：
+- ✅ 标准位置，权限简单
+- ✅ `www-data:www-data` 所有权
+- ✅ 无用户隔离问题
+- ✅ 安全性好，维护方便
 
-# 移除用户别名（编辑 ~/.bashrc）
-# 删除 SaltGoat 相关别名行
-```
+**支持的站点类型**：
+- **Magento 2**：自动设置 `var/`, `pub/media/`, `pub/static/`, `generated/`, `app/etc/` 等目录的写入权限
+- **WordPress**：自动设置 `wp-content/uploads/`, `wp-content/cache/` 等目录权限
+- **通用站点**：设置标准 Web 服务器权限，支持 `uploads/`, `files/`, `media/` 等上传目录
+
+**迁移站点流程**：
+1. 将站点文件复制到 `/var/www/sitename/`
+2. `saltgoat permissions detect /var/www/sitename` - 检测类型
+3. `saltgoat permissions set /var/www/sitename` - 设置权限
+4. `saltgoat nginx create sitename domain.com` - 创建 Nginx 配置
 
 ## 目录结构
 
