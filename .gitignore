@@ -1,0 +1,73 @@
+# SaltGoat .gitignore
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# 日志文件
+*.log
+logs/
+log/
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.temp
+
+# 缓存文件
+cache/
+.cache/
+
+# 崩溃文件
+erl_crash.dump
+*.dmp
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# 编译文件
+*.o
+*.so
+*.a
+
+# IDE 文件
+.vscode/
+.idea/
+*.sublime-*
+
+# 环境文件
+.env
+.env.local
+.env.production
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 密钥文件
+*.key
+*.pem
+*.crt
+*.csr
+
+# Salt 缓存
+salt/var/
+salt/cache/
+
+# 系统临时目录
+/tmp/
+/var/tmp/
+
+# 进程文件
+*.pid
+*.lock
+
+# 内存监控日志
+/var/log/saltgoat/

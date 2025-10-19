@@ -1,0 +1,25 @@
+[Unit]
+Description=RabbitMQ broker
+After=network.target
+
+[Service]
+Type=notify
+User=rabbitmq
+Group=rabbitmq
+ExecStart=/opt/rabbitmq/sbin/rabbitmq-server
+ExecStop=/opt/rabbitmq/sbin/rabbitmqctl shutdown
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=90
+TimeoutStopSec=60
+LimitNOFILE=65536
+Environment=HOME=/var/lib/rabbitmq
+Environment=RABBITMQ_MNESIA_BASE=/opt/rabbitmq/var/lib/rabbitmq/mnesia
+Environment=RABBITMQ_LOG_BASE=/opt/rabbitmq/var/log/rabbitmq
+Environment=RABBITMQ_PLUGINS_DIR=/opt/rabbitmq/plugins
+Environment=RABBITMQ_ENABLED_PLUGINS_FILE=/opt/rabbitmq/etc/rabbitmq/enabled_plugins
+
+[Install]
+WantedBy=multi-user.target

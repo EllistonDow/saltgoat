@@ -1,0 +1,22 @@
+# SaltGoat Magento 2.4.8 OpenSearch JVM 优化配置
+# Medium 级别 (48GB+): 8GB 堆内存 (64GB 服务器的 12.5%)
+
+# JVM 堆内存设置 (Medium 级别: 8GB)
+-Xms8g
+-Xmx8g
+
+# GC 设置
+-XX:+UseG1GC
+-XX:G1HeapRegionSize=16m
+-XX:MaxGCPauseMillis=200
+-XX:G1MixedGCCountTarget=8
+-XX:G1OldCSetRegionThreshold=10
+
+# 内存监控和处理
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath=/var/log/opensearch/heapdump.hprof
+
+# 基本 JVM 选项
+-XX:+UseCompressedOops
+-XX:+UseCompressedClassPointers
+-XX:+AlwaysPreTouch

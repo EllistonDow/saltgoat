@@ -1,0 +1,54 @@
+[mysqld]
+# SaltGoat Magento 2.4.8 MySQL 优化配置
+
+# 基础设置
+default-storage-engine = InnoDB
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+
+# InnoDB 优化 (62GB 内存的 25% = 16GB，为系统和其他服务留出更多空间)
+innodb_buffer_pool_size = 16G
+innodb_buffer_pool_instances = 8
+innodb_log_file_size = 256M
+innodb_log_buffer_size = 16M
+innodb_flush_log_at_trx_commit = 2
+innodb_thread_concurrency = 16
+innodb_read_io_threads = 4
+innodb_write_io_threads = 4
+
+# 连接设置
+max_connections = 500
+max_connect_errors = 1000000
+connect_timeout = 60
+wait_timeout = 600
+interactive_timeout = 600
+
+# 查询缓存
+query_cache_size = 128M
+query_cache_type = 1
+query_cache_limit = 2M
+
+# 临时表设置
+tmp_table_size = 64M
+max_heap_table_size = 64M
+
+# 其他优化
+table_open_cache = 4000
+thread_cache_size = 16
+sort_buffer_size = 2M
+read_buffer_size = 2M
+read_rnd_buffer_size = 8M
+myisam_sort_buffer_size = 64M
+key_buffer_size = 32M
+
+# 日志设置
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+log_queries_not_using_indexes = 1
+
+# 二进制日志
+log-bin = mysql-bin
+binlog_format = ROW
+expire_logs_days = 7
+max_binlog_size = 100M

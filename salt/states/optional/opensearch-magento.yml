@@ -1,0 +1,21 @@
+# SaltGoat Magento 2.4.8 OpenSearch 优化配置
+
+cluster.name: magento-cluster
+node.name: magento-node
+path.data: /var/lib/opensearch
+path.logs: /var/log/opensearch
+network.host: 0.0.0.0
+http.port: 9200
+discovery.type: single-node
+
+# 禁用安全插件（简化配置）
+plugins.security.disabled: true
+
+# 内存设置
+indices.memory.index_buffer_size: 30%
+indices.queries.cache.size: 10%
+indices.fielddata.cache.size: 20%
+
+# 其他优化
+bootstrap.memory_lock: true
+action.destructive_requires_name: true

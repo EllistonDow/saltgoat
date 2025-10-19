@@ -1,0 +1,49 @@
+# Webmin 安装和配置
+
+# 下载并安装 Webmin
+install_webmin:
+  cmd.run:
+    - name: |
+        wget http://www.webmin.com/download/deb/webmin-current.deb -O /tmp/webmin.deb
+        dpkg --install /tmp/webmin.deb || apt-get -f install -y
+        rm -f /tmp/webmin.deb
+    - creates: /usr/share/webmin
+
+# 配置 Webmin
+configure_webmin:
+  file.managed:
+    - name: /etc/webmin/miniserv.conf
+    - source: salt://optional/webmin.conf
+    - require:
+      - cmd: install_webmin
+
+# 设置 Webmin 密码
+set_webmin_password:
+  cmd.run:
+    - name: |
+        echo "root:SaltGoat2024!" | chpasswd
+        /usr/share/webmin/changepass.pl /etc/webmin root SaltGoat2024!
+    - require:
+      - file: configure_webmin
+
+# 启动 Webmin 服务
+start_webmin:
+  service.running:
+    - name: webmin
+    - enable: true
+    - require:
+      - cmd: set_webmin_password
+
+# 创建防火墙规则
+configure_webmin_firewall:
+  cmd.run:
+    - name: ufw allow 10000
+    - require:
+      - service: start_webmin
+
+# 测试 Webmin 连接
+test_webmin_connection:
+  cmd.run:
+    - name: curl -s http://localhost:10000 | grep -q "401.*Unauthorized" && echo "Webmin is running"
+    - require:
+      - service: start_webmin
