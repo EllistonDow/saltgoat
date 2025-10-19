@@ -62,7 +62,7 @@ git clone https://github.com/EllistonDow/saltgoat.git
 cd saltgoat
 
 # 安装到系统路径（无需 ./ 和 sudo）
-./install-saltgoat.sh
+sudo ./saltgoat system install
 
 # 重新加载环境
 source ~/.bashrc
@@ -113,28 +113,28 @@ saltgoat passwords
 ### 4. 多站点管理
 ```bash
 # 创建新站点数据库
-manage-mysql create mysite mypassword
+saltgoat mysql create mysite mypassword
 
 # 创建新站点 Nginx 配置
-manage-nginx create mysite example.com
+saltgoat nginx create mysite example.com
 
 # 创建新站点 RabbitMQ 用户
-manage-rabbitmq create mysite mypassword
+saltgoat rabbitmq create mysite mypassword
 ```
 
 ### 5. 定时任务管理
 ```bash
 # 启用 SaltGoat 定时任务（推荐）
-manage-schedules enable
+saltgoat schedule enable
 
 # 查看定时任务状态
-manage-schedules status
+saltgoat schedule status
 
 # 列出所有定时任务
-manage-schedules list
+saltgoat schedule list
 
 # 测试定时任务配置
-manage-schedules test
+saltgoat schedule test
 ```
 
 ## Salt Schedule 定时任务
@@ -171,46 +171,46 @@ SaltGoat 支持多站点环境，提供专门的管理脚本：
 ### 数据库管理
 ```bash
 # 创建站点数据库和用户
-manage-mysql create mysite mypassword
+saltgoat mysql create mysite mypassword
 
 # 列出所有站点
-manage-mysql list
+saltgoat mysql list
 
 # 备份站点数据库
-manage-mysql backup mysite
+saltgoat mysql backup mysite
 
 # 删除站点
-manage-mysql delete mysite
+saltgoat mysql delete mysite
 ```
 
 ### RabbitMQ 管理
 ```bash
 # 创建站点用户和虚拟主机
-manage-rabbitmq create mysite mypassword
+saltgoat rabbitmq create mysite mypassword
 
 # 列出所有站点
-manage-rabbitmq list
+saltgoat rabbitmq list
 
 # 设置用户权限
-manage-rabbitmq set-permissions mysite mysite
+saltgoat rabbitmq set-permissions mysite mysite
 
 # 删除站点
-manage-rabbitmq delete mysite
+saltgoat rabbitmq delete mysite
 ```
 
 ### Nginx 管理
 ```bash
 # 创建站点配置
-manage-nginx create mysite example.com
+saltgoat nginx create mysite example.com
 
 # 列出所有站点
-manage-nginx list
+saltgoat nginx list
 
 # 添加 SSL 证书
-manage-nginx add-ssl mysite example.com
+saltgoat nginx add-ssl mysite example.com
 
 # 删除站点
-manage-nginx delete mysite
+saltgoat nginx delete mysite
 ```
 
 ## 卸载方式
@@ -241,13 +241,7 @@ sudo rm -f /etc/sudoers.d/saltgoat
 ```
 saltgoat/
 ├── README.md              # 项目说明
-├── saltgoat               # SaltGoat 主安装脚本
-├── install-saltgoat.sh    # 系统安装脚本（推荐）
-├── uninstall-saltgoat.sh  # 系统卸载脚本
-├── manage-mysql.sh        # MySQL 多站点管理
-├── manage-rabbitmq.sh     # RabbitMQ 多站点管理
-├── manage-nginx.sh        # Nginx 多站点管理
-├── manage-schedules.sh    # Salt Schedule 定时任务管理
+├── saltgoat               # SaltGoat 一体化管理脚本
 ├── salt/
 │   ├── top.sls           # Salt 主配置文件
 │   ├── pillar/

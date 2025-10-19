@@ -25,6 +25,8 @@ cache/
 # 崩溃文件
 erl_crash.dump
 *.dmp
+*.crash
+*.dump
 
 # 备份文件
 *.bak
