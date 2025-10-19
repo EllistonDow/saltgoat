@@ -37,8 +37,13 @@ log_highlight() {
 
 # 检查权限（系统安装后无需 sudo）
 check_permissions() {
-    # 如果是 system install/uninstall 命令，跳过权限检查
-    if [[ "$1" == "system" && ("$2" == "install" || "$2" == "uninstall") ]]; then
+    # 如果是 system install/uninstall/ssh-port 命令，跳过权限检查
+    if [[ "$1" == "system" && ("$2" == "install" || "$2" == "uninstall" || "$2" == "ssh-port") ]]; then
+        return 0
+    fi
+    
+    # 如果是 help 命令，跳过权限检查
+    if [[ "$1" == "help" || "$1" == "--help" || "$1" == "-h" ]]; then
         return 0
     fi
     
@@ -933,6 +938,55 @@ EOF
     echo
 }
 
+# 检测当前 SSH 端口
+detect_ssh_port() {
+    log_info "正在检测当前 SSH 端口..."
+    
+    # 尝试多种方法检测 SSH 端口
+    local ssh_port=""
+    
+    # 方法1: 使用 ss 命令
+    if command -v ss >/dev/null 2>&1; then
+        ssh_port=$(sudo ss -tlnp | grep sshd | awk '{print $4}' | cut -d: -f2 | head -1)
+    fi
+    
+    # 方法2: 使用 netstat 命令
+    if [[ -z "$ssh_port" ]] && command -v netstat >/dev/null 2>&1; then
+        ssh_port=$(sudo netstat -tlnp 2>/dev/null | grep sshd | awk '{print $4}' | cut -d: -f2 | head -1)
+    fi
+    
+    # 方法3: 检查 SSH 配置文件
+    if [[ -z "$ssh_port" ]] && [[ -f /etc/ssh/sshd_config ]]; then
+        ssh_port=$(grep "^Port " /etc/ssh/sshd_config | awk '{print $2}' | head -1)
+    fi
+    
+    # 默认端口
+    if [[ -z "$ssh_port" ]]; then
+        ssh_port="22"
+        log_warning "无法检测 SSH 端口，使用默认端口 22"
+    fi
+    
+    log_success "检测到 SSH 端口: $ssh_port"
+    
+    # 检查 UFW 状态
+    if command -v ufw >/dev/null 2>&1; then
+        local ufw_status=$(sudo ufw status | head -1)
+        log_info "UFW 状态: $ufw_status"
+        
+        # 检查端口是否已允许
+        if sudo ufw status | grep -q "$ssh_port"; then
+            log_success "端口 $ssh_port 已在 UFW 中允许"
+        else
+            log_warning "端口 $ssh_port 未在 UFW 中允许"
+            log_info "建议运行: sudo ufw allow $ssh_port"
+        fi
+    else
+        log_warning "UFW 未安装"
+    fi
+    
+    return 0
+}
+
 system_uninstall() {
     log_info "正在移除符号链接..."
     
@@ -1000,6 +1054,7 @@ show_help() {
     echo "系统管理:"
     echo "  system install                 - 安装 SaltGoat 到系统路径（无需 ./ 和 sudo）"
     echo "  system uninstall               - 卸载 SaltGoat 系统安装"
+    echo "  system ssh-port                - 检测当前 SSH 端口和 UFW 状态"
     echo ""
     echo "多站点管理:"
     echo "  mysql create <dbname> <username> <password>  - 创建 MySQL 数据库和用户"
@@ -1111,6 +1166,27 @@ main() {
                 *)
                     log_error "未知的安装选项: $2"
                     log_info "支持: all, core, optional"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "system")
+            case "$2" in
+                "install")
+                    log_highlight "安装 SaltGoat 到系统路径..."
+                    system_install
+                    ;;
+                "uninstall")
+                    log_highlight "卸载 SaltGoat 系统安装..."
+                    system_uninstall
+                    ;;
+                "ssh-port")
+                    log_highlight "检测当前 SSH 端口..."
+                    detect_ssh_port
+                    ;;
+                *)
+                    log_error "未知的 System 操作: $2"
+                    log_info "支持: install, uninstall, ssh-port"
                     exit 1
                     ;;
             esac

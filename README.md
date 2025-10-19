@@ -69,6 +69,9 @@ source ~/.bashrc
 
 # 现在可以直接使用
 saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!' --webmin-password 'Webmin123!' --phpmyadmin-password 'phpMyAdmin123!'
+
+# SSH 端口检测（可选）
+saltgoat system ssh-port
 ```
 
 ### 方式二：直接使用
@@ -140,6 +143,33 @@ saltgoat schedule list
 # 测试定时任务配置
 saltgoat schedule test
 ```
+
+## 🔒 SSH 端口安全检测
+
+SaltGoat 内置智能 SSH 端口检测功能，确保防火墙配置不会意外锁定 SSH 连接：
+
+### 自动检测
+安装过程中会自动检测当前 SSH 端口并添加到 UFW 规则中：
+- 支持自定义 SSH 端口（如 18712）
+- 自动添加到防火墙允许列表
+- 防止安装后无法 SSH 连接
+
+### 手动检测
+```bash
+# 检测当前 SSH 端口和 UFW 状态
+saltgoat system ssh-port
+```
+
+### 检测方法
+1. **ss 命令**: 检测当前监听的 SSH 端口
+2. **netstat 命令**: 备用检测方法
+3. **配置文件**: 读取 `/etc/ssh/sshd_config`
+4. **默认端口**: 如果无法检测，使用默认端口 22
+
+### 安全提示
+- 安装前建议先检测 SSH 端口
+- 确保当前 SSH 连接不会被中断
+- 支持 IPv4 和 IPv6 双栈
 
 ## Salt Schedule 定时任务
 
