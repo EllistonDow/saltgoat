@@ -122,6 +122,48 @@ manage-nginx create mysite example.com
 manage-rabbitmq create mysite mypassword
 ```
 
+### 5. 定时任务管理
+```bash
+# 启用 SaltGoat 定时任务（推荐）
+manage-schedules enable
+
+# 查看定时任务状态
+manage-schedules status
+
+# 列出所有定时任务
+manage-schedules list
+
+# 测试定时任务配置
+manage-schedules test
+```
+
+## Salt Schedule 定时任务
+
+SaltGoat 使用 Salt 的 Schedule 功能替代传统的 crontab，提供更强大的定时任务管理：
+
+### 优势对比
+
+| 特性 | Crontab | Salt Schedule |
+|------|---------|---------------|
+| **集中管理** | ❌ 分散 | ✅ 统一 |
+| **版本控制** | ❌ 困难 | ✅ Git 友好 |
+| **幂等性** | ❌ 无 | ✅ 内置 |
+| **状态跟踪** | ❌ 无 | ✅ 完整 |
+| **依赖管理** | ❌ 无 | ✅ 支持 |
+| **随机延迟** | ❌ 无 | ✅ splay 支持 |
+| **条件执行** | ❌ 有限 | ✅ 丰富 |
+| **失败重试** | ❌ 无 | ✅ 支持 |
+
+### 内置定时任务
+
+- **内存监控**: 每5分钟检查系统内存使用
+- **系统更新**: 每周日凌晨3点自动更新
+- **日志清理**: 每周日凌晨1点清理旧日志
+- **数据库备份**: 每天凌晨2点备份数据库
+- **服务健康检查**: 每10分钟检查服务状态
+- **磁盘空间检查**: 每6小时检查磁盘使用
+- **安全更新检查**: 每周一凌晨4点检查安全更新
+
 ## 多站点管理
 
 SaltGoat 支持多站点环境，提供专门的管理脚本：
@@ -205,6 +247,7 @@ saltgoat/
 ├── manage-mysql.sh        # MySQL 多站点管理
 ├── manage-rabbitmq.sh     # RabbitMQ 多站点管理
 ├── manage-nginx.sh        # Nginx 多站点管理
+├── manage-schedules.sh    # Salt Schedule 定时任务管理
 ├── salt/
 │   ├── top.sls           # Salt 主配置文件
 │   ├── pillar/

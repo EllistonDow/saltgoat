@@ -56,6 +56,7 @@ install_saltgoat() {
     sudo ln -sf "$SALTGOAT_PATH/manage-mysql.sh" /usr/local/bin/manage-mysql
     sudo ln -sf "$SALTGOAT_PATH/manage-nginx.sh" /usr/local/bin/manage-nginx
     sudo ln -sf "$SALTGOAT_PATH/manage-rabbitmq.sh" /usr/local/bin/manage-rabbitmq
+    sudo ln -sf "$SALTGOAT_PATH/manage-schedules.sh" /usr/local/bin/manage-schedules
     
     log_success "已创建管理脚本符号链接"
 }
@@ -78,6 +79,7 @@ $USER ALL=(ALL) NOPASSWD: /usr/local/bin/saltgoat
 $USER ALL=(ALL) NOPASSWD: /usr/local/bin/manage-mysql
 $USER ALL=(ALL) NOPASSWD: /usr/local/bin/manage-nginx
 $USER ALL=(ALL) NOPASSWD: /usr/local/bin/manage-rabbitmq
+$USER ALL=(ALL) NOPASSWD: /usr/local/bin/manage-schedules
 EOF
     
     log_success "已配置 sudo 权限"
@@ -101,6 +103,7 @@ alias saltgoat='sudo /usr/local/bin/saltgoat'
 alias manage-mysql='sudo /usr/local/bin/manage-mysql'
 alias manage-nginx='sudo /usr/local/bin/manage-nginx'
 alias manage-rabbitmq='sudo /usr/local/bin/manage-rabbitmq'
+alias manage-schedules='sudo /usr/local/bin/manage-schedules'
 EOF
     
     log_success "已创建用户别名"
@@ -138,10 +141,12 @@ show_usage() {
     echo "  saltgoat passwords"
     echo "  saltgoat optimize magento"
     echo
-    echo "管理脚本："
-    echo "  manage-mysql create mysite mypassword"
-    echo "  manage-nginx create mysite example.com"
-    echo "  manage-rabbitmq create mysite mypassword"
+echo "管理脚本："
+echo "  manage-mysql create mysite mypassword"
+echo "  manage-nginx create mysite example.com"
+echo "  manage-rabbitmq create mysite mypassword"
+echo "  manage-schedules enable    # 启用定时任务"
+echo "  manage-schedules status    # 查看任务状态"
     echo
     echo "注意：首次使用需要重新加载 shell 环境："
     echo "  source ~/.bashrc"
