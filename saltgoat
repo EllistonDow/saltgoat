@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.3.1"
+SCRIPT_VERSION="0.3.2"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -142,10 +142,6 @@ show_help() {
     echo "  env load [file]                 - 加载环境配置文件"
     echo ""
     echo "服务管理:"
-    echo "  mysql create <db> <user> <pass> - 创建 MySQL 数据库和用户"
-    echo "  mysql list                     - 列出所有数据库"
-    echo "  mysql backup <db>              - 备份数据库"
-    echo "  mysql delete <db>              - 删除数据库"
     echo ""
     echo "  nginx create <site> <domain>   - 创建 Nginx 站点"
     echo "  nginx list                     - 列出所有站点"
