@@ -25,7 +25,7 @@ monitor_system_status() {
     # 系统信息
     local hostname=$(salt-call --local cmd.run "hostname" 2>/dev/null)
     local uptime=$(salt-call --local cmd.run "uptime" 2>/dev/null)
-    local load_avg=$(salt-call --local cmd.run "uptime | awk -F'load average:' '{print \$2}'" 2>/dev/null)
+    local load_avg=$(salt-call --local cmd.run "uptime" 2>/dev/null | grep -o 'load average:.*' | cut -d: -f2)
     
     echo "主机名: $hostname"
     echo "运行时间: $uptime"
@@ -36,7 +36,7 @@ monitor_system_status() {
     echo "----------------------------------------"
     
     # CPU 使用率
-    local cpu_usage=$(salt-call --local cmd.run "top -bn1 | grep 'Cpu(s)' | awk '{print \$2}' | awk -F'%' '{print \$1}'" 2>/dev/null)
+    local cpu_usage=$(salt-call --local cmd.run "top -bn1" 2>/dev/null | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%//')
     echo "CPU 使用率: ${cpu_usage}%"
     
     # 内存使用情况
@@ -66,7 +66,7 @@ monitor_service_status() {
     local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
     
     for service in "${services[@]}"; do
-        local status=$(salt-call --local service.status "$service" --out=txt 2>/dev/null | tail -n 1)
+        local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
         if [[ "$status" == "True" ]]; then
             log_success "✅ $service: 正在运行"
         else
@@ -80,9 +80,9 @@ monitor_service_status() {
     
     # 检查服务配置
     for service in "${services[@]}"; do
-        local status=$(salt-call --local service.status "$service" --out=txt 2>/dev/null | tail -n 1)
+        local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
         if [[ "$status" == "True" ]]; then
-            local pid=$(salt-call --local cmd.run "pgrep $service" 2>/dev/null)
+            local pid=$(salt-call --local cmd.run "pgrep $service" 2>/dev/null | head -1 | grep -o '[0-9]*')
             local memory=$(salt-call --local cmd.run "ps -o pid,vsz,rss,comm -p $pid" 2>/dev/null)
             echo "$service (PID: $pid):"
             echo "$memory"
@@ -105,7 +105,7 @@ monitor_resource_usage() {
     echo ""
     echo "CPU 使用率最高的进程:"
     echo "----------------------------------------"
-    local top_processes=$(salt-call --local cmd.run "ps aux --sort=-%cpu | head -10" 2>/dev/null)
+    local top_processes=$(salt-call --local cmd.run "ps aux" 2>/dev/null | sort -k3 -nr | head -10)
     echo "$top_processes"
     
     echo ""
@@ -119,7 +119,7 @@ monitor_resource_usage() {
     echo ""
     echo "内存使用率最高的进程:"
     echo "----------------------------------------"
-    local top_mem_processes=$(salt-call --local cmd.run "ps aux --sort=-%mem | head -10" 2>/dev/null)
+    local top_mem_processes=$(salt-call --local cmd.run "ps aux" 2>/dev/null | sort -k4 -nr | head -10)
     echo "$top_mem_processes"
     
     echo ""
@@ -356,9 +356,9 @@ monitor_realtime() {
         echo ""
         
         # 显示关键指标
-        local cpu_usage=$(salt-call --local cmd.run "top -bn1 | grep 'Cpu(s)' | awk '{print \$2}' | awk -F'%' '{print \$1}'" 2>/dev/null)
+        local cpu_usage=$(salt-call --local cmd.run "top -bn1" 2>/dev/null | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%//')
         local mem_usage=$(salt-call --local cmd.run "free | grep Mem | awk '{printf \"%.1f\", \$3/\$2 * 100.0}'" 2>/dev/null)
-        local load_avg=$(salt-call --local cmd.run "uptime | awk -F'load average:' '{print \$2}'" 2>/dev/null)
+        local load_avg=$(salt-call --local cmd.run "uptime" 2>/dev/null | grep -o 'load average:.*' | cut -d: -f2)
         
         echo "CPU 使用率: ${cpu_usage}%"
         echo "内存使用率: ${mem_usage}%"

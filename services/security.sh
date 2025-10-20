@@ -59,7 +59,7 @@ security_service_check() {
     local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
     
     for service in "${services[@]}"; do
-        local status=$(salt-call --local service.status "$service" --out=txt 2>/dev/null | tail -n 1)
+        local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
         if [[ "$status" == "True" ]]; then
             echo "✅ $service: 运行中"
         else

@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.2.0"
+SCRIPT_VERSION="0.3.0"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -33,7 +33,6 @@ source "${SCRIPT_DIR}/core/system.sh"
 source "${SCRIPT_DIR}/core/optimize.sh"
 
 # 加载服务管理
-source "${SCRIPT_DIR}/services/mysql.sh"
 source "${SCRIPT_DIR}/services/nginx.sh"
 source "${SCRIPT_DIR}/services/rabbitmq.sh"
 source "${SCRIPT_DIR}/services/backup.sh"
@@ -41,7 +40,10 @@ source "${SCRIPT_DIR}/services/logs.sh"
 source "${SCRIPT_DIR}/services/security.sh"
 source "${SCRIPT_DIR}/services/performance.sh"
 source "${SCRIPT_DIR}/services/ssl.sh"
-source "${SCRIPT_DIR}/services/monitor.sh"
+source "${SCRIPT_DIR}/services/maintenance.sh"
+source "${SCRIPT_DIR}/services/reports.sh"
+source "${SCRIPT_DIR}/services/automation.sh"
+source "${SCRIPT_DIR}/monitoring/system.sh"
 source "${SCRIPT_DIR}/services/database.sh"
 
 # 加载监控功能
@@ -99,20 +101,32 @@ show_versions() {
 
 show_passwords() {
     log_info "配置的密码:"
-    echo "MySQL Root: SaltGoat2024!"
-    echo "Valkey: Valkey2024!"
-    echo "RabbitMQ Admin: RabbitMQ2024!"
-    echo "Webmin: Webmin2024!"
-    echo "phpMyAdmin: phpMyAdmin2024!"
+    echo "MySQL Root: ${MYSQL_PASSWORD:-SaltGoat2024!}"
+    echo "Valkey: ${VALKEY_PASSWORD:-Valkey2024!}"
+    echo "RabbitMQ Admin: ${RABBITMQ_PASSWORD:-RabbitMQ2024!}"
+    echo "Webmin: ${WEBMIN_PASSWORD:-Webmin2024!}"
+    echo "phpMyAdmin: ${PHPMYADMIN_PASSWORD:-phpMyAdmin2024!}"
     echo ""
-    log_info "注意: 这些是默认密码，实际密码可能已通过安装过程修改"
+    if [[ -n "$MYSQL_PASSWORD" || -n "$VALKEY_PASSWORD" || -n "$RABBITMQ_PASSWORD" || -n "$WEBMIN_PASSWORD" || -n "$PHPMYADMIN_PASSWORD" ]]; then
+        log_info "注意: 这些是环境配置中的密码"
+    else
+        log_info "注意: 这些是默认密码，实际密码可能已通过安装过程修改"
+    fi
 }
 
 show_help() {
     echo "用法: saltgoat <command> [options]"
     echo ""
     echo "安装命令:"
-    echo "  install all                    - 安装所有组件"
+    echo "  install all [选项]             - 安装所有组件"
+    echo "    --mysql-password <pass>      - MySQL 密码"
+    echo "    --valkey-password <pass>     - Valkey 密码"
+    echo "    --rabbitmq-password <pass>   - RabbitMQ 密码"
+    echo "    --webmin-password <pass>     - Webmin 密码"
+    echo "    --phpmyadmin-password <pass> - phpMyAdmin 密码"
+    echo "    --ssl-email <email>          - SSL 证书邮箱"
+    echo "    --timezone <tz>              - 时区设置"
+    echo "    --language <lang>            - 语言设置"
     echo "  install core                   - 安装核心组件"
     echo "  install optional               - 安装可选组件"
     echo ""
@@ -192,6 +206,7 @@ show_help() {
     echo "  monitor config                  - 监控配置"
     echo "  monitor cleanup [days]           - 清理监控日志"
     echo ""
+    echo "  database mysql <create|list|backup|delete> [args] - MySQL 便捷功能 (Salt 原生)"
     echo "  database test-connection <type> [host] [port] [user] [pass] - 测试数据库连接"
     echo "  database status <type>          - 检查数据库状态"
     echo "  database backup <type> <db> [name] - 备份数据库"
@@ -211,6 +226,26 @@ show_help() {
     echo "  schedule status                - 查看定时任务状态"
     echo "  schedule list                  - 列出所有定时任务"
     echo "  schedule test                  - 测试定时任务配置"
+    echo ""
+    echo "系统维护:"
+    echo "  maintenance update <check|upgrade|dist-upgrade|autoremove|clean> - 系统更新管理"
+    echo "  maintenance service <restart|start|stop|reload|status> <service> - 服务管理"
+    echo "  maintenance cleanup <logs|temp|cache|all> - 系统清理"
+    echo "  maintenance disk <usage|find-large|cleanup-large> [size] [days] - 磁盘管理"
+    echo "  maintenance health - 系统健康检查"
+    echo ""
+    echo "报告生成:"
+    echo "  reports system [format] [output_file] - 生成系统健康报告"
+    echo "  reports performance [format] [output_file] - 生成性能分析报告"
+    echo "  reports security [format] [output_file] - 生成安全评估报告"
+    echo "  reports list [type] - 列出报告文件"
+    echo "  reports cleanup [days] - 清理旧报告"
+    echo ""
+    echo "自动化任务:"
+    echo "  automation script <create|list|edit|run|delete> [name] - 脚本管理"
+    echo "  automation job <create|list|enable|disable|run|delete> [name] [schedule] - 任务管理"
+    echo "  automation logs <list|view|tail|cleanup> [name] [days] - 日志管理"
+    echo "  automation templates <system-update|backup-cleanup|log-rotation|security-scan> - 预设模板"
     echo ""
     echo "系统信息:"
     echo "  status                         - 查看系统状态"
@@ -262,20 +297,18 @@ case "$1" in
     "install")
         case "$2" in
             "all")
-                log_highlight "开始安装所有 SaltGoat 组件..."
-                install_all
+                install_all "${@:3}"
                 ;;
             "core")
-                log_highlight "开始安装核心组件..."
                 install_core
                 ;;
             "optional")
-                log_highlight "开始安装可选组件..."
                 install_optional
                 ;;
             *)
                 log_error "未知的安装选项: $2"
                 log_info "支持: all, core, optional"
+                log_info "使用 'saltgoat install all --help' 查看参数选项"
                 exit 1
                 ;;
         esac
@@ -318,9 +351,6 @@ case "$1" in
                 exit 1
                 ;;
         esac
-        ;;
-    "mysql")
-        mysql_handler "$@"
         ;;
     "nginx")
         nginx_handler "$@"
@@ -530,40 +560,7 @@ case "$1" in
             esac
             ;;
         "database")
-            case "$2" in
-                "test-connection")
-                    database_test_connection "$3" "$4" "$5" "$6" "$7"
-                    ;;
-                "status")
-                    database_status "$3"
-                    ;;
-                "backup")
-                    database_backup "$3" "$4" "$5"
-                    ;;
-                "restore")
-                    database_restore "$3" "$4" "$5"
-                    ;;
-                "performance")
-                    database_performance "$3"
-                    ;;
-                "user")
-                    database_user_management "$3" "$4" "$5" "$6" "$7"
-                    ;;
-                "maintenance")
-                    database_maintenance "$3" "$4" "$5"
-                    ;;
-                "list-backups")
-                    database_list_backups
-                    ;;
-                "cleanup-backups")
-                    database_cleanup_backups "$3"
-                    ;;
-                *)
-                    log_error "未知的数据库操作: $2"
-                    log_info "支持: test-connection, status, backup, restore, performance, user, maintenance, list-backups, cleanup-backups"
-                    exit 1
-                    ;;
-            esac
+            database_handler "$2" "$3" "$4" "$5" "$6" "$7"
             ;;
     "memory")
         memory_handler "$@"
@@ -583,6 +580,15 @@ case "$1" in
                 exit 1
                 ;;
         esac
+        ;;
+    "maintenance")
+        maintenance_handler "$2" "$3" "$4" "$5"
+        ;;
+    "reports")
+        report_handler "$2" "$3" "$4" "$5"
+        ;;
+    "automation")
+        automation_handler "$2" "$3" "$4" "$5"
         ;;
     "status")
         log_highlight "查看系统状态..."

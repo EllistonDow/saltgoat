@@ -1,0 +1,98 @@
+# SaltGoat CI/CD 工作流
+# .github/workflows/code-review.yml
+
+name: SaltGoat Code Review
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Salt
+      run: |
+        curl -L https://bootstrap.saltproject.io | sudo sh
+        sudo salt-call --local test.ping
+        
+    - name: Install code review tools
+      run: |
+        sudo apt update
+        sudo apt install -y shellcheck shfmt python3-yaml
+        
+    - name: Make scripts executable
+      run: |
+        chmod +x scripts/*.sh
+        
+    - name: Run SaltGoat code review
+      run: |
+        ./scripts/salt-code-review.sh -a -c -v
+        
+    - name: Check Salt state files
+      run: |
+        find salt/ -name "*.sls" -exec salt-call --local state.show_sls {} --out=null \;
+        
+    - name: Test main script
+      run: |
+        ./saltgoat help
+        ./saltgoat versions
+        ./saltgoat status
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run security scan
+      run: |
+        # 检查硬编码密码
+        if grep -r "password.*=" --include="*.sh" --include="*.sls" . | grep -v "MYSQL_PASSWORD\|VALKEY_PASSWORD"; then
+          echo "发现可能的硬编码密码"
+          exit 1
+        fi
+        
+        # 检查文件权限
+        find . -name "*.sh" -not -perm 755 -exec chmod 755 {} \;
+        
+        # 检查敏感文件
+        if find . -name "*.key" -o -name "*.pem" -o -name "*.p12"; then
+          echo "发现敏感文件"
+          exit 1
+        fi
+
+  integration-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup test environment
+      run: |
+        sudo apt update
+        sudo apt install -y nginx mysql-server php-fpm
+        
+    - name: Install SaltGoat
+      run: |
+        sudo ./saltgoat system install
+        
+    - name: Test basic functionality
+      run: |
+        saltgoat versions
+        saltgoat status
+        saltgoat passwords
+        
+    - name: Test modules
+      run: |
+        saltgoat monitor system
+        saltgoat database status mysql
+        saltgoat security scan

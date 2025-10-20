@@ -1,0 +1,8 @@
+mysql_password: 'MyPass123!'
+valkey_password: 'Valkey123!'
+rabbitmq_password: 'RabbitMQ123!'
+webmin_password: 'Webmin123!'
+phpmyadmin_password: 'phpMyAdmin123!'
+ssl_email: 'ssl@tschenfeng.com'
+timezone: 'America/Los_Angeles'
+language: 'en_US.UTF-8'

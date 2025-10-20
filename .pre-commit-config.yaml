@@ -1,0 +1,55 @@
+# SaltGoat Pre-commit 配置
+# .pre-commit-config.yaml
+
+repos:
+  # Shell 脚本检查
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: ['--severity=warning']
+        files: \.sh$
+
+  # Shell 脚本格式化
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.8.0-2
+    hooks:
+      - id: shfmt
+        args: ['-i', '4', '-ci', '-sr']
+        files: \.sh$
+
+  # YAML 文件检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+        files: \.(yml|yaml)$
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-case-conflict
+
+  # Salt 特定检查
+  - repo: local
+    hooks:
+      - id: salt-syntax-check
+        name: Salt Syntax Check
+        entry: salt-call --local state.show_sls
+        language: system
+        files: \.sls$
+        pass_filenames: false
+        args: ['--out=null']
+        always_run: false
+
+  # 自定义 Salt 项目检查
+  - repo: local
+    hooks:
+      - id: saltgoat-review
+        name: SaltGoat Code Review
+        entry: ./scripts/salt-code-review.sh
+        language: system
+        files: \.(sh|sls|yml|yaml)$
+        pass_filenames: true
+        args: ['-c', '-v']
+        always_run: false

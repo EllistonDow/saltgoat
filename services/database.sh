@@ -743,3 +743,120 @@ database_cleanup_backups() {
     
     log_success "数据库备份清理完成，删除了 $cleaned_count 个文件/目录"
 }
+
+# MySQL 便捷功能 - 完全 Salt 原生功能
+database_mysql_convenience() {
+    case "$1" in
+        "create")
+            if [[ -z "$2" || -z "$3" || -z "$4" ]]; then
+                log_error "用法: saltgoat database mysql create <dbname> <username> <password>"
+                log_info "示例: saltgoat database mysql create hawkmage hawk 'hawk.2010'"
+                exit 1
+            fi
+            
+            local dbname="$2"
+            local username="$3"
+            local password="$4"
+            
+            log_highlight "创建 MySQL 数据库和用户: $dbname / $username"
+            ensure_database_dirs
+            
+            # 使用 Salt 原生 MySQL 模块创建数据库
+            log_info "创建数据库: $dbname"
+            salt-call --local mysql.db_create "$dbname"
+            
+            # 使用 Salt 原生 MySQL 模块创建用户
+            log_info "创建用户: $username"
+            salt-call --local mysql.user_create "$username" password="$password" auth_plugin="caching_sha2_password"
+            
+            # 使用 Salt 原生 MySQL 模块授权
+            log_info "授权用户访问数据库"
+            salt-call --local mysql.grant_add "$username" "$dbname" "ALL PRIVILEGES"
+            
+            log_success "MySQL 数据库和用户创建成功: $dbname / $username"
+            ;;
+        "list")
+            log_highlight "列出所有 MySQL 数据库..."
+            salt-call --local mysql.db_list
+            ;;
+        "backup")
+            if [[ -z "$2" ]]; then
+                log_error "用法: saltgoat database mysql backup <dbname>"
+                exit 1
+            fi
+            
+            local dbname="$2"
+            log_highlight "备份 MySQL 数据库: $dbname"
+            database_backup "mysql" "$dbname"
+            ;;
+        "delete")
+            if [[ -z "$2" ]]; then
+                log_error "用法: saltgoat database mysql delete <dbname>"
+                exit 1
+            fi
+            
+            local dbname="$2"
+            log_warning "删除 MySQL 数据库: $dbname"
+            salt-call --local mysql.db_remove "$dbname"
+            log_success "MySQL 数据库删除成功: $dbname"
+            ;;
+        *)
+            log_error "未知的 MySQL 操作: $1"
+            log_info "支持的操作: create, list, backup, delete"
+            log_info "这些是 MySQL 模块的便捷功能，完全使用 Salt 原生功能实现"
+            exit 1
+            ;;
+    esac
+}
+
+# 数据库管理主函数
+database_handler() {
+    case "$1" in
+        "mysql")
+            # MySQL 便捷功能
+            database_mysql_convenience "$2" "$3" "$4" "$5"
+            ;;
+        "test-connection")
+            database_test_connection "$2" "$3" "$4" "$5" "$6"
+            ;;
+        "status")
+            database_status "$2"
+            ;;
+        "backup")
+            database_backup "$2" "$3" "$4"
+            ;;
+        "restore")
+            database_restore "$2" "$3" "$4"
+            ;;
+        "performance")
+            database_performance "$2"
+            ;;
+        "user")
+            database_user_management "$2" "$3" "$4" "$5" "$6"
+            ;;
+        "maintenance")
+            database_maintenance "$2" "$3" "$4"
+            ;;
+        "list-backups")
+            database_list_backups
+            ;;
+        "cleanup-backups")
+            database_cleanup_backups "$2"
+            ;;
+        *)
+            log_error "未知的数据库操作: $1"
+            log_info "支持的操作:"
+            log_info "  mysql <create|list|backup|delete> [args] - MySQL 便捷功能"
+            log_info "  test-connection <type> [host] [port] [user] [pass] - 测试数据库连接"
+            log_info "  status <type>          - 检查数据库状态"
+            log_info "  backup <type> <db> [name] - 备份数据库"
+            log_info "  restore <type> <db> <file> - 恢复数据库"
+            log_info "  performance <type>      - 数据库性能监控"
+            log_info "  user <type> <action> [user] [pass] [db] - 用户管理"
+            log_info "  maintenance <type> <action> [db] - 数据库维护"
+            log_info "  list-backups            - 列出数据库备份"
+            log_info "  cleanup-backups [days] - 清理数据库备份"
+            exit 1
+            ;;
+    esac
+}
