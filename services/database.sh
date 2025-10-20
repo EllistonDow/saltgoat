@@ -14,12 +14,12 @@ ensure_database_dirs() {
     salt-call --local file.mkdir "$DB_CONFIG_DIR" >/dev/null 2>&1 || true
     
     # 创建 MySQL 配置文件以避免密码警告
-    local mysql --defaults-file=/home/$USER/.my.cnf_config="[client]
+    local mysql_config="[client]
 user=root
 password=MyPass123!"
-    local mysql --defaults-file=/home/$USER/.my.cnf_config_file="/home/$USER/.my.cnf"
-    echo "$mysql --defaults-file=/home/$USER/.my.cnf_config" > "$mysql --defaults-file=/home/$USER/.my.cnf_config_file"
-    chmod 600 "$mysql --defaults-file=/home/$USER/.my.cnf_config_file"
+    local mysql_config_file="/home/$USER/.my.cnf"
+    echo "$mysql_config" > "$mysql_config_file"
+    chmod 600 "$mysql_config_file"
 }
 
 # 数据库连接测试
@@ -32,17 +32,17 @@ database_test_connection() {
     
     if [[ -z "$db_type" ]]; then
         log_error "用法: saltgoat database test-connection <type> [host] [port] [username] [password]"
-        log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql, mongodb, redis"
-        log_info "示例: saltgoat database test-connection mysql --defaults-file=/home/$USER/.my.cnf localhost 3306 root password"
+        log_info "支持类型: mysql, postgresql, mongodb, redis"
+        log_info "示例: saltgoat database test-connection mysql localhost 3306 root password"
         exit 1
     fi
     
     log_highlight "测试数据库连接: $db_type ($host:$port)"
     
     case "$db_type" in
-        "mysql --defaults-file=/home/$USER/.my.cnf")
+        "mysql")
             log_info "测试 MySQL 连接..."
-            if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf --defaults-file=/home/$USER/.my.cnf -h $host -P $port -e 'SELECT 1;'" >/dev/null 2>&1; then
+            if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -h $host -P $port -e 'SELECT 1;'" >/dev/null 2>&1; then
                 log_success "MySQL 连接成功"
             else
                 log_error "MySQL 连接失败"
@@ -78,7 +78,7 @@ database_test_connection() {
             ;;
         *)
             log_error "不支持的数据库类型: $db_type"
-            log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql, mongodb, redis"
+            log_info "支持类型: mysql, postgresql, mongodb, redis"
             exit 1
             ;;
     esac
@@ -90,18 +90,18 @@ database_status() {
     
     if [[ -z "$db_type" ]]; then
         log_error "用法: saltgoat database status <type>"
-        log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql, mongodb, redis"
+        log_info "支持类型: mysql, postgresql, mongodb, redis"
         exit 1
     fi
     
     log_highlight "检查数据库状态: $db_type"
     
     case "$db_type" in
-        "mysql --defaults-file=/home/$USER/.my.cnf")
+        "mysql")
             log_info "MySQL 状态检查..."
             
             # 检查服务状态
-            local service_status=$(salt-call --local service.status mysql --defaults-file=/home/$USER/.my.cnf --out=txt 2>/dev/null | tail -n 1)
+            local service_status=$(salt-call --local service.status mysql --out=txt 2>/dev/null | tail -n 1)
             if [[ "$service_status" == "local: True" ]]; then
                 log_success "MySQL 服务正在运行"
             else
@@ -114,11 +114,11 @@ database_status() {
             echo "MySQL 版本: $version"
             
             # 检查连接数
-            local connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e 'SHOW STATUS LIKE \"Threads_connected\";'" 2>/dev/null)
+            local connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -e 'SHOW STATUS LIKE \"Threads_connected\";'" 2>/dev/null)
             echo "当前连接数: $connections"
             
             # 检查数据库列表
-            local databases=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e 'SHOW DATABASES;'" 2>/dev/null)
+            local databases=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -e 'SHOW DATABASES;'" 2>/dev/null)
             echo "数据库列表:"
             echo "$databases"
             ;;
@@ -184,7 +184,7 @@ database_status() {
             ;;
         *)
             log_error "不支持的数据库类型: $db_type"
-            log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql, mongodb, redis"
+            log_info "支持类型: mysql, postgresql, mongodb, redis"
             exit 1
             ;;
     esac
@@ -198,15 +198,9 @@ database_backup() {
     
     if [[ -z "$db_type" || -z "$db_name" ]]; then
         log_error "用法: saltgoat database backup <type> <database_name> [backup_name]"
-        log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql, mongodb"
-        log_info "示例: saltgoat database backup mysql --defaults-file=/home/$USER/.my.cnf mydb mydb_backup"
+        log_info "支持类型: mysql, postgresql, mongodb"
+        log_info "示例: saltgoat database backup mysql mydb mydb_backup"
         exit 1
-    fi
-    
-    # 处理 list 命令
-    if [[ "$db_name" == "list" ]]; then
-        database_list_backups "$db_type"
-        return
     fi
     
     if [[ -z "$backup_name" ]]; then
@@ -219,9 +213,9 @@ database_backup() {
     local backup_file="$DB_BACKUP_DIR/${backup_name}.sql"
     
     case "$db_type" in
-        "mysql --defaults-file=/home/$USER/.my.cnf")
+        "mysql")
             log_info "备份 MySQL 数据库..."
-            if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnfdump -u root  $db_name" > "$backup_file" 2>/dev/null; then
+            if salt-call --local cmd.run "mysqldump -u root -p'MyPass123!' $db_name > $backup_file" >/dev/null 2>&1; then
                 log_success "MySQL 数据库备份完成: $backup_file"
             else
                 log_error "MySQL 数据库备份失败"
@@ -250,7 +244,7 @@ database_backup() {
             ;;
         *)
             log_error "不支持的数据库类型: $db_type"
-            log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql, mongodb"
+            log_info "支持类型: mysql, postgresql, mongodb"
             exit 1
             ;;
     esac
@@ -275,8 +269,8 @@ database_restore() {
     
     if [[ -z "$db_type" || -z "$db_name" || -z "$backup_file" ]]; then
         log_error "用法: saltgoat database restore <type> <database_name> <backup_file>"
-        log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql, mongodb"
-        log_info "示例: saltgoat database restore mysql --defaults-file=/home/$USER/.my.cnf mydb /var/backups/databases/mydb_backup.sql"
+        log_info "支持类型: mysql, postgresql, mongodb"
+        log_info "示例: saltgoat database restore mysql mydb /var/backups/databases/mydb_backup.sql"
         exit 1
     fi
     
@@ -297,9 +291,9 @@ database_restore() {
     fi
     
     case "$db_type" in
-        "mysql --defaults-file=/home/$USER/.my.cnf")
+        "mysql")
             log_info "恢复 MySQL 数据库..."
-            if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  $db_name < $backup_file" >/dev/null 2>&1; then
+            if salt-call --local cmd.run "mysql -u root -p'MyPass123!' $db_name < $backup_file" >/dev/null 2>&1; then
                 log_success "MySQL 数据库恢复完成"
             else
                 log_error "MySQL 数据库恢复失败"
@@ -326,7 +320,7 @@ database_restore() {
             ;;
         *)
             log_error "不支持的数据库类型: $db_type"
-            log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql, mongodb"
+            log_info "支持类型: mysql, postgresql, mongodb"
             exit 1
             ;;
     esac
@@ -338,40 +332,40 @@ database_performance() {
     
     if [[ -z "$db_type" ]]; then
         log_error "用法: saltgoat database performance <type>"
-        log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql, mongodb, redis"
+        log_info "支持类型: mysql, postgresql, mongodb, redis"
         exit 1
     fi
     
     log_highlight "数据库性能监控: $db_type"
     
     case "$db_type" in
-        "mysql --defaults-file=/home/$USER/.my.cnf")
+        "mysql")
             log_info "MySQL 性能监控..."
             
             echo "连接统计:"
             echo "----------------------------------------"
-            local connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e 'SHOW STATUS LIKE \"Connections\";'" 2>/dev/null)
+            local connections=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Connections\";'" 2>/dev/null)
             echo "$connections"
             
-            local max_connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e 'SHOW STATUS LIKE \"Max_used_connections\";'" 2>/dev/null)
+            local max_connections=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Max_used_connections\";'" 2>/dev/null)
             echo "$max_connections"
             
             echo ""
             echo "查询统计:"
             echo "----------------------------------------"
-            local queries=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e 'SHOW STATUS LIKE \"Queries\";'" 2>/dev/null)
+            local queries=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Queries\";'" 2>/dev/null)
             echo "$queries"
             
-            local slow_queries=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e 'SHOW STATUS LIKE \"Slow_queries\";'" 2>/dev/null)
+            local slow_queries=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Slow_queries\";'" 2>/dev/null)
             echo "$slow_queries"
             
             echo ""
             echo "缓存统计:"
             echo "----------------------------------------"
-            local cache_hits=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e 'SHOW STATUS LIKE \"Qcache_hits\";'" 2>/dev/null)
+            local cache_hits=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Qcache_hits\";'" 2>/dev/null)
             echo "$cache_hits"
             
-            local cache_misses=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e 'SHOW STATUS LIKE \"Qcache_misses\";'" 2>/dev/null)
+            local cache_misses=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Qcache_misses\";'" 2>/dev/null)
             echo "$cache_misses"
             ;;
         "postgresql")
@@ -424,7 +418,7 @@ database_performance() {
             ;;
         *)
             log_error "不支持的数据库类型: $db_type"
-            log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql, mongodb, redis"
+            log_info "支持类型: mysql, postgresql, mongodb, redis"
             exit 1
             ;;
     esac
@@ -440,16 +434,16 @@ database_user_management() {
     
     if [[ -z "$db_type" || -z "$action" ]]; then
         log_error "用法: saltgoat database user <type> <action> [username] [password] [database]"
-        log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql"
+        log_info "支持类型: mysql, postgresql"
         log_info "支持操作: create, delete, list, grant"
-        log_info "示例: saltgoat database user mysql --defaults-file=/home/$USER/.my.cnf create testuser password123 mydb"
+        log_info "示例: saltgoat database user mysql create testuser password123 mydb"
         exit 1
     fi
     
     log_highlight "数据库用户管理: $db_type/$action"
     
     case "$db_type" in
-        "mysql --defaults-file=/home/$USER/.my.cnf")
+        "mysql")
             case "$action" in
                 "create")
                     if [[ -z "$username" || -z "$password" ]]; then
@@ -457,7 +451,7 @@ database_user_management() {
                         exit 1
                     fi
                     log_info "创建 MySQL 用户: $username"
-                    if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e \"CREATE USER '$username'@'localhost' IDENTIFIED BY '$password';\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"CREATE USER '$username'@'localhost' IDENTIFIED BY '$password';\"" >/dev/null 2>&1; then
                         log_success "MySQL 用户创建成功: $username"
                     else
                         log_error "MySQL 用户创建失败"
@@ -470,7 +464,7 @@ database_user_management() {
                         exit 1
                     fi
                     log_info "删除 MySQL 用户: $username"
-                    if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e \"DROP USER '$username'@'localhost';\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"DROP USER '$username'@'localhost';\"" >/dev/null 2>&1; then
                         log_success "MySQL 用户删除成功: $username"
                     else
                         log_error "MySQL 用户删除失败"
@@ -479,7 +473,7 @@ database_user_management() {
                     ;;
                 "list")
                     log_info "列出 MySQL 用户..."
-                    local users=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e 'SELECT User, Host FROM mysql --defaults-file=/home/$USER/.my.cnf.user;'" 2>/dev/null)
+                    local users=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SELECT User, Host FROM mysql.user;'" 2>/dev/null)
                     echo "$users"
                     ;;
                 "grant")
@@ -488,7 +482,7 @@ database_user_management() {
                         exit 1
                     fi
                     log_info "授权 MySQL 用户: $username -> $database"
-                    if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e \"GRANT ALL PRIVILEGES ON $database.* TO '$username'@'localhost';\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"GRANT ALL PRIVILEGES ON $database.* TO '$username'@'localhost';\"" >/dev/null 2>&1; then
                         log_success "MySQL 用户授权成功: $username -> $database"
                     else
                         log_error "MySQL 用户授权失败"
@@ -557,7 +551,7 @@ database_user_management() {
             ;;
         *)
             log_error "不支持的数据库类型: $db_type"
-            log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql"
+            log_info "支持类型: mysql, postgresql"
             exit 1
             ;;
     esac
@@ -571,16 +565,16 @@ database_maintenance() {
     
     if [[ -z "$db_type" || -z "$action" ]]; then
         log_error "用法: saltgoat database maintenance <type> <action> [database]"
-        log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql"
+        log_info "支持类型: mysql, postgresql"
         log_info "支持操作: optimize, analyze, repair, vacuum"
-        log_info "示例: saltgoat database maintenance mysql --defaults-file=/home/$USER/.my.cnf optimize mydb"
+        log_info "示例: saltgoat database maintenance mysql optimize mydb"
         exit 1
     fi
     
     log_highlight "数据库维护: $db_type/$action"
     
     case "$db_type" in
-        "mysql --defaults-file=/home/$USER/.my.cnf")
+        "mysql")
             case "$action" in
                 "optimize")
                     if [[ -z "$database" ]]; then
@@ -588,7 +582,7 @@ database_maintenance() {
                         exit 1
                     fi
                     log_info "优化 MySQL 数据库: $database"
-                    if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e \"OPTIMIZE TABLE $database.*;\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"OPTIMIZE TABLE $database.*;\"" >/dev/null 2>&1; then
                         log_success "MySQL 数据库优化完成: $database"
                     else
                         log_error "MySQL 数据库优化失败"
@@ -601,7 +595,7 @@ database_maintenance() {
                         exit 1
                     fi
                     log_info "分析 MySQL 数据库: $database"
-                    if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e \"ANALYZE TABLE $database.*;\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"ANALYZE TABLE $database.*;\"" >/dev/null 2>&1; then
                         log_success "MySQL 数据库分析完成: $database"
                     else
                         log_error "MySQL 数据库分析失败"
@@ -614,7 +608,7 @@ database_maintenance() {
                         exit 1
                     fi
                     log_info "修复 MySQL 数据库: $database"
-                    if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -u root  -e \"REPAIR TABLE $database.*;\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"REPAIR TABLE $database.*;\"" >/dev/null 2>&1; then
                         log_success "MySQL 数据库修复完成: $database"
                     else
                         log_error "MySQL 数据库修复失败"
@@ -665,7 +659,7 @@ database_maintenance() {
             ;;
         *)
             log_error "不支持的数据库类型: $db_type"
-            log_info "支持类型: mysql --defaults-file=/home/$USER/.my.cnf, postgresql"
+            log_info "支持类型: mysql, postgresql"
             exit 1
             ;;
     esac
@@ -677,7 +671,7 @@ database_list_backups() {
     ensure_database_dirs
     
     if [[ ! -d "$DB_BACKUP_DIR" ]] || [[ -z "$(ls -A "$DB_BACKUP_DIR" 2>/dev/null)" ]]; then
-        echo "[INFO] 没有找到任何数据库备份"
+        log_info "没有找到任何数据库备份"
         return 0
     fi
     
