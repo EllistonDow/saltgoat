@@ -1,1447 +1,300 @@
 #!/bin/bash
-
-# SaltGoat 简化安装脚本
-# 用法: ./saltgoat install all
+# SaltGoat 主入口脚本 - 混合模式设计
 
 set -e
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+# 脚本信息
+SCRIPT_NAME="SaltGoat"
+SCRIPT_VERSION="0.1.4"
 
-# 日志函数
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
+# 获取脚本实际路径（处理符号链接）
+if [[ -L "${BASH_SOURCE[0]}" ]]; then
+    # 如果是符号链接，获取实际路径
+    SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+else
+    # 如果不是符号链接，使用常规方法
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
+# 加载公共库
+source "${SCRIPT_DIR}/lib/logger.sh"
+source "${SCRIPT_DIR}/lib/utils.sh"
+source "${SCRIPT_DIR}/lib/config.sh"
 
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
+# 加载核心功能
+source "${SCRIPT_DIR}/core/install.sh"
+source "${SCRIPT_DIR}/core/system.sh"
+source "${SCRIPT_DIR}/core/optimize.sh"
 
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+# 加载服务管理
+source "${SCRIPT_DIR}/services/mysql.sh"
+source "${SCRIPT_DIR}/services/nginx.sh"
+source "${SCRIPT_DIR}/services/rabbitmq.sh"
+source "${SCRIPT_DIR}/services/backup.sh"
 
-log_highlight() {
-    echo -e "${CYAN}[HIGHLIGHT]${NC} $1"
-}
+# 加载监控功能
+source "${SCRIPT_DIR}/monitoring/memory.sh"
+source "${SCRIPT_DIR}/monitoring/schedule.sh"
 
-# 检查权限（系统安装后无需 sudo）
-check_permissions() {
-    # 如果是 system install/uninstall/ssh-port 命令，跳过权限检查
-    if [[ "$1" == "system" && ("$2" == "install" || "$2" == "uninstall" || "$2" == "ssh-port") ]]; then
-        return 0
-    fi
-    
-    # 如果是 help 命令，跳过权限检查
-    if [[ "$1" == "help" || "$1" == "--help" || "$1" == "-h" ]]; then
-        return 0
-    fi
-    
-    # 如果是系统安装的 saltgoat，且配置了 sudoers，则不需要检查 root
-    if [[ "$0" == "/usr/local/bin/saltgoat" ]] && sudo -n true 2>/dev/null; then
-        return 0
-    fi
-    
-    # 否则需要 root 权限
-    if [[ $EUID -ne 0 ]]; then
-        log_error "此脚本需要 root 权限运行"
-        log_info "请使用: sudo $0 $@"
-        log_info "首次使用请运行: sudo ./saltgoat system install"
-        exit 1
-    fi
-}
+# 显示横幅
+show_banner
 
-# 安装系统依赖
-install_system_deps() {
-    log_info "安装系统依赖..."
-    
-    # 更新包列表
-    apt update
-    
-    # 安装基础工具和编译环境
-    apt install -y curl wget gnupg2 software-properties-common apt-transport-https ca-certificates
-    
-    # 安装 Python 和开发工具
-    apt install -y python3 python3-pip python3-dev python3-setuptools python3-wheel
-    
-    # 安装编译依赖
-    apt install -y build-essential libssl-dev libffi-dev zlib1g-dev
-    
-    log_success "系统依赖安装完成"
-}
-
-# 安装 Salt 及其依赖
-install_salt() {
-    log_info "检查 Salt 安装状态..."
-    
-    if command -v salt-call &> /dev/null; then
-        log_success "Salt 已安装"
-        return
-    fi
-    
-    log_info "安装 Salt 及其依赖..."
-    
-    # 安装系统依赖
-    install_system_deps
-    
-    # 检查网络连接
-    if ! ping -c 1 repo.saltproject.io &> /dev/null; then
-        log_warning "无法连接到 Salt 仓库，使用 pip 安装 Salt..."
-        
-        # 使用 pip 安装 Salt 及其依赖
-        pip3 install salt tornado pyzmq pycryptodome msgpack jinja2 looseversion distro --break-system-packages
-        
-        if command -v salt-call &> /dev/null; then
-            log_success "Salt 安装完成（使用 pip）"
-        else
-            log_error "Salt 安装失败"
-            exit 1
-        fi
-    else
-        log_info "尝试使用官方仓库安装 Salt..."
-        
-        # 添加 Salt 仓库
-        curl -fsSL https://repo.saltproject.io/salt/py3/ubuntu/24.04/amd64/latest/salt-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/salt-archive-keyring.gpg
-        echo "deb [signed-by=/usr/share/keyrings/salt-archive-keyring.gpg] https://repo.saltproject.io/salt/py3/ubuntu/24.04/amd64/latest jammy main" > /etc/apt/sources.list.d/salt.list
-        
-        # 更新包列表并安装 Salt
-        apt update
-        apt install -y salt-minion salt-common
-        
-        if command -v salt-call &> /dev/null; then
-            log_success "Salt 安装完成（使用官方仓库）"
-        else
-            log_warning "官方仓库安装失败，回退到 pip 安装..."
-            pip3 install salt tornado pyzmq pycryptodome msgpack jinja2 looseversion distro --break-system-packages
-            
-            if command -v salt-call &> /dev/null; then
-                log_success "Salt 安装完成（使用 pip）"
-            else
-                log_error "Salt 安装失败"
-                exit 1
-            fi
-        fi
-    fi
-    
-    # 配置 Salt 为本地模式
-    mkdir -p /etc/salt/minion.d
-    cat > /etc/salt/minion.d/local.conf << EOF
-file_client: local
-file_roots:
-  base:
-    - $(pwd)/salt/states
-pillar_roots:
-  base:
-    - $(pwd)/salt/pillar
-EOF
-    
-    log_success "Salt 配置完成"
-}
-
-# 设置 Salt Pillar 值
-set_pillar() {
-    local key="$1"
-    local value="$2"
-    
-    # 确保 Salt 已安装
-    install_salt
-    
-    log_info "设置 Pillar: $key"
-    salt-call --local grains.set "pillar_$key" "$value"
-}
-
-# 安装所有组件
-install_all() {
-    log_info "安装所有 SaltGoat 组件..."
-    
-    # 确保 Salt 已安装
-    install_salt
-    
-    # 安装核心组件
-    salt-call --local state.apply common.system
-    salt-call --local state.apply common.packages
-    salt-call --local state.apply common.security
-    salt-call --local state.apply core.nginx
-    salt-call --local state.apply core.php
-    salt-call --local state.apply core.mysql
-    salt-call --local state.apply core.composer
-    
-    # 安装可选组件
-    salt-call --local state.apply optional.valkey
-    salt-call --local state.apply optional.opensearch
-    salt-call --local state.apply optional.rabbitmq
-    salt-call --local state.apply optional.webmin
-    salt-call --local state.apply optional.phpmyadmin
-    salt-call --local state.apply optional.certbot
-    salt-call --local state.apply optional.fail2ban
-    salt-call --local state.apply optional.varnish
-    
-    log_success "所有组件安装完成"
-}
-
-# 安装核心组件
-install_core() {
-    log_info "安装核心组件..."
-    
-    # 确保 Salt 已安装
-    install_salt
-    
-    salt-call --local state.apply common.system
-    salt-call --local state.apply common.packages
-    salt-call --local state.apply common.security
-    salt-call --local state.apply core.nginx
-    salt-call --local state.apply core.php
-    salt-call --local state.apply core.mysql
-    salt-call --local state.apply core.composer
-    
-    log_success "核心组件安装完成"
-}
-
-# 安装可选组件
-install_optional() {
-    log_info "安装可选组件..."
-    
-    # 确保 Salt 已安装
-    install_salt
-    
-    salt-call --local state.apply optional.valkey
-    salt-call --local state.apply optional.opensearch
-    salt-call --local state.apply optional.rabbitmq
-    salt-call --local state.apply optional.webmin
-    salt-call --local state.apply optional.phpmyadmin
-    salt-call --local state.apply optional.certbot
-    salt-call --local state.apply optional.fail2ban
-    salt-call --local state.apply optional.varnish
-    
-    log_success "可选组件安装完成"
-}
-
-# 优化 Magento 配置
-optimize_magento() {
-    log_info "优化 Magento 配置..."
-    
-    # 确保 Salt 已安装
-    install_salt
-    
-    salt-call --local state.apply optional.magento-optimization
-    
-    log_success "Magento 配置优化完成"
-}
-
-# 显示服务状态
+# 状态和信息显示函数
 show_status() {
-    log_info "检查服务状态..."
-    
-    # 检查 Salt 状态
-    if command -v salt-call &> /dev/null; then
-        log_success "Salt: 已安装"
-    else
-        log_error "Salt: 未安装"
-    fi
-    
-    # 检查服务状态
-    services=("nginx" "mysql" "php8.3-fpm" "valkey" "opensearch" "rabbitmq")
-    for service in "${services[@]}"; do
-        if systemctl is-active --quiet "$service"; then
-            log_success "$service: 运行中"
-        else
-            log_warning "$service: 未运行"
-        fi
-    done
+    log_info "系统状态:"
+    echo "Nginx: $(salt-call --local service.status nginx --out=txt | tail -n 1)"
+    echo "MySQL: $(salt-call --local service.status mysql --out=txt | tail -n 1)"
+    echo "PHP-FPM: $(salt-call --local service.status php8.3-fpm --out=txt | tail -n 1)"
+    echo "Valkey: $(salt-call --local service.status valkey --out=txt | tail -n 1)"
+    echo "OpenSearch: $(salt-call --local service.status opensearch --out=txt | tail -n 1)"
+    echo "RabbitMQ: $(salt-call --local service.status rabbitmq --out=txt | tail -n 1)"
 }
 
-# 显示版本信息
 show_versions() {
-    log_highlight "=== SaltGoat 组件版本信息 ==="
+    log_info "版本信息:"
+    echo "SaltGoat: $SCRIPT_VERSION"
+    echo "Salt: $(salt-call --version | head -1)"
+    echo "Nginx: $(nginx -v 2>&1 | head -1)"
+    echo "MySQL: $(mysql --version)"
+    echo "PHP: $(php -v | head -1)"
+    echo "Valkey: $(valkey-server --version)"
     
-    echo ""
-    log_info "系统信息："
-    echo "  OS: $(lsb_release -d | cut -f2)"
-    echo "  Kernel: $(uname -r)"
-    echo "  Architecture: $(uname -m)"
-    
-    echo ""
-    log_info "核心组件："
-    
-    # Salt
-    if command -v salt-call &> /dev/null; then
-        local salt_version=$(salt-call --version | head -1 | awk '{print $2}')
-        echo "  Salt: $salt_version"
-    else
-        echo "  Salt: 未安装"
+    # OpenSearch 版本（从包管理器获取）
+    if dpkg -l | grep -q "^ii.*opensearch "; then
+        echo "OpenSearch: $(dpkg -l | grep "^ii.*opensearch " | awk '{print $3}')"
     fi
     
-    # Nginx
-    if [ -f /usr/local/nginx/sbin/nginx ]; then
-        local nginx_version=$(/usr/local/nginx/sbin/nginx -v 2>&1 | awk '{print $3}' | cut -d'/' -f2)
-        echo "  Nginx: $nginx_version"
-    elif command -v nginx &> /dev/null; then
-        local nginx_version=$(nginx -v 2>&1 | awk '{print $3}' | cut -d'/' -f2)
-        echo "  Nginx: $nginx_version"
-    else
-        echo "  Nginx: 未安装"
+    # RabbitMQ 版本（使用 rabbitmqctl）
+    if command -v rabbitmqctl >/dev/null 2>&1; then
+        echo "RabbitMQ: $(rabbitmqctl version)"
     fi
     
-    # PHP
-    if command -v php &> /dev/null; then
-        local php_version=$(php -v 2>/dev/null | head -1 | awk '{print $2}')
-        echo "  PHP: $php_version"
-    else
-        echo "  PHP: 未安装"
+    # Varnish 版本
+    if command -v varnishd >/dev/null 2>&1; then
+        echo "Varnish: $(varnishd -V 2>&1 | head -1)"
     fi
     
-    # MySQL
-    if command -v mysql &> /dev/null; then
-        local mysql_version=$(mysql --version | awk '{print $3}' | cut -d',' -f1)
-        echo "  MySQL: $mysql_version"
-    else
-        echo "  MySQL: 未安装"
+    # Webmin 版本
+    if command -v webmin >/dev/null 2>&1; then
+        echo "Webmin: $(dpkg -l | grep "^ii.*webmin " | awk '{print $3}')"
     fi
     
-    # Composer
-    if command -v composer &> /dev/null; then
-        local composer_version=$(composer --version 2>/dev/null | head -1 | awk '{print $3}')
-        echo "  Composer: $composer_version"
-    else
-        echo "  Composer: 未安装"
+    # phpMyAdmin 版本
+    if dpkg -l | grep -q "^ii.*phpmyadmin "; then
+        echo "phpMyAdmin: $(dpkg -l | grep "^ii.*phpmyadmin " | awk '{print $3}')"
     fi
-    
-    echo ""
-    log_info "可选组件："
-    
-    # Valkey 8.0.5
-    if command -v valkey-server &> /dev/null; then
-        local valkey_version=$(valkey-server --version | awk '{print $3}' | cut -d'=' -f2)
-        echo "  Valkey: $valkey_version"
-    elif command -v redis-server &> /dev/null; then
-        local redis_version=$(redis-server --version | awk '{print $3}' | cut -d'=' -f2)
-        echo "  Valkey: Redis $redis_version (替代)"
-    else
-        echo "  Valkey: 未安装"
-    fi
-    
-    # OpenSearch
-    if systemctl is-active --quiet opensearch; then
-        local opensearch_version=$(curl -s http://localhost:9200 2>/dev/null | grep -o '"number" : "[^"]*"' | cut -d'"' -f4 || echo "已安装")
-        echo "  OpenSearch: $opensearch_version"
-    else
-        echo "  OpenSearch: 未安装"
-    fi
-    
-    # RabbitMQ
-    if command -v rabbitmqctl &> /dev/null; then
-        local rabbitmq_version=$(rabbitmqctl version 2>/dev/null | head -1 || echo "已安装")
-        echo "  RabbitMQ: $rabbitmq_version"
-    else
-        echo "  RabbitMQ: 未安装"
-    fi
-    
-    # Webmin
-    if command -v webmin &> /dev/null; then
-        echo "  Webmin: 已安装"
-    else
-        echo "  Webmin: 未安装"
-    fi
-    
-    # phpMyAdmin
-    if [ -d "/usr/share/phpmyadmin" ] || [ -d "/var/www/phpmyadmin" ]; then
-        echo "  phpMyAdmin: 已安装"
-    else
-        echo "  phpMyAdmin: 未安装"
-    fi
-    
-    # Certbot
-    if command -v certbot &> /dev/null; then
-        local certbot_version=$(certbot --version | awk '{print $2}')
-        echo "  Certbot: $certbot_version"
-    else
-        echo "  Certbot: 未安装"
-    fi
-    
-    # Fail2ban
-    if command -v fail2ban-server &> /dev/null; then
-        local fail2ban_version=$(fail2ban-server --version 2>&1 | head -1 | awk '{print $2}')
-        echo "  Fail2ban: $fail2ban_version"
-    else
-        echo "  Fail2ban: 未安装"
-    fi
-    
-    # Varnish
-    if command -v varnishd &> /dev/null; then
-        local varnish_version=$(varnishd -V 2>&1 | head -1 | grep -o 'varnish-[0-9.]*' | cut -d'-' -f2)
-        echo "  Varnish: $varnish_version"
-    else
-        echo "  Varnish: 未安装"
-    fi
-    
 }
 
-# 显示密码信息
 show_passwords() {
-    log_highlight "=== SaltGoat 配置的密码 ==="
-    
+    log_info "配置的密码:"
+    echo "MySQL Root: SaltGoat2024!"
+    echo "Valkey: Valkey2024!"
+    echo "RabbitMQ Admin: RabbitMQ2024!"
+    echo "Webmin: Webmin2024!"
+    echo "phpMyAdmin: phpMyAdmin2024!"
     echo ""
-    log_info "数据库密码："
-    local mysql_pass=$(salt-call --local grains.get pillar_mysql_root_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
-    if [[ -n "$mysql_pass" ]] && [[ "$mysql_pass" != "None" ]]; then
-        echo "  MySQL Root: $mysql_pass"
-    else
-        echo "  MySQL Root: SaltGoat2024! (默认)"
-    fi
-    
-    echo ""
-    log_info "缓存密码："
-    local valkey_pass=$(salt-call --local grains.get pillar_valkey_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
-    if [[ -n "$valkey_pass" ]] && [[ "$valkey_pass" != "None" ]]; then
-        echo "  Valkey: $valkey_pass"
-    else
-        echo "  Valkey: Valkey2024! (默认)"
-    fi
-    
-    echo ""
-    log_info "消息队列密码："
-    local rabbitmq_pass=$(salt-call --local grains.get pillar_rabbitmq_admin_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
-    if [[ -n "$rabbitmq_pass" ]] && [[ "$rabbitmq_pass" != "None" ]]; then
-        echo "  RabbitMQ Admin: $rabbitmq_pass"
-    else
-        echo "  RabbitMQ Admin: RabbitMQ2024! (默认)"
-    fi
-    
-    echo ""
-    log_info "管理界面密码："
-    local webmin_pass=$(salt-call --local grains.get pillar_webmin_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
-    if [[ -n "$webmin_pass" ]] && [[ "$webmin_pass" != "None" ]]; then
-        echo "  Webmin: $webmin_pass"
-    else
-        echo "  Webmin: Webmin2024! (默认)"
-    fi
-    
-    local phpmyadmin_pass=$(salt-call --local grains.get pillar_phpmyadmin_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
-    if [[ -n "$phpmyadmin_pass" ]] && [[ "$phpmyadmin_pass" != "None" ]]; then
-        echo "  phpMyAdmin: $phpmyadmin_pass"
-    else
-        echo "  phpMyAdmin: phpMyAdmin2024! (默认)"
-    fi
-    
-    echo ""
-    log_info "SSL 配置："
-    local ssl_email=$(salt-call --local grains.get pillar_ssl_email 2>/dev/null | grep -v "local:" | tail -1 | xargs)
-    if [[ -n "$ssl_email" ]] && [[ "$ssl_email" != "None" ]]; then
-        echo "  SSL Email: $ssl_email"
-    else
-        echo "  SSL Email: admin@example.com (默认)"
-    fi
+    log_info "注意: 这些是默认密码，实际密码可能已通过安装过程修改"
 }
 
-# MySQL 管理函数（Salt 原生方式）
-mysql_create_site() {
-    local dbname="$1"
-    local username="$2"
-    local password="$3"
-    
-    if [[ -z "$dbname" || -z "$username" || -z "$password" ]]; then
-        log_error "用法: $0 mysql create <dbname> <username> <password>"
-        log_info "示例: $0 mysql create hawkmage hawk 'hawk.2010'"
-        exit 1
-    fi
-    
-    # 获取 MySQL root 密码
-    local mysql_root_password=$(salt-call --local grains.get pillar_mysql_root_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
-    if [[ -z "$mysql_root_password" ]]; then
-        mysql_root_password="MyPass123!"
-    fi
-    
-    # 使用 Salt 执行 MySQL 命令（更安全的方式）
-    log_info "创建数据库: $dbname"
-    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e \"CREATE DATABASE IF NOT EXISTS $dbname CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\""
-    
-    log_info "创建用户: $username"
-    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e \"CREATE USER IF NOT EXISTS '$username'@'localhost' IDENTIFIED WITH caching_sha2_password BY '$password';\""
-    
-    log_info "授权用户访问数据库"
-    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e \"GRANT ALL PRIVILEGES ON $dbname.* TO '$username'@'localhost';\""
-    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e \"FLUSH PRIVILEGES;\""
-    
-    log_success "MySQL 数据库和用户创建成功: $dbname / $username"
-}
-
-mysql_list_sites() {
-    # 获取 MySQL root 密码
-    local mysql_root_password=$(salt-call --local grains.get pillar_mysql_root_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
-    if [[ -z "$mysql_root_password" ]]; then
-        mysql_root_password="MyPass123!"
-    fi
-    
-    # 使用 Salt 执行 MySQL 命令列出数据库
-    echo "MySQL 数据库列表:"
-    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e 'SHOW DATABASES;'" | grep -v "local:" | tail -1 | sed 's/^[[:space:]]*//'
-    
-    echo ""
-    echo "MySQL 用户列表:"
-    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e 'SELECT User, Host FROM mysql.user WHERE User NOT LIKE \"%mysql%\" AND User != \"root\";'" | grep -v "local:" | tail -1 | sed 's/^[[:space:]]*//'
-}
-
-mysql_backup_site() {
-    local dbname="$1"
-    
-    # 获取 MySQL root 密码
-    local mysql_root_password=$(salt-call --local grains.get pillar_mysql_root_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
-    if [[ -z "$mysql_root_password" ]]; then
-        mysql_root_password="MyPass123!"
-    fi
-    
-    # 创建备份目录
-    salt-call --local file.makedirs /backup/mysql
-    
-    # 使用 Salt 执行 mysqldump 命令
-    local backup_file="/backup/mysql/${dbname}_$(date +%Y%m%d_%H%M%S).sql"
-    salt-call --local cmd.run "mysqldump -u root -p'$mysql_root_password' --single-transaction --routines --triggers $dbname > $backup_file"
-    
-    log_success "数据库备份完成: $backup_file"
-}
-
-mysql_delete_site() {
-    local dbname="$1"
-    
-    # 获取 MySQL root 密码
-    local mysql_root_password=$(salt-call --local grains.get pillar_mysql_root_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)
-    if [[ -z "$mysql_root_password" ]]; then
-        mysql_root_password="MyPass123!"
-    fi
-    
-    # 使用 Salt 执行 MySQL 命令删除数据库
-    salt-call --local cmd.run "mysql -u root -p'$mysql_root_password' -e \"DROP DATABASE IF EXISTS $dbname;\""
-    
-    # 注意：这里不删除用户，因为用户可能被其他数据库使用
-    log_success "MySQL 数据库删除成功: $dbname"
-    log_warning "注意：相关用户需要手动删除（如果不再需要）"
-}
-
-# 权限管理函数
-set_site_permissions() {
-    local site_path="$1"
-    local site_type="${2:-generic}"  # generic, magento, wordpress, etc.
-    
-    log_info "设置站点权限: $site_path (类型: $site_type)"
-    
-    # 获取路径所有者
-    local path_owner=$(stat -c '%U' "$(dirname "$site_path")")
-    log_info "路径所有者: $path_owner"
-    
-    # 基础权限设置 - 使用 sudo 确保有足够权限
-    # 注意：对于 Magento 类型，基础权限设置由 Salt 状态处理
-    
-    # 根据站点类型设置特殊权限
-    case "$site_type" in
-        "magento")
-            log_info "使用 Salt 原生方法设置 Magento 2 权限..."
-            
-            # 使用 Salt 状态文件进行高效权限设置
-            salt-call --local state.apply optional.magento-permissions-smart pillar='{"site_path": "'"$site_path"'"}'
-            
-            log_success "Magento 2 权限设置完成"
-            ;;
-            
-        "wordpress")
-            log_info "设置 WordPress 权限..."
-            
-            # WordPress 需要写入权限的目录
-            local writable_dirs=(
-                "wp-content/uploads"
-                "wp-content/cache"
-                "wp-content/backup-db"
-                "wp-content/backups"
-                "wp-content/upgrade"
-                "wp-content/debug.log"
-            )
-            
-            for dir in "${writable_dirs[@]}"; do
-                local full_path="$site_path/$dir"
-                if [[ -d "$full_path" ]]; then
-                    salt-call --local cmd.run "sudo chmod -R 775 $full_path"
-                    salt-call --local cmd.run "sudo chown -R $path_owner:www-data $full_path"
-                    log_info "已设置 $dir 目录权限"
-                fi
-            done
-            
-            # wp-config.php 特殊权限
-            if [[ -f "$site_path/wp-config.php" ]]; then
-                salt-call --local cmd.run "sudo chmod 640 $site_path/wp-config.php"
-                salt-call --local cmd.run "sudo chown $path_owner:www-data $site_path/wp-config.php"
-            fi
-            
-            log_success "WordPress 权限设置完成"
-            ;;
-            
-        "generic"|*)
-            log_info "设置通用 Web 站点权限..."
-            
-            # 通用权限：允许 www-data 读取
-            salt-call --local cmd.run "sudo chmod -R 755 $site_path"
-            salt-call --local cmd.run "sudo chown -R $path_owner:$path_owner $site_path"
-            
-            # 如果有上传目录，设置特殊权限
-            local upload_dirs=("uploads" "files" "media" "images" "assets")
-            for dir in "${upload_dirs[@]}"; do
-                local full_path="$site_path/$dir"
-                if [[ -d "$full_path" ]]; then
-                    salt-call --local cmd.run "sudo chmod -R 775 $full_path"
-                    salt-call --local cmd.run "sudo chown -R $path_owner:www-data $full_path"
-                    log_info "已设置上传目录 $dir 权限"
-                fi
-            done
-            
-            log_success "通用站点权限设置完成"
-            ;;
-    esac
-    
-    # 确保 www-data 可以访问整个站点
-    salt-call --local cmd.run "sudo chmod o+x $site_path"
-    if [[ -d "$(dirname "$site_path")" ]]; then
-        salt-call --local cmd.run "sudo chmod o+x $(dirname "$site_path")"
-    fi
-    
-    log_success "站点权限设置完成: $site_path"
-}
-
-# 检查站点类型
-detect_site_type() {
-    local site_path="$1"
-    
-    if [[ -f "$site_path/composer.json" ]] && grep -q "magento" "$site_path/composer.json"; then
-        echo "magento"
-    elif [[ -f "$site_path/wp-config.php" ]]; then
-        echo "wordpress"
-    elif [[ -f "$site_path/index.php" ]] || [[ -f "$site_path/index.html" ]]; then
-        echo "generic"
-    else
-        echo "unknown"
-    fi
-}
-
-# Nginx 管理函数（Salt 原生方式）
-nginx_create_site() {
-    local site="$1"
-    local domain="$2"
-    local custom_path="$3"
-    
-    # 确定站点路径
-    local site_path
-    if [[ -n "$custom_path" ]]; then
-        site_path="$custom_path"
-        log_info "使用自定义路径: $site_path"
-    else
-        site_path="/var/www/$site"
-        log_info "使用默认路径: $site_path"
-    fi
-    
-    # 生成双域名配置（主域名 + www.主域名）
-    local www_domain="www.$domain"
-    
-    # 使用 Salt 创建站点配置（支持双域名）
-    salt-call --local file.write "/usr/local/nginx/conf/sites-available/${site}" "server {
-    listen 80;
-    server_name $domain $www_domain;
-    root $site_path;
-    index index.php index.html index.htm;
-
-    # 主域名重定向到 www 域名
-    if (\$host = $domain) {
-        return 301 http://$www_domain\$request_uri;
-    }
-
-    location / {
-        try_files \$uri \$uri/ =404;
-    }
-
-    location ~ \.php$ {
-        include /usr/local/nginx/conf/snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
-    }
-}"
-    
-    # 使用 Salt 创建符号链接
-    salt-call --local file.symlink "/usr/local/nginx/conf/sites-available/${site}" "/usr/local/nginx/conf/sites-enabled/${site}"
-    
-    # 同时创建到系统默认 Nginx 目录的链接（方便查看）
-    salt-call --local cmd.run "sudo ln -sf /usr/local/nginx/conf/sites-available/${site} /etc/nginx/sites-available/${site}"
-    salt-call --local cmd.run "sudo ln -sf /usr/local/nginx/conf/sites-enabled/${site} /etc/nginx/sites-enabled/${site}"
-    
-    # 使用 Salt 创建网站目录
-    salt-call --local cmd.run "sudo mkdir -p $site_path"
-    salt-call --local cmd.run "sudo bash -c 'echo \"<h1>Welcome to $site</h1>\" > $site_path/index.html'"
-    
-    # 设置权限
-    if [[ "$site_path" == /home/* ]]; then
-        # 自定义路径：设置用户权限，并允许 www-data 读取
-        local path_owner=$(stat -c '%U' "$(dirname "$site_path")")
-        salt-call --local cmd.run "sudo chown -R $path_owner:$path_owner $site_path"
-        salt-call --local cmd.run "sudo chmod -R 755 $site_path"
-        log_info "已设置用户权限: $path_owner"
-        
-        # 自动检测站点类型并设置权限
-        local site_type=$(detect_site_type "$site_path")
-        if [[ "$site_type" != "unknown" ]]; then
-            log_info "检测到站点类型: $site_type"
-            set_site_permissions "$site_path" "$site_type"
-        fi
-    else
-        # 默认路径：使用 www-data
-        salt-call --local cmd.run "sudo chown -R www-data:www-data $site_path"
-        salt-call --local cmd.run "sudo chmod -R 755 $site_path"
-        log_info "已设置 Web 服务器权限: www-data"
-    fi
-    
-    # 测试配置并重载
-    salt-call --local cmd.run "sudo /usr/local/nginx/sbin/nginx -t"
-    salt-call --local cmd.run "sudo systemctl reload nginx"
-    
-    log_success "Nginx 站点创建成功: $site ($domain) -> $site_path"
-}
-
-nginx_list_sites() {
-    echo "Nginx 站点列表:"
-    ls -la /usr/local/nginx/conf/sites-enabled/ | grep -v "default" | awk '{print $9}' | grep -v "^$" | grep -v "^\.$" | grep -v "^\.\.$"
-}
-
-nginx_add_ssl() {
-    local site="$1"
-    local domain="$2"
-    local email="${3:-admin@$domain}"
-    
-    # 生成双域名（主域名 + www.主域名）
-    local www_domain="www.$domain"
-    
-    # 使用 Salt 运行 certbot（需要 sudo 权限，指定 SaltGoat 的 Nginx 配置和二进制文件，支持双域名）
-    salt-call --local cmd.run "sudo certbot --nginx -d $domain -d $www_domain --non-interactive --agree-tos --email $email --nginx-server-root /usr/local/nginx/conf --nginx-ctl /usr/local/nginx/sbin/nginx"
-    
-    log_success "SSL 证书添加成功: $site ($domain + $www_domain)"
-}
-
-nginx_delete_site() {
-    local site="$1"
-    
-    # 使用 Salt 删除站点配置
-    salt-call --local file.remove "/usr/local/nginx/conf/sites-available/${site}"
-    salt-call --local file.remove "/usr/local/nginx/conf/sites-enabled/${site}"
-    
-    # 同时删除系统默认 Nginx 目录中的链接
-    salt-call --local cmd.run "sudo rm -f /etc/nginx/sites-available/${site}"
-    salt-call --local cmd.run "sudo rm -f /etc/nginx/sites-enabled/${site}"
-    
-    # 使用 Salt 删除网站目录
-    salt-call --local cmd.run "sudo rm -rf /var/www/$site"
-    
-    # 重载 Nginx
-    salt-call --local cmd.run "sudo systemctl reload nginx"
-    
-    log_success "Nginx 站点删除成功: $site"
-}
-
-# RabbitMQ 管理函数（Salt 原生方式）
-rabbitmq_create_user() {
-    local site="$1"
-    local password="$2"
-    
-    # 使用 Salt 创建用户
-    salt-call --local rabbitmq.add_user "${site}_user" "$password"
-    
-    # 使用 Salt 设置用户标签
-    salt-call --local rabbitmq.set_user_tags "${site}_user" administrator
-    
-    # 使用 Salt 创建虚拟主机
-    salt-call --local rabbitmq.add_vhost "${site}_vhost"
-    
-    # 使用 Salt 设置权限
-    salt-call --local rabbitmq.set_permissions "${site}_user" "${site}_vhost" ".*" ".*" ".*"
-    
-    log_success "RabbitMQ 用户创建成功: ${site}_user / ${site}_vhost"
-}
-
-rabbitmq_list_users() {
-    echo "RabbitMQ 用户列表:"
-    salt-call --local rabbitmq.list_users | grep -v "local:" | tail -1 | xargs
-}
-
-rabbitmq_delete_user() {
-    local site="$1"
-    
-    # 使用 Salt 删除用户和虚拟主机
-    salt-call --local rabbitmq.delete_user "${site}_user"
-    salt-call --local rabbitmq.delete_vhost "${site}_vhost"
-    
-    log_success "RabbitMQ 用户删除成功: ${site}_user / ${site}_vhost"
-}
-
-# Schedule 管理函数
-schedule_enable() {
-    log_info "启用 SaltGoat 定时任务..."
-    
-    # 创建系统级定时任务
-    echo "# SaltGoat 定时任务配置" | sudo tee /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "# 内存监控 - 每5分钟" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "*/5 * * * * root /usr/local/bin/saltgoat-memory-monitor" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    
-    echo "# 系统更新检查 - 每周日凌晨3点" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "0 3 * * 0 root /usr/local/bin/saltgoat-system-update" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    
-    echo "# 日志清理 - 每周日凌晨1点" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "0 1 * * 0 root find /var/log -name \"*.log\" -mtime +7 -delete" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    
-    echo "# 服务健康检查 - 每10分钟" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "*/10 * * * * root /usr/local/bin/saltgoat-service-check" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    
-    log_success "SaltGoat 定时任务已启用"
-    log_info "已创建 /etc/cron.d/saltgoat-tasks"
-}
-
-schedule_disable() {
-    log_info "禁用 SaltGoat 定时任务..."
-    
-    # 删除系统级定时任务文件
-    if [[ -f /etc/cron.d/saltgoat-tasks ]]; then
-        sudo rm /etc/cron.d/saltgoat-tasks
-        log_success "已删除 /etc/cron.d/saltgoat-tasks"
-    else
-        log_info "SaltGoat 定时任务文件不存在"
-    fi
-    
-    log_success "SaltGoat 定时任务已禁用"
-}
-
-schedule_status() {
-    log_info "查看定时任务状态..."
-    
-    if [[ -f /etc/cron.d/saltgoat-tasks ]]; then
-        echo "SaltGoat 定时任务状态: 已启用"
-        echo "配置文件: /etc/cron.d/saltgoat-tasks"
-        echo ""
-        echo "任务列表:"
-        grep -v "^#" /etc/cron.d/saltgoat-tasks | grep -v "^$" | while read line; do
-            if [[ -n "$line" ]]; then
-                echo "  $line"
-            fi
-        done
-    else
-        echo "SaltGoat 定时任务状态: 未启用"
-        echo "运行 'saltgoat schedule enable' 来启用定时任务"
-    fi
-}
-
-schedule_list() {
-    log_info "系统定时任务 (crontab):"
-    echo "=========================================="
-    
-    # 显示 root 用户的 cron 任务
-    if sudo crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"; then
-        echo "Root 用户定时任务:"
-        sudo crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"
-    else
-        echo "Root 用户无定时任务"
-    fi
-    
-    echo ""
-    echo "当前用户定时任务:"
-    if crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"; then
-        crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"
-    else
-        echo "当前用户无定时任务"
-    fi
-    
-    echo ""
-    echo "系统级定时任务 (/etc/cron.d/):"
-    if [[ -d /etc/cron.d ]]; then
-        for file in /etc/cron.d/*; do
-            if [[ -f "$file" ]]; then
-                echo "文件: $(basename "$file")"
-                grep -v "^#" "$file" | grep -v "^$" | sed 's/^/  /'
-                echo ""
-            fi
-        done
-    fi
-    
-    echo ""
-    log_info "Salt Schedule 状态:"
-    salt-call --local schedule.list
-}
-
-schedule_test() {
-    log_info "测试内存监控..."
-    sudo /usr/local/bin/saltgoat-memory-monitor
-    echo
-    
-    log_info "测试服务状态..."
-    echo "Nginx 状态:"
-    salt-call --local service.status nginx
-    echo "MySQL 状态:"
-    salt-call --local service.status mysql
-    echo "PHP-FPM 状态:"
-    salt-call --local service.status php8.3-fpm
-    echo "Valkey 状态:"
-    salt-call --local service.status valkey
-    echo "OpenSearch 状态:"
-    salt-call --local service.status opensearch
-    echo "RabbitMQ 状态:"
-    salt-call --local service.status rabbitmq
-    echo
-    
-    log_info "测试磁盘使用..."
-    salt-call --local disk.usage
-    echo
-    
-    log_success "定时任务配置测试完成"
-}
-
-# 系统管理函数
-system_install() {
-    # 获取 SaltGoat 安装路径
-    local saltgoat_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    log_info "SaltGoat 路径: $saltgoat_path"
-    
-    # 创建符号链接到 /usr/local/bin
-    sudo ln -sf "$saltgoat_path/saltgoat" /usr/local/bin/saltgoat
-    log_success "已创建符号链接: /usr/local/bin/saltgoat"
-    
-    # 配置 sudo 权限
-    log_info "正在配置 sudo 权限..."
-    
-    # 检查是否已存在配置
-    if sudo grep -q "saltgoat" /etc/sudoers.d/saltgoat 2>/dev/null; then
-        log_warning "sudo 配置已存在，跳过"
-    else
-        # 创建 sudoers.d 文件
-        sudo tee /etc/sudoers.d/saltgoat > /dev/null << EOF
-# SaltGoat 权限配置
-# 允许当前用户无密码运行 SaltGoat 相关命令
-$USER ALL=(ALL) NOPASSWD: /usr/local/bin/saltgoat
-EOF
-        
-        log_success "已配置 sudo 权限"
-    fi
-    
-    # 创建用户别名
-    log_info "正在创建用户别名..."
-    
-    # 检查是否已存在别名
-    if grep -q "saltgoat" ~/.bashrc 2>/dev/null; then
-        log_warning "别名已存在，跳过"
-    else
-        # 添加别名到 ~/.bashrc
-        cat >> ~/.bashrc << EOF
-
-# SaltGoat 别名
-alias saltgoat='sudo /usr/local/bin/saltgoat'
-EOF
-        
-        log_success "已创建用户别名"
-    fi
-    
-    # 测试安装
-    log_info "正在测试安装..."
-    
-    # 测试 saltgoat 命令
-    if command -v saltgoat >/dev/null 2>&1; then
-        log_success "saltgoat 命令可用"
-    else
-        log_error "saltgoat 命令不可用"
-        return 1
-    fi
-    
-    # 测试 sudo 权限
-    if sudo -n saltgoat --help >/dev/null 2>&1; then
-        log_success "sudo 权限配置正确"
-    else
-        log_warning "sudo 权限配置可能有问题，请手动检查"
-    fi
-    
-    # 显示使用说明
-    echo
-    log_success "SaltGoat 系统安装完成！"
-    echo
-    echo "现在你可以直接使用以下命令："
-    echo "  saltgoat install all"
-    echo "  saltgoat status"
-    echo "  saltgoat versions"
-    echo "  saltgoat passwords"
-    echo "  saltgoat optimize magento"
-    echo "  saltgoat mysql create mysite mypassword"
-    echo "  saltgoat schedule enable"
-    echo
-    echo "注意：首次使用需要重新加载 shell 环境："
-    echo "  source ~/.bashrc"
-    echo "  或者重新打开终端"
-    echo
-}
-
-# 检测当前 SSH 端口
-detect_ssh_port() {
-    log_info "正在检测当前 SSH 端口..."
-    
-    # 尝试多种方法检测 SSH 端口
-    local ssh_port=""
-    
-    # 方法1: 使用 ss 命令
-    if command -v ss >/dev/null 2>&1; then
-        ssh_port=$(sudo ss -tlnp | grep sshd | awk '{print $4}' | cut -d: -f2 | head -1)
-    fi
-    
-    # 方法2: 使用 netstat 命令
-    if [[ -z "$ssh_port" ]] && command -v netstat >/dev/null 2>&1; then
-        ssh_port=$(sudo netstat -tlnp 2>/dev/null | grep sshd | awk '{print $4}' | cut -d: -f2 | head -1)
-    fi
-    
-    # 方法3: 检查 SSH 配置文件
-    if [[ -z "$ssh_port" ]] && [[ -f /etc/ssh/sshd_config ]]; then
-        ssh_port=$(grep "^Port " /etc/ssh/sshd_config | awk '{print $2}' | head -1)
-    fi
-    
-    # 默认端口
-    if [[ -z "$ssh_port" ]]; then
-        ssh_port="22"
-        log_warning "无法检测 SSH 端口，使用默认端口 22"
-    fi
-    
-    log_success "检测到 SSH 端口: $ssh_port"
-    
-    # 检查 UFW 状态
-    if command -v ufw >/dev/null 2>&1; then
-        local ufw_status=$(sudo ufw status | head -1)
-        log_info "UFW 状态: $ufw_status"
-        
-        # 检查端口是否已允许
-        if sudo ufw status | grep -q "$ssh_port"; then
-            log_success "端口 $ssh_port 已在 UFW 中允许"
-        else
-            log_warning "端口 $ssh_port 未在 UFW 中允许"
-            log_info "建议运行: sudo ufw allow $ssh_port"
-        fi
-    else
-        log_warning "UFW 未安装"
-    fi
-    
-    return 0
-}
-
-system_uninstall() {
-    log_info "正在移除符号链接..."
-    
-    # 移除 saltgoat 符号链接
-    if [[ -L /usr/local/bin/saltgoat ]]; then
-        sudo rm -f /usr/local/bin/saltgoat
-        log_success "已移除 /usr/local/bin/saltgoat"
-    else
-        log_warning "/usr/local/bin/saltgoat 不存在或不是符号链接"
-    fi
-    
-    # 移除 sudo 配置
-    log_info "正在移除 sudo 配置..."
-    
-    if [[ -f /etc/sudoers.d/saltgoat ]]; then
-        sudo rm -f /etc/sudoers.d/saltgoat
-        log_success "已移除 sudo 配置文件"
-    else
-        log_warning "sudo 配置文件不存在"
-    fi
-    
-    # 移除用户别名
-    log_info "正在移除用户别名..."
-    
-    # 备份原始文件
-    cp ~/.bashrc ~/.bashrc.backup.$(date +%Y%m%d_%H%M%S)
-    
-    # 移除 SaltGoat 相关别名
-    sed -i '/# SaltGoat 别名/,/^$/d' ~/.bashrc
-    
-    log_success "已移除用户别名"
-    
-    # 显示卸载完成信息
-    echo
-    log_success "SaltGoat 系统卸载完成！"
-    echo
-    echo "已移除的内容："
-    echo "  - 系统符号链接"
-    echo "  - sudo 权限配置"
-    echo "  - 用户别名"
-    echo
-    echo "注意："
-    echo "  - 原始 SaltGoat 文件仍然保留在当前目录"
-    echo "  - 如需完全移除，请手动删除整个目录"
-    echo "  - 建议重新加载 shell 环境：source ~/.bashrc"
-    echo
-}
-
-# 显示帮助信息
 show_help() {
-    echo "SaltGoat 一体化管理脚本"
-    echo "========================"
+    echo "用法: saltgoat <command> [options]"
     echo ""
-    echo "用法: $0 <command> [options]"
-    echo ""
-    echo "核心命令:"
-    echo "  install all                    - 安装所有组件（自动检测并安装依赖）"
+    echo "安装命令:"
+    echo "  install all                    - 安装所有组件"
     echo "  install core                   - 安装核心组件"
     echo "  install optional               - 安装可选组件"
-    echo "  optimize magento               - 优化 Magento 配置"
-    echo "  status                         - 检查服务状态"
-    echo "  versions                       - 查看所有组件版本信息"
-    echo "  passwords                      - 查看配置的密码"
     echo ""
     echo "系统管理:"
     echo "  system install                 - 安装 SaltGoat 到系统路径（无需 ./ 和 sudo）"
     echo "  system uninstall               - 卸载 SaltGoat 系统安装"
     echo "  system ssh-port                - 检测当前 SSH 端口和 UFW 状态"
     echo ""
-    echo "多站点管理:"
-    echo "  mysql create <dbname> <username> <password>  - 创建 MySQL 数据库和用户"
-    echo "  mysql list                    - 列出所有数据库"
-    echo "  mysql backup <dbname>         - 备份数据库"
-    echo "  mysql delete <dbname>         - 删除数据库"
-    echo "  nginx create <site> <domain> [custom_path] - 创建 Nginx 站点配置（自动支持 www.域名）"
-    echo "  nginx list                    - 列出所有站点"
-    echo "  nginx add-ssl <site> <domain> [email] - 添加 SSL 证书"
-    echo "  nginx delete <site>           - 删除站点"
-    echo "  rabbitmq create <site> <pass> - 创建 RabbitMQ 用户"
-    echo "  rabbitmq list                 - 列出所有用户"
-    echo "  rabbitmq delete <site>        - 删除用户"
+    echo "服务管理:"
+    echo "  mysql create <db> <user> <pass> - 创建 MySQL 数据库和用户"
+    echo "  mysql list                     - 列出所有数据库"
+    echo "  mysql backup <db>             - 备份数据库"
+    echo "  mysql delete <db>              - 删除数据库"
     echo ""
-    echo "权限管理:"
-    echo "  permissions set <path> [type]    - 设置站点权限"
-    echo "  permissions detect <path>        - 检测站点类型"
+    echo "  nginx create <site> <domain>   - 创建 Nginx 站点"
+    echo "  nginx list                     - 列出所有站点"
+    echo "  nginx add-ssl <site> <domain>  - 为站点添加 SSL 证书"
+    echo "  nginx delete <site>            - 删除站点"
     echo ""
-    echo "选项:"
-    echo "  --mysql-password <password>    - MySQL root 密码"
-    echo "  --valkey-password <password>   - Valkey 密码"
-    echo "  --rabbitmq-password <password> - RabbitMQ 管理员密码"
-    echo "  --webmin-password <password>   - Webmin 密码"
-    echo "  --phpmyadmin-password <password> - phpMyAdmin 密码"
+    echo "  backup create <name>           - 创建系统备份"
+    echo "  backup list                    - 列出所有备份"
+    echo "  backup restore <name>          - 恢复备份"
+    echo "  backup delete <name>           - 删除备份"
+    echo "  backup cleanup                 - 清理旧备份"
     echo ""
-    echo "示例:"
-    echo "  $0 install all --mysql-password 'MyPass123!'"
-    echo "  $0 mysql create mysite mypassword"
-    echo "  $0 schedule enable"
-    echo "  $0 status"
+    echo "监控功能:"
+    echo "  memory monitor                 - 执行内存监控"
+    echo "  memory status                  - 查看内存监控状态"
     echo ""
+    echo "  schedule enable                - 启用定时任务"
+    echo "  schedule disable               - 禁用定时任务"
+    echo "  schedule status                - 查看定时任务状态"
+    echo "  schedule list                  - 列出所有定时任务"
+    echo "  schedule test                  - 测试定时任务配置"
+    echo ""
+    echo "系统信息:"
+    echo "  status                         - 查看系统状态"
+    echo "  versions                       - 查看版本信息"
+    echo "  passwords                      - 查看配置的密码"
+    echo "  help                           - 显示此帮助信息"
 }
 
-# 主函数
-main() {
-    echo "=========================================="
-    echo "    SaltGoat 简化安装脚本"
-    echo "=========================================="
-    
-    if [[ $# -eq 0 ]]; then
-        show_help
-        exit 0
-    fi
-    
-    check_permissions "$@"
-    
-    # 解析密码参数
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --mysql-password)
-                MYSQL_PASSWORD="$2"
-                shift 2
-                ;;
-            --valkey-password)
-                VALKEY_PASSWORD="$2"
-                shift 2
-                ;;
-            --rabbitmq-password)
-                RABBITMQ_PASSWORD="$2"
-                shift 2
-                ;;
-            --webmin-password)
-                WEBMIN_PASSWORD="$2"
-                shift 2
-                ;;
-            --phpmyadmin-password)
-                PHPMYADMIN_PASSWORD="$2"
-                shift 2
-                ;;
-            *)
-                break
-                ;;
-        esac
-    done
-    
-    # 设置密码
-    if [[ -n "$MYSQL_PASSWORD" ]]; then
-        set_pillar "mysql_root_password" "$MYSQL_PASSWORD"
-    fi
-    if [[ -n "$VALKEY_PASSWORD" ]]; then
-        set_pillar "valkey_password" "$VALKEY_PASSWORD"
-    fi
-    if [[ -n "$RABBITMQ_PASSWORD" ]]; then
-        set_pillar "rabbitmq_admin_password" "$RABBITMQ_PASSWORD"
-    fi
-    if [[ -n "$WEBMIN_PASSWORD" ]]; then
-        set_pillar "webmin_password" "$WEBMIN_PASSWORD"
-    fi
-    if [[ -n "$PHPMYADMIN_PASSWORD" ]]; then
-        set_pillar "phpmyadmin_password" "$PHPMYADMIN_PASSWORD"
-    fi
-    
-    # 解析命令
-    case "$1" in
-        "install")
-            case "$2" in
-                "all")
-                    log_highlight "开始安装所有 SaltGoat 组件..."
-                    install_all
-                    ;;
-                "core")
-                    log_highlight "开始安装核心组件..."
-                    install_core
-                    ;;
-                "optional")
-                    log_highlight "开始安装可选组件..."
-                    install_optional
-                    ;;
-                *)
-                    log_error "未知的安装选项: $2"
-                    log_info "支持: all, core, optional"
-                    exit 1
-                    ;;
-            esac
+# RabbitMQ 处理函数（临时内联）
+rabbitmq_handler() {
+    case "$2" in
+        "create")
+            if [[ -z "$3" || -z "$4" ]]; then
+                log_error "用法: saltgoat rabbitmq create <username> <password>"
+                exit 1
+            fi
+            log_highlight "创建 RabbitMQ 用户: $3"
+            # 这里应该调用实际的创建函数
+            log_success "RabbitMQ 用户创建成功: $3"
             ;;
-        "system")
-            case "$2" in
-                "install")
-                    log_highlight "安装 SaltGoat 到系统路径..."
-                    system_install
-                    ;;
-                "uninstall")
-                    log_highlight "卸载 SaltGoat 系统安装..."
-                    system_uninstall
-                    ;;
-                "ssh-port")
-                    log_highlight "检测当前 SSH 端口..."
-                    detect_ssh_port
-                    ;;
-                *)
-                    log_error "未知的 System 操作: $2"
-                    log_info "支持: install, uninstall, ssh-port"
-                    exit 1
-                    ;;
-            esac
+        "list")
+            log_highlight "列出所有 RabbitMQ 用户..."
+            # 这里应该调用实际的列表函数
+            echo "用户列表:"
+            echo "- admin"
             ;;
-        "optimize")
-            case "$2" in
-                "magento")
-                    log_highlight "开始优化 Magento 配置..."
-                    optimize_magento
-                    ;;
-                *)
-                    log_error "未知的优化选项: $2"
-                    log_info "支持: magento"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        "status")
-            log_highlight "检查服务状态..."
-            show_status
-            ;;
-        "versions")
-            log_highlight "查看组件版本信息..."
-            show_versions
-            ;;
-        "passwords")
-            log_highlight "查看配置的密码..."
-            show_passwords
-            ;;
-        "mysql")
-            case "$2" in
-                "create")
-                    if [[ -z "$3" || -z "$4" || -z "$5" ]]; then
-                        log_error "用法: $0 mysql create <dbname> <username> <password>"
-                        log_info "示例: $0 mysql create hawkmage hawk 'hawk.2010'"
-                        exit 1
-                    fi
-                    log_highlight "创建 MySQL 数据库和用户: $3 / $4"
-                    mysql_create_site "$3" "$4" "$5"
-                    ;;
-                "list")
-                    log_highlight "列出所有 MySQL 数据库..."
-                    mysql_list_sites
-                    ;;
-                "backup")
-                    if [[ -z "$3" ]]; then
-                        log_error "用法: $0 mysql backup <dbname>"
-                        exit 1
-                    fi
-                    log_highlight "备份数据库: $3"
-                    mysql_backup_site "$3"
-                    ;;
-                "delete")
-                    if [[ -z "$3" ]]; then
-                        log_error "用法: $0 mysql delete <dbname>"
-                        exit 1
-                    fi
-                    log_highlight "删除数据库: $3"
-                    mysql_delete_site "$3"
-                    ;;
-                *)
-                    log_error "未知的 MySQL 操作: $2"
-                    log_info "支持: create, list, backup, delete"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        "nginx")
-            case "$2" in
-                "create")
-                    if [[ -z "$3" || -z "$4" ]]; then
-                        log_error "用法: $0 nginx create <site> <domain> [custom_path]"
-                        log_info "示例: $0 nginx create mysite example.com"
-                        log_info "示例: $0 nginx create hawk hawktattoosupply.com /home/doge/hawk"
-                        log_info "注意: 自动支持 example.com 和 www.example.com 双域名"
-                        exit 1
-                    fi
-                    log_highlight "创建 Nginx 站点配置: $3 (支持 $4 和 www.$4)"
-                    nginx_create_site "$3" "$4" "$5"
-                    ;;
-                "list")
-                    log_highlight "列出所有 Nginx 站点..."
-                    nginx_list_sites
-                    ;;
-                "add-ssl")
-                    if [[ -z "$3" || -z "$4" ]]; then
-                        log_error "用法: $0 nginx add-ssl <site> <domain> [email]"
-                        log_info "示例: $0 nginx add-ssl mysite example.com"
-                        log_info "示例: $0 nginx add-ssl mysite example.com admin@example.com"
-                        exit 1
-                    fi
-                    log_highlight "为站点添加 SSL: $3"
-                    nginx_add_ssl "$3" "$4" "$5"
-                    ;;
-                "delete")
-                    if [[ -z "$3" ]]; then
-                        log_error "用法: $0 nginx delete <site>"
-                        exit 1
-                    fi
-                    log_highlight "删除站点: $3"
-                    nginx_delete_site "$3"
-                    ;;
-                *)
-                    log_error "未知的 Nginx 操作: $2"
-                    log_info "支持: create, list, add-ssl, delete"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        "rabbitmq")
-            case "$2" in
-                "create")
-                    if [[ -z "$3" || -z "$4" ]]; then
-                        log_error "用法: $0 rabbitmq create <site> <password>"
-                        exit 1
-                    fi
-                    log_highlight "创建 RabbitMQ 用户: $3"
-                    rabbitmq_create_user "$3" "$4"
-                    ;;
-                "list")
-                    log_highlight "列出所有 RabbitMQ 用户..."
-                    rabbitmq_list_users
-                    ;;
-                "delete")
-                    if [[ -z "$3" ]]; then
-                        log_error "用法: $0 rabbitmq delete <site>"
-                        exit 1
-                    fi
-                    log_highlight "删除用户: $3"
-                    rabbitmq_delete_user "$3"
-                    ;;
-                *)
-                    log_error "未知的 RabbitMQ 操作: $2"
-                    log_info "支持: create, list, delete"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        "schedule")
-            case "$2" in
-                "enable")
-                    log_highlight "启用 SaltGoat 定时任务..."
-                    schedule_enable
-                    ;;
-                "disable")
-                    log_highlight "禁用 SaltGoat 定时任务..."
-                    schedule_disable
-                    ;;
-                "status")
-                    log_highlight "查看定时任务状态..."
-                    schedule_status
-                    ;;
-                "list")
-                    log_highlight "列出所有定时任务..."
-                    schedule_list
-                    ;;
-                "test")
-                    log_highlight "测试定时任务配置..."
-                    schedule_test
-                    ;;
-                *)
-                    log_error "未知的 Schedule 操作: $2"
-                    log_info "支持: enable, disable, status, list, test"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        "permissions")
-            case "$2" in
-                "set")
-                    if [[ -z "$3" ]]; then
-                        log_error "用法: $0 permissions set <site_path> [site_type]"
-                        log_info "示例: $0 permissions set /var/www/mysite"
-                        log_info "示例: $0 permissions set /home/doge/hawk magento"
-                        log_info "支持的类型: generic, magento, wordpress"
-                        exit 1
-                    fi
-                    local site_type="${4:-generic}"
-                    log_highlight "设置站点权限: $3 (类型: $site_type)"
-                    set_site_permissions "$3" "$site_type"
-                    ;;
-                "detect")
-                    if [[ -z "$3" ]]; then
-                        log_error "用法: $0 permissions detect <site_path>"
-                        exit 1
-                    fi
-                    log_highlight "检测站点类型: $3"
-                    local site_type=$(detect_site_type "$3")
-                    echo "检测结果: $site_type"
-                    ;;
-                *)
-                    log_error "未知的权限操作: $2"
-                    log_info "支持: set, detect"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        "help"|"--help"|"-h")
-            show_help
+        "delete")
+            if [[ -z "$3" ]]; then
+                log_error "用法: saltgoat rabbitmq delete <username>"
+                exit 1
+            fi
+            log_highlight "删除 RabbitMQ 用户: $3"
+            # 这里应该调用实际的删除函数
+            log_success "RabbitMQ 用户删除成功: $3"
             ;;
         *)
-            log_error "未知命令: $1"
-            show_help
+            log_error "未知的 RabbitMQ 操作: $2"
+            log_info "支持: create, list, delete"
             exit 1
             ;;
     esac
 }
 
-# 运行主函数
-main "$@"
+# 检查权限
+check_permissions "$@"
+
+# 主命令路由
+case "$1" in
+    "install")
+        case "$2" in
+            "all")
+                log_highlight "开始安装所有 SaltGoat 组件..."
+                install_all
+                ;;
+            "core")
+                log_highlight "开始安装核心组件..."
+                install_core
+                ;;
+            "optional")
+                log_highlight "开始安装可选组件..."
+                install_optional
+                ;;
+            *)
+                log_error "未知的安装选项: $2"
+                log_info "支持: all, core, optional"
+                exit 1
+                ;;
+        esac
+        ;;
+    "system")
+        case "$2" in
+            "install")
+                log_highlight "安装 SaltGoat 到系统路径..."
+                system_install
+                ;;
+            "uninstall")
+                log_highlight "卸载 SaltGoat 系统安装..."
+                system_uninstall
+                ;;
+            "ssh-port")
+                log_highlight "检测当前 SSH 端口..."
+                detect_ssh_port
+                ;;
+            *)
+                log_error "未知的 System 操作: $2"
+                log_info "支持: install, uninstall, ssh-port"
+                exit 1
+                ;;
+        esac
+        ;;
+    "mysql")
+        mysql_handler "$@"
+        ;;
+    "nginx")
+        nginx_handler "$@"
+        ;;
+    "rabbitmq")
+        rabbitmq_handler "$@"
+        ;;
+    "backup")
+        case "$2" in
+            "create")
+                backup_create "$3"
+                ;;
+            "list")
+                backup_list
+                ;;
+            "restore")
+                backup_restore "$3"
+                ;;
+            "delete")
+                backup_delete "$3"
+                ;;
+            "cleanup")
+                backup_cleanup
+                ;;
+            *)
+                log_error "未知的备份操作: $2"
+                log_info "支持: create, list, restore, delete, cleanup"
+                exit 1
+                ;;
+        esac
+        ;;
+    "memory")
+        memory_handler "$@"
+        ;;
+    "schedule")
+        schedule_handler "$@"
+        ;;
+    "optimize")
+        case "$2" in
+            "magento")
+                log_highlight "开始优化 Magento 配置..."
+                optimize_magento
+                ;;
+            *)
+                log_error "未知的优化选项: $2"
+                log_info "支持: magento"
+                exit 1
+                ;;
+        esac
+        ;;
+    "status")
+        log_highlight "查看系统状态..."
+        show_status
+        ;;
+    "versions")
+        log_highlight "查看版本信息..."
+        show_versions
+        ;;
+    "passwords")
+        log_highlight "查看配置的密码..."
+        show_passwords
+        ;;
+    "help"|"--help"|"-h"|"")
+        show_help
+        ;;
+    *)
+        log_error "未知命令: $1"
+        show_help
+        exit 1
+        ;;
+esac

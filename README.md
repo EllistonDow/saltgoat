@@ -389,11 +389,23 @@ SaltGoat 支持自动检测服务器内存并调整配置：
 ```
 saltgoat/
 ├── README.md              # 项目说明（本文档）
-├── saltgoat               # SaltGoat 主安装脚本
-├── manage-mysql.sh        # MySQL 多站点管理
-├── manage-rabbitmq.sh     # RabbitMQ 多站点管理
-├── manage-nginx.sh        # Nginx 多站点管理
-├── salt/
+├── saltgoat               # SaltGoat 主入口脚本（模块化）
+├── lib/                   # 公共库
+│   ├── logger.sh         # 日志函数库
+│   ├── utils.sh          # 工具函数库
+│   └── config.sh         # 配置管理库
+├── core/                  # 核心功能模块
+│   ├── install.sh        # 安装管理
+│   ├── system.sh         # 系统管理
+│   └── optimize.sh       # 优化功能
+├── services/              # 服务管理模块
+│   ├── mysql.sh          # MySQL 管理
+│   ├── nginx.sh          # Nginx 管理
+│   └── rabbitmq.sh       # RabbitMQ 管理
+├── monitoring/            # 监控功能模块
+│   ├── memory.sh         # 内存监控
+│   └── schedule.sh       # 定时任务
+├── salt/                  # Salt 配置文件
 │   ├── top.sls           # Salt 主配置文件
 │   ├── pillar/
 │   │   └── lemp.sls      # Pillar 数据配置
@@ -401,5 +413,5 @@ saltgoat/
 │       ├── core/         # 核心组件 states
 │       ├── optional/     # 可选组件 states
 │       └── common/       # 通用 states
-└── PROJECT_SUMMARY.md     # 项目总结
+└── templates/             # 模板文件（待扩展）
 ```
