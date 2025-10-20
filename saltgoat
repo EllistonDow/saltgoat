@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.1.8"
+SCRIPT_VERSION="0.1.9"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -35,6 +35,7 @@ source "${SCRIPT_DIR}/services/logs.sh"
 source "${SCRIPT_DIR}/services/security.sh"
 source "${SCRIPT_DIR}/services/performance.sh"
 source "${SCRIPT_DIR}/services/ssl.sh"
+source "${SCRIPT_DIR}/services/monitor.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -121,7 +122,7 @@ show_help() {
     echo ""
     echo "  nginx create <site> <domain>   - 创建 Nginx 站点"
     echo "  nginx list                     - 列出所有站点"
-    echo "  nginx add-ssl <site> <domain>  - 为站点添加 SSL 证书"
+    echo "  nginx add-ssl <site> <domain>  - 为站点申请 Let's Encrypt SSL 证书"
     echo "  nginx delete <site>            - 删除站点"
     echo ""
     echo "  backup create <name>           - 创建系统备份"
@@ -166,6 +167,18 @@ show_help() {
     echo "  ssl backup [name]               - 备份证书"
     echo "  ssl cleanup-expired [days]      - 清理过期证书"
     echo "  ssl status                      - SSL 状态检查"
+    echo ""
+    echo "  monitor system                  - 系统状态监控"
+    echo "  monitor services                - 服务状态监控"
+    echo "  monitor resources               - 资源使用监控"
+    echo "  monitor network                 - 网络状态监控"
+    echo "  monitor logs                     - 日志状态监控"
+    echo "  monitor security                - 安全状态监控"
+    echo "  monitor performance              - 性能监控"
+    echo "  monitor report [name]           - 生成监控报告"
+    echo "  monitor realtime [seconds]      - 实时监控"
+    echo "  monitor config                  - 监控配置"
+    echo "  monitor cleanup [days]           - 清理监控日志"
     echo ""
     echo "监控功能:"
     echo "  memory monitor                 - 执行内存监控"
@@ -430,6 +443,48 @@ case "$1" in
                 *)
                     log_error "未知的 SSL 操作: $2"
                     log_info "支持: generate-self-signed, generate-csr, view, verify, list, renew, backup, cleanup-expired, status"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "monitor")
+            case "$2" in
+                "system")
+                    monitor_system_status
+                    ;;
+                "services")
+                    monitor_service_status
+                    ;;
+                "resources")
+                    monitor_resource_usage
+                    ;;
+                "network")
+                    monitor_network_status
+                    ;;
+                "logs")
+                    monitor_log_status
+                    ;;
+                "security")
+                    monitor_security_status
+                    ;;
+                "performance")
+                    monitor_performance
+                    ;;
+                "report")
+                    monitor_generate_report "$3"
+                    ;;
+                "realtime")
+                    monitor_realtime "$3"
+                    ;;
+                "config")
+                    monitor_config
+                    ;;
+                "cleanup")
+                    monitor_cleanup "$3"
+                    ;;
+                *)
+                    log_error "未知的监控操作: $2"
+                    log_info "支持: system, services, resources, network, logs, security, performance, report, realtime, config, cleanup"
                     exit 1
                     ;;
             esac

@@ -43,15 +43,11 @@ ssl_generate_self_signed() {
         fi
     fi
     
-    # 生成私钥
-    log_info "生成私钥..."
-    salt-call --local cmd.run "openssl genrsa -out $key_file 2048" >/dev/null 2>&1
-    salt-call --local cmd.run "chmod 600 $key_file" >/dev/null 2>&1
-    
-    # 生成证书
-    log_info "生成自签名证书..."
-    salt-call --local cmd.run "openssl req -new -x509 -key $key_file -out $cert_file -days $days -subj '/C=US/ST=State/L=City/O=Organization/CN=$domain'" >/dev/null 2>&1
-    salt-call --local cmd.run "chmod 644 $cert_file" >/dev/null 2>&1
+    # 生成私钥和证书
+    log_info "生成私钥和证书..."
+    salt-call --local cmd.run "sudo openssl req -newkey rsa:2048 -nodes -keyout $key_file -x509 -days $days -out $cert_file -subj '/C=US/ST=State/L=City/O=Organization/CN=$domain'" >/dev/null 2>&1
+    salt-call --local cmd.run "sudo chmod 600 $key_file" >/dev/null 2>&1
+    salt-call --local cmd.run "sudo chmod 644 $cert_file" >/dev/null 2>&1
     
     log_success "自签名证书生成完成"
     log_info "证书文件: $cert_file"
@@ -200,16 +196,43 @@ ssl_list_certs() {
     # 列出系统证书目录
     if salt-call --local file.directory_exists "$SSL_CERT_DIR" --out=txt 2>/dev/null | grep -q "True"; then
         echo "证书文件 ($SSL_CERT_DIR):"
-        salt-call --local cmd.run "ls -la $SSL_CERT_DIR/*.crt 2>/dev/null || echo '无证书文件'" 2>/dev/null
+        local cert_files=$(salt-call --local file.find "$SSL_CERT_DIR" name="*.crt" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+        if [[ -n "$cert_files" ]]; then
+            for file in $cert_files; do
+                if [[ -n "$file" ]]; then
+                    salt-call --local cmd.run "ls -la $file" 2>/dev/null
+                fi
+            done
+        else
+            echo "无证书文件"
+        fi
     fi
     
     echo ""
     echo "私钥文件 ($SSL_KEY_DIR):"
-    salt-call --local cmd.run "ls -la $SSL_KEY_DIR/*.key 2>/dev/null || echo '无私钥文件'" 2>/dev/null
+    local key_files=$(salt-call --local file.find "$SSL_KEY_DIR" name="*.key" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    if [[ -n "$key_files" ]]; then
+        for file in $key_files; do
+            if [[ -n "$file" ]]; then
+                salt-call --local cmd.run "ls -la $file" 2>/dev/null
+            fi
+        done
+    else
+        echo "无私钥文件"
+    fi
     
     echo ""
     echo "CSR 文件 ($SSL_CSR_DIR):"
-    salt-call --local cmd.run "ls -la $SSL_CSR_DIR/*.csr 2>/dev/null || echo '无 CSR 文件'" 2>/dev/null
+    local csr_files=$(salt-call --local file.find "$SSL_CSR_DIR" name="*.csr" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    if [[ -n "$csr_files" ]]; then
+        for file in $csr_files; do
+            if [[ -n "$file" ]]; then
+                salt-call --local cmd.run "ls -la $file" 2>/dev/null
+            fi
+        done
+    else
+        echo "无 CSR 文件"
+    fi
     
     echo ""
     echo "证书详细信息:"
