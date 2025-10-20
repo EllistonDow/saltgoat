@@ -19,24 +19,74 @@ saltgui_install() {
     log_info "安装 SaltGUI..."
     
     # 检查是否已安装
-    if command -v saltgui >/dev/null 2>&1; then
+    if [[ -f "/opt/saltgui/saltgui/index.html" ]]; then
         log_warning "SaltGUI 已安装"
         return 0
     fi
     
-    # 安装 Node.js 和 npm
-    log_info "安装 Node.js 和 npm..."
-    salt-call --local pkg.install nodejs npm 2>/dev/null || {
-        log_error "Node.js 安装失败"
+    # 检查 Node.js 和 npm
+    log_info "检查 Node.js 和 npm..."
+    
+    # 检查 Node.js
+    if ! command -v node >/dev/null 2>&1; then
+        log_info "安装 Node.js..."
+        salt-call --local pkg.install nodejs 2>/dev/null || {
+            log_error "Node.js 安装失败"
+            return 1
+        }
+    else
+        log_success "Node.js 已安装: $(node --version)"
+    fi
+    
+    # 检查 npm
+    if ! command -v npm >/dev/null 2>&1; then
+        log_info "安装 npm..."
+        salt-call --local pkg.install npm 2>/dev/null || {
+            log_error "npm 安装失败"
+            return 1
+        }
+    else
+        log_success "npm 已安装: $(npm --version)"
+    fi
+    
+    # 安装 SaltGUI (从 GitHub 源码)
+    log_info "安装 SaltGUI..."
+    
+    # 创建安装目录
+    local install_dir="/opt/saltgui"
+    sudo mkdir -p "$install_dir"
+    
+    # 克隆 SaltGUI 仓库
+    local temp_dir=$(mktemp -d)
+    cd "$temp_dir"
+    
+    log_info "从 GitHub 克隆 SaltGUI..."
+    git clone https://github.com/erwindon/SaltGUI.git 2>/dev/null || {
+        log_error "无法克隆 SaltGUI 仓库"
+        cd - >/dev/null
+        rm -rf "$temp_dir"
         return 1
     }
     
-    # 安装 SaltGUI
-    log_info "安装 SaltGUI..."
-    sudo npm install -g saltgui 2>/dev/null || {
-        log_error "SaltGUI 安装失败"
+    cd SaltGUI
+    
+    # 复制文件到安装目录
+    log_info "安装 SaltGUI 文件..."
+    sudo cp -r * "$install_dir/" 2>/dev/null || {
+        log_error "复制 SaltGUI 文件失败"
+        cd - >/dev/null
+        rm -rf "$temp_dir"
         return 1
     }
+    
+    # 设置权限
+    sudo chown -R root:root "$install_dir"
+    sudo chmod -R 755 "$install_dir"
+    
+    cd - >/dev/null
+    rm -rf "$temp_dir"
+    
+    log_success "SaltGUI 安装完成"
     
     # 创建配置文件
     create_saltgui_config
@@ -52,7 +102,10 @@ saltgui_install() {
 create_saltgui_config() {
     log_info "创建 SaltGUI 配置文件..."
     
-    cat > "$SALTGUI_CONFIG_DIR/config.json" << EOF
+    # 确保配置目录存在
+    sudo mkdir -p "$SALTGUI_CONFIG_DIR"
+    
+    cat > "/tmp/saltgui_config.json" << EOF
 {
     "port": $SALTGUI_PORT,
     "host": "$SALTGUI_HOST",
@@ -73,6 +126,9 @@ create_saltgui_config() {
 }
 EOF
     
+    # 移动配置文件到正确位置
+    sudo mv "/tmp/saltgui_config.json" "$SALTGUI_CONFIG_DIR/config.json"
+    
     log_success "SaltGUI 配置文件已创建"
 }
 
@@ -89,7 +145,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$SALTGUI_CONFIG_DIR
-ExecStart=/usr/bin/saltgui --config $SALTGUI_CONFIG_DIR/config.json
+ExecStart=/usr/bin/python3 -m http.server $SALTGUI_PORT --directory /opt/saltgui/saltgui
 Restart=always
 RestartSec=10
 
@@ -108,7 +164,7 @@ EOF
 saltgui_start() {
     log_info "启动 SaltGUI..."
     
-    if ! command -v saltgui >/dev/null 2>&1; then
+    if ! [[ -f "/opt/saltgui/saltgui/index.html" ]]; then
         log_error "SaltGUI 未安装，请先运行: saltgoat saltgui install"
         return 1
     fi
@@ -157,7 +213,7 @@ saltgui_restart() {
 saltgui_status() {
     log_info "检查 SaltGUI 状态..."
     
-    if ! command -v saltgui >/dev/null 2>&1; then
+    if ! [[ -f "/opt/saltgui/saltgui/index.html" ]]; then
         log_warning "SaltGUI 未安装"
         return 1
     fi
@@ -190,7 +246,7 @@ saltgui_uninstall() {
     sudo systemctl daemon-reload
     
     # 卸载 SaltGUI
-    sudo npm uninstall -g saltgui 2>/dev/null || true
+    sudo rm -rf /opt/saltgui
     
     # 删除配置文件
     sudo rm -rf "$SALTGUI_CONFIG_DIR"
