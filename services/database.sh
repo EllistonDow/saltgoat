@@ -13,13 +13,7 @@ ensure_database_dirs() {
     salt-call --local file.mkdir "$DB_LOG_DIR" >/dev/null 2>&1 || true
     salt-call --local file.mkdir "$DB_CONFIG_DIR" >/dev/null 2>&1 || true
     
-    # 创建 MySQL 配置文件以避免密码警告
-    local mysql_config="[client]
-user=root
-password=MyPass123!"
-    local mysql_config_file="/home/doge/.my.cnf"
-    echo "$mysql_config" > "$mysql_config_file"
-    chmod 600 "$mysql_config_file"
+    # 不再写入明文密码；统一走本地 unix_socket
 }
 
 # 数据库连接测试
@@ -42,11 +36,17 @@ database_test_connection() {
     case "$db_type" in
         "mysql")
             log_info "测试 MySQL 连接..."
-            if salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -h $host -P $port -e 'SELECT 1;'" >/dev/null 2>&1; then
-                log_success "MySQL 连接成功"
+            # 本机优先通过 unix_socket
+            if salt-call --local mysql.query database=mysql query="SELECT 1;" unix_socket=/var/run/mysqld/mysqld.sock >/dev/null 2>&1; then
+                log_success "MySQL 连接成功 (unix_socket)"
             else
-                log_error "MySQL 连接失败"
-                exit 1
+                # 如提供了 host/user 则尝试 TCP
+                if salt-call --local cmd.run "mysql -h $host -P $port -u ${username} -p'${password}' -e 'SELECT 1;'" >/dev/null 2>&1; then
+                    log_success "MySQL 连接成功 (tcp)"
+                else
+                    log_error "MySQL 连接失败"
+                    exit 1
+                fi
             fi
             ;;
         "postgresql")
@@ -109,16 +109,16 @@ database_status() {
                 exit 1
             fi
             
-            # 检查版本
-            local version=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf --version" 2>/dev/null)
+            # 检查版本（Salt 原生 + unix_socket）
+            local version=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SELECT VERSION();" 2>/dev/null | tail -n 1)
             echo "MySQL 版本: $version"
             
-            # 检查连接数
-            local connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Threads_connected\";'" 2>/dev/null)
+            # 检查连接数（Salt 原生 + unix_socket）
+            local connections=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW STATUS LIKE 'Threads_connected';" 2>/dev/null | awk 'NR==2 {print $2}')
             echo "当前连接数: $connections"
             
-            # 检查数据库列表
-            local databases=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW DATABASES;'" 2>/dev/null)
+            # 检查数据库列表（Salt 原生 + unix_socket）
+            local databases=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW DATABASES;" 2>/dev/null | tail -n +2)
             echo "数据库列表:"
             echo "$databases"
             ;;
@@ -761,23 +761,41 @@ database_mysql_convenience() {
             log_highlight "创建 MySQL 数据库和用户: $dbname / $username"
             ensure_database_dirs
             
-            # 使用 Salt 原生 MySQL 模块创建数据库
+            # 使用 Salt 原生 mysql.query 通过本地 socket 创建数据库
             log_info "创建数据库: $dbname"
-            salt-call --local mysql.db_create "$dbname"
+            if ! salt-call --local --retcode-passthrough \
+                mysql.query database=mysql \
+                query="CREATE DATABASE IF NOT EXISTS ${dbname} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" \
+                unix_socket=/var/run/mysqld/mysqld.sock >/dev/null; then
+                log_error "创建数据库失败: $dbname"
+                exit 1
+            fi
             
-            # 使用 Salt 原生 MySQL 模块创建用户
+            # 使用 Salt 原生 mysql.query 通过本地 socket 创建用户（caching_sha2_password）
             log_info "创建用户: $username"
-            salt-call --local mysql.user_create "$username" password="$password" auth_plugin="caching_sha2_password"
+            if ! salt-call --local --retcode-passthrough \
+                mysql.query database=mysql \
+                query="CREATE USER IF NOT EXISTS '${username}'@'localhost' IDENTIFIED WITH caching_sha2_password BY '${password}';" \
+                unix_socket=/var/run/mysqld/mysqld.sock >/dev/null; then
+                log_error "创建用户失败: $username"
+                exit 1
+            fi
             
-            # 使用 Salt 原生 MySQL 模块授权
+            # 使用 Salt 原生 mysql.query 通过本地 socket 授权
             log_info "授权用户访问数据库"
-            salt-call --local mysql.grant_add "$username" "$dbname" "ALL PRIVILEGES"
+            if ! salt-call --local --retcode-passthrough \
+                mysql.query database=mysql \
+                query="GRANT ALL PRIVILEGES ON \`${dbname}\`.* TO '${username}'@'localhost'; FLUSH PRIVILEGES;" \
+                unix_socket=/var/run/mysqld/mysqld.sock >/dev/null; then
+                log_error "授权失败: $username -> $dbname"
+                exit 1
+            fi
             
             log_success "MySQL 数据库和用户创建成功: $dbname / $username"
             ;;
         "list")
             log_highlight "列出所有 MySQL 数据库..."
-            salt-call --local mysql.db_list
+            mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW DATABASES;" 2>/dev/null | tail -n +2
             ;;
         "backup")
             if [[ -z "$2" ]]; then
