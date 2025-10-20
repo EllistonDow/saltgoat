@@ -27,6 +27,23 @@ load_install_config() {
     validate_install_config
 }
 
+# 配置 Salt minion 以读取项目 pillar（需要 root）
+configure_salt_minion() {
+    log_info "配置 Salt minion（pillar_roots）..."
+    local pillar_conf="/etc/salt/minion.d/saltgoat-pillar.conf"
+    local pillar_dir="${SCRIPT_DIR}/salt/pillar"
+    sudo mkdir -p /etc/salt/minion.d
+    sudo mkdir -p "$pillar_dir"
+    sudo tee "$pillar_conf" >/dev/null <<EOF
+pillar_roots:
+  base:
+    - $pillar_dir
+EOF
+    # 刷新 pillar（不阻断）
+    sudo salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || true
+    log_success "Salt minion 配置完成"
+}
+
 # 解析安装参数
 parse_install_args() {
     log_info "解析命令行参数: $*"
@@ -133,6 +150,9 @@ install_all() {
     # 加载环境配置
     load_install_config
     
+    # 配置 salt minion（确保能读取项目 pillar）
+    configure_salt_minion
+
     # 安装系统依赖
     install_system_deps
     
@@ -154,10 +174,10 @@ install_core() {
     log_info "安装核心组件..."
     
     # 应用核心状态
-    salt-call --local state.apply core.nginx
-    salt-call --local state.apply core.php
-    salt-call --local state.apply core.mysql
-    salt-call --local state.apply core.composer
+    sudo salt-call --local state.apply core.nginx
+    sudo salt-call --local state.apply core.php
+    sudo salt-call --local state.apply core.mysql pillar='{"mysql_password":"'"$MYSQL_PASSWORD"'"}'
+    sudo salt-call --local state.apply core.composer
     
     log_success "核心组件安装完成"
 }
@@ -167,14 +187,14 @@ install_optional() {
     log_info "安装可选组件..."
     
     # 应用可选状态
-    salt-call --local state.apply optional.valkey
-    salt-call --local state.apply optional.opensearch
-    salt-call --local state.apply optional.rabbitmq
-    salt-call --local state.apply optional.varnish
-    salt-call --local state.apply optional.fail2ban
-    salt-call --local state.apply optional.webmin
-    salt-call --local state.apply optional.phpmyadmin
-    salt-call --local state.apply optional.certbot
+    sudo salt-call --local state.apply optional.valkey
+    sudo salt-call --local state.apply optional.opensearch
+    sudo salt-call --local state.apply optional.rabbitmq
+    sudo salt-call --local state.apply optional.varnish
+    sudo salt-call --local state.apply optional.fail2ban
+    sudo salt-call --local state.apply optional.webmin
+    sudo salt-call --local state.apply optional.phpmyadmin
+    sudo salt-call --local state.apply optional.certbot
     
     log_success "可选组件安装完成"
 }
@@ -184,10 +204,10 @@ install_system_deps() {
     log_info "安装系统依赖..."
     
     # 更新包列表
-    salt-call --local cmd.run "sudo apt update"
+    sudo salt-call --local cmd.run "apt update"
     
-    # 安装基础包
-    salt-call --local pkg.install curl wget git unzip
+    # 安装基础包（使用 pkgs 列表，避免位置参数被误解析为 fromrepo 等字段）
+    sudo salt-call --local pkg.install pkgs='["curl", "wget", "git", "unzip"]'
     
     log_success "系统依赖安装完成"
 }

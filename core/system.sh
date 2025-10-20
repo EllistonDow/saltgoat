@@ -7,24 +7,54 @@ system_install() {
     # 获取 SaltGoat 安装路径（从主脚本目录）
     local saltgoat_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     log_info "SaltGoat 路径: $saltgoat_path"
-    
+
+    # 识别实际需要授权的用户（避免在 sudo 下写入 root）
+    local install_user="$SUDO_USER"
+    if [[ -z "$install_user" ]]; then
+        install_user="$(logname 2>/dev/null || whoami)"
+    fi
+    log_info "授权用户: $install_user"
+
     # 创建系统级符号链接
     log_info "创建系统级符号链接..."
     sudo ln -sf "$saltgoat_path/saltgoat" /usr/local/bin/saltgoat
     sudo chmod +x /usr/local/bin/saltgoat
-    
-    # 配置 sudoers
+
+    # 确保 /usr/local/bin 在该用户 PATH 中
+    if ! grep -q "/usr/local/bin" "/home/$install_user/.bashrc" 2>/dev/null; then
+        echo "export PATH=\"/usr/local/bin:\$PATH\"" | sudo tee -a "/home/$install_user/.bashrc" >/dev/null
+    fi
+
+    # 配置 sudoers（幂等 & 语法校验）
     log_info "配置 sudoers..."
-    echo "$USER ALL=(ALL) NOPASSWD: /usr/local/bin/saltgoat" | sudo tee /etc/sudoers.d/saltgoat > /dev/null
-    sudo chmod 440 /etc/sudoers.d/saltgoat
-    
-    # 配置用户别名
+    local sudoers_tmp="/tmp/saltgoat_sudoers_$$"
+    printf "Cmnd_Alias SALTGOAT_CMDS = /usr/local/bin/saltgoat\n%s ALL=(ALL) NOPASSWD: SALTGOAT_CMDS\n" "$install_user" > "$sudoers_tmp"
+    if sudo visudo -cf "$sudoers_tmp" >/dev/null 2>&1; then
+        echo "Sudoers 语法检查通过"
+        # 仅当内容不存在时写入
+        if ! sudo grep -q "SALTGOAT_CMDS" /etc/sudoers.d/saltgoat 2>/dev/null; then
+            sudo install -m 440 -o root -g root "$sudoers_tmp" /etc/sudoers.d/saltgoat
+        else
+            # 覆盖到确保最新（仍保持 440 权限）
+            sudo cp "$sudoers_tmp" /etc/sudoers.d/saltgoat
+            sudo chmod 440 /etc/sudoers.d/saltgoat
+        fi
+    else
+        log_error "sudoers 语法校验失败，未写入授权文件"
+        rm -f "$sudoers_tmp"
+        return 1
+    fi
+    rm -f "$sudoers_tmp"
+
+    # 配置用户别名（避免重复添加）
     log_info "配置用户别名..."
-    echo "alias saltgoat='/usr/local/bin/saltgoat'" >> ~/.bashrc
-    
+    if ! grep -q "alias saltgoat='\/usr\/local\/bin\/saltgoat'" "/home/$install_user/.bashrc" 2>/dev/null; then
+        echo "alias saltgoat='/usr/local/bin/saltgoat'" | sudo tee -a "/home/$install_user/.bashrc" >/dev/null
+    fi
+
     log_success "SaltGoat 系统安装完成！"
     log_info "现在可以使用 'saltgoat' 命令（无需 sudo 和 ./）"
-    log_info "请重新登录或运行 'source ~/.bashrc' 来应用别名"
+    log_info "请重新登录或执行 'source /home/$install_user/.bashrc' 应用环境"
 }
 
 # 系统卸载

@@ -1,13 +1,45 @@
 # Percona MySQL 8.4 安装和配置
 
 
+# 预置：让本地 salt 能读取项目 pillar，并启用 mysql 执行模块
+
+configure_pillar_roots:
+  file.managed:
+    - name: /etc/salt/minion.d/saltgoat-pillar.conf
+    - makedirs: True
+    - contents: |
+        pillar_roots:
+          base:
+            - /home/doge/saltgoat/salt/pillar
+
+install_mysql_python_lib:
+  pkg.installed:
+    - name: python3-pymysql
+
+configure_mysql_module:
+  file.managed:
+    - name: /etc/salt/minion.d/mysql.conf
+    - makedirs: True
+    - contents: |
+        mysql:
+          user: root
+          unix_socket: /var/run/mysqld/mysqld.sock
+    - require:
+      - pkg: install_mysql_python_lib
+
+refresh_modules:
+  module.run:
+    - name: saltutil.sync_modules
+    - require:
+      - file: configure_mysql_module
+
 # 添加 Percona 仓库
 add_percona_repository:
   cmd.run:
     - name: |
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        apt update
+        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt update
     - unless: test -f /etc/apt/sources.list.d/percona-original-release.list
 
 # 安装 Percona MySQL 8.4
@@ -39,14 +71,20 @@ wait_for_mysql:
     - require:
       - service: start_mysql
 
-# 设置 MySQL Root 密码
+{# 从 Pillar 读取 root 密码，默认回退 #}
+{% set root_pass = pillar.get('mysql_password', 'SaltGoat2024!') %}
+
+# 设置 MySQL Root 密码（使用 Salt 原生 mysql 模块）
 set_mysql_root_password:
-  cmd.run:
-    - name: |
-        mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'SaltGoat2024!';"
-        mysql -e "FLUSH PRIVILEGES;"
+  module.run:
+    - name: mysql.query
+    - database: mysql
+    - query: |
+        ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '{{ root_pass }}';
+        FLUSH PRIVILEGES;
     - require:
       - cmd: wait_for_mysql
+      - module: refresh_modules
 
 # 配置 MySQL
 configure_mysql:
@@ -68,6 +106,6 @@ restart_mysql:
 # 创建防火墙规则
 configure_mysql_firewall:
   cmd.run:
-    - name: ufw allow 3306
+    - name: sudo ufw allow 3306
     - require:
       - service: restart_mysql
