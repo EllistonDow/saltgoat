@@ -9,9 +9,9 @@ DB_CONFIG_DIR="/etc/saltgoat/database"
 
 # 确保数据库目录存在
 ensure_database_dirs() {
-    salt-call --local file.mkdir "$DB_BACKUP_DIR" >/dev/null 2>&1
-    salt-call --local file.mkdir "$DB_LOG_DIR" >/dev/null 2>&1
-    salt-call --local file.mkdir "$DB_CONFIG_DIR" >/dev/null 2>&1
+    salt-call --local file.mkdir "$DB_BACKUP_DIR" >/dev/null 2>&1 || true
+    salt-call --local file.mkdir "$DB_LOG_DIR" >/dev/null 2>&1 || true
+    salt-call --local file.mkdir "$DB_CONFIG_DIR" >/dev/null 2>&1 || true
 }
 
 # 数据库连接测试
@@ -20,7 +20,7 @@ database_test_connection() {
     local host="${2:-localhost}"
     local port="${3:-3306}"
     local username="${4:-root}"
-    local password="${5:-SaltGoat2024!}"
+    local password="${5:-MyPass123!}"
     
     if [[ -z "$db_type" ]]; then
         log_error "用法: saltgoat database test-connection <type> [host] [port] [username] [password]"
@@ -106,11 +106,11 @@ database_status() {
             echo "MySQL 版本: $version"
             
             # 检查连接数
-            local connections=$(salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e 'SHOW STATUS LIKE \"Threads_connected\";'" 2>/dev/null)
+            local connections=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Threads_connected\";'" 2>/dev/null)
             echo "当前连接数: $connections"
             
             # 检查数据库列表
-            local databases=$(salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e 'SHOW DATABASES;'" 2>/dev/null)
+            local databases=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW DATABASES;'" 2>/dev/null)
             echo "数据库列表:"
             echo "$databases"
             ;;
@@ -195,6 +195,12 @@ database_backup() {
         exit 1
     fi
     
+    # 处理 list 命令
+    if [[ "$db_name" == "list" ]]; then
+        database_list_backups "$db_type"
+        return
+    fi
+    
     if [[ -z "$backup_name" ]]; then
         backup_name="${db_name}_$(date +%Y%m%d_%H%M%S)"
     fi
@@ -207,7 +213,7 @@ database_backup() {
     case "$db_type" in
         "mysql")
             log_info "备份 MySQL 数据库..."
-            if salt-call --local cmd.run "mysqldump -u root -p'SaltGoat2024!' $db_name > $backup_file" >/dev/null 2>&1; then
+            if salt-call --local cmd.run "mysqldump -u root -p'MyPass123!' $db_name" > "$backup_file" 2>/dev/null; then
                 log_success "MySQL 数据库备份完成: $backup_file"
             else
                 log_error "MySQL 数据库备份失败"
@@ -285,7 +291,7 @@ database_restore() {
     case "$db_type" in
         "mysql")
             log_info "恢复 MySQL 数据库..."
-            if salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' $db_name < $backup_file" >/dev/null 2>&1; then
+            if salt-call --local cmd.run "mysql -u root -p'MyPass123!' $db_name < $backup_file" >/dev/null 2>&1; then
                 log_success "MySQL 数据库恢复完成"
             else
                 log_error "MySQL 数据库恢复失败"
@@ -336,28 +342,28 @@ database_performance() {
             
             echo "连接统计:"
             echo "----------------------------------------"
-            local connections=$(salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e 'SHOW STATUS LIKE \"Connections\";'" 2>/dev/null)
+            local connections=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Connections\";'" 2>/dev/null)
             echo "$connections"
             
-            local max_connections=$(salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e 'SHOW STATUS LIKE \"Max_used_connections\";'" 2>/dev/null)
+            local max_connections=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Max_used_connections\";'" 2>/dev/null)
             echo "$max_connections"
             
             echo ""
             echo "查询统计:"
             echo "----------------------------------------"
-            local queries=$(salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e 'SHOW STATUS LIKE \"Queries\";'" 2>/dev/null)
+            local queries=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Queries\";'" 2>/dev/null)
             echo "$queries"
             
-            local slow_queries=$(salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e 'SHOW STATUS LIKE \"Slow_queries\";'" 2>/dev/null)
+            local slow_queries=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Slow_queries\";'" 2>/dev/null)
             echo "$slow_queries"
             
             echo ""
             echo "缓存统计:"
             echo "----------------------------------------"
-            local cache_hits=$(salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e 'SHOW STATUS LIKE \"Qcache_hits\";'" 2>/dev/null)
+            local cache_hits=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Qcache_hits\";'" 2>/dev/null)
             echo "$cache_hits"
             
-            local cache_misses=$(salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e 'SHOW STATUS LIKE \"Qcache_misses\";'" 2>/dev/null)
+            local cache_misses=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Qcache_misses\";'" 2>/dev/null)
             echo "$cache_misses"
             ;;
         "postgresql")
@@ -443,7 +449,7 @@ database_user_management() {
                         exit 1
                     fi
                     log_info "创建 MySQL 用户: $username"
-                    if salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e \"CREATE USER '$username'@'localhost' IDENTIFIED BY '$password';\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"CREATE USER '$username'@'localhost' IDENTIFIED BY '$password';\"" >/dev/null 2>&1; then
                         log_success "MySQL 用户创建成功: $username"
                     else
                         log_error "MySQL 用户创建失败"
@@ -456,7 +462,7 @@ database_user_management() {
                         exit 1
                     fi
                     log_info "删除 MySQL 用户: $username"
-                    if salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e \"DROP USER '$username'@'localhost';\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"DROP USER '$username'@'localhost';\"" >/dev/null 2>&1; then
                         log_success "MySQL 用户删除成功: $username"
                     else
                         log_error "MySQL 用户删除失败"
@@ -465,7 +471,7 @@ database_user_management() {
                     ;;
                 "list")
                     log_info "列出 MySQL 用户..."
-                    local users=$(salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e 'SELECT User, Host FROM mysql.user;'" 2>/dev/null)
+                    local users=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SELECT User, Host FROM mysql.user;'" 2>/dev/null)
                     echo "$users"
                     ;;
                 "grant")
@@ -474,7 +480,7 @@ database_user_management() {
                         exit 1
                     fi
                     log_info "授权 MySQL 用户: $username -> $database"
-                    if salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e \"GRANT ALL PRIVILEGES ON $database.* TO '$username'@'localhost';\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"GRANT ALL PRIVILEGES ON $database.* TO '$username'@'localhost';\"" >/dev/null 2>&1; then
                         log_success "MySQL 用户授权成功: $username -> $database"
                     else
                         log_error "MySQL 用户授权失败"
@@ -574,7 +580,7 @@ database_maintenance() {
                         exit 1
                     fi
                     log_info "优化 MySQL 数据库: $database"
-                    if salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e \"OPTIMIZE TABLE $database.*;\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"OPTIMIZE TABLE $database.*;\"" >/dev/null 2>&1; then
                         log_success "MySQL 数据库优化完成: $database"
                     else
                         log_error "MySQL 数据库优化失败"
@@ -587,7 +593,7 @@ database_maintenance() {
                         exit 1
                     fi
                     log_info "分析 MySQL 数据库: $database"
-                    if salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e \"ANALYZE TABLE $database.*;\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"ANALYZE TABLE $database.*;\"" >/dev/null 2>&1; then
                         log_success "MySQL 数据库分析完成: $database"
                     else
                         log_error "MySQL 数据库分析失败"
@@ -600,7 +606,7 @@ database_maintenance() {
                         exit 1
                     fi
                     log_info "修复 MySQL 数据库: $database"
-                    if salt-call --local cmd.run "mysql -u root -p'SaltGoat2024!' -e \"REPAIR TABLE $database.*;\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"REPAIR TABLE $database.*;\"" >/dev/null 2>&1; then
                         log_success "MySQL 数据库修复完成: $database"
                     else
                         log_error "MySQL 数据库修复失败"
@@ -663,7 +669,7 @@ database_list_backups() {
     ensure_database_dirs
     
     if [[ ! -d "$DB_BACKUP_DIR" ]] || [[ -z "$(ls -A "$DB_BACKUP_DIR" 2>/dev/null)" ]]; then
-        log_info "没有找到任何数据库备份"
+        echo "[INFO] 没有找到任何数据库备份"
         return 0
     fi
     
