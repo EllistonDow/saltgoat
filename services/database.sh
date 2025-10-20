@@ -94,7 +94,7 @@ database_status() {
             
             # 检查服务状态
             local service_status=$(salt-call --local service.status mysql --out=txt 2>/dev/null | tail -n 1)
-            if [[ "$service_status" == "True" ]]; then
+            if [[ "$service_status" == "local: True" ]]; then
                 log_success "MySQL 服务正在运行"
             else
                 log_error "MySQL 服务未运行"
@@ -119,7 +119,7 @@ database_status() {
             
             # 检查服务状态
             local service_status=$(salt-call --local service.status postgresql --out=txt 2>/dev/null | tail -n 1)
-            if [[ "$service_status" == "True" ]]; then
+            if [[ "$service_status" == "local: True" ]]; then
                 log_success "PostgreSQL 服务正在运行"
             else
                 log_error "PostgreSQL 服务未运行"
@@ -139,7 +139,7 @@ database_status() {
             
             # 检查服务状态
             local service_status=$(salt-call --local service.status mongodb --out=txt 2>/dev/null | tail -n 1)
-            if [[ "$service_status" == "True" ]]; then
+            if [[ "$service_status" == "local: True" ]]; then
                 log_success "MongoDB 服务正在运行"
             else
                 log_error "MongoDB 服务未运行"
@@ -159,7 +159,7 @@ database_status() {
             
             # 检查服务状态
             local service_status=$(salt-call --local service.status redis --out=txt 2>/dev/null | tail -n 1)
-            if [[ "$service_status" == "True" ]]; then
+            if [[ "$service_status" == "local: True" ]]; then
                 log_success "Redis 服务正在运行"
             else
                 log_error "Redis 服务未运行"
