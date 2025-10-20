@@ -17,7 +17,7 @@ ensure_database_dirs() {
     local mysql_config="[client]
 user=root
 password=MyPass123!"
-    local mysql_config_file="/home/$USER/.my.cnf"
+    local mysql_config_file="/home/doge/.my.cnf"
     echo "$mysql_config" > "$mysql_config_file"
     chmod 600 "$mysql_config_file"
 }
@@ -42,7 +42,7 @@ database_test_connection() {
     case "$db_type" in
         "mysql")
             log_info "测试 MySQL 连接..."
-            if salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -h $host -P $port -e 'SELECT 1;'" >/dev/null 2>&1; then
+            if salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -h $host -P $port -e 'SELECT 1;'" >/dev/null 2>&1; then
                 log_success "MySQL 连接成功"
             else
                 log_error "MySQL 连接失败"
@@ -110,15 +110,15 @@ database_status() {
             fi
             
             # 检查版本
-            local version=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf --version" 2>/dev/null)
+            local version=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf --version" 2>/dev/null)
             echo "MySQL 版本: $version"
             
             # 检查连接数
-            local connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -e 'SHOW STATUS LIKE \"Threads_connected\";'" 2>/dev/null)
+            local connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Threads_connected\";'" 2>/dev/null)
             echo "当前连接数: $connections"
             
             # 检查数据库列表
-            local databases=$(salt-call --local cmd.run "mysql --defaults-file=/home/$USER/.my.cnf -e 'SHOW DATABASES;'" 2>/dev/null)
+            local databases=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW DATABASES;'" 2>/dev/null)
             echo "数据库列表:"
             echo "$databases"
             ;;
@@ -215,7 +215,7 @@ database_backup() {
     case "$db_type" in
         "mysql")
             log_info "备份 MySQL 数据库..."
-            if salt-call --local cmd.run "mysqldump -u root -p'MyPass123!' $db_name > $backup_file" >/dev/null 2>&1; then
+            if salt-call --local cmd.run "mysqldump --defaults-file=/home/doge/.my.cnf $db_name" > "$backup_file" 2>/dev/null; then
                 log_success "MySQL 数据库备份完成: $backup_file"
             else
                 log_error "MySQL 数据库备份失败"
@@ -293,7 +293,7 @@ database_restore() {
     case "$db_type" in
         "mysql")
             log_info "恢复 MySQL 数据库..."
-            if salt-call --local cmd.run "mysql -u root -p'MyPass123!' $db_name < $backup_file" >/dev/null 2>&1; then
+            if salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf $db_name < $backup_file" >/dev/null 2>&1; then
                 log_success "MySQL 数据库恢复完成"
             else
                 log_error "MySQL 数据库恢复失败"
@@ -344,28 +344,28 @@ database_performance() {
             
             echo "连接统计:"
             echo "----------------------------------------"
-            local connections=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Connections\";'" 2>/dev/null)
+            local connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Connections\";'" 2>/dev/null)
             echo "$connections"
             
-            local max_connections=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Max_used_connections\";'" 2>/dev/null)
+            local max_connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Max_used_connections\";'" 2>/dev/null)
             echo "$max_connections"
             
             echo ""
             echo "查询统计:"
             echo "----------------------------------------"
-            local queries=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Queries\";'" 2>/dev/null)
+            local queries=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Queries\";'" 2>/dev/null)
             echo "$queries"
             
-            local slow_queries=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Slow_queries\";'" 2>/dev/null)
+            local slow_queries=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Slow_queries\";'" 2>/dev/null)
             echo "$slow_queries"
             
             echo ""
             echo "缓存统计:"
             echo "----------------------------------------"
-            local cache_hits=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Qcache_hits\";'" 2>/dev/null)
+            local cache_hits=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Qcache_hits\";'" 2>/dev/null)
             echo "$cache_hits"
             
-            local cache_misses=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SHOW STATUS LIKE \"Qcache_misses\";'" 2>/dev/null)
+            local cache_misses=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Qcache_misses\";'" 2>/dev/null)
             echo "$cache_misses"
             ;;
         "postgresql")
@@ -451,7 +451,7 @@ database_user_management() {
                         exit 1
                     fi
                     log_info "创建 MySQL 用户: $username"
-                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"CREATE USER '$username'@'localhost' IDENTIFIED BY '$password';\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e \"CREATE USER '$username'@'localhost' IDENTIFIED BY '$password';\"" >/dev/null 2>&1; then
                         log_success "MySQL 用户创建成功: $username"
                     else
                         log_error "MySQL 用户创建失败"
@@ -464,7 +464,7 @@ database_user_management() {
                         exit 1
                     fi
                     log_info "删除 MySQL 用户: $username"
-                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"DROP USER '$username'@'localhost';\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e \"DROP USER '$username'@'localhost';\"" >/dev/null 2>&1; then
                         log_success "MySQL 用户删除成功: $username"
                     else
                         log_error "MySQL 用户删除失败"
@@ -473,7 +473,7 @@ database_user_management() {
                     ;;
                 "list")
                     log_info "列出 MySQL 用户..."
-                    local users=$(salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e 'SELECT User, Host FROM mysql.user;'" 2>/dev/null)
+                    local users=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SELECT User, Host FROM mysql.user;'" 2>/dev/null)
                     echo "$users"
                     ;;
                 "grant")
@@ -482,7 +482,7 @@ database_user_management() {
                         exit 1
                     fi
                     log_info "授权 MySQL 用户: $username -> $database"
-                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"GRANT ALL PRIVILEGES ON $database.* TO '$username'@'localhost';\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e \"GRANT ALL PRIVILEGES ON $database.* TO '$username'@'localhost';\"" >/dev/null 2>&1; then
                         log_success "MySQL 用户授权成功: $username -> $database"
                     else
                         log_error "MySQL 用户授权失败"
@@ -582,7 +582,7 @@ database_maintenance() {
                         exit 1
                     fi
                     log_info "优化 MySQL 数据库: $database"
-                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"OPTIMIZE TABLE $database.*;\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e \"OPTIMIZE TABLE $database.*;\"" >/dev/null 2>&1; then
                         log_success "MySQL 数据库优化完成: $database"
                     else
                         log_error "MySQL 数据库优化失败"
@@ -595,7 +595,7 @@ database_maintenance() {
                         exit 1
                     fi
                     log_info "分析 MySQL 数据库: $database"
-                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"ANALYZE TABLE $database.*;\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e \"ANALYZE TABLE $database.*;\"" >/dev/null 2>&1; then
                         log_success "MySQL 数据库分析完成: $database"
                     else
                         log_error "MySQL 数据库分析失败"
@@ -608,7 +608,7 @@ database_maintenance() {
                         exit 1
                     fi
                     log_info "修复 MySQL 数据库: $database"
-                    if salt-call --local cmd.run "mysql -u root -p'MyPass123!' -e \"REPAIR TABLE $database.*;\"" >/dev/null 2>&1; then
+                    if salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e \"REPAIR TABLE $database.*;\"" >/dev/null 2>&1; then
                         log_success "MySQL 数据库修复完成: $database"
                     else
                         log_error "MySQL 数据库修复失败"
