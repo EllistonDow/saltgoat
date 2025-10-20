@@ -1,5 +1,7 @@
 # SaltGoat - LEMP Stack Automation
 
+**版本**: v0.3.0 | **状态**: ✅ 生产就绪
+
 基于 Salt 的全自动 LEMP 安装项目，专为 Ubuntu 24.04 设计。使用 Salt 原生功能，提供完整的 LEMP 环境安装、配置和管理功能。
 
 ## 🎯 项目特点
@@ -16,7 +18,15 @@
 - **Salt Grains**：系统信息检测
 - **Salt States**：状态管理
 - **Salt CLI**：命令行参数传递
-- **无外部依赖**：不需要 .env 文件
+- **环境配置**：支持 .env 文件和命令行参数
+
+### ✅ 模块化架构
+- **核心模块**：系统安装和基础配置
+- **服务模块**：Nginx、MySQL、Redis、RabbitMQ 等
+- **监控模块**：系统监控和性能分析
+- **维护模块**：系统更新、清理、健康检查
+- **报告模块**：多格式报告生成
+- **自动化模块**：脚本和任务管理
 
 ### ✅ 智能内存检测
 - 自动检测服务器内存并调整配置
@@ -85,9 +95,23 @@ cd saltgoat
 sudo ./saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!' --webmin-password 'Webmin123!' --phpmyadmin-password 'phpMyAdmin123!'
 ```
 
-### 1. 基础安装（Salt 原生方式）
+### 1. 基础安装（推荐方式）
+
+#### 方式A：使用 .env 文件（推荐）
 ```bash
-# 设置密码并安装所有组件（推荐）
+# 1. 创建环境配置文件
+saltgoat env create
+
+# 2. 编辑密码
+nano .env
+
+# 3. 安装所有组件
+saltgoat install all
+```
+
+#### 方式B：命令行参数（传统方式）
+```bash
+# 设置密码并安装所有组件
 saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!' --webmin-password 'Webmin123!' --phpmyadmin-password 'phpMyAdmin123!'
 
 # 或者分步安装
@@ -95,13 +119,41 @@ saltgoat install core --mysql-password 'MyPass123!'
 saltgoat install optional --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!'
 ```
 
+#### 方式C：混合方式（最灵活）
+```bash
+# 使用 .env 文件 + 命令行参数覆盖
+saltgoat install all --mysql-password 'NewPassword123!'
+```
+
+**安装方式对比：**
+
+| 方式 | 优势 | 适用场景 |
+|------|------|----------|
+| **.env 文件** | ✅ 配置持久化<br>✅ 版本控制友好<br>✅ 密码安全 | 生产环境<br>团队协作<br>重复部署 |
+| **命令行参数** | ✅ 一次性使用<br>✅ 脚本自动化<br>✅ 临时配置 | 测试环境<br>CI/CD<br>快速部署 |
+| **混合方式** | ✅ 灵活性最高<br>✅ 配置覆盖<br>✅ 最佳实践 | 复杂环境<br>多环境部署 |
+
+**优先级：** 命令行参数 > .env 文件 > 默认值
+
 ### 2. Magento 优化（智能检测）
 ```bash
 # 使用 Salt 原生方式优化
 saltgoat optimize magento
 ```
 
-### 3. 服务状态检查
+### 3. 环境配置管理
+```bash
+# 创建环境配置文件
+saltgoat env create
+
+# 查看当前环境配置
+saltgoat env show
+
+# 加载指定环境配置文件
+saltgoat env load /path/to/custom.env
+```
+
+### 4. 服务状态检查
 ```bash
 # 检查所有服务状态
 saltgoat status
@@ -113,7 +165,7 @@ saltgoat versions
 saltgoat passwords
 ```
 
-### 4. 多站点管理
+### 5. 多站点管理
 ```bash
 # 创建新站点数据库
 saltgoat mysql create hawkmage hawk 'hawk.2010'
@@ -170,6 +222,86 @@ saltgoat system ssh-port
 - 安装前建议先检测 SSH 端口
 - 确保当前 SSH 连接不会被中断
 - 支持 IPv4 和 IPv6 双栈
+
+## 🆕 新功能模块
+
+### 系统维护模块
+```bash
+# 系统更新管理
+saltgoat maintenance update check
+saltgoat maintenance update upgrade
+
+# 服务管理
+saltgoat maintenance service restart nginx
+saltgoat maintenance service status mysql
+
+# 系统清理
+saltgoat maintenance cleanup all
+saltgoat maintenance cleanup logs
+
+# 磁盘管理
+saltgoat maintenance disk usage
+saltgoat maintenance disk find-large 100M
+
+# 系统健康检查
+saltgoat maintenance health
+```
+
+### 报告生成模块
+```bash
+# 生成系统健康报告
+saltgoat reports system text
+saltgoat reports system json
+saltgoat reports system html
+
+# 生成性能分析报告
+saltgoat reports performance text
+
+# 生成安全评估报告
+saltgoat reports security text
+
+# 报告管理
+saltgoat reports list all
+saltgoat reports cleanup 30
+```
+
+### 自动化任务管理
+```bash
+# 脚本管理
+saltgoat automation script create my-script
+saltgoat automation script list
+saltgoat automation script run my-script
+
+# 任务调度
+saltgoat automation job create my-job "0 2 * * *" my-script
+saltgoat automation job enable my-job
+saltgoat automation job list
+
+# 预设模板
+saltgoat automation templates system-update
+saltgoat automation templates backup-cleanup
+saltgoat automation templates log-rotation
+saltgoat automation templates security-scan
+
+# 日志管理
+saltgoat automation logs list
+saltgoat automation logs view my-script_20251020.log
+```
+
+### 数据库管理优化
+```bash
+# MySQL 便捷功能（Salt 原生）
+saltgoat database mysql create testdb testuser 'testpass123'
+saltgoat database mysql list
+saltgoat database mysql backup testdb
+saltgoat database mysql delete testdb
+
+# 通用数据库功能
+saltgoat database status mysql
+saltgoat database test-connection mysql
+saltgoat database performance mysql
+saltgoat database user mysql create testuser password123
+```
 
 ## Salt Schedule 定时任务
 
