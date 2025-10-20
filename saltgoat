@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.1.9"
+SCRIPT_VERSION="0.2.0"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -36,6 +36,7 @@ source "${SCRIPT_DIR}/services/security.sh"
 source "${SCRIPT_DIR}/services/performance.sh"
 source "${SCRIPT_DIR}/services/ssl.sh"
 source "${SCRIPT_DIR}/services/monitor.sh"
+source "${SCRIPT_DIR}/services/database.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -179,6 +180,16 @@ show_help() {
     echo "  monitor realtime [seconds]      - 实时监控"
     echo "  monitor config                  - 监控配置"
     echo "  monitor cleanup [days]           - 清理监控日志"
+    echo ""
+    echo "  database test-connection <type> [host] [port] [user] [pass] - 测试数据库连接"
+    echo "  database status <type>          - 检查数据库状态"
+    echo "  database backup <type> <db> [name] - 备份数据库"
+    echo "  database restore <type> <db> <file> - 恢复数据库"
+    echo "  database performance <type>      - 数据库性能监控"
+    echo "  database user <type> <action> [user] [pass] [db] - 用户管理"
+    echo "  database maintenance <type> <action> [db] - 数据库维护"
+    echo "  database list-backups            - 列出数据库备份"
+    echo "  database cleanup-backups [days] - 清理数据库备份"
     echo ""
     echo "监控功能:"
     echo "  memory monitor                 - 执行内存监控"
@@ -485,6 +496,42 @@ case "$1" in
                 *)
                     log_error "未知的监控操作: $2"
                     log_info "支持: system, services, resources, network, logs, security, performance, report, realtime, config, cleanup"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "database")
+            case "$2" in
+                "test-connection")
+                    database_test_connection "$3" "$4" "$5" "$6" "$7"
+                    ;;
+                "status")
+                    database_status "$3"
+                    ;;
+                "backup")
+                    database_backup "$3" "$4" "$5"
+                    ;;
+                "restore")
+                    database_restore "$3" "$4" "$5"
+                    ;;
+                "performance")
+                    database_performance "$3"
+                    ;;
+                "user")
+                    database_user_management "$3" "$4" "$5" "$6" "$7"
+                    ;;
+                "maintenance")
+                    database_maintenance "$3" "$4" "$5"
+                    ;;
+                "list-backups")
+                    database_list_backups
+                    ;;
+                "cleanup-backups")
+                    database_cleanup_backups "$3"
+                    ;;
+                *)
+                    log_error "未知的数据库操作: $2"
+                    log_info "支持: test-connection, status, backup, restore, performance, user, maintenance, list-backups, cleanup-backups"
                     exit 1
                     ;;
             esac
