@@ -210,7 +210,50 @@ salt versions
 lemp install all
 ```
 
-### 6. 多站点管理
+**⚠️ 注意事项：**
+- 避免使用与系统用户名相同的别名（如 `doge`）
+- 避免使用系统命令名作为别名
+- 别名管理脚本会自动检测冲突并提供建议
+
+### 6. SaltGUI Web 界面
+
+SaltGoat 支持 SaltGUI Web 界面，让您通过浏览器管理 SaltStack：
+
+#### 安装和配置
+```bash
+# 安装 SaltGUI
+saltgoat saltgui install
+
+# 启动 SaltGUI
+saltgoat saltgui start
+
+# 检查状态
+saltgoat saltgui status
+```
+
+#### 访问 SaltGUI
+- **访问地址**: http://localhost:3333
+- **配置文件**: /etc/saltgui/config.json
+- **日志文件**: /var/log/saltgui/saltgui.log
+
+#### SaltGUI 功能
+- ✅ **可视化状态管理**：查看所有 minion 状态
+- ✅ **远程命令执行**：通过 Web 界面执行 Salt 命令
+- ✅ **实时监控**：监控系统状态和性能
+- ✅ **日志查看**：查看 Salt 执行日志
+- ✅ **配置管理**：管理 Salt 配置文件
+
+#### 管理命令
+```bash
+saltgoat saltgui install    # 安装 SaltGUI
+saltgoat saltgui start      # 启动 SaltGUI
+saltgoat saltgui stop       # 停止 SaltGUI
+saltgoat saltgui restart    # 重启 SaltGUI
+saltgoat saltgui status     # 检查状态
+saltgoat saltgui uninstall  # 卸载 SaltGUI
+```
+
+### 7. 多站点管理
 ```bash
 # 创建新站点数据库
 saltgoat mysql create hawkmage hawk 'hawk.2010'

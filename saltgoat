@@ -43,6 +43,7 @@ source "${SCRIPT_DIR}/services/ssl.sh"
 source "${SCRIPT_DIR}/services/maintenance.sh"
 source "${SCRIPT_DIR}/services/reports.sh"
 source "${SCRIPT_DIR}/services/automation.sh"
+source "${SCRIPT_DIR}/services/saltgui.sh"
 source "${SCRIPT_DIR}/monitoring/system.sh"
 source "${SCRIPT_DIR}/services/database.sh"
 
@@ -246,6 +247,14 @@ show_help() {
     echo "  automation job <create|list|enable|disable|run|delete> [name] [schedule] - 任务管理"
     echo "  automation logs <list|view|tail|cleanup> [name] [days] - 日志管理"
     echo "  automation templates <system-update|backup-cleanup|log-rotation|security-scan> - 预设模板"
+    echo ""
+    echo "SaltGUI Web 界面:"
+    echo "  saltgui install                - 安装 SaltGUI"
+    echo "  saltgui start                  - 启动 SaltGUI"
+    echo "  saltgui stop                   - 停止 SaltGUI"
+    echo "  saltgui restart                - 重启 SaltGUI"
+    echo "  saltgui status                 - 检查 SaltGUI 状态"
+    echo "  saltgui uninstall              - 卸载 SaltGUI"
     echo ""
     echo "系统信息:"
     echo "  status                         - 查看系统状态"
@@ -589,6 +598,9 @@ case "$1" in
         ;;
     "automation")
         automation_handler "$2" "$3" "$4" "$5"
+        ;;
+    "saltgui")
+        saltgui_handler "$2" "$3" "$4" "$5"
         ;;
     "status")
         log_highlight "查看系统状态..."

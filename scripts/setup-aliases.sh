@@ -37,12 +37,48 @@ alias_exists() {
     grep -q "alias $alias_name='/usr/local/bin/saltgoat'" ~/.bashrc 2>/dev/null
 }
 
+# 检查别名冲突
+check_alias_conflict() {
+    local alias_name="$1"
+    
+    # 检查是否是系统命令
+    if command -v "$alias_name" >/dev/null 2>&1; then
+        echo -e "${RED}错误: '$alias_name' 是系统命令，不能用作别名${NC}"
+        return 1
+    fi
+    
+    # 检查是否是用户名
+    if id "$alias_name" >/dev/null 2>&1; then
+        echo -e "${YELLOW}警告: '$alias_name' 是系统用户名，建议使用其他别名${NC}"
+        echo -e "${BLUE}建议的替代别名:${NC}"
+        echo "  - ${alias_name}goat"
+        echo "  - ${alias_name}sg"
+        echo "  - ${alias_name}lemp"
+        return 1
+    fi
+    
+    # 检查是否是保留字
+    case "$alias_name" in
+        "if"|"then"|"else"|"fi"|"for"|"while"|"do"|"done"|"case"|"esac"|"function"|"return"|"exit")
+            echo -e "${RED}错误: '$alias_name' 是 Shell 保留字，不能用作别名${NC}"
+            return 1
+            ;;
+    esac
+    
+    return 0
+}
+
 # 添加别名
 add_alias() {
     local alias_name="$1"
     
     if [[ -z "$alias_name" ]]; then
         echo -e "${RED}错误: 请提供别名名称${NC}"
+        return 1
+    fi
+    
+    # 检查别名冲突
+    if ! check_alias_conflict "$alias_name"; then
         return 1
     fi
     
