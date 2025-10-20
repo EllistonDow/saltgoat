@@ -12,6 +12,231 @@ ensure_backup_dir() {
     salt-call --local file.mkdir "$BACKUP_BASE_DIR" >/dev/null 2>&1
 }
 
+# 站点文件备份
+backup_create_site() {
+    local site_name="$1"
+    local project_name="$2"
+    
+    if [[ -z "$site_name" ]]; then
+        log_error "用法: saltgoat backup site create <site_name> [project_name]"
+        log_info "示例: saltgoat backup site create tank tank"
+        log_info "示例: saltgoat backup site create mysite mysite"
+        exit 1
+    fi
+    
+    # 如果没有指定项目名，使用站点名
+    if [[ -z "$project_name" ]]; then
+        project_name="$site_name"
+    fi
+    
+    local site_path="/var/www/$site_name"
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    
+    # 检查站点目录是否存在
+    if [[ ! -d "$site_path" ]]; then
+        log_error "站点目录不存在: $site_path"
+        log_info "请确保站点已创建: saltgoat nginx create $site_name domain.com"
+        exit 1
+    fi
+    
+    # 创建项目化备份目录
+    local project_backup_dir="/home/doge/Dropbox/${project_name}/snapshot"
+    local backup_file="$project_backup_dir/${site_name}_${timestamp}.tar.gz"
+    
+    # 确保目录存在
+    mkdir -p "$project_backup_dir" 2>/dev/null || {
+        log_warning "无法创建项目备份目录: $project_backup_dir"
+        log_info "使用默认备份目录: $BACKUP_BASE_DIR"
+        ensure_backup_dir
+        backup_file="$BACKUP_BASE_DIR/${site_name}_${timestamp}.tar.gz"
+    }
+    
+    log_highlight "备份站点文件: $site_name -> $backup_file"
+    
+    # 显示站点信息
+    local site_size=$(du -sh "$site_path" 2>/dev/null | cut -f1)
+    log_info "站点路径: $site_path"
+    log_info "站点大小: $site_size"
+    log_info "备份文件: $backup_file"
+    
+    # 使用 Salt 原生 archive 模块创建压缩包
+    log_info "创建站点备份..."
+    if salt-call --local cmd.run "sudo tar -czf '$backup_file' -C /var/www '$site_name'" >/dev/null 2>&1; then
+        # 获取备份文件大小
+        local backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
+        log_success "站点备份完成: $backup_file"
+        log_info "备份文件大小: $backup_size"
+        log_info "备份路径: $backup_file"
+        
+        # 创建备份信息文件
+        local backup_info="站点备份信息
+==================
+站点名称: $site_name
+项目名称: $project_name
+备份时间: $(date)
+站点路径: $site_path
+备份文件: $backup_file
+站点大小: $site_size
+备份大小: $backup_size
+备份内容: 完整站点文件"
+        
+        salt-call --local file.write "${backup_file%.tar.gz}_info.txt" contents="$backup_info" >/dev/null 2>&1
+        
+    else
+        log_error "站点备份失败"
+        exit 1
+    fi
+}
+
+# 站点文件恢复
+backup_restore_site() {
+    local site_name="$1"
+    local backup_file="$2"
+    local force_flag="$3"
+    
+    if [[ -z "$site_name" || -z "$backup_file" ]]; then
+        log_error "用法: saltgoat backup site restore <site_name> <backup_file> [--force]"
+        log_info "示例: saltgoat backup site restore tank /home/doge/Dropbox/tank/snapshot/tank_20251008_143459.tar.gz"
+        log_info "示例: saltgoat backup site restore tank /home/doge/Dropbox/tank/snapshot/tank_20251008_143459.tar.gz --force"
+        exit 1
+    fi
+    
+    local site_path="/var/www/$site_name"
+    
+    # 检查备份文件是否存在
+    if [[ ! -f "$backup_file" ]]; then
+        log_error "备份文件不存在: $backup_file"
+        exit 1
+    fi
+    
+    # 显示备份文件信息
+    local backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
+    local backup_date=$(stat -c %y "$backup_file" 2>/dev/null)
+    log_info "备份文件大小: $backup_size"
+    log_info "备份文件时间: $backup_date"
+    
+    # 检查是否需要强制模式
+    if [[ "$force_flag" == "--force" ]]; then
+        log_info "使用强制模式，跳过确认"
+    else
+        log_warning "这将覆盖目标站点目录，请确认是否继续？"
+        read -p "输入 'yes' 确认继续: " confirm
+        
+        if [[ "$confirm" != "yes" ]]; then
+            log_info "恢复操作已取消"
+            exit 0
+        fi
+    fi
+    
+    log_highlight "恢复站点文件: $site_name <- $backup_file"
+    
+    # 创建临时恢复目录
+    local restore_dir="/tmp/saltgoat_site_restore_$$"
+    salt-call --local file.mkdir "$restore_dir" >/dev/null 2>&1
+    
+    log_info "解压备份文件..."
+    if salt-call --local archive.tar xzf "$backup_file" dest="$restore_dir" >/dev/null 2>&1; then
+        log_success "备份文件解压成功"
+        
+        # 查找解压后的站点目录
+        local extracted_site_dir=$(find "$restore_dir" -name "$site_name" -type d | head -1)
+        
+        if [[ -z "$extracted_site_dir" ]]; then
+            log_error "在备份文件中未找到站点目录: $site_name"
+            salt-call --local file.remove "$restore_dir" recurse=True >/dev/null 2>&1
+            exit 1
+        fi
+        
+        # 备份当前站点（如果存在）
+        if [[ -d "$site_path" ]]; then
+            local backup_current="/tmp/${site_name}_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
+            log_info "备份当前站点到: $backup_current"
+            salt-call --local archive.tar czf "$backup_current" sources="[\"$site_path\"]" >/dev/null 2>&1
+        fi
+        
+        # 恢复站点文件
+        log_info "恢复站点文件到: $site_path"
+        salt-call --local file.mkdir "$site_path" >/dev/null 2>&1
+        salt-call --local cmd.run "cp -r $extracted_site_dir/* $site_path/" >/dev/null 2>&1
+        
+        # 设置正确的权限
+        log_info "设置站点权限..."
+        salt-call --local cmd.run "chown -R www-data:www-data $site_path" >/dev/null 2>&1
+        salt-call --local cmd.run "chmod -R 755 $site_path" >/dev/null 2>&1
+        
+        # 清理临时目录
+        salt-call --local file.remove "$restore_dir" recurse=True >/dev/null 2>&1
+        
+        log_success "站点恢复完成: $site_name"
+        log_info "站点路径: $site_path"
+        
+    else
+        log_error "备份文件解压失败"
+        salt-call --local file.remove "$restore_dir" recurse=True >/dev/null 2>&1
+        exit 1
+    fi
+}
+
+# 列出站点备份
+backup_list_sites() {
+    log_highlight "列出站点备份..."
+    
+    echo "站点备份列表:"
+    echo "=========================================="
+    
+    # 列出项目化备份（Dropbox 路径）
+    local found_backups=false
+    
+    for project_dir in /home/doge/Dropbox/*/snapshot/; do
+        if [[ -d "$project_dir" ]]; then
+            local project_name=$(basename $(dirname "$project_dir"))
+            
+            echo "项目: $project_name"
+            echo "----------------------------------------"
+            
+            for file in "$project_dir"*.tar.gz; do
+                if [[ -f "$file" ]]; then
+                    local name=$(basename "$file" .tar.gz)
+                    local size=$(du -h "$file" 2>/dev/null | cut -f1)
+                    local date=$(stat -c %y "$file" 2>/dev/null)
+                    
+                    echo "备份名称: $name"
+                    echo "文件大小: $size"
+                    echo "创建时间: $date"
+                    echo "文件路径: $file"
+                    echo "----------------------------------------"
+                    found_backups=true
+                fi
+            done
+        fi
+    done
+    
+    # 列出默认备份目录
+    ensure_backup_dir
+    if [[ -d "$BACKUP_BASE_DIR" ]] && [[ -n "$(ls -A "$BACKUP_BASE_DIR" 2>/dev/null)" ]]; then
+        echo "默认备份目录:"
+        echo "----------------------------------------"
+        
+        for file in "$BACKUP_BASE_DIR"/*.tar.gz; do
+            if [[ -f "$file" ]]; then
+                local name=$(basename "$file" .tar.gz)
+                local size=$(du -h "$file" 2>/dev/null | cut -f1)
+                local date=$(stat -c %y "$file" 2>/dev/null)
+                
+                echo "备份名称: $name"
+                echo "文件大小: $size"
+                echo "创建时间: $date"
+                echo "文件路径: $file"
+                echo "----------------------------------------"
+            fi
+        done
+    fi
+    
+    if [[ "$found_backups" == "false" ]]; then
+        echo "未找到站点备份文件"
+    fi
+}
+
 # 创建系统备份
 backup_create() {
     local backup_name="$1"

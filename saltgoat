@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.3.7"
+SCRIPT_VERSION="0.3.8"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -149,6 +149,9 @@ show_help() {
     echo "  nginx delete <site>            - 删除站点"
     echo ""
     echo "  backup create <name>           - 创建系统备份"
+    echo "  backup site create <site> [project] - 创建站点备份"
+    echo "  backup site restore <site> <file> [--force] - 恢复站点备份"
+    echo "  backup site list               - 列出站点备份"
     echo "  backup list                    - 列出所有备份"
     echo "  backup restore <name>          - 恢复备份"
     echo "  backup delete <name>           - 删除备份"
@@ -368,6 +371,27 @@ case "$1" in
             "create")
                 backup_create "$3"
                 ;;
+            "site")
+                case "$3" in
+                    "create")
+                        backup_create_site "$4" "$5"
+                        ;;
+                    "restore")
+                        backup_restore_site "$4" "$5" "$6"
+                        ;;
+                    "list")
+                        backup_list_sites
+                        ;;
+                    *)
+                        log_error "未知的站点备份操作: $3"
+                        log_info "支持: create, restore, list"
+                        log_info "示例: saltgoat backup site create tank tank"
+                        log_info "示例: saltgoat backup site restore tank /path/to/backup.tar.gz"
+                        log_info "示例: saltgoat backup site list"
+                        exit 1
+                        ;;
+                esac
+                ;;
             "list")
                 backup_list
                 ;;
@@ -382,7 +406,8 @@ case "$1" in
                 ;;
             *)
                 log_error "未知的备份操作: $2"
-                log_info "支持: create, list, restore, delete, cleanup"
+                log_info "支持: create, site, list, restore, delete, cleanup"
+                log_info "站点备份: saltgoat backup site <create|restore|list> [args]"
                 exit 1
                 ;;
         esac
