@@ -204,19 +204,49 @@ database_backup() {
     fi
     
     if [[ -z "$backup_name" ]]; then
+        # 支持项目化命名：{项目名}mage -> {项目名}
+        local project_name=""
+        if [[ "$db_name" =~ ^(.+)mage$ ]]; then
+            project_name="${BASH_REMATCH[1]}"
+        else
+            project_name="$db_name"
+        fi
+        
         backup_name="${db_name}_$(date +%Y%m%d_%H%M%S)"
     fi
     
     log_highlight "备份数据库: $db_type/$db_name -> $backup_name"
-    ensure_database_dirs
     
-    local backup_file="$DB_BACKUP_DIR/${backup_name}.sql"
+    # 支持项目化备份路径
+    local project_name=""
+    if [[ "$db_name" =~ ^(.+)mage$ ]]; then
+        project_name="${BASH_REMATCH[1]}"
+    else
+        project_name="$db_name"
+    fi
+    
+    # 创建项目化备份目录
+    local project_backup_dir="/home/doge/Dropbox/${project_name}/database/$(date +%Y%m%d)"
+    local backup_file="$project_backup_dir/${backup_name}.sql.gz"
+    
+    # 确保目录存在
+    mkdir -p "$project_backup_dir" 2>/dev/null || {
+        log_warning "无法创建项目备份目录: $project_backup_dir"
+        log_info "使用默认备份目录: $DB_BACKUP_DIR"
+        ensure_database_dirs
+        backup_file="$DB_BACKUP_DIR/${backup_name}.sql.gz"
+    }
     
     case "$db_type" in
         "mysql")
             log_info "备份 MySQL 数据库..."
-            if salt-call --local cmd.run "mysqldump --defaults-file=/home/doge/.my.cnf $db_name" > "$backup_file" 2>/dev/null; then
+            # 使用原生 mysqldump 命令，避免 Salt 模块的性能开销，并压缩备份
+            if mysqldump --defaults-file=/etc/salt/mysql_saltuser.cnf "$db_name" | gzip > "$backup_file" 2>/dev/null; then
+                # 获取备份文件大小
+                local backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
                 log_success "MySQL 数据库备份完成: $backup_file"
+                log_info "备份文件大小: $backup_size"
+                log_info "备份路径: $backup_file"
             else
                 log_error "MySQL 数据库备份失败"
                 exit 1
@@ -277,10 +307,16 @@ database_restore() {
     log_highlight "恢复数据库: $db_type/$db_name <- $backup_file"
     
     # 检查备份文件是否存在
-    if ! salt-call --local file.file_exists "$backup_file" --out=txt 2>/dev/null | grep -q "True"; then
+    if [[ ! -f "$backup_file" ]]; then
         log_error "备份文件不存在: $backup_file"
         exit 1
     fi
+    
+    # 显示备份文件信息
+    local backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
+    local backup_date=$(stat -c %y "$backup_file" 2>/dev/null)
+    log_info "备份文件大小: $backup_size"
+    log_info "备份文件时间: $backup_date"
     
     log_warning "这将覆盖目标数据库，请确认是否继续？"
     read -p "输入 'yes' 确认继续: " confirm
@@ -293,11 +329,26 @@ database_restore() {
     case "$db_type" in
         "mysql")
             log_info "恢复 MySQL 数据库..."
-            if salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf $db_name < $backup_file" >/dev/null 2>&1; then
-                log_success "MySQL 数据库恢复完成"
+            # 使用原生 mysql 命令，避免 Salt 模块的性能开销
+            # 支持压缩文件 (.sql.gz) 和普通文件 (.sql)
+            if [[ "$backup_file" == *.gz ]]; then
+                # 压缩文件，使用 gunzip 解压后恢复
+                if gunzip -c "$backup_file" | mysql --defaults-file=/etc/salt/mysql_saltuser.cnf "$db_name" 2>/dev/null; then
+                    log_success "MySQL 数据库恢复完成: $db_name (压缩文件)"
+                    log_info "已从压缩备份文件恢复: $backup_file"
+                else
+                    log_error "MySQL 数据库恢复失败"
+                    exit 1
+                fi
             else
-                log_error "MySQL 数据库恢复失败"
-                exit 1
+                # 普通文件，直接恢复
+                if mysql --defaults-file=/etc/salt/mysql_saltuser.cnf "$db_name" < "$backup_file" 2>/dev/null; then
+                    log_success "MySQL 数据库恢复完成: $db_name (普通文件)"
+                    log_info "已从备份文件恢复: $backup_file"
+                else
+                    log_error "MySQL 数据库恢复失败"
+                    exit 1
+                fi
             fi
             ;;
         "postgresql")
@@ -668,23 +719,67 @@ database_maintenance() {
 # 列出数据库备份
 database_list_backups() {
     log_highlight "列出数据库备份..."
-    ensure_database_dirs
-    
-    if [[ ! -d "$DB_BACKUP_DIR" ]] || [[ -z "$(ls -A "$DB_BACKUP_DIR" 2>/dev/null)" ]]; then
-        log_info "没有找到任何数据库备份"
-        return 0
-    fi
     
     echo "数据库备份列表:"
     echo "=========================================="
     
-    for file in "$DB_BACKUP_DIR"/*.sql; do
-        if [[ -f "$file" ]]; then
-            local name=$(basename "$file" .sql)
-            local size=$(salt-call --local cmd.run "du -h $file" 2>/dev/null)
-            local date=$(salt-call --local cmd.run "stat -c %y $file" 2>/dev/null)
+    # 列出项目化备份（Dropbox 路径）
+    local found_backups=false
+    
+    for project_dir in /home/doge/Dropbox/*/database/*/; do
+        if [[ -d "$project_dir" ]]; then
+            local project_name=$(basename $(dirname $(dirname "$project_dir")))
+            local date_dir=$(basename "$project_dir")
             
-            echo "备份名称: $name"
+            echo "项目: $project_name (日期: $date_dir)"
+            echo "----------------------------------------"
+            
+            for file in "$project_dir"*.sql.gz; do
+                if [[ -f "$file" ]]; then
+                    local name=$(basename "$file" .sql.gz)
+                    local size=$(du -h "$file" 2>/dev/null | cut -f1)
+                    local date=$(stat -c %y "$file" 2>/dev/null)
+                    
+                    echo "备份名称: $name (项目备份)"
+                    echo "文件大小: $size"
+                    echo "创建时间: $date"
+                    echo "文件路径: $file"
+                    echo "----------------------------------------"
+                    found_backups=true
+                fi
+            done
+        fi
+    done
+    
+    # 列出默认备份目录
+    ensure_database_dirs
+    if [[ -d "$DB_BACKUP_DIR" ]] && [[ -n "$(ls -A "$DB_BACKUP_DIR" 2>/dev/null)" ]]; then
+        echo "默认备份目录:"
+        echo "----------------------------------------"
+    
+    # 列出 .sql.gz 压缩备份文件
+    for file in "$DB_BACKUP_DIR"/*.sql.gz; do
+        if [[ -f "$file" ]]; then
+            local name=$(basename "$file" .sql.gz)
+            local size=$(du -h "$file" 2>/dev/null | cut -f1)
+            local date=$(stat -c %y "$file" 2>/dev/null)
+            
+            echo "备份名称: $name (默认备份)"
+            echo "文件大小: $size"
+            echo "创建时间: $date"
+            echo "文件路径: $file"
+            echo "----------------------------------------"
+        fi
+    done
+    
+    # 列出 .sql 普通备份文件（向后兼容）
+    for file in "$DB_BACKUP_DIR"/*.sql; do
+        if [[ -f "$file" && "$file" != *.sql.gz ]]; then
+            local name=$(basename "$file" .sql)
+            local size=$(du -h "$file" 2>/dev/null | cut -f1)
+            local date=$(stat -c %y "$file" 2>/dev/null)
+            
+            echo "备份名称: $name (默认备份)"
             echo "文件大小: $size"
             echo "创建时间: $date"
             echo "文件路径: $file"
@@ -706,6 +801,7 @@ database_list_backups() {
             echo "----------------------------------------"
         fi
     done
+    fi
 }
 
 # 清理数据库备份
@@ -761,37 +857,58 @@ database_mysql_convenience() {
             log_highlight "创建 MySQL 数据库和用户: $dbname / $username"
             ensure_database_dirs
             
-            # 使用 Salt 原生 mysql.query 通过本地 socket 创建数据库
+            # 创建数据库
             log_info "创建数据库: $dbname"
-            if ! salt-call --local --retcode-passthrough \
-                mysql.query database=mysql \
-                query="CREATE DATABASE IF NOT EXISTS ${dbname} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" \
-                unix_socket=/var/run/mysqld/mysqld.sock >/dev/null; then
+            if ! mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "CREATE DATABASE IF NOT EXISTS ${dbname} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null; then
                 log_error "创建数据库失败: $dbname"
                 exit 1
             fi
             
-            # 使用 Salt 原生 mysql.query 通过本地 socket 创建用户（caching_sha2_password）
+            # 创建用户
             log_info "创建用户: $username"
-            if ! salt-call --local --retcode-passthrough \
-                mysql.query database=mysql \
-                query="CREATE USER IF NOT EXISTS '${username}'@'localhost' IDENTIFIED WITH caching_sha2_password BY '${password}';" \
-                unix_socket=/var/run/mysqld/mysqld.sock >/dev/null; then
+            if ! mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "CREATE USER IF NOT EXISTS '${username}'@'localhost' IDENTIFIED WITH caching_sha2_password BY '${password}';" 2>/dev/null; then
                 log_error "创建用户失败: $username"
                 exit 1
             fi
             
-            # 使用 Salt 原生 mysql.query 通过本地 socket 授权
+            # 授权用户
             log_info "授权用户访问数据库"
-            if ! salt-call --local --retcode-passthrough \
-                mysql.query database=mysql \
-                query="GRANT ALL PRIVILEGES ON \`${dbname}\`.* TO '${username}'@'localhost'; FLUSH PRIVILEGES;" \
-                unix_socket=/var/run/mysqld/mysqld.sock >/dev/null; then
+            if ! mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "GRANT ALL PRIVILEGES ON \`${dbname}\`.* TO '${username}'@'localhost'; GRANT SUPER, PROCESS ON *.* TO '${username}'@'localhost'; FLUSH PRIVILEGES;" 2>/dev/null; then
                 log_error "授权失败: $username -> $dbname"
                 exit 1
             fi
             
             log_success "MySQL 数据库和用户创建成功: $dbname / $username"
+            
+            # 显示用户权限信息
+            log_highlight "用户权限信息:"
+            mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW GRANTS FOR '${username}'@'localhost';" 2>/dev/null | while read line; do
+                if [[ "$line" =~ ^Grants\ for ]]; then
+                    log_info "用户: $line"
+                else
+                    log_info "  $line"
+                fi
+            done
+            
+            # 验证关键权限
+            log_highlight "权限验证:"
+            if mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW GRANTS FOR '${username}'@'localhost';" 2>/dev/null | grep -q "ALL PRIVILEGES ON \`${dbname}\`"; then
+                log_success "✅ 数据库权限: ${username} 对 ${dbname} 拥有 ALL PRIVILEGES"
+            else
+                log_error "❌ 数据库权限: ${username} 对 ${dbname} 权限不足"
+            fi
+            
+            if mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW GRANTS FOR '${username}'@'localhost';" 2>/dev/null | grep -q "SUPER ON \*\.\*"; then
+                log_success "✅ 系统权限: ${username} 拥有 SUPER 权限"
+            else
+                log_error "❌ 系统权限: ${username} 缺少 SUPER 权限"
+            fi
+            
+            if mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW GRANTS FOR '${username}'@'localhost';" 2>/dev/null | grep -q "PROCESS"; then
+                log_success "✅ 进程权限: ${username} 拥有 PROCESS 权限"
+            else
+                log_error "❌ 进程权限: ${username} 缺少 PROCESS 权限"
+            fi
             ;;
         "list")
             log_highlight "列出所有 MySQL 数据库..."
