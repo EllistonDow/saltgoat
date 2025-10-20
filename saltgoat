@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.1.7"
+SCRIPT_VERSION="0.1.8"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -34,6 +34,7 @@ source "${SCRIPT_DIR}/services/backup.sh"
 source "${SCRIPT_DIR}/services/logs.sh"
 source "${SCRIPT_DIR}/services/security.sh"
 source "${SCRIPT_DIR}/services/performance.sh"
+source "${SCRIPT_DIR}/services/ssl.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -155,6 +156,16 @@ show_help() {
     echo "  performance history             - 性能历史记录"
     echo "  performance report              - 生成性能报告"
     echo "  performance cleanup             - 清理性能日志"
+    echo ""
+    echo "  ssl generate-self-signed <domain> [days] - 生成自签名证书"
+    echo "  ssl generate-csr <domain> [country] [state] [city] [org] - 生成证书签名请求"
+    echo "  ssl view <certificate_file>     - 查看证书信息"
+    echo "  ssl verify <cert_file> [key_file] - 验证证书"
+    echo "  ssl list                        - 列出所有证书"
+    echo "  ssl renew <cert_file> [days]   - 续期证书"
+    echo "  ssl backup [name]               - 备份证书"
+    echo "  ssl cleanup-expired [days]      - 清理过期证书"
+    echo "  ssl status                      - SSL 状态检查"
     echo ""
     echo "监控功能:"
     echo "  memory monitor                 - 执行内存监控"
@@ -348,45 +359,81 @@ case "$1" in
                 ;;
         esac
         ;;
-    "performance")
-        case "$2" in
-            "cpu")
-                performance_cpu
-                ;;
-            "memory")
-                performance_memory
-                ;;
-            "disk")
-                performance_disk
-                ;;
-            "network")
-                performance_network
-                ;;
-            "processes")
-                performance_processes
-                ;;
-            "load")
-                performance_load
-                ;;
-            "benchmark")
-                performance_benchmark
-                ;;
-            "history")
-                performance_history
-                ;;
-            "report")
-                performance_report
-                ;;
-            "cleanup")
-                performance_cleanup
-                ;;
-            *)
-                log_error "未知的性能操作: $2"
-                log_info "支持: cpu, memory, disk, network, processes, load, benchmark, history, report, cleanup"
-                exit 1
-                ;;
-        esac
-        ;;
+        "performance")
+            case "$2" in
+                "cpu")
+                    performance_cpu
+                    ;;
+                "memory")
+                    performance_memory
+                    ;;
+                "disk")
+                    performance_disk
+                    ;;
+                "network")
+                    performance_network
+                    ;;
+                "processes")
+                    performance_processes
+                    ;;
+                "load")
+                    performance_load
+                    ;;
+                "benchmark")
+                    performance_benchmark
+                    ;;
+                "history")
+                    performance_history
+                    ;;
+                "report")
+                    performance_report
+                    ;;
+                "cleanup")
+                    performance_cleanup
+                    ;;
+                *)
+                    log_error "未知的性能操作: $2"
+                    log_info "支持: cpu, memory, disk, network, processes, load, benchmark, history, report, cleanup"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "ssl")
+            case "$2" in
+                "generate-self-signed")
+                    ssl_generate_self_signed "$3" "$4"
+                    ;;
+                "generate-csr")
+                    ssl_generate_csr "$3" "$4" "$5" "$6" "$7"
+                    ;;
+                "view")
+                    ssl_view_cert "$3"
+                    ;;
+                "verify")
+                    ssl_verify_cert "$3" "$4"
+                    ;;
+                "list")
+                    ssl_list_certs
+                    ;;
+                "renew")
+                    ssl_renew_cert "$3" "$4"
+                    ;;
+                "backup")
+                    ssl_backup_certs "$3"
+                    ;;
+                "cleanup-expired")
+                    ssl_cleanup_expired "$3"
+                    ;;
+                "status")
+                    ssl_status
+                    ;;
+                *)
+                    log_error "未知的 SSL 操作: $2"
+                    log_info "支持: generate-self-signed, generate-csr, view, verify, list, renew, backup, cleanup-expired, status"
+                    exit 1
+                    ;;
+            esac
+            ;;
     "memory")
         memory_handler "$@"
         ;;
