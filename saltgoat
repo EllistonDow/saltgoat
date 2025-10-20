@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.1.6"
+SCRIPT_VERSION="0.1.7"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -33,6 +33,7 @@ source "${SCRIPT_DIR}/services/rabbitmq.sh"
 source "${SCRIPT_DIR}/services/backup.sh"
 source "${SCRIPT_DIR}/services/logs.sh"
 source "${SCRIPT_DIR}/services/security.sh"
+source "${SCRIPT_DIR}/services/performance.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -143,6 +144,17 @@ show_help() {
     echo "  security users                 - 检查用户安全"
     echo "  security logs                  - 检查日志安全"
     echo "  security report                - 生成安全报告"
+    echo ""
+    echo "  performance cpu                - CPU 性能监控"
+    echo "  performance memory             - 内存性能监控"
+    echo "  performance disk               - 磁盘性能监控"
+    echo "  performance network             - 网络性能监控"
+    echo "  performance processes           - 进程性能监控"
+    echo "  performance load                - 系统负载监控"
+    echo "  performance benchmark           - 性能基准测试"
+    echo "  performance history             - 性能历史记录"
+    echo "  performance report              - 生成性能报告"
+    echo "  performance cleanup             - 清理性能日志"
     echo ""
     echo "监控功能:"
     echo "  memory monitor                 - 执行内存监控"
@@ -332,6 +344,45 @@ case "$1" in
             *)
                 log_error "未知的安全操作: $2"
                 log_info "支持: scan, ports, services, files, firewall, updates, users, logs, report"
+                exit 1
+                ;;
+        esac
+        ;;
+    "performance")
+        case "$2" in
+            "cpu")
+                performance_cpu
+                ;;
+            "memory")
+                performance_memory
+                ;;
+            "disk")
+                performance_disk
+                ;;
+            "network")
+                performance_network
+                ;;
+            "processes")
+                performance_processes
+                ;;
+            "load")
+                performance_load
+                ;;
+            "benchmark")
+                performance_benchmark
+                ;;
+            "history")
+                performance_history
+                ;;
+            "report")
+                performance_report
+                ;;
+            "cleanup")
+                performance_cleanup
+                ;;
+            *)
+                log_error "未知的性能操作: $2"
+                log_info "支持: cpu, memory, disk, network, processes, load, benchmark, history, report, cleanup"
                 exit 1
                 ;;
         esac
