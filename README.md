@@ -165,7 +165,52 @@ saltgoat versions
 saltgoat passwords
 ```
 
-### 5. 多站点管理
+### 5. 别名设置（可选）
+
+SaltGoat 支持设置别名，让您使用更简短的名字：
+
+#### 快速设置（推荐）
+```bash
+# 运行快速别名设置脚本
+./scripts/quick-alias.sh
+```
+
+#### 手动设置
+```bash
+# 临时别名（当前会话有效）
+alias sg='saltgoat'
+alias goat='saltgoat'
+
+# 永久别名（添加到 ~/.bashrc）
+echo "alias sg='/usr/local/bin/saltgoat'" >> ~/.bashrc
+echo "alias goat='/usr/local/bin/saltgoat'" >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### 高级别名管理
+```bash
+# 使用别名管理脚本
+./scripts/setup-aliases.sh --add sg
+./scripts/setup-aliases.sh --add goat
+./scripts/setup-aliases.sh --list
+./scripts/setup-aliases.sh --remove sg
+```
+
+**常用别名建议：**
+- `sg` - 短别名
+- `goat` - 动物别名
+- `salt` - Salt 别名
+- `lemp` - LEMP 别名
+
+**使用方法：**
+```bash
+sg help
+goat status
+salt versions
+lemp install all
+```
+
+### 6. 多站点管理
 ```bash
 # 创建新站点数据库
 saltgoat mysql create hawkmage hawk 'hawk.2010'
