@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.1.4"
+SCRIPT_VERSION="0.1.5"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -31,6 +31,7 @@ source "${SCRIPT_DIR}/services/mysql.sh"
 source "${SCRIPT_DIR}/services/nginx.sh"
 source "${SCRIPT_DIR}/services/rabbitmq.sh"
 source "${SCRIPT_DIR}/services/backup.sh"
+source "${SCRIPT_DIR}/services/logs.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -125,6 +126,12 @@ show_help() {
     echo "  backup restore <name>          - 恢复备份"
     echo "  backup delete <name>           - 删除备份"
     echo "  backup cleanup                 - 清理旧备份"
+    echo ""
+    echo "  logs view <type> [lines]       - 查看日志文件"
+    echo "  logs cleanup <type> [days]     - 清理旧日志"
+    echo "  logs rotate <type>             - 轮转日志文件"
+    echo "  logs stats                     - 查看日志统计"
+    echo "  logs monitor <type>            - 实时监控日志"
     echo ""
     echo "监控功能:"
     echo "  memory monitor                 - 执行内存监控"
@@ -254,6 +261,30 @@ case "$1" in
             *)
                 log_error "未知的备份操作: $2"
                 log_info "支持: create, list, restore, delete, cleanup"
+                exit 1
+                ;;
+        esac
+        ;;
+    "logs")
+        case "$2" in
+            "view")
+                log_view "$3" "$4"
+                ;;
+            "cleanup")
+                log_cleanup "$3" "$4"
+                ;;
+            "rotate")
+                log_rotate "$3"
+                ;;
+            "stats")
+                log_stats
+                ;;
+            "monitor")
+                log_monitor "$3"
+                ;;
+            *)
+                log_error "未知的日志操作: $2"
+                log_info "支持: view, cleanup, rotate, stats, monitor"
                 exit 1
                 ;;
         esac
