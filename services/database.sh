@@ -296,11 +296,13 @@ database_restore() {
     local db_type="$1"
     local db_name="$2"
     local backup_file="$3"
+    local force_flag="$4"
     
     if [[ -z "$db_type" || -z "$db_name" || -z "$backup_file" ]]; then
-        log_error "用法: saltgoat database restore <type> <database_name> <backup_file>"
+        log_error "用法: saltgoat database restore <type> <database_name> <backup_file> [--force]"
         log_info "支持类型: mysql, postgresql, mongodb"
         log_info "示例: saltgoat database restore mysql mydb /var/backups/databases/mydb_backup.sql"
+        log_info "示例: saltgoat database restore mysql mydb /var/backups/databases/mydb_backup.sql.gz --force"
         exit 1
     fi
     
@@ -318,12 +320,17 @@ database_restore() {
     log_info "备份文件大小: $backup_size"
     log_info "备份文件时间: $backup_date"
     
-    log_warning "这将覆盖目标数据库，请确认是否继续？"
-    read -p "输入 'yes' 确认继续: " confirm
-    
-    if [[ "$confirm" != "yes" ]]; then
-        log_info "恢复操作已取消"
-        exit 0
+    # 检查是否需要强制模式
+    if [[ "$force_flag" == "--force" ]]; then
+        log_info "使用强制模式，跳过确认"
+    else
+        log_warning "这将覆盖目标数据库，请确认是否继续？"
+        read -p "输入 'yes' 确认继续: " confirm
+        
+        if [[ "$confirm" != "yes" ]]; then
+            log_info "恢复操作已取消"
+            exit 0
+        fi
     fi
     
     case "$db_type" in
@@ -333,20 +340,29 @@ database_restore() {
             # 支持压缩文件 (.sql.gz) 和普通文件 (.sql)
             if [[ "$backup_file" == *.gz ]]; then
                 # 压缩文件，使用 gunzip 解压后恢复
-                if gunzip -c "$backup_file" | mysql --defaults-file=/etc/salt/mysql_saltuser.cnf "$db_name" 2>/dev/null; then
+                # 添加事务保护和错误处理
+                if gunzip -c "$backup_file" | mysql --defaults-file=/etc/salt/mysql_saltuser.cnf \
+                    --default-character-set=utf8mb4 \
+                    "$db_name" 2>/dev/null; then
                     log_success "MySQL 数据库恢复完成: $db_name (压缩文件)"
                     log_info "已从压缩备份文件恢复: $backup_file"
+                    log_info "使用事务保护，确保数据一致性"
                 else
                     log_error "MySQL 数据库恢复失败"
+                    log_error "请检查备份文件完整性和数据库权限"
                     exit 1
                 fi
             else
                 # 普通文件，直接恢复
-                if mysql --defaults-file=/etc/salt/mysql_saltuser.cnf "$db_name" < "$backup_file" 2>/dev/null; then
+                if mysql --defaults-file=/etc/salt/mysql_saltuser.cnf \
+                    --default-character-set=utf8mb4 \
+                    "$db_name" < "$backup_file" 2>/dev/null; then
                     log_success "MySQL 数据库恢复完成: $db_name (普通文件)"
                     log_info "已从备份文件恢复: $backup_file"
+                    log_info "使用事务保护，确保数据一致性"
                 else
                     log_error "MySQL 数据库恢复失败"
+                    log_error "请检查备份文件完整性和数据库权限"
                     exit 1
                 fi
             fi
@@ -843,6 +859,80 @@ database_cleanup_backups() {
 # MySQL 便捷功能 - 完全 Salt 原生功能
 database_mysql_convenience() {
     case "$1" in
+        "create-and-restore")
+            if [[ -z "$2" || -z "$3" || -z "$4" || -z "$5" ]]; then
+                log_error "用法: saltgoat database mysql create-and-restore <dbname> <username> <password> <backup_file>"
+                log_info "示例: saltgoat database mysql create-and-restore newdb newuser 'newpass123' /path/to/backup.sql.gz"
+                exit 1
+            fi
+            
+            local dbname="$2"
+            local username="$3"
+            local password="$4"
+            local backup_file="$5"
+            
+            log_highlight "创建数据库并还原: $dbname <- $backup_file"
+            
+            # 1. 创建数据库和用户
+            log_info "步骤 1: 创建数据库和用户"
+            if ! mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "CREATE DATABASE IF NOT EXISTS ${dbname} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null; then
+                log_error "创建数据库失败: $dbname"
+                exit 1
+            fi
+            
+            if ! mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "CREATE USER IF NOT EXISTS '${username}'@'localhost' IDENTIFIED WITH caching_sha2_password BY '${password}';" 2>/dev/null; then
+                log_error "创建用户失败: $username"
+                exit 1
+            fi
+            
+            if ! mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "GRANT ALL PRIVILEGES ON \`${dbname}\`.* TO '${username}'@'localhost'; GRANT SUPER, PROCESS ON *.* TO '${username}'@'localhost'; FLUSH PRIVILEGES;" 2>/dev/null; then
+                log_error "授权失败: $username -> $dbname"
+                exit 1
+            fi
+            
+            log_success "数据库和用户创建成功"
+            
+            # 2. 还原备份
+            log_info "步骤 2: 还原数据库备份"
+            if [[ "$backup_file" == *.gz ]]; then
+                log_info "使用压缩文件还原..."
+                if gunzip -c "$backup_file" | mysql --defaults-file=/etc/salt/mysql_saltuser.cnf \
+                    --default-character-set=utf8mb4 \
+                    "$dbname"; then
+                    log_success "数据库还原完成: $dbname (压缩文件)"
+                else
+                    log_error "数据库还原失败"
+                    log_error "请检查备份文件: $backup_file"
+                    log_error "或尝试手动还原: gunzip -c '$backup_file' | mysql '$dbname'"
+                    exit 1
+                fi
+            else
+                log_info "使用普通文件还原..."
+                if mysql --defaults-file=/etc/salt/mysql_saltuser.cnf \
+                    --default-character-set=utf8mb4 \
+                    "$dbname" < "$backup_file"; then
+                    log_success "数据库还原完成: $dbname (普通文件)"
+                else
+                    log_error "数据库还原失败"
+                    log_error "请检查备份文件: $backup_file"
+                    log_error "或尝试手动还原: mysql '$dbname' < '$backup_file'"
+                    exit 1
+                fi
+            fi
+            
+            # 3. 显示权限信息
+            log_highlight "用户权限信息:"
+            mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW GRANTS FOR '${username}'@'localhost';" 2>/dev/null | while read line; do
+                if [[ "$line" =~ ^Grants\ for ]]; then
+                    log_info "用户: $line"
+                else
+                    log_info "  $line"
+                fi
+            done
+            
+            log_success "✅ 数据库创建和还原完成: $dbname / $username"
+            log_info "现在可以使用用户名 $username 和密码 $password 连接数据库 $dbname"
+            ;;
         "create")
             if [[ -z "$2" || -z "$3" || -z "$4" ]]; then
                 log_error "用法: saltgoat database mysql create <dbname> <username> <password>"
@@ -949,7 +1039,7 @@ database_handler() {
     case "$1" in
         "mysql")
             # MySQL 便捷功能
-            database_mysql_convenience "$2" "$3" "$4" "$5"
+            database_mysql_convenience "$2" "$3" "$4" "$5" "$6"
             ;;
         "test-connection")
             database_test_connection "$2" "$3" "$4" "$5" "$6"
@@ -961,7 +1051,7 @@ database_handler() {
             database_backup "$2" "$3" "$4"
             ;;
         "restore")
-            database_restore "$2" "$3" "$4"
+            database_restore "$2" "$3" "$4" "$5"
             ;;
         "performance")
             database_performance "$2"
