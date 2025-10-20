@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.3.0"
+SCRIPT_VERSION="0.3.1"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -144,7 +144,7 @@ show_help() {
     echo "服务管理:"
     echo "  mysql create <db> <user> <pass> - 创建 MySQL 数据库和用户"
     echo "  mysql list                     - 列出所有数据库"
-    echo "  mysql backup <db>             - 备份数据库"
+    echo "  mysql backup <db>              - 备份数据库"
     echo "  mysql delete <db>              - 删除数据库"
     echo ""
     echo "  nginx create <site> <domain>   - 创建 Nginx 站点"
@@ -199,13 +199,13 @@ show_help() {
     echo "  monitor services                - 服务状态监控"
     echo "  monitor resources               - 资源使用监控"
     echo "  monitor network                 - 网络状态监控"
-    echo "  monitor logs                     - 日志状态监控"
+    echo "  monitor logs                    - 日志状态监控"
     echo "  monitor security                - 安全状态监控"
-    echo "  monitor performance              - 性能监控"
+    echo "  monitor performance             - 性能监控"
     echo "  monitor report [name]           - 生成监控报告"
     echo "  monitor realtime [seconds]      - 实时监控"
     echo "  monitor config                  - 监控配置"
-    echo "  monitor cleanup [days]           - 清理监控日志"
+    echo "  monitor cleanup [days]          - 清理监控日志"
     echo ""
     echo "  database mysql <create|list|backup|delete> [args] - MySQL 便捷功能 (Salt 原生)"
     echo "  database test-connection <type> [host] [port] [user] [pass] - 测试数据库连接"

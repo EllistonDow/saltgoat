@@ -14,6 +14,114 @@ ensure_saltgui_dirs() {
     salt-call --local file.mkdir "$SALTGUI_LOG_DIR" 2>/dev/null || true
 }
 
+# 安装 Salt Master 和 Salt API
+install_salt_master_api() {
+    log_info "安装 Salt Master 和 Salt API..."
+    
+    # 检查 Salt Master 是否已安装
+    if ! command -v salt-master >/dev/null 2>&1; then
+        log_info "安装 Salt Master..."
+        salt-call --local pkg.install salt-master 2>/dev/null || {
+            log_error "Salt Master 安装失败"
+            return 1
+        }
+    else
+        log_success "Salt Master 已安装"
+    fi
+    
+    # 检查 Salt API 是否已安装
+    if ! command -v salt-api >/dev/null 2>&1; then
+        log_info "安装 Salt API..."
+        salt-call --local pkg.install salt-api 2>/dev/null || {
+            log_error "Salt API 安装失败"
+            return 1
+        }
+    else
+        log_success "Salt API 已安装"
+    fi
+    
+    # 配置 Salt Master
+    configure_salt_master
+    
+    # 检查 Salt Master 是否在运行
+    if ! ss -tlnp | grep -q ":4506 "; then
+        log_info "启动 Salt Master 服务..."
+        salt-call --local service.start salt-master 2>/dev/null || {
+            log_warning "Salt Master 启动失败，尝试手动启动..."
+            sudo salt-master -d 2>/dev/null || {
+                log_error "Salt Master 启动失败"
+                return 1
+            }
+        }
+    else
+        log_success "Salt Master 已在运行"
+    fi
+    
+    # 检查 Salt API 是否在运行
+    if ! ss -tlnp | grep -q ":8000 "; then
+        log_info "启动 Salt API 服务..."
+        salt-call --local service.start salt-api 2>/dev/null || {
+            log_warning "Salt API 启动失败，尝试手动启动..."
+            sudo salt-api -d 2>/dev/null || {
+                log_warning "Salt API 启动失败，继续安装 SaltGUI..."
+            }
+        }
+    else
+        log_success "Salt API 已在运行"
+    fi
+    
+    # 设置开机自启
+    salt-call --local service.enable salt-master 2>/dev/null || true
+    salt-call --local service.enable salt-api 2>/dev/null || true
+    
+    log_success "Salt Master 和 Salt API 安装完成"
+}
+
+# 配置 Salt Master
+configure_salt_master() {
+    log_info "配置 Salt Master..."
+    
+    # 创建 Salt Master 配置目录
+    salt-call --local file.mkdir "/etc/salt" 2>/dev/null || true
+    
+    # 创建 Salt Master 配置文件
+    cat > "/tmp/salt_master_config" << 'EOF'
+# Salt Master 配置文件
+interface: 0.0.0.0
+publish_port: 4505
+ret_port: 4506
+user: root
+worker_threads: 5
+keep_jobs: 24
+log_level: info
+log_file: /var/log/salt/master
+pidfile: /var/run/salt-master.pid
+
+# Salt API 配置
+rest_cherrypy:
+  host: 0.0.0.0
+  port: 8000
+  debug: False
+  log_access_file: /var/log/salt/api_access.log
+  log_error_file: /var/log/salt/api_error.log
+
+# 外部认证配置（PAM）
+external_auth:
+  pam:
+    salt:
+      - .*
+      - '@wheel'
+      - '@runner'
+      - '@jobs'
+EOF
+    
+    # 移动配置文件
+    sudo mv "/tmp/salt_master_config" "/etc/salt/master"
+    sudo chmod 644 "/etc/salt/master"
+    
+    log_success "Salt Master 配置完成"
+}
+
 # 安装 SaltGUI
 saltgui_install() {
     log_info "安装 SaltGUI..."
@@ -23,6 +131,9 @@ saltgui_install() {
         log_warning "SaltGUI 已安装"
         return 0
     fi
+    
+    # 首先安装 Salt Master 和 Salt API
+    install_salt_master_api
     
     # 检查 Node.js 和 npm
     log_info "检查 Node.js 和 npm..."
@@ -96,6 +207,10 @@ saltgui_install() {
     
     log_success "SaltGUI 安装完成"
     log_info "访问地址: http://localhost:$SALTGUI_PORT"
+    log_info "认证方式: PAM (系统用户认证)"
+    log_info "用户名: saltgui"
+    log_info "密码: saltgui123"
+    log_info "认证类型: 选择 'pam'"
 }
 
 # 创建 SaltGUI 配置文件
@@ -112,8 +227,7 @@ create_saltgui_config() {
     "salt": {
         "master": "localhost",
         "port": 4506,
-        "auth": "sharedsecret",
-        "sharedsecret": "saltgoat2024"
+        "auth": "pam"
     },
     "log": {
         "level": "info",
