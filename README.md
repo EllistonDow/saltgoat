@@ -1,6 +1,6 @@
 # SaltGoat - LEMP Stack Automation
 
-**版本**: v0.6.0 | **状态**: ✅ 生产就绪
+**版本**: v0.6.1 | **状态**: ✅ 生产就绪
 
 基于 Salt 的全自动 LEMP 安装项目，专为 Ubuntu 24.04 设计。使用 Salt 原生功能，提供完整的 LEMP 环境安装、配置和管理功能。
 
@@ -312,6 +312,27 @@ saltgoat system ssh-port
 - 支持 IPv4 和 IPv6 双栈
 
 ## 🆕 新功能模块
+
+### Magento工具集
+```bash
+# 安装Magento开发工具
+saltgoat magetools install n98-magerun2
+saltgoat magetools install phpunit
+saltgoat magetools install xdebug
+
+# 缓存管理
+saltgoat magetools cache clear
+saltgoat magetools cache status
+
+# 索引管理
+saltgoat magetools index reindex
+
+# 性能分析
+saltgoat magetools performance
+
+# 查看帮助
+saltgoat magetools help
+```
 
 ### 系统维护模块
 ```bash

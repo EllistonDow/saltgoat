@@ -38,6 +38,9 @@ show_help() {
         "version-lock")
             show_version_lock_help
             ;;
+        "magetools")
+            show_magetools_help
+            ;;
         "all")
             show_complete_help
             ;;
@@ -91,6 +94,9 @@ show_main_help() {
     echo "  saltgui <action>           - SaltGUI管理"
     echo "  automation <action>         - 任务自动化"
     echo "  reports <type>             - 报告生成"
+    echo ""
+    echo "Magento工具:"
+    echo "  magetools <command>        - Magento工具集"
     echo ""
     echo "系统信息:"
     echo "  status                     - 查看系统状态"
@@ -423,6 +429,54 @@ show_profile_help() {
     echo "  saltgoat profile analyze system"
     echo "  saltgoat profile analyze nginx"
     echo "  saltgoat profile analyze all"
+}
+
+# Magento工具帮助
+show_magetools_help() {
+    echo "=========================================="
+    echo "    Magento 工具集帮助"
+    echo "=========================================="
+    echo ""
+    echo "Magento工具集提供以下功能:"
+    echo ""
+    echo "📦 工具安装:"
+    echo "  install n98-magerun2 - 安装N98 Magerun2 (Magento 2 CLI工具)"
+    echo "  install magerun      - 安装N98 Magerun (Magento 1 CLI工具)"
+    echo "  install phpunit      - 安装PHPUnit单元测试框架"
+    echo "  install xdebug       - 安装Xdebug调试工具"
+    echo ""
+    echo "🗂️  缓存管理:"
+    echo "  cache clear          - 清理所有缓存"
+    echo "  cache status         - 检查缓存状态"
+    echo "  cache warm           - 预热缓存"
+    echo ""
+    echo "📊 索引管理:"
+    echo "  index reindex        - 重建所有索引"
+    echo "  index status         - 检查索引状态"
+    echo ""
+    echo "🚀 部署管理:"
+    echo "  deploy               - 部署到生产环境"
+    echo ""
+    echo "💾 备份恢复:"
+    echo "  backup               - 创建完整备份"
+    echo "  restore <backup>     - 从备份恢复"
+    echo ""
+    echo "📈 性能分析:"
+    echo "  performance          - 分析性能状况"
+    echo ""
+    echo "🔒 安全扫描:"
+    echo "  security             - 扫描安全问题"
+    echo ""
+    echo "🔄 更新管理:"
+    echo "  update               - 更新Magento"
+    echo ""
+    echo "示例:"
+    echo "  saltgoat magetools install n98-magerun2"
+    echo "  saltgoat magetools cache clear"
+    echo "  saltgoat magetools index reindex"
+    echo "  saltgoat magetools backup"
+    echo "  saltgoat magetools performance"
+    echo ""
 }
 
 # 版本锁定帮助

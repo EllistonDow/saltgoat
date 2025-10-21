@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.6.0"
+SCRIPT_VERSION="0.6.1"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -61,6 +61,7 @@ source "${SCRIPT_DIR}/modules/monitoring/grafana-email.sh"
 source "${SCRIPT_DIR}/modules/diagnose/diagnose.sh"
 source "${SCRIPT_DIR}/modules/version-lock/version-lock.sh"
 source "${SCRIPT_DIR}/modules/profile/performance-analysis.sh"
+source "${SCRIPT_DIR}/modules/magetools/magetools.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -743,6 +744,9 @@ case "$1" in
                 exit 1
                 ;;
         esac
+        ;;
+    "magetools")
+        magetools_handler "$2" "$3"
         ;;
     "help"|"--help"|"-h"|"")
         show_help "$2"
