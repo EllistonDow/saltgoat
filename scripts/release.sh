@@ -52,7 +52,7 @@ mkdir -p "$RELEASE_DIR"
 
 # 复制文件
 cp -r saltgoat lib core services monitoring salt scripts templates "$RELEASE_DIR/"
-cp README.md CHANGELOG.md WEBSERVER_README.md env.example "$RELEASE_DIR/"
+cp README.md CHANGELOG.md env.example "$RELEASE_DIR/"
 
 # 创建安装脚本
 cat > "$RELEASE_DIR/install.sh" << 'EOF'
