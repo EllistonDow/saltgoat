@@ -10,7 +10,7 @@ configure_pillar_roots:
     - contents: |
         pillar_roots:
           base:
-            - /home/doge/saltgoat/salt/pillar
+            - {{ grains['saltgoat_project_dir'] }}/salt/pillar
 
 install_mysql_python_lib:
   pkg.installed:

@@ -152,6 +152,9 @@ install_all() {
 
 	# 配置 salt minion（确保能读取项目 pillar）
 	configure_salt_minion
+	
+	# 设置SaltGoat项目目录grain
+	salt-call --local grains.set saltgoat_project_dir "${SCRIPT_DIR}"
 
 	# 安装系统依赖
 	install_system_deps

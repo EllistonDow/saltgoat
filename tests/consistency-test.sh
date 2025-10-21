@@ -107,8 +107,9 @@ test_config_consistency() {
     echo "----------------------------------------"
     
     # 检查SaltGoat版本
-    if [ -f "/home/doge/saltgoat/saltgoat" ]; then
-        SCRIPT_VERSION=$(grep "SCRIPT_VERSION=" /home/doge/saltgoat/saltgoat | cut -d'"' -f2)
+    local saltgoat_path=$(which saltgoat 2>/dev/null || find /usr/local/bin /home -name "saltgoat" 2>/dev/null | head -1)
+    if [ -n "$saltgoat_path" ] && [ -f "$saltgoat_path" ]; then
+        SCRIPT_VERSION=$(grep "SCRIPT_VERSION=" "$saltgoat_path" | cut -d'"' -f2)
         echo "  SaltGoat版本: $SCRIPT_VERSION ✅"
     fi
     
