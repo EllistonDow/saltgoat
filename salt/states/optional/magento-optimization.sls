@@ -60,12 +60,20 @@ optimize_nginx_config:
         sudo sed -i '/gzip_buffers 16 8k;/d' "$NGINX_CONF"
         sudo sed -i '/gzip_http_version 1.1;/d' "$NGINX_CONF"
         
-        # 在gzip_types行后添加优化配置（使用更灵活的匹配）
+        # 在gzip_types行后添加优化配置（使用更安全的处理方式）
         if grep -q "gzip_types" "$NGINX_CONF"; then
-            sudo sed -i '/gzip_types/a\    gzip_disable "msie6";\n    gzip_buffers 16 8k;\n    gzip_http_version 1.1;' "$NGINX_CONF"
+            # 检查gzip_types是否已经完整（以分号结尾）
+            if grep -A 10 "gzip_types" "$NGINX_CONF" | grep -q ";"; then
+                # 如果gzip_types已经完整，在其后添加其他配置
+                sudo sed -i '/gzip_types.*;/a\    gzip_disable "msie6";\n    gzip_buffers 16 8k;\n    gzip_http_version 1.1;' "$NGINX_CONF"
+            else
+                # 如果gzip_types不完整，先修复它
+                sudo sed -i '/gzip_types$/,/image\/svg\+xml;/c\    gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;' "$NGINX_CONF"
+                sudo sed -i '/gzip_types.*;/a\    gzip_disable "msie6";\n    gzip_buffers 16 8k;\n    gzip_http_version 1.1;' "$NGINX_CONF"
+            fi
         else
             # 如果没有gzip_types，在http块中添加
-            sudo sed -i '/http {/a\    gzip on;\n    gzip_types text/plain text/css application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;\n    gzip_disable "msie6";\n    gzip_buffers 16 8k;\n    gzip_http_version 1.1;' "$NGINX_CONF"
+            sudo sed -i '/http {/a\    gzip on;\n    gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;\n    gzip_disable "msie6";\n    gzip_buffers 16 8k;\n    gzip_http_version 1.1;' "$NGINX_CONF"
         fi
     - require:
       - cmd: detect_system_memory
