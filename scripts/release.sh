@@ -116,18 +116,9 @@ EOF
 
 chmod +x "$RELEASE_DIR/install.sh"
 
-# 创建压缩包
-echo -e "${YELLOW}创建压缩包...${NC}"
-cd /tmp
-tar -czf "saltgoat-$VERSION.tar.gz" "saltgoat-$VERSION"
-mv "saltgoat-$VERSION.tar.gz" "$SCRIPT_DIR/"
-
-# 清理临时目录
-rm -rf "$RELEASE_DIR"
-
-echo -e "${GREEN}✅ 发布包创建完成: saltgoat-$VERSION.tar.gz${NC}"
+echo -e "${GREEN}✅ 发布目录创建完成: $RELEASE_DIR${NC}"
 echo ""
-echo -e "${BLUE}发布包内容:${NC}"
+echo -e "${BLUE}发布目录内容:${NC}"
 echo "  - SaltGoat 主程序"
 echo "  - 所有服务模块"
 echo "  - Salt 状态文件"
@@ -136,6 +127,6 @@ echo "  - 安装脚本"
 echo "  - 文档和配置"
 echo ""
 echo -e "${YELLOW}使用方法:${NC}"
-echo "  1. 解压: tar -xzf saltgoat-$VERSION.tar.gz"
-echo "  2. 安装: cd saltgoat-$VERSION && ./install.sh"
+echo "  1. 进入目录: cd $RELEASE_DIR"
+echo "  2. 安装: ./install.sh"
 echo "  3. 使用: saltgoat help"
