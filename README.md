@@ -1,6 +1,6 @@
 # SaltGoat - LEMP Stack Automation
 
-**版本**: v0.5.6 | **状态**: ✅ 生产就绪
+**版本**: v0.5.7 | **状态**: ✅ 生产就绪
 
 基于 Salt 的全自动 LEMP 安装项目，专为 Ubuntu 24.04 设计。使用 Salt 原生功能，提供完整的 LEMP 环境安装、配置和管理功能。
 

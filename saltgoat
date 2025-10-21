@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.5.6"
+SCRIPT_VERSION="0.5.7"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -58,6 +58,8 @@ source "${SCRIPT_DIR}/services/smart-monitoring.sh"
 source "${SCRIPT_DIR}/services/dynamic-monitoring.sh"
 source "${SCRIPT_DIR}/services/cost-optimized-monitoring.sh"
 source "${SCRIPT_DIR}/services/grafana-email.sh"
+source "${SCRIPT_DIR}/services/diagnose.sh"
+source "${SCRIPT_DIR}/services/version-lock.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -565,6 +567,39 @@ case "$1" in
                 exit 1
                 ;;
         esac
+        ;;
+    "diagnose")
+        if [[ -z "$2" ]]; then
+            log_error "用法: saltgoat diagnose <type>"
+            log_info "支持的类型:"
+            log_info "  nginx     - 诊断Nginx服务"
+            log_info "  mysql     - 诊断MySQL服务"
+            log_info "  php       - 诊断PHP服务"
+            log_info "  system    - 诊断系统状态"
+            log_info "  network   - 诊断网络连接"
+            log_info "  all       - 完整系统诊断"
+            log_info ""
+            log_info "示例:"
+            log_info "  saltgoat diagnose nginx"
+            log_info "  saltgoat diagnose all"
+            exit 1
+        fi
+        
+        diagnose_handler "$2"
+        ;;
+    "version-lock")
+        if [[ -z "$2" ]]; then
+            log_error "用法: saltgoat version-lock <command>"
+            log_info "支持的命令:"
+            log_info "  lock    - 锁定主要软件版本"
+            log_info "  unlock  - 解锁软件版本"
+            log_info "  show    - 显示锁定的软件包"
+            log_info "  status  - 检查软件版本状态"
+            log_info "  help    - 显示帮助信息"
+            exit 1
+        fi
+        
+        version_lock_handler "$2"
         ;;
     "monitoring")
         case "$2" in
