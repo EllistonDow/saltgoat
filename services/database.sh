@@ -1004,6 +1004,43 @@ database_mysql_convenience() {
             log_highlight "列出所有 MySQL 数据库..."
             mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW DATABASES;" 2>/dev/null | tail -n +2
             ;;
+        "status")
+            log_highlight "MySQL 状态检查..."
+            
+            # 检查服务状态
+            local service_status=$(systemctl is-active mysql 2>/dev/null || echo "inactive")
+            if [[ "$service_status" == "active" ]]; then
+                log_success "MySQL 服务正在运行"
+            else
+                log_error "MySQL 服务未运行"
+                exit 1
+            fi
+            
+            # 检查版本
+            local version=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SELECT VERSION();" 2>/dev/null | tail -n 1)
+            log_info "MySQL 版本: $version"
+            
+            # 检查连接数
+            local connections=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW STATUS LIKE 'Threads_connected';" 2>/dev/null | awk 'NR==2 {print $2}')
+            log_info "当前连接数: $connections"
+            
+            # 检查最大连接数
+            local max_connections=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW VARIABLES LIKE 'max_connections';" 2>/dev/null | awk 'NR==2 {print $2}')
+            log_info "最大连接数: $max_connections"
+            
+            # 检查数据库数量
+            local db_count=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW DATABASES;" 2>/dev/null | tail -n +2 | wc -l)
+            log_info "数据库数量: $db_count"
+            
+            # 检查InnoDB状态
+            local innodb_status=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW ENGINE INNODB STATUS\\G" 2>/dev/null | grep -E "(InnoDB|Buffer pool|Log sequence)" | head -3)
+            if [[ -n "$innodb_status" ]]; then
+                log_info "InnoDB 状态:"
+                echo "$innodb_status" | while read line; do
+                    log_info "  $line"
+                done
+            fi
+            ;;
         "backup")
             if [[ -z "$2" ]]; then
                 log_error "用法: saltgoat database mysql backup <dbname>"
@@ -1014,6 +1051,18 @@ database_mysql_convenience() {
             log_highlight "备份 MySQL 数据库: $dbname"
             database_backup "mysql" "$dbname"
             ;;
+        "restore")
+            if [[ -z "$2" || -z "$3" ]]; then
+                log_error "用法: saltgoat database mysql restore <dbname> <backup_file>"
+                log_info "示例: saltgoat database mysql restore mydb /path/to/backup.sql.gz"
+                exit 1
+            fi
+            
+            local dbname="$2"
+            local backup_file="$3"
+            log_highlight "恢复 MySQL 数据库: $dbname <- $backup_file"
+            database_restore "mysql" "$dbname" "$backup_file"
+            ;;
         "delete")
             if [[ -z "$2" ]]; then
                 log_error "用法: saltgoat database mysql delete <dbname>"
@@ -1022,12 +1071,18 @@ database_mysql_convenience() {
             
             local dbname="$2"
             log_warning "删除 MySQL 数据库: $dbname"
-            salt-call --local mysql.db_remove "$dbname"
-            log_success "MySQL 数据库删除成功: $dbname"
+            
+            # 直接使用MySQL命令，避免Salt警告
+            if mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "DROP DATABASE IF EXISTS \`${dbname}\`;" 2>/dev/null; then
+                log_success "MySQL 数据库删除成功: $dbname"
+            else
+                log_error "MySQL 数据库删除失败: $dbname"
+                exit 1
+            fi
             ;;
         *)
             log_error "未知的 MySQL 操作: $1"
-            log_info "支持的操作: create, list, backup, delete"
+            log_info "支持的操作: create, list, status, backup, restore, delete"
             log_info "这些是 MySQL 模块的便捷功能，完全使用 Salt 原生功能实现"
             exit 1
             ;;

@@ -82,10 +82,14 @@ monitor_service_status() {
     for service in "${services[@]}"; do
         local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
         if [[ "$status" == "True" ]]; then
-            local pid=$(salt-call --local cmd.run "pgrep $service" 2>/dev/null | head -1 | grep -o '[0-9]*')
-            local memory=$(salt-call --local cmd.run "ps -o pid,vsz,rss,comm -p $pid" 2>/dev/null)
-            echo "$service (PID: $pid):"
-            echo "$memory"
+            local pid=$(pgrep "$service" 2>/dev/null | head -1)
+            if [[ -n "$pid" ]]; then
+                local memory=$(ps -o pid,vsz,rss,comm -p "$pid" 2>/dev/null | tail -n +2)
+                echo "$service (PID: $pid):"
+                echo "$memory"
+            else
+                echo "$service (PID: 未找到):"
+            fi
             echo "----------------------------------------"
         fi
     done

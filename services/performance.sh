@@ -96,7 +96,7 @@ performance_disk() {
     echo ""
     echo "磁盘使用率最高的目录:"
     echo "----------------------------------------"
-    salt-call --local cmd.run "du -h / 2>/dev/null | sort -hr | head -10" 2>/dev/null
+    du -h / 2>/dev/null | sort -h -r | head -10
     
     echo ""
     echo "磁盘设备信息:"

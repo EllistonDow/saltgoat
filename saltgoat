@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.3.8"
+SCRIPT_VERSION="0.4.2"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -57,12 +57,14 @@ show_banner
 # 状态和信息显示函数
 show_status() {
     log_info "系统状态:"
-    echo "Nginx: $(salt-call --local service.status nginx --out=txt | tail -n 1)"
-    echo "MySQL: $(salt-call --local service.status mysql --out=txt | tail -n 1)"
-    echo "PHP-FPM: $(salt-call --local service.status php8.3-fpm --out=txt | tail -n 1)"
-    echo "Valkey: $(salt-call --local service.status valkey --out=txt | tail -n 1)"
-    echo "OpenSearch: $(salt-call --local service.status opensearch --out=txt | tail -n 1)"
-    echo "RabbitMQ: $(salt-call --local service.status rabbitmq --out=txt | tail -n 1)"
+    
+    # 使用systemctl直接检查服务状态，避免Salt调用
+    echo "Nginx: $(systemctl is-active nginx 2>/dev/null || echo 'inactive')"
+    echo "MySQL: $(systemctl is-active mysql 2>/dev/null || echo 'inactive')"
+    echo "PHP-FPM: $(systemctl is-active php8.3-fpm 2>/dev/null || echo 'inactive')"
+    echo "Valkey: $(systemctl is-active valkey 2>/dev/null || echo 'inactive')"
+    echo "OpenSearch: $(systemctl is-active opensearch 2>/dev/null || echo 'inactive')"
+    echo "RabbitMQ: $(systemctl is-active rabbitmq 2>/dev/null || echo 'inactive')"
 }
 
 show_versions() {

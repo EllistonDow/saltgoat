@@ -34,7 +34,7 @@ ssl_generate_self_signed() {
     local key_file="$SSL_KEY_DIR/${domain}.key"
     
     # 检查证书是否已存在
-    if salt-call --local file.file_exists "$cert_file" --out=txt 2>/dev/null | grep -q "True"; then
+    if [[ -f "$cert_file" ]]; then
         log_warning "证书文件已存在: $cert_file"
         read -p "是否覆盖现有证书？(y/N): " confirm
         if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
@@ -45,13 +45,17 @@ ssl_generate_self_signed() {
     
     # 生成私钥和证书
     log_info "生成私钥和证书..."
-    salt-call --local cmd.run "sudo openssl req -newkey rsa:2048 -nodes -keyout $key_file -x509 -days $days -out $cert_file -subj '/C=US/ST=State/L=City/O=Organization/CN=$domain'" >/dev/null 2>&1
-    salt-call --local cmd.run "sudo chmod 600 $key_file" >/dev/null 2>&1
-    salt-call --local cmd.run "sudo chmod 644 $cert_file" >/dev/null 2>&1
-    
-    log_success "自签名证书生成完成"
-    log_info "证书文件: $cert_file"
-    log_info "私钥文件: $key_file"
+    if sudo openssl req -newkey rsa:2048 -nodes -keyout "$key_file" -x509 -days "$days" -out "$cert_file" -subj "/C=US/ST=State/L=City/O=Organization/CN=$domain" 2>/dev/null; then
+        sudo chmod 600 "$key_file" 2>/dev/null
+        sudo chmod 644 "$cert_file" 2>/dev/null
+        
+        log_success "自签名证书生成完成"
+        log_info "证书文件: $cert_file"
+        log_info "私钥文件: $key_file"
+    else
+        log_error "证书生成失败"
+        exit 1
+    fi
 }
 
 # 生成证书签名请求 (CSR)

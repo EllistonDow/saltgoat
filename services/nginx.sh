@@ -56,14 +56,14 @@ nginx_create_site() {
     local site_path="${custom_path:-/var/www/$site}"
     
     log_info "创建站点目录: $site_path"
-    salt-call --local cmd.run "sudo mkdir -p $site_path"
+    sudo mkdir -p "$site_path"
     
     log_info "创建默认页面"
-    salt-call --local cmd.run "sudo bash -c 'echo \"<h1>Welcome to $site</h1>\" > $site_path/index.html'"
+    sudo bash -c "echo \"<h1>Welcome to $site</h1>\" > $site_path/index.html"
     
     log_info "设置站点权限"
-    salt-call --local cmd.run "sudo chown -R www-data:www-data $site_path"
-    salt-call --local cmd.run "sudo chmod -R 755 $site_path"
+    sudo chown -R www-data:www-data "$site_path"
+    sudo chmod -R 755 "$site_path"
     
     log_info "创建 Nginx 配置文件"
     local config_file="/usr/local/nginx/conf/sites-available/$site"
@@ -102,10 +102,10 @@ EOF
     sudo ln -sf "$config_file" "/etc/nginx/sites-enabled/$site"
     
     log_info "测试 Nginx 配置"
-    salt-call --local cmd.run "sudo /usr/local/nginx/sbin/nginx -t"
+    sudo nginx -t
     
     log_info "重新加载 Nginx"
-    salt-call --local cmd.run "sudo systemctl reload nginx"
+    sudo systemctl reload nginx
     
     log_success "Nginx 站点创建成功: $site ($domain)"
     log_info "站点路径: $site_path"
@@ -159,10 +159,10 @@ nginx_delete_site() {
     sudo rm -f "/etc/nginx/sites-enabled/$site"
     
     # 删除站点目录
-    salt-call --local cmd.run "sudo rm -rf /var/www/$site"
+    sudo rm -rf "/var/www/$site"
     
     log_info "重新加载 Nginx"
-    salt-call --local cmd.run "sudo systemctl reload nginx"
+    sudo systemctl reload nginx
     
     log_success "Nginx 站点删除成功: $site"
 }

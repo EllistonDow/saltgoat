@@ -8,25 +8,27 @@ maintenance_update() {
         "check")
             log_highlight "检查系统更新..."
             
-            # 使用 Salt 原生功能更新包列表
-            salt-call --local pkg.refresh_db 2>/dev/null
-            
-            # 使用 Salt 原生功能检查可更新的包
-            local updates=$(salt-call --local pkg.list_upgrades 2>/dev/null | grep -c ":" || echo "0")
-            
-            if [[ "$updates" -gt 0 ]]; then
-                log_info "发现 $updates 个可更新的包"
+            # 直接使用apt命令，避免Salt超时
+            if sudo apt update >/dev/null 2>&1; then
+                local updates=$(apt list --upgradable 2>/dev/null | grep -c "upgradable" || echo "0")
                 
-                # 显示可更新的包
-                echo "可更新的包:"
-                echo "----------------------------------------"
-                salt-call --local pkg.list_upgrades 2>/dev/null | head -20
-                
-                if [[ "$updates" -gt 20 ]]; then
-                    echo "... 还有 $((updates - 20)) 个包"
+                if [[ "$updates" -gt 0 ]]; then
+                    log_info "发现 $updates 个可更新的包"
+                    
+                    # 显示可更新的包
+                    echo "可更新的包:"
+                    echo "----------------------------------------"
+                    apt list --upgradable 2>/dev/null | head -20
+                    
+                    if [[ "$updates" -gt 20 ]]; then
+                        echo "... 还有 $((updates - 20)) 个包"
+                    fi
+                else
+                    log_success "系统已是最新版本"
                 fi
             else
-                log_success "系统已是最新版本"
+                log_error "无法检查系统更新"
+                exit 1
             fi
             ;;
         "upgrade")
@@ -87,17 +89,12 @@ maintenance_service() {
             local service="$2"
             log_highlight "重启服务: $service"
             
-            # 使用 Salt 原生功能检查服务状态
-            local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
-            
-            if [[ "$status" == "True" ]]; then
-                # 使用 Salt 原生功能重启服务
-                salt-call --local service.restart "$service" 2>/dev/null
+            # 直接使用systemctl，避免Salt警告
+            if sudo systemctl restart "$service" 2>/dev/null; then
                 log_success "服务 $service 重启完成"
             else
-                log_warning "服务 $service 未运行，尝试启动..."
-                salt-call --local service.start "$service" 2>/dev/null
-                log_success "服务 $service 启动完成"
+                log_error "服务 $service 重启失败"
+                exit 1
             fi
             ;;
         "start")
@@ -109,9 +106,12 @@ maintenance_service() {
             local service="$2"
             log_highlight "启动服务: $service"
             
-            # 使用 Salt 原生功能启动服务
-            salt-call --local service.start "$service" 2>/dev/null
-            log_success "服务 $service 启动完成"
+            if sudo systemctl start "$service" 2>/dev/null; then
+                log_success "服务 $service 启动完成"
+            else
+                log_error "服务 $service 启动失败"
+                exit 1
+            fi
             ;;
         "stop")
             if [[ -z "$2" ]]; then
@@ -122,9 +122,12 @@ maintenance_service() {
             local service="$2"
             log_highlight "停止服务: $service"
             
-            # 使用 Salt 原生功能停止服务
-            salt-call --local service.stop "$service" 2>/dev/null
-            log_success "服务 $service 停止完成"
+            if sudo systemctl stop "$service" 2>/dev/null; then
+                log_success "服务 $service 停止完成"
+            else
+                log_error "服务 $service 停止失败"
+                exit 1
+            fi
             ;;
         "reload")
             if [[ -z "$2" ]]; then
@@ -135,9 +138,12 @@ maintenance_service() {
             local service="$2"
             log_highlight "重载服务配置: $service"
             
-            # 使用 Salt 原生功能重载服务配置
-            salt-call --local service.reload "$service" 2>/dev/null
-            log_success "服务 $service 配置重载完成"
+            if sudo systemctl reload "$service" 2>/dev/null; then
+                log_success "服务 $service 配置重载完成"
+            else
+                log_error "服务 $service 配置重载失败"
+                exit 1
+            fi
             ;;
         "status")
             if [[ -z "$2" ]]; then
@@ -148,13 +154,12 @@ maintenance_service() {
             local service="$2"
             log_highlight "检查服务状态: $service"
             
-            # 使用 Salt 原生功能检查服务状态
-            local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
-            
-            if [[ "$status" == "True" ]]; then
+            local status=$(systemctl is-active "$service" 2>/dev/null || echo "inactive")
+            if [[ "$status" == "active" ]]; then
                 log_success "服务 $service 正在运行"
             else
                 log_error "服务 $service 未运行"
+                exit 1
             fi
             ;;
         *)
@@ -240,7 +245,7 @@ maintenance_disk() {
             echo ""
             echo "目录大小统计 (前10个最大目录):"
             echo "----------------------------------------"
-            salt-call --local cmd.run "du -h / 2>/dev/null | sort -h -r | head -10" 2>/dev/null
+            du -h / 2>/dev/null | sort -h -r | head -10
             ;;
         "find-large")
             local size="${2:-100M}"
