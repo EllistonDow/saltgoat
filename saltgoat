@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.4.2"
+SCRIPT_VERSION="0.4.3"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -44,8 +44,13 @@ source "${SCRIPT_DIR}/services/maintenance.sh"
 source "${SCRIPT_DIR}/services/reports.sh"
 source "${SCRIPT_DIR}/services/automation.sh"
 source "${SCRIPT_DIR}/services/saltgui.sh"
+source "${SCRIPT_DIR}/services/auto-tune.sh"
+source "${SCRIPT_DIR}/services/benchmark.sh"
+source "${SCRIPT_DIR}/services/optimize.sh"
+source "${SCRIPT_DIR}/services/speedtest.sh"
 source "${SCRIPT_DIR}/monitoring/system.sh"
 source "${SCRIPT_DIR}/services/database.sh"
+source "${SCRIPT_DIR}/lib/help.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -117,152 +122,6 @@ show_passwords() {
     fi
 }
 
-show_help() {
-    echo "用法: saltgoat <command> [options]"
-    echo ""
-    echo "安装命令:"
-    echo "  install all [选项]             - 安装所有组件"
-    echo "    --mysql-password <pass>      - MySQL 密码"
-    echo "    --valkey-password <pass>     - Valkey 密码"
-    echo "    --rabbitmq-password <pass>   - RabbitMQ 密码"
-    echo "    --webmin-password <pass>     - Webmin 密码"
-    echo "    --phpmyadmin-password <pass> - phpMyAdmin 密码"
-    echo "    --ssl-email <email>          - SSL 证书邮箱"
-    echo "    --timezone <tz>              - 时区设置"
-    echo "    --language <lang>            - 语言设置"
-    echo "  install core                   - 安装核心组件"
-    echo "  install optional               - 安装可选组件"
-    echo ""
-    echo "系统管理:"
-    echo "  system install                 - 安装 SaltGoat 到系统路径（无需 ./ 和 sudo）"
-    echo "  system uninstall               - 卸载 SaltGoat 系统安装"
-    echo "  system ssh-port                - 检测当前 SSH 端口和 UFW 状态"
-    echo ""
-    echo "环境配置:"
-    echo "  env create                      - 创建环境配置文件 (.env)"
-    echo "  env show                        - 显示当前环境配置"
-    echo "  env load [file]                 - 加载环境配置文件"
-    echo ""
-    echo "服务管理:"
-    echo ""
-    echo "  nginx create <site> <domain>   - 创建 Nginx 站点"
-    echo "  nginx list                     - 列出所有站点"
-    echo "  nginx add-ssl <site> <domain>  - 为站点申请 Let's Encrypt SSL 证书"
-    echo "  nginx delete <site>            - 删除站点"
-    echo ""
-    echo "  backup create <name>           - 创建系统备份"
-    echo "  backup site create <site> [project] - 创建站点备份"
-    echo "  backup site restore <site> <file> [--force] - 恢复站点备份"
-    echo "  backup site list               - 列出站点备份"
-    echo "  backup list                    - 列出所有备份"
-    echo "  backup restore <name>          - 恢复备份"
-    echo "  backup delete <name>           - 删除备份"
-    echo "  backup cleanup                 - 清理旧备份"
-    echo ""
-    echo "  logs view <type> [lines]       - 查看日志文件"
-    echo "  logs cleanup <type> [days]     - 清理旧日志"
-    echo "  logs rotate <type>             - 轮转日志文件"
-    echo "  logs stats                     - 查看日志统计"
-    echo "  logs monitor <type>            - 实时监控日志"
-    echo ""
-    echo "  security scan                  - 完整安全扫描"
-    echo "  security ports                 - 扫描开放端口"
-    echo "  security services              - 检查服务安全"
-    echo "  security files                 - 检查文件权限"
-    echo "  security firewall              - 检查防火墙状态"
-    echo "  security updates               - 检查系统更新"
-    echo "  security users                 - 检查用户安全"
-    echo "  security logs                  - 检查日志安全"
-    echo "  security report                - 生成安全报告"
-    echo ""
-    echo "  performance cpu                - CPU 性能监控"
-    echo "  performance memory             - 内存性能监控"
-    echo "  performance disk               - 磁盘性能监控"
-    echo "  performance network             - 网络性能监控"
-    echo "  performance processes           - 进程性能监控"
-    echo "  performance load                - 系统负载监控"
-    echo "  performance benchmark           - 性能基准测试"
-    echo "  performance history             - 性能历史记录"
-    echo "  performance report              - 生成性能报告"
-    echo "  performance cleanup             - 清理性能日志"
-    echo ""
-    echo "  ssl generate-self-signed <domain> [days] - 生成自签名证书"
-    echo "  ssl generate-csr <domain> [country] [state] [city] [org] - 生成证书签名请求"
-    echo "  ssl view <certificate_file>     - 查看证书信息"
-    echo "  ssl verify <cert_file> [key_file] - 验证证书"
-    echo "  ssl list                        - 列出所有证书"
-    echo "  ssl renew <cert_file> [days]   - 续期证书"
-    echo "  ssl backup [name]               - 备份证书"
-    echo "  ssl cleanup-expired [days]      - 清理过期证书"
-    echo "  ssl status                      - SSL 状态检查"
-    echo ""
-    echo "  monitor system                  - 系统状态监控"
-    echo "  monitor services                - 服务状态监控"
-    echo "  monitor resources               - 资源使用监控"
-    echo "  monitor network                 - 网络状态监控"
-    echo "  monitor logs                    - 日志状态监控"
-    echo "  monitor security                - 安全状态监控"
-    echo "  monitor performance             - 性能监控"
-    echo "  monitor report [name]           - 生成监控报告"
-    echo "  monitor realtime [seconds]      - 实时监控"
-    echo "  monitor config                  - 监控配置"
-    echo "  monitor cleanup [days]          - 清理监控日志"
-    echo ""
-    echo "  database mysql <create|list|backup|delete> [args] - MySQL 便捷功能 (Salt 原生)"
-    echo "  database test-connection <type> [host] [port] [user] [pass] - 测试数据库连接"
-    echo "  database status <type>          - 检查数据库状态"
-    echo "  database backup <type> <db> [name] - 备份数据库"
-    echo "  database restore <type> <db> <file> - 恢复数据库"
-    echo "  database performance <type>      - 数据库性能监控"
-    echo "  database user <type> <action> [user] [pass] [db] - 用户管理"
-    echo "  database maintenance <type> <action> [db] - 数据库维护"
-    echo "  database list-backups            - 列出数据库备份"
-    echo "  database cleanup-backups [days] - 清理数据库备份"
-    echo ""
-    echo "监控功能:"
-    echo "  memory monitor                 - 执行内存监控"
-    echo "  memory status                  - 查看内存监控状态"
-    echo ""
-    echo "  schedule enable                - 启用定时任务"
-    echo "  schedule disable               - 禁用定时任务"
-    echo "  schedule status                - 查看定时任务状态"
-    echo "  schedule list                  - 列出所有定时任务"
-    echo "  schedule test                  - 测试定时任务配置"
-    echo ""
-    echo "系统维护:"
-    echo "  maintenance update <check|upgrade|dist-upgrade|autoremove|clean> - 系统更新管理"
-    echo "  maintenance service <restart|start|stop|reload|status> <service> - 服务管理"
-    echo "  maintenance cleanup <logs|temp|cache|all> - 系统清理"
-    echo "  maintenance disk <usage|find-large|cleanup-large> [size] [days] - 磁盘管理"
-    echo "  maintenance health - 系统健康检查"
-    echo ""
-    echo "报告生成:"
-    echo "  reports system [format] [output_file] - 生成系统健康报告"
-    echo "  reports performance [format] [output_file] - 生成性能分析报告"
-    echo "  reports security [format] [output_file] - 生成安全评估报告"
-    echo "  reports list [type] - 列出报告文件"
-    echo "  reports cleanup [days] - 清理旧报告"
-    echo ""
-    echo "自动化任务:"
-    echo "  automation script <create|list|edit|run|delete> [name] - 脚本管理"
-    echo "  automation job <create|list|enable|disable|run|delete> [name] [schedule] - 任务管理"
-    echo "  automation logs <list|view|tail|cleanup> [name] [days] - 日志管理"
-    echo "  automation templates <system-update|backup-cleanup|log-rotation|security-scan> - 预设模板"
-    echo ""
-    echo "SaltGUI Web 界面:"
-    echo "  saltgui install                - 安装 SaltGUI"
-    echo "  saltgui start                  - 启动 SaltGUI"
-    echo "  saltgui stop                   - 停止 SaltGUI"
-    echo "  saltgui restart                - 重启 SaltGUI"
-    echo "  saltgui status                 - 检查 SaltGUI 状态"
-    echo "  saltgui uninstall              - 卸载 SaltGUI"
-    echo ""
-    echo "系统信息:"
-    echo "  status                         - 查看系统状态"
-    echo "  versions                       - 查看版本信息"
-    echo "  passwords                      - 查看配置的密码"
-    echo "  help                           - 显示此帮助信息"
-}
 
 # RabbitMQ 处理函数（临时内联）
 rabbitmq_handler() {
@@ -603,13 +462,36 @@ case "$1" in
     "optimize")
         case "$2" in
             "magento")
-                log_highlight "开始优化 Magento 配置..."
+                log_highlight "开始 Magento2 专用优化..."
+                log_info "基于 Magento2 官方建议的完整优化方案"
                 optimize_magento
                 ;;
             *)
-                log_error "未知的优化选项: $2"
-                log_info "支持: magento"
-                exit 1
+                # 如果没有子命令，执行智能优化建议
+                log_highlight "智能优化建议分析..."
+                optimize
+                ;;
+        esac
+        ;;
+    "auto-tune")
+        auto_tune
+        ;;
+    "benchmark")
+        benchmark
+        ;;
+    "speedtest")
+        case "$2" in
+            "quick")
+                speedtest_quick
+                ;;
+            "server")
+                speedtest_server "$3"
+                ;;
+            "list")
+                speedtest_list
+                ;;
+            *)
+                speedtest
                 ;;
         esac
         ;;
@@ -638,7 +520,7 @@ case "$1" in
         show_passwords
         ;;
     "help"|"--help"|"-h"|"")
-        show_help
+        show_help "$2"
         ;;
     *)
         log_error "未知命令: $1"

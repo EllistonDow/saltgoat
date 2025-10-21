@@ -27,19 +27,70 @@ detect_system_memory:
 
 # 优化 Nginx 配置
 optimize_nginx_config:
-  file.managed:
-    - name: /usr/local/nginx/conf/nginx.conf
-    - source: salt://optional/nginx-magento.conf
-    - backup: minion
+  cmd.run:
+    - name: |
+        # 检测Nginx配置文件路径
+        NGINX_CONF=""
+        if [ -f "/usr/local/nginx/conf/nginx.conf" ]; then
+            NGINX_CONF="/usr/local/nginx/conf/nginx.conf"
+        elif [ -f "/etc/nginx/nginx.conf" ]; then
+            NGINX_CONF="/etc/nginx/nginx.conf"
+        else
+            echo "错误: 找不到Nginx配置文件"
+            exit 1
+        fi
+        
+        echo "使用Nginx配置文件: $NGINX_CONF"
+        
+        # 备份原配置文件
+        sudo cp "$NGINX_CONF" "$NGINX_CONF.backup.$(date +%Y%m%d_%H%M%S)"
+        
+        # 修复错误的worker_connections位置（删除全局区域的错误配置）
+        sudo sed -i '/^worker_connections 2048;$/d' "$NGINX_CONF"
+        
+        # 在events块内正确设置worker_connections
+        sudo sed -i '/events {/,/}/ s/worker_connections [0-9]*;/worker_connections 2048;/' "$NGINX_CONF"
+        
+        # 优化其他配置（使用更灵活的匹配）
+        sudo sed -i 's/client_max_body_size [0-9]*[Mm];/client_max_body_size 64M;/' "$NGINX_CONF"
+        
+        # 添加Magento优化配置（使用更安全的方法，避免重复）
+        # 先删除可能存在的重复配置
+        sudo sed -i '/gzip_disable "msie6";/d' "$NGINX_CONF"
+        sudo sed -i '/gzip_buffers 16 8k;/d' "$NGINX_CONF"
+        sudo sed -i '/gzip_http_version 1.1;/d' "$NGINX_CONF"
+        
+        # 在gzip_types行后添加优化配置（使用更灵活的匹配）
+        if grep -q "gzip_types" "$NGINX_CONF"; then
+            sudo sed -i '/gzip_types/a\    gzip_disable "msie6";\n    gzip_buffers 16 8k;\n    gzip_http_version 1.1;' "$NGINX_CONF"
+        else
+            # 如果没有gzip_types，在http块中添加
+            sudo sed -i '/http {/a\    gzip on;\n    gzip_types text/plain text/css application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;\n    gzip_disable "msie6";\n    gzip_buffers 16 8k;\n    gzip_http_version 1.1;' "$NGINX_CONF"
+        fi
     - require:
       - cmd: detect_system_memory
 
 # 测试 Nginx 配置
 test_nginx_config:
   cmd.run:
-    - name: /usr/local/nginx/sbin/nginx -t
+    - name: |
+        # 检测Nginx可执行文件路径
+        NGINX_BIN=""
+        if [ -f "/usr/local/nginx/sbin/nginx" ]; then
+            NGINX_BIN="/usr/local/nginx/sbin/nginx"
+        elif [ -f "/usr/sbin/nginx" ]; then
+            NGINX_BIN="/usr/sbin/nginx"
+        elif [ -f "/usr/bin/nginx" ]; then
+            NGINX_BIN="/usr/bin/nginx"
+        else
+            echo "错误: 找不到Nginx可执行文件"
+            exit 1
+        fi
+        
+        echo "使用Nginx可执行文件: $NGINX_BIN"
+        sudo "$NGINX_BIN" -t
     - require:
-      - file: optimize_nginx_config
+      - cmd: optimize_nginx_config
 
 # 重新加载 Nginx
 reload_nginx:
@@ -51,34 +102,133 @@ reload_nginx:
 
 # 优化 PHP 配置
 optimize_php_config:
-  file.managed:
-    - name: /etc/php/8.3/fpm/php.ini
-    - source: salt://optional/php-magento.ini
-    - backup: minion
+  cmd.run:
+    - name: |
+        # 检测PHP版本和配置文件路径
+        PHP_VERSION=""
+        PHP_INI=""
+        PHP_FPM_CONF=""
+        
+        # 检测PHP版本
+        for version in 8.3 8.2 8.1 8.0 7.4; do
+            if [ -f "/etc/php/$version/fpm/php.ini" ]; then
+                PHP_VERSION="$version"
+                PHP_INI="/etc/php/$version/fpm/php.ini"
+                PHP_FPM_CONF="/etc/php/$version/fpm/php-fpm.conf"
+                break
+            fi
+        done
+        
+        if [ -z "$PHP_VERSION" ]; then
+            echo "错误: 找不到PHP-FPM配置文件"
+            exit 1
+        fi
+        
+        echo "使用PHP版本: $PHP_VERSION"
+        echo "PHP配置文件: $PHP_INI"
+        echo "PHP-FPM配置文件: $PHP_FPM_CONF"
+        
+        # 备份原配置文件
+        sudo cp "$PHP_INI" "$PHP_INI.backup.$(date +%Y%m%d_%H%M%S)"
+        
+        # 创建日志目录并设置权限
+        sudo mkdir -p /var/log
+        sudo touch "/var/log/php$PHP_VERSION-fpm.log"
+        sudo chown www-data:www-data "/var/log/php$PHP_VERSION-fpm.log"
+        sudo chmod 666 "/var/log/php$PHP_VERSION-fpm.log"
+        
+        # 修复PHP-FPM配置文件中的error_log设置
+        sudo sed -i "s|error_log = /var/log/php$PHP_VERSION-fpm.log|;error_log = /var/log/php$PHP_VERSION-fpm.log|" "$PHP_FPM_CONF"
+        
+        # 使用sed优化PHP配置（使用更灵活的匹配）
+        sudo sed -i 's/memory_limit = [0-9]*[Mm]/memory_limit = 2G/' "$PHP_INI"
+        sudo sed -i 's/max_execution_time = [0-9]*/max_execution_time = 300/' "$PHP_INI"
+        sudo sed -i 's/max_input_vars = [0-9]*/max_input_vars = 3000/' "$PHP_INI"
+        sudo sed -i 's/post_max_size = [0-9]*[Mm]/post_max_size = 64M/' "$PHP_INI"
+        sudo sed -i 's/upload_max_filesize = [0-9]*[Mm]/upload_max_filesize = 64M/' "$PHP_INI"
+        
+        # 优化OPcache（使用更灵活的匹配）
+        sudo sed -i 's/opcache.memory_consumption=[0-9]*/opcache.memory_consumption=512/' "$PHP_INI"
+        sudo sed -i 's/opcache.max_accelerated_files=[0-9]*/opcache.max_accelerated_files=20000/' "$PHP_INI"
+        sudo sed -i 's/opcache.validate_timestamps=[01]/opcache.validate_timestamps=0/' "$PHP_INI"
+        
+        # 设置错误日志路径
+        sudo sed -i "s|;error_log = php_errors.log|error_log = /var/log/php$PHP_VERSION-fpm.log|" "$PHP_INI"
     - require:
       - cmd: detect_system_memory
 
 # 测试 PHP 配置
 test_php_config:
   cmd.run:
-    - name: php-fpm8.3 -t
+    - name: |
+        # 检测PHP-FPM可执行文件路径
+        PHP_FPM_BIN=""
+        for version in 8.3 8.2 8.1 8.0 7.4; do
+            if [ -f "/usr/sbin/php-fpm$version" ]; then
+                PHP_FPM_BIN="/usr/sbin/php-fpm$version"
+                break
+            elif [ -f "/usr/bin/php-fpm$version" ]; then
+                PHP_FPM_BIN="/usr/bin/php-fpm$version"
+                break
+            fi
+        done
+        
+        if [ -z "$PHP_FPM_BIN" ]; then
+            echo "错误: 找不到PHP-FPM可执行文件"
+            exit 1
+        fi
+        
+        echo "使用PHP-FPM可执行文件: $PHP_FPM_BIN"
+        "$PHP_FPM_BIN" -t
     - require:
-      - file: optimize_php_config
+      - cmd: optimize_php_config
 
 # 重新加载 PHP-FPM
 reload_php_fpm:
-  service.running:
-    - name: php8.3-fpm
-    - reload: true
+  cmd.run:
+    - name: |
+        # 检测PHP-FPM服务名称
+        PHP_FPM_SERVICE=""
+        for version in 8.3 8.2 8.1 8.0 7.4; do
+            if systemctl list-unit-files | grep -q "php$version-fpm.service"; then
+                PHP_FPM_SERVICE="php$version-fpm"
+                break
+            fi
+        done
+        
+        if [ -z "$PHP_FPM_SERVICE" ]; then
+            echo "错误: 找不到PHP-FPM服务"
+            exit 1
+        fi
+        
+        echo "使用PHP-FPM服务: $PHP_FPM_SERVICE"
+        sudo systemctl restart "$PHP_FPM_SERVICE"
     - require:
       - cmd: test_php_config
 
 # 优化 MySQL 配置
 optimize_mysql_config:
-  file.managed:
-    - name: /etc/mysql/mysql.conf.d/lemp.cnf
-    - source: salt://optional/mysql-magento.cnf
-    - backup: minion
+  cmd.run:
+    - name: |
+        # 备份原配置文件
+        sudo cp /etc/mysql/mysql.conf.d/lemp.cnf /etc/mysql/mysql.conf.d/lemp.cnf.backup.$(date +%Y%m%d_%H%M%S)
+        
+        # 使用sed优化MySQL配置
+        sudo sed -i 's/innodb_buffer_pool_size = 128M/innodb_buffer_pool_size = 16G/' /etc/mysql/mysql.conf.d/lemp.cnf
+        sudo sed -i 's/max_connections = 200/max_connections = 500/' /etc/mysql/mysql.conf.d/lemp.cnf
+        sudo sed -i 's/innodb_log_file_size = 256M/innodb_log_file_size = 256M/' /etc/mysql/mysql.conf.d/lemp.cnf
+        
+        # 添加Magento优化配置
+        echo "" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        echo "# Magento优化配置" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        echo "innodb_buffer_pool_instances = 8" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        echo "innodb_log_buffer_size = 16M" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        echo "innodb_flush_log_at_trx_commit = 2" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        echo "innodb_thread_concurrency = 16" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        echo "query_cache_size = 128M" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        echo "query_cache_type = 1" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        echo "tmp_table_size = 64M" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        echo "max_heap_table_size = 64M" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
     - require:
       - cmd: detect_system_memory
 
@@ -88,14 +238,24 @@ restart_mysql:
     - name: mysql
     - restart: true
     - require:
-      - file: optimize_mysql_config
+      - cmd: optimize_mysql_config
 
 # 优化 Valkey 配置
 optimize_valkey_config:
-  file.managed:
-    - name: /etc/valkey/valkey.conf
-    - source: salt://optional/valkey-magento.conf
-    - backup: minion
+  cmd.run:
+    - name: |
+        # 备份原配置文件
+        sudo cp /etc/valkey/valkey.conf /etc/valkey/valkey.conf.backup.$(date +%Y%m%d_%H%M%S)
+        
+        # 使用sed优化Valkey配置
+        sudo sed -i 's/maxmemory 256mb/maxmemory 1gb/' /etc/valkey/valkey.conf
+        sudo sed -i 's/maxmemory-policy allkeys-lru/maxmemory-policy allkeys-lru/' /etc/valkey/valkey.conf
+        
+        # 添加Magento优化配置
+        echo "" | sudo tee -a /etc/valkey/valkey.conf
+        echo "# Magento优化配置" | sudo tee -a /etc/valkey/valkey.conf
+        echo "timeout 300" | sudo tee -a /etc/valkey/valkey.conf
+        echo "tcp-keepalive 60" | sudo tee -a /etc/valkey/valkey.conf
     - require:
       - cmd: detect_system_memory
 
@@ -105,14 +265,23 @@ restart_valkey:
     - name: valkey
     - restart: true
     - require:
-      - file: optimize_valkey_config
+      - cmd: optimize_valkey_config
 
 # 优化 OpenSearch 配置
 optimize_opensearch_config:
-  file.managed:
-    - name: /etc/opensearch/opensearch.yml
-    - source: salt://optional/opensearch-magento.yml
-    - backup: minion
+  cmd.run:
+    - name: |
+        # 备份原配置文件
+        sudo cp /etc/opensearch/opensearch.yml /etc/opensearch/opensearch.yml.backup.$(date +%Y%m%d_%H%M%S)
+        
+        # 添加Magento优化配置
+        echo "" | sudo tee -a /etc/opensearch/opensearch.yml
+        echo "# Magento优化配置" | sudo tee -a /etc/opensearch/opensearch.yml
+        echo "indices.memory.index_buffer_size: 20%" | sudo tee -a /etc/opensearch/opensearch.yml
+        echo "indices.queries.cache.size: 10%" | sudo tee -a /etc/opensearch/opensearch.yml
+        echo "indices.fielddata.cache.size: 20%" | sudo tee -a /etc/opensearch/opensearch.yml
+        echo "thread_pool.write.queue_size: 1000" | sudo tee -a /etc/opensearch/opensearch.yml
+        echo "thread_pool.search.queue_size: 1000" | sudo tee -a /etc/opensearch/opensearch.yml
     - require:
       - cmd: detect_system_memory
 
@@ -122,7 +291,7 @@ restart_opensearch:
     - name: opensearch
     - restart: true
     - require:
-      - file: optimize_opensearch_config
+      - cmd: optimize_opensearch_config
 
 # 优化 RabbitMQ 配置
 optimize_rabbitmq_config:
@@ -141,19 +310,93 @@ restart_rabbitmq:
     - require:
       - file: optimize_rabbitmq_config
 
-# 安装内存监控脚本
-install_memory_monitor:
-  file.managed:
-    - name: /usr/local/bin/saltgoat-memory-monitor
-    - source: salt://optional/memory-monitor.sh
-    - mode: 755
+# 完成优化并显示优化报告
+magento_optimization_complete:
+  cmd.run:
+    - name: |
+        echo "=========================================="
+        echo "    Magento 2.4.8 优化配置完成"
+        echo "=========================================="
+        echo ""
+        echo "系统信息:"
+        echo "  内存级别: $(cat /tmp/memory_level 2>/dev/null || echo 'unknown')"
+        echo "  总内存: $(cat /tmp/total_memory_gb 2>/dev/null || echo 'unknown') GB"
+        echo ""
+        echo "优化内容详情:"
+        echo "----------------------------------------"
+        echo ""
+        echo "1. Nginx 优化:"
+        echo "  - worker_connections: 2048 (提升并发处理能力)"
+        echo "  - client_max_body_size: 64M (适合Magento文件上传)"
+        echo "  - gzip_disable: msie6 (禁用IE6压缩)"
+        echo "  - gzip_buffers: 16 8k (优化压缩缓冲区)"
+        echo "  - gzip_http_version: 1.1 (启用HTTP/1.1压缩)"
+        echo ""
+        echo "2. PHP-FPM 优化:"
+        echo "  - memory_limit: 2G (提升内存限制)"
+        echo "  - max_execution_time: 300s (延长执行时间)"
+        echo "  - max_input_vars: 3000 (增加输入变量限制)"
+        echo "  - post_max_size: 64M (提升POST数据大小)"
+        echo "  - upload_max_filesize: 64M (提升文件上传大小)"
+        echo "  - opcache.memory_consumption: 512M (增加OPcache内存)"
+        echo "  - opcache.max_accelerated_files: 20000 (增加缓存文件数)"
+        echo "  - opcache.validate_timestamps: 0 (禁用时间戳验证)"
+        echo ""
+        echo "3. MySQL 优化:"
+        echo "  - innodb_buffer_pool_size: 16G (InnoDB缓冲池)"
+        echo "  - innodb_buffer_pool_instances: 8 (缓冲池实例数)"
+        echo "  - innodb_log_file_size: 256M (日志文件大小)"
+        echo "  - innodb_log_buffer_size: 16M (日志缓冲区)"
+        echo "  - innodb_flush_log_at_trx_commit: 2 (日志刷新策略)"
+        echo "  - innodb_thread_concurrency: 16 (线程并发数)"
+        echo "  - max_connections: 500 (最大连接数)"
+        echo "  - query_cache_size: 128M (查询缓存大小)"
+        echo "  - query_cache_type: 1 (启用查询缓存)"
+        echo "  - tmp_table_size: 64M (临时表大小)"
+        echo "  - max_heap_table_size: 64M (堆表大小)"
+        echo ""
+        echo "4. Valkey 优化:"
+        echo "  - maxmemory: 1gb (最大内存限制)"
+        echo "  - maxmemory-policy: allkeys-lru (内存淘汰策略)"
+        echo "  - timeout: 300 (连接超时时间)"
+        echo "  - tcp-keepalive: 60 (TCP保活时间)"
+        echo ""
+        echo "5. OpenSearch 优化:"
+        echo "  - indices.memory.index_buffer_size: 20% (索引缓冲区)"
+        echo "  - indices.queries.cache.size: 10% (查询缓存)"
+        echo "  - indices.fielddata.cache.size: 20% (字段数据缓存)"
+        echo "  - thread_pool.write.queue_size: 1000 (写入队列大小)"
+        echo "  - thread_pool.search.queue_size: 1000 (搜索队列大小)"
+        echo ""
+        echo "6. RabbitMQ 优化:"
+        echo "  - 使用Magento专用配置文件"
+        echo ""
+        echo "优化建议:"
+        echo "----------------------------------------"
+        echo "1. 重启所有服务以确保配置生效:"
+        echo "   sudo systemctl restart nginx"
+        echo "   sudo systemctl restart php8.3-fpm"
+        echo "   sudo systemctl restart mysql"
+        echo "   sudo systemctl restart valkey"
+        echo "   sudo systemctl restart opensearch"
+        echo "   sudo systemctl restart rabbitmq"
+        echo ""
+        echo "2. 使用 SaltGoat 监控功能检查服务状态:"
+        echo "   saltgoat monitor services"
+        echo "   saltgoat monitor system"
+        echo ""
+        echo "3. 定期使用 SaltGoat 性能监控:"
+        echo "   saltgoat performance cpu"
+        echo "   saltgoat performance memory"
+        echo "   saltgoat performance disk"
+        echo ""
+        echo "=========================================="
+        echo "Magento 2.4.8 优化配置完成！"
+        echo "=========================================="
     - require:
-      - cmd: detect_system_memory
-
-# 创建内存监控日志目录
-create_monitor_log_dir:
-  file.directory:
-    - name: /var/log/saltgoat
-    - mode: 755
-    - require:
-      - file: install_memory_monitor
+      - cmd: optimize_nginx_config
+      - cmd: optimize_php_config
+      - cmd: optimize_mysql_config
+      - cmd: optimize_valkey_config
+      - cmd: optimize_opensearch_config
+      - file: optimize_rabbitmq_config
