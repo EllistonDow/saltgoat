@@ -37,6 +37,16 @@ cp env.example .env
 nano .env
 ```
 
+**邮件通知配置**:
+```bash
+# 邮件通知配置
+SMTP_HOST='smtp.gmail.com:587'
+SMTP_USER='your-email@gmail.com'
+SMTP_PASSWORD='your-app-password'
+SMTP_FROM_EMAIL='your-email@gmail.com'
+SMTP_FROM_NAME='SaltGoat Alerts'
+```
+
 #### 3. 系统安装
 ```bash
 # 安装SaltGoat到系统

@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.5.2"
+SCRIPT_VERSION="0.5.3"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -56,7 +56,7 @@ source "${SCRIPT_DIR}/services/monitoring-levels.sh"
 source "${SCRIPT_DIR}/services/smart-monitoring.sh"
 source "${SCRIPT_DIR}/services/dynamic-monitoring.sh"
 source "${SCRIPT_DIR}/services/cost-optimized-monitoring.sh"
-source "${SCRIPT_DIR}/lib/help.sh"
+source "${SCRIPT_DIR}/services/grafana-email.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -581,10 +581,25 @@ case "$1" in
                     monitor_prometheus_setup
                 fi
                 ;;
-            "grafana")
-                log_highlight "SaltGoat Grafana集成..."
-                monitor_grafana_setup
-                ;;
+           "grafana")
+               case "$3" in
+                   "email")
+                       log_highlight "SaltGoat Grafana邮件配置..."
+                       configure_grafana_email "$4" "$5" "$6" "$7" "$8"
+                       ;;
+                   "test-email")
+                       log_highlight "SaltGoat 测试邮件发送..."
+                       test_email_sending "$4"
+                       ;;
+                   "email-help")
+                       show_email_config_help
+                       ;;
+                   *)
+                       log_highlight "SaltGoat Grafana集成..."
+                       monitor_grafana_setup
+                       ;;
+               esac
+               ;;
             "smart")
                 log_highlight "SaltGoat 智能监控配置..."
                 install_smart_monitoring
@@ -608,6 +623,9 @@ case "$1" in
                 log_info "命令:"
                 log_info "  prometheus [level]    - 安装Prometheus (支持low/medium/high/auto)"
                 log_info "  grafana              - 安装Grafana"
+                log_info "  grafana email        - 配置Grafana邮件通知"
+                log_info "  grafana test-email   - 测试邮件发送"
+                log_info "  grafana email-help   - 邮件配置帮助"
                 log_info "  smart                - 智能业务场景监控"
                 log_info "  dynamic              - 动态负载监控"
                 log_info "  cost                 - 成本优化监控"

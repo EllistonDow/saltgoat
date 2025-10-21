@@ -89,7 +89,11 @@ varnish:
 firewall:
   allowed_ports: {{ pillar.get('firewall_allowed_ports', '22,80,443,3306,6379,5672,15672,10000').split(',') }}
 
-# 日志配置
-logging:
-  level: {{ pillar.get('log_level', 'info') }}
+# 邮件通知配置
+email:
+  smtp_host: {{ grains.get('pillar_smtp_host', 'smtp.gmail.com:587') }}
+  smtp_user: {{ grains.get('pillar_smtp_user', 'your-email@gmail.com') }}
+  smtp_password: {{ grains.get('pillar_smtp_password', 'your-app-password') }}
+  from_email: {{ grains.get('pillar_smtp_from_email', 'your-email@gmail.com') }}
+  from_name: {{ grains.get('pillar_smtp_from_name', 'SaltGoat Alerts') }}
   retention_days: {{ pillar.get('log_retention_days', '30') }}
