@@ -2,6 +2,58 @@
 # 系统管理模块
 # core/system.sh
 
+# 重新加载环境变量
+reload_environment() {
+    log_info "重新加载环境变量..."
+    
+    # 检查 .env 文件是否存在
+    if [[ ! -f ".env" ]]; then
+        log_error ".env 文件不存在"
+        log_info "请先复制 env.example 为 .env 并配置"
+        return 1
+    fi
+    
+    # 加载环境变量
+    log_info "加载 .env 文件..."
+    set -a  # 自动导出变量
+    source .env
+    set +a  # 停止自动导出
+    
+    # 显示当前邮件配置
+    log_info "当前邮件配置:"
+    log_info "  SMTP_HOST: ${SMTP_HOST:-未设置}"
+    log_info "  SMTP_USER: ${SMTP_USER:-未设置}"
+    log_info "  SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-未设置}"
+    
+    # 更新Postfix配置
+    if [[ -n "$SMTP_HOST" ]] && [[ -n "$SMTP_USER" ]] && [[ -n "$SMTP_PASSWORD" ]]; then
+        log_info "更新Postfix配置..."
+        
+        # 设置Postfix配置
+        sudo postconf -e "relayhost = $SMTP_HOST"
+        sudo postconf -e "myorigin = $SMTP_FROM_EMAIL"
+        sudo postconf -e "myhostname = localhost"
+        sudo postconf -e "mydomain = localhost"
+        
+        # 更新SASL密码文件
+        sudo tee /etc/postfix/sasl_passwd > /dev/null <<EOF
+[$SMTP_HOST] $SMTP_USER:$SMTP_PASSWORD
+EOF
+        
+        # 生成密码数据库
+        sudo postmap /etc/postfix/sasl_passwd
+        sudo chmod 600 /etc/postfix/sasl_passwd
+        
+        # 重新加载Postfix
+        sudo systemctl reload postfix
+        
+        log_success "Postfix配置已更新"
+        log_info "现在可以使用: echo '测试邮件' | mail -s '测试' your-email@domain.com"
+    else
+        log_warning "邮件配置不完整，跳过Postfix更新"
+    fi
+}
+
 # 系统安装
 system_install() {
     # 获取 SaltGoat 安装路径（从主脚本目录）

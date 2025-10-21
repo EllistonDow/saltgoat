@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.5.3"
+SCRIPT_VERSION="0.5.4"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -220,9 +220,13 @@ case "$1" in
                 log_highlight "检测当前 SSH 端口..."
                 detect_ssh_port
                 ;;
+            "reload-env")
+                log_highlight "重新加载环境变量..."
+                reload_environment
+                ;;
             *)
                 log_error "未知的 System 操作: $2"
-                log_info "支持: install, uninstall, ssh-port"
+                log_info "支持: install, uninstall, ssh-port, reload-env"
                 exit 1
                 ;;
         esac
