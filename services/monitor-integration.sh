@@ -67,6 +67,14 @@ monitor_prometheus_setup() {
         local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
         log_info "访问地址: http://${server_ip}:9090"
         show_prometheus_status
+        
+        # 自动安装Node Exporter
+        log_info "自动安装 Node Exporter..."
+        install_node_exporter
+        
+        # 自动安装Nginx Exporter
+        log_info "自动安装 Nginx Exporter..."
+        install_nginx_exporter
     else
         log_error "Prometheus 启动失败"
         sudo systemctl status prometheus
@@ -158,7 +166,7 @@ show_prometheus_status() {
     echo ""
     
     # 检查端口
-    if netstat -tlnp 2>/dev/null | grep -q ":9090 "; then
+    if ss -tlnp 2>/dev/null | grep -q ":9090 "; then
         echo "端口状态: ✅ 9090端口已监听"
     else
         echo "端口状态: ❌ 9090端口未监听"
@@ -240,7 +248,7 @@ show_grafana_status() {
     echo ""
     
     # 检查端口
-    if netstat -tlnp 2>/dev/null | grep -q ":3000 "; then
+    if ss -tlnp 2>/dev/null | grep -q ":3000 "; then
         echo "端口状态: ✅ 3000端口已监听"
     else
         echo "端口状态: ❌ 3000端口未监听"
@@ -308,6 +316,66 @@ EOF
     fi
     
     rm -rf /tmp/node_exporter*
+}
+
+# 安装Nginx Exporter
+install_nginx_exporter() {
+    log_info "安装 Nginx Exporter..."
+    
+    # 检查Nginx是否安装
+    if ! command -v nginx >/dev/null 2>&1; then
+        log_info "Nginx 未安装，跳过 Nginx Exporter 安装"
+        return 0
+    fi
+    
+    local nginx_exporter_version="0.11.0"
+    local nginx_exporter_url="https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${nginx_exporter_version}/nginx-prometheus-exporter_${nginx_exporter_version}_linux_amd64.tar.gz"
+    
+    cd /tmp
+    wget -q "$nginx_exporter_url" -O nginx_exporter.tar.gz
+    
+    if [[ $? -ne 0 ]]; then
+        log_error "下载 Nginx Exporter 失败"
+        return 1
+    fi
+    
+    tar xzf nginx_exporter.tar.gz
+    sudo cp nginx-prometheus-exporter /usr/local/bin/nginx_exporter
+    sudo chown prometheus:prometheus /usr/local/bin/nginx_exporter
+    
+    # 创建服务
+    sudo tee /etc/systemd/system/nginx_exporter.service > /dev/null <<EOF
+[Unit]
+Description=Nginx Prometheus Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+Type=simple
+ExecStart=/usr/local/bin/nginx_exporter -nginx.scrape-uri=http://localhost/nginx_status
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    sudo systemctl daemon-reload
+    sudo systemctl enable nginx_exporter
+    sudo systemctl start nginx_exporter
+    
+    # 放行Nginx Exporter端口
+    configure_firewall_port "9113" "Nginx Exporter"
+    
+    if systemctl is-active --quiet nginx_exporter; then
+        log_success "Nginx Exporter 安装成功"
+        local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+        log_info "访问地址: http://${server_ip}:9113/metrics"
+    else
+        log_error "Nginx Exporter 启动失败"
+    fi
+    
+    rm -rf /tmp/nginx-prometheus-exporter*
 }
 
 # 防火墙管理函数
