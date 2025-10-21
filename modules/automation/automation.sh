@@ -213,7 +213,7 @@ automation_job() {
             
             echo "自动化任务列表:"
             echo "=========================================="
-            salt-call --local file.find "$AUTOMATION_JOBS_DIR" type=f name="*.job" 2>/dev/null | while read -r job; do
+            salt-call --local file.find "$AUTOMATION_JOBS_DIR" type=f name="*.job" 2>/dev/null | grep "^- " | sed 's/^- //' | while read -r job; do
                 if [[ -n "$job" ]]; then
                     local job_name=$(basename "$job" .job)
                     local job_content=$(salt-call --local file.read "$job" 2>/dev/null)

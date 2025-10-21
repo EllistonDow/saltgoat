@@ -148,7 +148,7 @@ install_all() {
 	log_info "开始安装所有 SaltGoat 组件..."
 
 	# 加载环境配置
-	load_install_config
+	load_install_config "$@"
 
 	# 配置 salt minion（确保能读取项目 pillar）
 	configure_salt_minion

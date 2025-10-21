@@ -315,7 +315,7 @@ analyze_system() {
     fi
     
     # 检查内存使用率
-    local memory_usage=$(salt-call --local cmd.run "free | awk 'NR==2{printf \"%.0f\", \$3/\$2*100}'" 2>/dev/null)
+    local memory_usage=$(free | awk 'NR==2{printf "%.0f", $3/$2*100}')
     if [[ $memory_usage -gt 85 ]]; then
         echo "  ⚠️  内存使用率较高: ${memory_usage}%"
         echo "  🔧 建议: 检查内存泄漏或增加内存"

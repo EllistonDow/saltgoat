@@ -16,9 +16,16 @@ diagnose_nginx() {
     local fixes=()
     
     # 检查Nginx是否运行
-    if ! systemctl is-active --quiet nginx 2>/dev/null; then
+    # 检查Nginx服务状态 - 支持源码编译和包管理器安装
+    if command -v nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx 2>/dev/null; then
+        log_success "Nginx: 运行中 (systemd)"
+    elif [[ -f "/usr/local/nginx/sbin/nginx" ]] && pgrep -f "nginx: master process" >/dev/null 2>&1; then
+        log_success "Nginx: 运行中 (手动启动)"
+    elif command -v nginx >/dev/null 2>&1 && pgrep -f "nginx: master process" >/dev/null 2>&1; then
+        log_success "Nginx: 运行中 (手动启动)"
+    else
         issues+=("Nginx服务未运行")
-        fixes+=("sudo systemctl start nginx")
+        fixes+=("sudo systemctl start nginx 或手动启动: /usr/local/nginx/sbin/nginx")
     fi
     
     # 检查Nginx配置

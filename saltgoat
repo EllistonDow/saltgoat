@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.5.7"
+SCRIPT_VERSION="0.6.0"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -36,30 +36,31 @@ source "${SCRIPT_DIR}/core/optimize.sh"
 # 加载服务管理
 source "${SCRIPT_DIR}/services/nginx.sh"
 source "${SCRIPT_DIR}/services/rabbitmq.sh"
-source "${SCRIPT_DIR}/services/backup.sh"
-source "${SCRIPT_DIR}/services/logs.sh"
-source "${SCRIPT_DIR}/services/security.sh"
+source "${SCRIPT_DIR}/modules/maintenance/backup.sh"
+source "${SCRIPT_DIR}/modules/maintenance/logs.sh"
+source "${SCRIPT_DIR}/modules/security/security.sh"
 source "${SCRIPT_DIR}/services/performance.sh"
-source "${SCRIPT_DIR}/services/ssl.sh"
-source "${SCRIPT_DIR}/services/maintenance.sh"
-source "${SCRIPT_DIR}/services/reports.sh"
-source "${SCRIPT_DIR}/services/automation.sh"
+source "${SCRIPT_DIR}/modules/security/ssl.sh"
+source "${SCRIPT_DIR}/modules/maintenance/maintenance.sh"
+source "${SCRIPT_DIR}/modules/automation/reports.sh"
+source "${SCRIPT_DIR}/modules/automation/automation.sh"
 source "${SCRIPT_DIR}/services/saltgui.sh"
-source "${SCRIPT_DIR}/services/auto-tune.sh"
-source "${SCRIPT_DIR}/services/benchmark.sh"
-source "${SCRIPT_DIR}/services/optimize.sh"
-source "${SCRIPT_DIR}/services/speedtest.sh"
+source "${SCRIPT_DIR}/modules/optimization/auto-tune.sh"
+source "${SCRIPT_DIR}/modules/optimization/benchmark.sh"
+source "${SCRIPT_DIR}/modules/optimization/optimize.sh"
+source "${SCRIPT_DIR}/modules/optimization/speedtest.sh"
 source "${SCRIPT_DIR}/monitoring/system.sh"
 source "${SCRIPT_DIR}/services/database.sh"
 source "${SCRIPT_DIR}/services/state.sh"
-source "${SCRIPT_DIR}/services/monitor-integration.sh"
-source "${SCRIPT_DIR}/services/monitoring-levels.sh"
-source "${SCRIPT_DIR}/services/smart-monitoring.sh"
-source "${SCRIPT_DIR}/services/dynamic-monitoring.sh"
-source "${SCRIPT_DIR}/services/cost-optimized-monitoring.sh"
-source "${SCRIPT_DIR}/services/grafana-email.sh"
-source "${SCRIPT_DIR}/services/diagnose.sh"
-source "${SCRIPT_DIR}/services/version-lock.sh"
+source "${SCRIPT_DIR}/modules/monitoring/monitor-integration.sh"
+source "${SCRIPT_DIR}/modules/monitoring/monitoring-levels.sh"
+source "${SCRIPT_DIR}/modules/monitoring/smart-monitoring.sh"
+source "${SCRIPT_DIR}/modules/monitoring/dynamic-monitoring.sh"
+source "${SCRIPT_DIR}/modules/monitoring/cost-optimized-monitoring.sh"
+source "${SCRIPT_DIR}/modules/monitoring/grafana-email.sh"
+source "${SCRIPT_DIR}/modules/diagnose/diagnose.sh"
+source "${SCRIPT_DIR}/modules/version-lock/version-lock.sh"
+source "${SCRIPT_DIR}/modules/profile/performance-analysis.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -73,7 +74,16 @@ show_status() {
     log_info "系统状态:"
     
     # 使用systemctl直接检查服务状态，避免Salt调用
-    echo "Nginx: $(systemctl is-active nginx 2>/dev/null || echo 'inactive')"
+    # 检查Nginx状态 - 支持源码编译和包管理器安装
+    if command -v nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx 2>/dev/null; then
+        echo "Nginx: active (systemd)"
+    elif [[ -f "/usr/local/nginx/sbin/nginx" ]] && pgrep -f "nginx: master process" >/dev/null 2>&1; then
+        echo "Nginx: active (manual)"
+    elif command -v nginx >/dev/null 2>&1 && pgrep -f "nginx: master process" >/dev/null 2>&1; then
+        echo "Nginx: active (manual)"
+    else
+        echo "Nginx: inactive"
+    fi
     echo "MySQL: $(systemctl is-active mysql 2>/dev/null || echo 'inactive')"
     echo "PHP-FPM: $(systemctl is-active php8.3-fpm 2>/dev/null || echo 'inactive')"
     echo "Valkey: $(systemctl is-active valkey 2>/dev/null || echo 'inactive')"
@@ -202,9 +212,12 @@ case "$1" in
             "load")
                 load_env_config "$3"
                 ;;
+            "status")
+                show_env_config
+                ;;
             *)
                 log_error "未知的环境配置选项: $2"
-                log_info "支持: create, show, load"
+                log_info "支持: create, show, load, status"
                 exit 1
                 ;;
         esac
@@ -600,6 +613,56 @@ case "$1" in
         fi
         
         version_lock_handler "$2"
+        ;;
+    "profile")
+        if [[ -z "$2" ]]; then
+            log_error "用法: saltgoat profile <command>"
+            log_info "支持的命令:"
+            log_info "  analyze <type> - 性能分析"
+            log_info "    支持的类型: system, nginx, mysql, php, memory, disk, network, all"
+            log_info "  help          - 显示帮助信息"
+            log_info ""
+            log_info "示例:"
+            log_info "  saltgoat profile analyze system"
+            log_info "  saltgoat profile analyze all"
+            exit 1
+        fi
+        
+        case "$2" in
+            "analyze")
+                if [[ -z "$3" ]]; then
+                    log_error "用法: saltgoat profile analyze <type>"
+                    log_info "支持的类型: system, nginx, mysql, php, memory, disk, network, all"
+                    exit 1
+                fi
+                performance_analyze_handler "$3"
+                ;;
+            "help"|"--help"|"-h")
+                log_info "性能分析功能帮助:"
+                log_info "用法: saltgoat profile <command>"
+                log_info ""
+                log_info "命令:"
+                log_info "  analyze <type> - 性能分析"
+                log_info "    支持的类型:"
+                log_info "      system   - 系统性能分析"
+                log_info "      nginx    - Nginx性能分析"
+                log_info "      mysql    - MySQL性能分析"
+                log_info "      php      - PHP性能分析"
+                log_info "      memory   - 内存性能分析"
+                log_info "      disk     - 磁盘性能分析"
+                log_info "      network  - 网络性能分析"
+                log_info "      all      - 完整性能分析"
+                log_info ""
+                log_info "示例:"
+                log_info "  saltgoat profile analyze system"
+                log_info "  saltgoat profile analyze all"
+                ;;
+            *)
+                log_error "未知的性能分析命令: $2"
+                log_info "使用 'saltgoat profile help' 查看帮助"
+                return 1
+                ;;
+        esac
         ;;
     "monitoring")
         case "$2" in
