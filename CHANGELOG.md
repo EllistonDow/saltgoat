@@ -1,5 +1,25 @@
 # SaltGoat 更新日志
 
+## [0.5.5] - 2025-01-21
+
+### 🎯 SaltGUI集成完善
+- **官方样板配置**: 采用SaltGUI官方推荐的Nginx配置模板
+- **API路径优化**: 使用`/api/`路径代理Salt API，符合官方最佳实践
+- **会话管理**: 完善SaltGUI的登录和会话管理功能
+- **一致性保证**: 确保git clone后安装的配置完全一致
+
+### 🔧 技术改进
+- **Nginx配置**: 使用官方样板，简化配置结构
+- **API代理**: 优化Salt API的代理配置
+- **配置模板**: 自动配置SaltGUI的API_URL设置
+- **服务管理**: 完善Salt Master和Salt API的配置
+
+### 🐛 错误修复
+- 修复SaltGUI登录后的会话管理问题
+- 修复Salt API的netapi_enable_clients配置
+- 修复Nginx配置中的location规则冲突
+- 完善SaltGUI的安装脚本一致性
+
 ## [0.5.4] - 2025-01-21
 
 ### 📧 邮件配置功能增强

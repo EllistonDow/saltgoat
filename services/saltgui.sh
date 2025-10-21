@@ -85,7 +85,7 @@ configure_salt_master() {
     salt-call --local file.mkdir "/etc/salt" 2>/dev/null || true
     
     # 创建 Salt Master 配置文件
-    cat > "/tmp/salt_master_config" << 'EOF'
+    cat > "/tmp/salt_master_config" << EOF
 # Salt Master 配置文件
 interface: 0.0.0.0
 publish_port: 4505
@@ -97,22 +97,29 @@ log_level: info
 log_file: /var/log/salt/master
 pidfile: /var/run/salt-master.pid
 
-# Salt API 配置
+# Salt API 配置 (禁用SSL)
 rest_cherrypy:
   host: 0.0.0.0
   port: 8000
   debug: False
+  disable_ssl: True
   log_access_file: /var/log/salt/api_access.log
   log_error_file: /var/log/salt/api_error.log
 
 # 外部认证配置（PAM）
 external_auth:
   pam:
-    salt:
+    saltgui:
       - .*
       - '@wheel'
       - '@runner'
       - '@jobs'
+
+# 启用 Salt API 客户端
+netapi_enable_clients:
+  - wheel
+  - runner
+  - local
 EOF
     
     # 移动配置文件
@@ -202,6 +209,12 @@ saltgui_install() {
     # 创建配置文件
     create_saltgui_config
     
+    # 配置 SaltGUI API URL
+    configure_saltgui_api_url
+    
+    # 创建 Nginx 配置
+    create_saltgui_nginx_config
+    
     # 创建 systemd 服务
     create_saltgui_service
     
@@ -244,6 +257,99 @@ EOF
     sudo mv "/tmp/saltgui_config.json" "$SALTGUI_CONFIG_DIR/config.json"
     
     log_success "SaltGUI 配置文件已创建"
+}
+
+# 配置 SaltGUI API URL
+configure_saltgui_api_url() {
+    log_info "配置 SaltGUI API URL..."
+    
+    # 更新 SaltGUI 的 config.js 文件，使用 /api 路径
+    sudo tee /opt/saltgui/saltgui/static/scripts/config.js > /dev/null <<EOF
+/* istanbul ignore file */
+/* eslint-disable no-unused-vars */
+const config = {
+  // additional prefix for the API urls
+  // with an empty string, the defaults will be used
+  // See also https://docs.saltproject.io/en/latest/ref/netapi/all/salt.netapi.rest_cherrypy.html
+  "API_URL": "/api",
+
+  // additional prefix for the navigation urls
+  // with an empty string, the defaults will be used
+  "NAV_URL": ""
+};
+/* eslint-enable no-unused-vars */
+EOF
+    
+    log_success "SaltGUI API URL 配置完成"
+}
+
+# 创建 SaltGUI Nginx 配置
+create_saltgui_nginx_config() {
+    log_info "创建 SaltGUI Nginx 配置..."
+    
+    # 检查 Nginx 是否安装
+    if ! command -v nginx >/dev/null 2>&1 && ! [[ -f "/usr/local/nginx/sbin/nginx" ]]; then
+        log_warning "Nginx 未安装，跳过 Nginx 配置"
+        return 0
+    fi
+    
+    # 确定 Nginx 配置目录
+    local nginx_conf_dir="/usr/local/nginx/conf"
+    if [[ ! -d "$nginx_conf_dir" ]]; then
+        nginx_conf_dir="/etc/nginx"
+    fi
+    
+    # 创建 SaltGUI Nginx 配置
+    cat > "/tmp/saltgui_nginx.conf" << EOF
+server {
+    listen $SALTGUI_PORT;
+    server_name localhost;
+    root /opt/saltgui/saltgui;
+    index index.html;
+
+    # handle internal api (proxy)
+    location /api/ {
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-NginX-Proxy true;
+        proxy_pass http://localhost:8000/;
+        proxy_ssl_session_reuse off;
+        proxy_set_header Host \$http_host;
+        proxy_redirect off;
+    }
+
+    # handle saltgui web page
+    location / {
+        try_files \$uri /index.html;
+    }
+}
+EOF
+    
+    # 移动配置文件
+    sudo mv "/tmp/saltgui_nginx.conf" "$nginx_conf_dir/sites-available/saltgui"
+    
+    # 创建 sites-enabled 目录（如果不存在）
+    sudo mkdir -p "$nginx_conf_dir/sites-enabled"
+    
+    # 启用站点
+    sudo ln -sf "$nginx_conf_dir/sites-available/saltgui" "$nginx_conf_dir/sites-enabled/"
+    
+    # 测试 Nginx 配置
+    if command -v nginx >/dev/null 2>&1; then
+        sudo nginx -t 2>/dev/null && {
+            sudo systemctl reload nginx 2>/dev/null || sudo nginx -s reload 2>/dev/null
+            log_success "SaltGUI Nginx 配置已创建并启用"
+        } || {
+            log_warning "Nginx 配置测试失败，请手动检查"
+        }
+    elif [[ -f "/usr/local/nginx/sbin/nginx" ]]; then
+        sudo /usr/local/nginx/sbin/nginx -t 2>/dev/null && {
+            sudo /usr/local/nginx/sbin/nginx -s reload 2>/dev/null
+            log_success "SaltGUI Nginx 配置已创建并启用"
+        } || {
+            log_warning "Nginx 配置测试失败，请手动检查"
+        }
+    fi
 }
 
 # 创建 systemd 服务
