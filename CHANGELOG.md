@@ -1,5 +1,61 @@
 # SaltGoat 更新日志
 
+## [0.5.0] - 2025-01-21
+
+### 🚀 重大功能更新
+- **监控集成系统**: 新增完整的Prometheus和Grafana监控集成
+- **防火墙自动配置**: 智能检测并配置UFW、Firewalld、iptables防火墙
+- **状态管理系统**: 新增Salt状态管理功能，支持状态列表、应用和回滚
+- **代码质量工具**: 集成shellcheck代码检查和shfmt代码格式化
+
+### 🔧 监控集成功能
+- **Prometheus集成**: `saltgoat monitoring prometheus` - 自动安装配置Prometheus
+- **Grafana集成**: `saltgoat monitoring grafana` - 自动安装配置Grafana仪表板
+- **Node Exporter**: 自动安装系统监控组件
+- **智能端口配置**: 自动放行9090、3000、9100端口
+- **IPv4地址显示**: 显示实际服务器IP而非localhost
+
+### 🛡️ 防火墙管理
+- **多防火墙支持**: 自动检测UFW、Firewalld、iptables
+- **智能端口放行**: 自动配置监控服务端口
+- **防火墙状态检查**: 实时检查端口放行状态
+- **跨平台兼容**: 支持Ubuntu、CentOS、Debian等发行版
+
+### 📊 状态管理
+- **状态列表**: `saltgoat state list` - 查看所有可用状态
+- **状态应用**: `saltgoat state apply <name>` - 应用特定状态
+- **状态回滚**: `saltgoat state rollback <name>` - 回滚到之前状态
+- **自动备份**: 应用状态前自动创建备份
+- **状态检查**: 显示服务状态和配置文件状态
+
+### 🔍 代码质量
+- **代码检查**: `saltgoat lint [file]` - 使用shellcheck检查代码
+- **代码格式化**: `saltgoat format [file]` - 使用shfmt格式化代码
+- **安全扫描**: `saltgoat security-scan` - 完整的安全扫描分析
+
+### 🎯 用户体验提升
+- **智能帮助系统**: 新增监控集成帮助页面
+- **配置一致性**: 增强跨服务器配置一致性
+- **IPv4地址显示**: 所有访问地址显示实际IP
+- **防火墙状态**: 实时显示防火墙配置状态
+
+### 📋 技术改进
+- **模块化设计**: 监控集成功能独立模块化
+- **错误处理**: 增强错误处理和调试信息
+- **路径检测**: 改进配置文件路径自动检测
+- **服务检测**: 优化服务状态检测逻辑
+
+### 🎉 新增访问地址
+- **Prometheus**: http://your-server-ip:9090
+- **Grafana**: http://your-server-ip:3000 (admin/admin)
+- **Node Exporter**: http://your-server-ip:9100/metrics
+
+### 📊 推荐仪表板
+- Node Exporter: 1860
+- Nginx: 12559
+- MySQL: 7362
+- Valkey: 11835
+
 ## [0.4.4] - 2025-01-21
 
 ### 🐛 重要修复

@@ -105,10 +105,14 @@ except:
     echo ""
     echo "指定服务器测试:"
     echo "----------------------------------------"
-    local nearest_server=$(speedtest-cli --list | head -5 | tail -1 | awk '{print $1}')
-    if [[ -n "$nearest_server" ]]; then
+    # 提取服务器ID（只取数字部分，去掉括号和距离信息）
+    local nearest_server=$(speedtest-cli --list | head -5 | tail -1 | grep -o '^[0-9]*')
+    if [[ -n "$nearest_server" && "$nearest_server" =~ ^[0-9]+$ ]]; then
+        echo "使用服务器ID: $nearest_server"
         speedtest-cli --server "$nearest_server" --simple > "$speedtest_dir/server_specific.txt" 2>&1
         cat "$speedtest_dir/server_specific.txt"
+    else
+        echo "无法获取有效的服务器ID，跳过指定服务器测试"
     fi
     
     echo "  ✅ 网络速度测试完成"

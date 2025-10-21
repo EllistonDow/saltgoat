@@ -26,6 +26,9 @@ show_help() {
         "speedtest")
             show_speedtest_help
             ;;
+        "monitoring")
+            show_monitoring_help
+            ;;
         "all")
             show_complete_help
             ;;
@@ -52,6 +55,20 @@ show_main_help() {
     echo "  maintenance                - 系统维护"
     echo "  optimize                   - 系统优化"
     echo "  speedtest                  - 网络速度测试"
+    echo ""
+    echo "代码质量:"
+    echo "  lint [file]                - 代码检查 (shellcheck)"
+    echo "  format [file]              - 代码格式化 (shfmt)"
+    echo "  security-scan              - 安全扫描"
+    echo ""
+    echo "状态管理:"
+    echo "  state list                 - 列出所有状态"
+    echo "  state apply <name>         - 应用特定状态"
+    echo "  state rollback <name>      - 回滚状态"
+    echo ""
+    echo "监控集成:"
+    echo "  monitoring prometheus       - Prometheus监控集成"
+    echo "  monitoring grafana         - Grafana仪表板集成"
     echo ""
     echo "系统信息:"
     echo "  status                     - 查看系统状态"
@@ -271,7 +288,45 @@ show_complete_help() {
     echo ""
     show_speedtest_help
     echo ""
+    show_monitoring_help
+    echo ""
     echo "=========================================="
     echo "    更多信息请访问项目文档"
     echo "=========================================="
+}
+
+# 显示监控集成帮助
+show_monitoring_help() {
+    local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+    echo "=========================================="
+    echo "    监控集成帮助"
+    echo "=========================================="
+    echo ""
+    echo "监控集成功能:"
+    echo "  monitoring prometheus       - 安装配置Prometheus"
+    echo "  monitoring grafana         - 安装配置Grafana"
+    echo ""
+    echo "访问地址:"
+    echo "  Prometheus: http://${server_ip}:9090"
+    echo "  Grafana: http://${server_ip}:3000 (admin/admin)"
+    echo ""
+    echo "使用步骤:"
+    echo "  1. 运行 saltgoat monitoring prometheus"
+    echo "  2. 运行 saltgoat monitoring grafana"
+    echo "  3. 访问 Grafana 并登录"
+    echo "  4. 添加 Prometheus 数据源"
+    echo "  5. 导入推荐仪表板"
+    echo ""
+    echo "防火墙配置:"
+    echo "  - 自动检测并配置UFW、Firewalld、iptables"
+    echo "  - Prometheus: 9090端口"
+    echo "  - Grafana: 3000端口"
+    echo "  - Node Exporter: 9100端口"
+    echo ""
+    echo "推荐仪表板:"
+    echo "  - Node Exporter: 1860"
+    echo "  - Nginx: 12559"
+    echo "  - MySQL: 7362"
+    echo "  - Valkey: 11835"
+    echo ""
 }

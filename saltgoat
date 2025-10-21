@@ -5,7 +5,7 @@ set -e
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.4.4"
+SCRIPT_VERSION="0.5.0"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -50,6 +50,8 @@ source "${SCRIPT_DIR}/services/optimize.sh"
 source "${SCRIPT_DIR}/services/speedtest.sh"
 source "${SCRIPT_DIR}/monitoring/system.sh"
 source "${SCRIPT_DIR}/services/database.sh"
+source "${SCRIPT_DIR}/services/state.sh"
+source "${SCRIPT_DIR}/services/monitor-integration.sh"
 source "${SCRIPT_DIR}/lib/help.sh"
 
 # 加载监控功能
@@ -518,6 +520,61 @@ case "$1" in
     "passwords")
         log_highlight "查看配置的密码..."
         show_passwords
+        ;;
+    "lint")
+        log_highlight "SaltGoat 代码检查..."
+        "${SCRIPT_DIR}/scripts/code-review.sh" -c "$2"
+        ;;
+    "format")
+        log_highlight "SaltGoat 代码格式化..."
+        "${SCRIPT_DIR}/scripts/code-review.sh" -f "$2"
+        ;;
+    "security-scan")
+        log_highlight "SaltGoat 安全扫描..."
+        security_full_scan
+        ;;
+    "state")
+        case "$2" in
+            "list")
+                log_highlight "SaltGoat 状态列表..."
+                state_list
+                ;;
+            "apply")
+                log_highlight "SaltGoat 应用状态..."
+                state_apply "$3"
+                ;;
+            "rollback")
+                log_highlight "SaltGoat 状态回滚..."
+                state_rollback "$3"
+                ;;
+            *)
+                log_error "用法: saltgoat state <list|apply|rollback> [state_name]"
+                log_info "示例:"
+                log_info "  saltgoat state list                    # 列出所有状态"
+                log_info "  saltgoat state apply nginx             # 应用nginx状态"
+                log_info "  saltgoat state rollback nginx          # 回滚nginx状态"
+                exit 1
+                ;;
+        esac
+        ;;
+    "monitoring")
+        case "$2" in
+            "prometheus")
+                log_highlight "SaltGoat Prometheus集成..."
+                monitor_prometheus_setup
+                ;;
+            "grafana")
+                log_highlight "SaltGoat Grafana集成..."
+                monitor_grafana_setup
+                ;;
+            *)
+                log_error "用法: saltgoat monitoring <prometheus|grafana>"
+                log_info "示例:"
+                log_info "  saltgoat monitoring prometheus             # 安装配置Prometheus"
+                log_info "  saltgoat monitoring grafana               # 安装配置Grafana"
+                exit 1
+                ;;
+        esac
         ;;
     "help"|"--help"|"-h"|"")
         show_help "$2"
