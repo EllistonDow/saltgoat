@@ -79,7 +79,7 @@ configure_valkey:
         pidfile /var/run/valkey/valkey.pid
         loglevel notice
         logfile /var/log/valkey/valkey.log
-        databases 16
+        databases 100
         save 900 1
         save 300 10
         save 60 10000
@@ -108,7 +108,7 @@ create_valkey_service:
 
         [Service]
         Type=simple
-        ExecStart=/usr/local/bin/valkey-server --port 6379 --requirepass {{ valkey_pass }} --daemonize no --pidfile /var/run/valkey/valkey.pid --logfile /var/log/valkey/valkey.log --dir /var/lib/valkey --maxmemory 256mb --maxmemory-policy allkeys-lru
+        ExecStart=/usr/local/bin/valkey-server --port 6379 --requirepass {{ valkey_pass }} --databases 100 --daemonize no --pidfile /var/run/valkey/valkey.pid --logfile /var/log/valkey/valkey.log --dir /var/lib/valkey --maxmemory 256mb --maxmemory-policy allkeys-lru
         ExecStop=/usr/local/bin/valkey-cli -a {{ valkey_pass }} shutdown
         TimeoutStopSec=0
         User=valkey

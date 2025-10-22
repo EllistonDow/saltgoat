@@ -66,7 +66,7 @@ nginx_create_site() {
     sudo chmod -R 755 "$site_path"
     
     log_info "创建 Nginx 配置文件"
-    local config_file="/usr/local/nginx/conf/sites-available/$site"
+    local config_file="/etc/nginx/sites-available/$site"
     
     cat > /tmp/nginx_site.conf << EOF
 server {
@@ -85,7 +85,7 @@ server {
     }
     
     location ~ \.php$ {
-        include /usr/local/nginx/conf/snippets/fastcgi-php.conf;
+        include /etc/nginx/snippets/fastcgi-php.conf;
         fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
     }
 }
@@ -95,10 +95,6 @@ EOF
     rm /tmp/nginx_site.conf
     
     log_info "启用站点配置"
-    sudo ln -sf "$config_file" "/usr/local/nginx/conf/sites-enabled/$site"
-    
-    # 创建系统级符号链接
-    sudo ln -sf "$config_file" "/etc/nginx/sites-available/$site"
     sudo ln -sf "$config_file" "/etc/nginx/sites-enabled/$site"
     
     log_info "测试 Nginx 配置"
@@ -110,7 +106,7 @@ EOF
     log_success "Nginx 站点创建成功: $site ($domain)"
     log_info "站点路径: $site_path"
     log_info "配置文件: $config_file"
-    log_info "启用链接: /usr/local/nginx/conf/sites-enabled/$site"
+    log_info "启用链接: /etc/nginx/sites-enabled/$site"
 }
 
 # 列出所有站点
@@ -127,21 +123,67 @@ nginx_list_sites() {
 nginx_add_ssl() {
     local site="$1"
     local domain="$2"
-    local email="${3:-admin@$domain}"
+    local email="${3:-$(salt-call --local pillar.get ssl_email --out=txt 2>/dev/null | grep -o '[^:]*$' | tr -d ' ')}"
+    
+    # 如果 Salt Pillar 中没有配置 email，使用默认值
+    if [[ -z "$email" || "$email" == "None" ]]; then
+        email="admin@$domain"
+    fi
     
     log_info "为 $site ($domain) 申请 SSL 证书"
+    log_info "使用邮箱: $email"
     
-    # 使用 certbot 申请证书
-    sudo certbot --nginx \
-        --nginx-server-root /usr/local/nginx/conf \
-        --nginx-ctl /usr/local/nginx/sbin/nginx \
+    # 使用 certbot webroot 模式申请证书（不修改 Nginx 配置）
+    sudo certbot certonly --webroot \
+        -w "/var/www/$site/pub" \
+        -d "$domain" \
+        -d "www.$domain" \
         --email "$email" \
         --agree-tos \
         --no-eff-email \
-        --domains "$domain,www.$domain" \
         --cert-name "$site"
     
-    log_success "SSL 证书申请完成: $site ($domain)"
+    # 手动添加 SSL 配置到现有的 server 块
+    local config_file="/etc/nginx/sites-enabled/$site"
+    if [[ -f "$config_file" ]]; then
+        # 备份原配置
+        sudo cp "$config_file" "$config_file.backup.$(date +%Y%m%d_%H%M%S)"
+        
+        # 添加 SSL 配置
+        sudo tee "$config_file" >/dev/null <<EOF
+server {
+    listen 80;
+    server_name $domain www.$domain;
+    return 301 https://\$server_name\$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name $domain www.$domain;
+    set \$MAGE_ROOT /var/www/$site;
+    include /var/www/$site/nginx.conf.sample;
+    
+    # SSL 配置
+    ssl_certificate /etc/letsencrypt/live/$site/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$site/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384;
+    ssl_prefer_server_ciphers off;
+}
+EOF
+        
+        # 测试并重新加载 Nginx
+        if sudo nginx -t; then
+            sudo systemctl reload nginx
+            log_success "SSL 证书申请完成: $site ($domain)"
+        else
+            log_error "Nginx 配置测试失败，请检查配置"
+            return 1
+        fi
+    else
+        log_error "找不到站点配置文件: $config_file"
+        return 1
+    fi
 }
 
 # 删除站点

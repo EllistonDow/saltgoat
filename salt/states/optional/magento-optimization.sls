@@ -162,6 +162,22 @@ optimize_php_config:
         
         # 设置错误日志路径
         sudo sed -i "s|;error_log = php_errors.log|error_log = /var/log/php$PHP_VERSION-fpm.log|" "$PHP_INI"
+        
+        # 优化CLI配置（CLI需要更多内存运行Magento命令）
+        CLI_INI="/etc/php/$PHP_VERSION/cli/php.ini"
+        if [[ -f "$CLI_INI" ]]; then
+            echo "优化CLI配置: $CLI_INI"
+            sudo sed -i 's/memory_limit = [0-9]*[Mm]/memory_limit = 4G/' "$CLI_INI"
+            sudo sed -i 's/max_execution_time = [0-9]*/max_execution_time = 300/' "$CLI_INI"
+            sudo sed -i 's/max_input_vars = [0-9]*/max_input_vars = 3000/' "$CLI_INI"
+            sudo sed -i 's/post_max_size = [0-9]*[Mm]/post_max_size = 64M/' "$CLI_INI"
+            sudo sed -i 's/upload_max_filesize = [0-9]*[Mm]/upload_max_filesize = 64M/' "$CLI_INI"
+            
+            # 优化CLI的OPcache
+            sudo sed -i 's/opcache.memory_consumption=[0-9]*/opcache.memory_consumption=512/' "$CLI_INI"
+            sudo sed -i 's/opcache.max_accelerated_files=[0-9]*/opcache.max_accelerated_files=20000/' "$CLI_INI"
+            sudo sed -i 's/opcache.validate_timestamps=[01]/opcache.validate_timestamps=0/' "$CLI_INI"
+        fi
     - require:
       - cmd: detect_system_memory
 
@@ -350,9 +366,18 @@ magento_optimization_complete:
         echo "  - upload_max_filesize: 64M (提升文件上传大小)"
         echo "  - opcache.memory_consumption: 512M (增加OPcache内存)"
         echo "  - opcache.max_accelerated_files: 20000 (增加缓存文件数)"
+        echo ""
+        echo "3. PHP-CLI 优化:"
+        echo "  - memory_limit: 4G (CLI需要更多内存运行Magento命令)"
+        echo "  - max_execution_time: 300s (延长执行时间)"
+        echo "  - max_input_vars: 3000 (增加输入变量限制)"
+        echo "  - post_max_size: 64M (提升POST数据大小)"
+        echo "  - upload_max_filesize: 64M (提升文件上传大小)"
+        echo "  - opcache.memory_consumption: 512M (增加OPcache内存)"
+        echo "  - opcache.max_accelerated_files: 20000 (增加缓存文件数)"
         echo "  - opcache.validate_timestamps: 0 (禁用时间戳验证)"
         echo ""
-        echo "3. MySQL 优化:"
+        echo "4. MySQL 优化:"
         echo "  - innodb_buffer_pool_size: 16G (InnoDB缓冲池)"
         echo "  - innodb_buffer_pool_instances: 8 (缓冲池实例数)"
         echo "  - innodb_log_buffer_size: 16M (日志缓冲区)"

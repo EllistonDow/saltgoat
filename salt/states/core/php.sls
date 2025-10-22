@@ -83,7 +83,7 @@ create_php_test_file:
 # 创建 nginx snippets 目录
 create_nginx_snippets_dir:
   file.directory:
-    - name: /usr/local/nginx/conf/snippets
+    - name: /etc/nginx/snippets
     - user: www-data
     - group: www-data
     - mode: 755
@@ -92,7 +92,7 @@ create_nginx_snippets_dir:
 # 配置 Nginx PHP 支持
 configure_nginx_php:
   file.managed:
-    - name: /usr/local/nginx/conf/snippets/php.conf
+    - name: /etc/nginx/snippets/php.conf
     - contents: |
         location ~ \.php$ {
             include fastcgi_params;

@@ -80,14 +80,10 @@ adminer_create_nginx_config() {
     
     # 检测 Nginx 安装方式并确定配置路径
     local nginx_config_dir
-    if [[ -d "/usr/local/nginx/conf" ]]; then
-        # 编译安装的 Nginx
-        nginx_config_dir="/usr/local/nginx/conf"
-        log_info "检测到编译安装的 Nginx，使用配置目录: $nginx_config_dir"
-    elif [[ -d "/etc/nginx" ]]; then
-        # 包管理器安装的 Nginx
+    if [[ -d "/etc/nginx" ]]; then
+        # 标准 Nginx 安装
         nginx_config_dir="/etc/nginx"
-        log_info "检测到包管理器安装的 Nginx，使用配置目录: $nginx_config_dir"
+        log_info "检测到标准 Nginx 安装，使用配置目录: $nginx_config_dir"
     else
         log_error "无法检测 Nginx 安装方式"
         return 1

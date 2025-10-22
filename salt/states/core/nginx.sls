@@ -71,7 +71,7 @@ compile_nginx:
   cmd.run:
     - name: |
         cd /usr/src/nginx-1.29.1
-        ./configure --prefix=/usr/local/nginx \
+        ./configure --prefix=/etc/nginx \
             --with-http_ssl_module \
             --with-http_realip_module \
             --with-http_addition_module \
@@ -101,12 +101,12 @@ compile_nginx:
     - require:
       - cmd: compile_modsecurity
       - cmd: download_modsecurity_nginx_module
-    - unless: test -f /usr/local/nginx/sbin/nginx
+    - unless: test -f /etc/nginx/sbin/nginx
 
 # 创建 ModSecurity 配置文件
 create_modsecurity_config:
   file.managed:
-    - name: /usr/local/nginx/conf/modsecurity.conf
+    - name: /etc/nginx/conf/modsecurity.conf
     - contents: |
         # ModSecurity 基础配置
         SecRuleEngine On
@@ -128,7 +128,7 @@ create_modsecurity_config:
 download_owasp_crs:
   cmd.run:
     - name: |
-        cd /usr/local/nginx/conf
+        cd /etc/nginx/conf
         if [ ! -d "coreruleset" ]; then
           git clone https://github.com/coreruleset/coreruleset.git
         fi
@@ -140,7 +140,7 @@ download_owasp_crs:
 # 配置 Nginx
 configure_nginx:
   file.managed:
-    - name: /usr/local/nginx/conf/nginx.conf
+    - name: /etc/nginx/nginx.conf
     - source: salt://core/nginx.conf
     - require:
       - cmd: compile_nginx
@@ -154,8 +154,8 @@ create_web_directories:
       - /var/www/html
       - /var/www/html/public
       - /var/log/nginx
-      - /usr/local/nginx/conf/sites-available
-      - /usr/local/nginx/conf/sites-enabled
+      - /etc/nginx/sites-available
+      - /etc/nginx/sites-enabled
     - user: www-data
     - group: www-data
     - mode: 755
@@ -164,7 +164,7 @@ create_web_directories:
 # 创建默认网站配置
 create_default_site:
   file.managed:
-    - name: /usr/local/nginx/conf/sites-available/default
+    - name: /etc/nginx/sites-available/default
     - source: salt://core/default-site.conf
     - require:
       - cmd: compile_nginx
@@ -173,8 +173,8 @@ create_default_site:
 # 启用默认网站
 enable_default_site:
   file.symlink:
-    - name: /usr/local/nginx/conf/sites-enabled/default
-    - target: /usr/local/nginx/conf/sites-available/default
+    - name: /etc/nginx/sites-enabled/default
+    - target: /etc/nginx/sites-available/default
     - require:
       - file: create_default_site
 
@@ -189,9 +189,9 @@ create_nginx_service:
 
         [Service]
         Type=forking
-        PIDFile=/usr/local/nginx/logs/nginx.pid
-        ExecStartPre=/usr/local/nginx/sbin/nginx -t
-        ExecStart=/usr/local/nginx/sbin/nginx
+        PIDFile=/etc/nginx/logs/nginx.pid
+        ExecStartPre=/etc/nginx/sbin/nginx -t
+        ExecStart=/etc/nginx/sbin/nginx
         ExecReload=/bin/kill -s HUP $MAINPID
         KillSignal=SIGQUIT
         TimeoutStopSec=5
@@ -210,10 +210,18 @@ reload_systemd:
     - require:
       - file: create_nginx_service
 
+# 创建 Nginx 命令符号链接
+create_nginx_symlink:
+  file.symlink:
+    - name: /usr/sbin/nginx
+    - target: /etc/nginx/sbin/nginx
+    - require:
+      - cmd: compile_nginx
+
 # 测试 Nginx 配置
 test_nginx_config:
   cmd.run:
-    - name: /usr/local/nginx/sbin/nginx -t
+    - name: nginx -t
     - require:
       - file: configure_nginx
       - file: enable_default_site
