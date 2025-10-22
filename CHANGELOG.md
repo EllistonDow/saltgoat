@@ -1,5 +1,48 @@
 # SaltGoat 更新日志
 
+## [0.7.1] - 2025-10-22
+
+### 新增功能
+- **Valkey 自动续期功能** (`saltgoat magetools valkey-renew`)
+  - 随机分配数据库编号（10-99范围），避免冲突
+  - 自动获取 Valkey 密码并清空指定数据库
+  - 支持 `--restart-valkey` 参数重启 Valkey 服务
+  - 完整的 Magento 缓存清理和重新编译流程
+
+### 改进
+- **统一日志格式**
+  - 移除所有 emoji 图标
+  - 使用统一的 `[INFO]` `[SUCCESS]` `[WARNING]` `[ERROR]` `[HIGHLIGHT]` 格式
+  - 加载项目的 `lib/logger.sh` 库
+
+- **Magento 工具集优化**
+  - 清理 magetools 菜单，只保留核心功能
+  - 移除简单的功能（cache、index、deploy、backup、performance、security、update等）
+  - 保留：工具安装、权限管理、站点转换、Valkey缓存管理
+
+- **Valkey 配置优化**
+  - 支持 100 个数据库（0-99 范围）
+  - 更新安装脚本和 systemd 服务配置
+
+### 修复
+- **权限问题修复**
+  - 使用 `sudo` 执行文件备份和修改操作
+  - 修复 `Permission denied` 错误
+
+- **Valkey 认证问题修复**
+  - 添加密码获取逻辑
+  - 修复 `NOAUTH Authentication required` 错误
+  - 确保数据库清空功能正常工作
+
+- **数据库编号范围问题修复**
+  - 修复数据库编号超出范围的问题
+  - 确保随机分配的数据库编号在有效范围内
+
+### 文档更新
+- 更新帮助菜单，添加 `valkey-renew` 命令说明
+- 更新示例命令和使用方法
+- 完善 magetools 功能说明
+
 ## [0.6.1] - 2025-10-21
 
 ### 新增功能
