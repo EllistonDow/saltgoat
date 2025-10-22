@@ -111,6 +111,32 @@ magetools_handler() {
             # 调用 valkey-renew 脚本
             "${SCRIPT_DIR}/modules/magetools/valkey-renew.sh" "$2" "$3"
             ;;
+        "rabbitmq")
+            case "$2" in
+                "all"|"smart")
+                    # 调用 rabbitmq 脚本
+                    sudo "${SCRIPT_DIR}/modules/magetools/rabbitmq.sh" "$2" "$3" "${4:-2}"
+                    ;;
+                "check")
+                    # 检查 rabbitmq 状态
+                    "${SCRIPT_DIR}/modules/magetools/rabbitmq-check.sh" "$3"
+                    ;;
+                *)
+                    log_error "未知的 RabbitMQ 操作: $2"
+                    log_info "支持的操作: all, smart, check"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "migrate")
+            if [[ -z "$3" ]]; then
+                log_error "用法: saltgoat magetools migrate <site_path> <site_name> [action]"
+                log_info "操作: detect (检测), fix (修复)"
+                log_info "示例: saltgoat magetools migrate /var/www/tank tank detect"
+                exit 1
+            fi
+            source "${SCRIPT_DIR}/modules/magetools/migrate-detect.sh" "$3" "$4" "$5"
+            ;;
         "help"|"--help"|"-h")
             show_magetools_help
             ;;
@@ -124,6 +150,7 @@ magetools_handler() {
             log_info "  convert magento2     - 转换为Magento2配置"
             log_info "  convert check        - 检查Magento2兼容性"
             log_info "  valkey-renew <site>  - Valkey缓存自动续期"
+            log_info "  rabbitmq setup <mode> <site> - RabbitMQ队列管理"
             log_info "  help                 - 显示帮助"
             exit 1
             ;;
@@ -1159,11 +1186,146 @@ show_magetools_help() {
     echo "🔄 Valkey缓存管理:"
     echo "  valkey-renew <site>  - Valkey缓存自动续期 (随机分配数据库编号)"
     echo ""
+    echo "🔄 RabbitMQ队列管理:"
+    echo "  rabbitmq all <site> [threads]   - 配置所有消费者（21个）"
+    echo "  rabbitmq smart <site> [threads] - 智能配置（仅核心消费者）"
+    echo "  rabbitmq check <site>           - 检查消费者状态"
+    echo ""
+    echo "🔄 网站迁移管理:"
+    echo "  migrate <path> <site> detect    - 检测迁移配置问题"
+    echo "  migrate <path> <site> fix       - 修复迁移配置问题"
+    echo ""
     echo "示例:"
     echo "  saltgoat magetools install n98-magerun2"
     echo "  saltgoat magetools permissions fix"
     echo "  saltgoat magetools convert magento2"
     echo "  saltgoat magetools valkey-renew tank"
+    echo "  saltgoat magetools rabbitmq check tank"
+}
+
+# 检查 RabbitMQ 状态
+check_rabbitmq_status() {
+    local site_name="${1:-tank}"
+    
+    log_highlight "检查 RabbitMQ 消费者状态: $site_name"
+    echo ""
+    
+    # 检查 RabbitMQ 服务状态
+    log_info "1. RabbitMQ 服务状态:"
+    if systemctl is-active --quiet rabbitmq; then
+        log_success "RabbitMQ 服务正常运行"
+    else
+        log_error "RabbitMQ 服务未运行"
+        return 1
+    fi
+    
+    echo ""
+    
+    # 检查消费者服务状态
+    log_info "2. 消费者服务状态:"
+    local services=$(systemctl list-units --type=service | grep "magento-consumer-$site_name" | awk '{print $1}' | sed 's/\.service$//')
+    
+    if [[ -z "$services" ]]; then
+        log_warning "未找到 $site_name 的消费者服务"
+        return 1
+    fi
+    
+    local total_services=0
+    local running_services=0
+    local failed_services=0
+    local restarting_services=0
+    
+    # 使用数组处理服务列表
+    local service_array=()
+    while IFS= read -r service; do
+        if [[ -n "$service" ]]; then
+            service_array+=("$service")
+        fi
+    done <<< "$services"
+    
+    for service in "${service_array[@]}"; do
+        ((total_services++))
+        local status=$(systemctl is-active "$service" 2>/dev/null)
+        local state=$(systemctl show "$service" --property=ActiveState --value 2>/dev/null)
+        local restart_count=$(systemctl show "$service" --property=NRestarts --value 2>/dev/null)
+        
+        case "$status" in
+            "active")
+                log_success "✅ $service (运行中)"
+                ((running_services++))
+                ;;
+            "failed")
+                log_error "❌ $service (失败)"
+                ((failed_services++))
+                ;;
+            *)
+                if [[ "$state" == "activating" ]]; then
+                    log_warning "🔄 $service (重启中)"
+                    ((restarting_services++))
+                else
+                    log_warning "⚠️  $service ($status)"
+                fi
+                ;;
+        esac
+        
+        # 显示重启次数
+        if [[ "$restart_count" -gt 0 ]]; then
+            echo "   重启次数: $restart_count"
+        fi
+    done
+    
+    echo ""
+    log_info "3. 服务统计:"
+    echo "   总服务数: $total_services"
+    echo "   运行中: $running_services"
+    echo "   失败: $failed_services"
+    echo "   重启中: $restarting_services"
+    
+    echo ""
+    
+    # 检查队列状态
+    log_info "4. RabbitMQ 队列状态:"
+    local vhost="/$site_name"
+    if sudo rabbitmqctl list_queues -p "$vhost" 2>/dev/null | grep -q "Timeout"; then
+        log_warning "队列查询超时，可能 RabbitMQ 服务繁忙"
+    else
+        local queue_count=$(sudo rabbitmqctl list_queues -p "$vhost" 2>/dev/null | wc -l)
+        if [[ "$queue_count" -gt 1 ]]; then
+            log_success "发现 $((queue_count-1)) 个队列"
+            sudo rabbitmqctl list_queues -p "$vhost" 2>/dev/null | head -10
+        else
+            log_info "暂无队列消息"
+        fi
+    fi
+    
+    echo ""
+    
+    # 检查最近日志
+    log_info "5. 最近服务日志 (失败的服务):"
+    local failed_services_list=$(systemctl list-units --type=service | grep "magento-consumer-$site_name" | grep "failed\|activating" | awk '{print $1}')
+    
+    if [[ -n "$failed_services_list" ]]; then
+        while IFS= read -r service; do
+            if [[ -n "$service" ]]; then
+                echo ""
+                log_warning "服务: $service"
+                sudo journalctl -u "$service" --no-pager -n 5 2>/dev/null | tail -3
+            fi
+        done <<< "$failed_services_list"
+    else
+        log_success "所有服务运行正常"
+    fi
+    
+    echo ""
+    
+    # 总结
+    if [[ "$failed_services" -eq 0 && "$restarting_services" -eq 0 ]]; then
+        log_success "✅ RabbitMQ 消费者状态良好"
+    elif [[ "$failed_services" -gt 0 ]]; then
+        log_error "❌ 发现 $failed_services 个失败的服务，需要检查"
+    else
+        log_warning "⚠️  有 $restarting_services 个服务在重启，请关注"
+    fi
 }
 
 # 修复 Magento 权限 (使用 Salt 原生功能)

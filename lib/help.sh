@@ -478,11 +478,17 @@ show_magetools_help() {
     echo "🔄 Valkey缓存管理:"
     echo "  valkey-renew <site>  - Valkey缓存自动续期 (随机分配数据库编号)"
     echo ""
+    echo "🔄 RabbitMQ队列管理:"
+    echo "  rabbitmq all <site> [threads]   - 配置所有消费者（21个）"
+    echo "  rabbitmq smart <site> [threads] - 智能配置（仅核心消费者）"
+    echo "  rabbitmq check <site>           - 检查消费者状态"
+    echo ""
     echo "示例:"
     echo "  saltgoat magetools install n98-magerun2"
     echo "  saltgoat magetools permissions fix"
     echo "  saltgoat magetools convert magento2"
     echo "  saltgoat magetools valkey-renew tank"
+    echo "  saltgoat magetools rabbitmq check tank"
     echo ""
 }
 
