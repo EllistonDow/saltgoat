@@ -17,12 +17,15 @@ configure_webmin:
     - require:
       - cmd: install_webmin
 
+{# 从 Pillar 读取 Webmin 密码，默认回退 #}
+{% set webmin_pass = pillar.get('webmin_password', 'SaltGoat2024!') %}
+
 # 设置 Webmin 密码
 set_webmin_password:
   cmd.run:
     - name: |
-        echo "root:SaltGoat2024!" | chpasswd
-        /usr/share/webmin/changepass.pl /etc/webmin root SaltGoat2024!
+        echo "root:{{ webmin_pass }}" | chpasswd
+        /usr/share/webmin/changepass.pl /etc/webmin root {{ webmin_pass }}
     - require:
       - file: configure_webmin
 

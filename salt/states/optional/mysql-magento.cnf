@@ -9,7 +9,7 @@ collation-server = utf8mb4_unicode_ci
 # InnoDB 优化 (62GB 内存的 25% = 16GB，为系统和其他服务留出更多空间)
 innodb_buffer_pool_size = 16G
 innodb_buffer_pool_instances = 8
-innodb_log_file_size = 256M
+# innodb_log_file_size = 256M  # 已移除，使用 innodb_redo_log_capacity
 innodb_log_buffer_size = 16M
 innodb_flush_log_at_trx_commit = 2
 innodb_thread_concurrency = 16
@@ -23,10 +23,10 @@ connect_timeout = 60
 wait_timeout = 600
 interactive_timeout = 600
 
-# 查询缓存
-query_cache_size = 128M
-query_cache_type = 1
-query_cache_limit = 2M
+# 查询缓存 (Percona 8.4+ 已移除)
+# query_cache_size = 128M
+# query_cache_type = 1
+# query_cache_limit = 2M
 
 # 临时表设置
 tmp_table_size = 64M

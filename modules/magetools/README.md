@@ -8,8 +8,6 @@ Magento工具集为SaltGoat提供了专门的Magento开发和维护工具，包�
 
 ### 📦 工具安装
 - **n98-magerun2** - Magento 2 CLI工具
-- **magerun** - Magento 1 CLI工具  
-- **magento-cloud** - Magento Cloud CLI
 - **phpunit** - PHP单元测试框架
 - **xdebug** - Xdebug调试工具
 

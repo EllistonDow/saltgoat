@@ -86,6 +86,20 @@ set_mysql_root_password:
       - cmd: wait_for_mysql
       - module: refresh_modules
 
+# 配置 MySQL 环境变量
+configure_mysql_defaults:
+  file.managed:
+    - name: /etc/default/mysql
+    - contents: |
+        # defaults file for percona server
+        STARTTIMEOUT=120
+        STOPTIMEOUT=600
+        
+        # MySQL daemon options
+        MYSQLD_OPTS="--defaults-file=/etc/mysql/my.cnf"
+    - require:
+      - pkg: install_percona_mysql
+
 # 配置 MySQL
 configure_mysql:
   file.managed:
@@ -102,6 +116,7 @@ restart_mysql:
     - reload: true
     - require:
       - file: configure_mysql
+      - file: configure_mysql_defaults
 
 # 创建防火墙规则
 configure_mysql_firewall:

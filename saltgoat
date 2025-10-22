@@ -3,9 +3,22 @@
 
 set -e
 
+# 抑制 Salt DeprecationWarning 警告
+export PYTHONWARNINGS="ignore::DeprecationWarning"
+export PYTHONPATH="/usr/local/lib/python3.12/dist-packages:$PYTHONPATH"
+
+# 创建临时的 Python 警告过滤器
+python3 -c "
+import warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', message='.*datetime.datetime.utcnow.*')
+warnings.filterwarnings('ignore', message='.*crypt.*')
+warnings.filterwarnings('ignore', message='.*spwd.*')
+" 2>/dev/null || true
+
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.6.1"
+SCRIPT_VERSION="0.7.0"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -62,6 +75,11 @@ source "${SCRIPT_DIR}/modules/diagnose/diagnose.sh"
 source "${SCRIPT_DIR}/modules/version-lock/version-lock.sh"
 source "${SCRIPT_DIR}/modules/profile/performance-analysis.sh"
 source "${SCRIPT_DIR}/modules/magetools/magetools.sh"
+
+# 加载管理面板模块
+source "${SCRIPT_DIR}/modules/cockpit/cockpit.sh"
+source "${SCRIPT_DIR}/modules/adminer/adminer.sh"
+source "${SCRIPT_DIR}/modules/uptime-kuma/uptime-kuma.sh"
 
 # 加载监控功能
 source "${SCRIPT_DIR}/monitoring/memory.sh"
@@ -128,18 +146,30 @@ show_versions() {
 }
 
 show_passwords() {
-    log_info "配置的密码:"
-    echo "MySQL Root: ${MYSQL_PASSWORD:-SaltGoat2024!}"
-    echo "Valkey: ${VALKEY_PASSWORD:-Valkey2024!}"
-    echo "RabbitMQ Admin: ${RABBITMQ_PASSWORD:-RabbitMQ2024!}"
-    echo "Webmin: ${WEBMIN_PASSWORD:-Webmin2024!}"
-    echo "phpMyAdmin: ${PHPMYADMIN_PASSWORD:-phpMyAdmin2024!}"
+    log_info "实际配置的密码:"
+    
+    # MySQL 密码 - 从 .env 文件获取实际使用的密码
+    local mysql_pass=$(grep "MYSQL_PASSWORD=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d"'" -f2)
+    echo "MySQL Root: ${mysql_pass:-未知}"
+    
+    # Valkey 密码 - 从配置文件获取
+    local valkey_pass=$(sudo cat /etc/valkey/valkey.conf 2>/dev/null | grep "requirepass" | awk '{print $2}' | head -1)
+    echo "Valkey: ${valkey_pass:-未知}"
+    
+    # RabbitMQ 密码 - 从 .env 文件获取实际使用的密码
+    local rabbitmq_pass=$(grep "RABBITMQ_PASSWORD=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d"'" -f2)
+    echo "RabbitMQ Admin: ${rabbitmq_pass:-未知}"
+    
+    # Webmin 密码 - 从 .env 文件获取实际使用的密码
+    local webmin_pass=$(grep "WEBMIN_PASSWORD=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d"'" -f2)
+    echo "Webmin: ${webmin_pass:-未知}"
+    
+    # phpMyAdmin 密码 - 从 .env 文件获取实际使用的密码
+    local phpmyadmin_pass=$(grep "PHPMYADMIN_PASSWORD=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d"'" -f2)
+    echo "phpMyAdmin: ${phpmyadmin_pass:-未知}"
+    
     echo ""
-    if [[ -n "$MYSQL_PASSWORD" || -n "$VALKEY_PASSWORD" || -n "$RABBITMQ_PASSWORD" || -n "$WEBMIN_PASSWORD" || -n "$PHPMYADMIN_PASSWORD" ]]; then
-        log_info "注意: 这些是环境配置中的密码"
-    else
-        log_info "注意: 这些是默认密码，实际密码可能已通过安装过程修改"
-    fi
+    log_info "注意: 这些是实际服务配置的密码"
 }
 
 
@@ -746,7 +776,16 @@ case "$1" in
         esac
         ;;
     "magetools")
-        magetools_handler "$2" "$3"
+        magetools_handler "$2" "$3" "$4"
+        ;;
+    "cockpit")
+        cockpit_main "$2" "$3" "$4"
+        ;;
+    "adminer")
+        adminer_main "$2" "$3" "$4"
+        ;;
+    "uptime-kuma")
+        uptime_kuma_main "$2" "$3" "$4"
         ;;
     "help"|"--help"|"-h"|"")
         show_help "$2"

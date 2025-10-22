@@ -218,6 +218,19 @@ saltgui_install() {
     # 创建 systemd 服务
     create_saltgui_service
     
+    # 配置防火墙
+    log_info "配置防火墙规则..."
+    if command -v ufw >/dev/null 2>&1; then
+        sudo ufw allow ${SALTGUI_PORT}/tcp
+        log_success "UFW 规则已添加: 允许端口 ${SALTGUI_PORT}"
+    fi
+    
+    if command -v firewall-cmd >/dev/null 2>&1; then
+        sudo firewall-cmd --permanent --add-port=${SALTGUI_PORT}/tcp
+        sudo firewall-cmd --reload
+        log_success "Firewalld 规则已添加: 允许端口 ${SALTGUI_PORT}"
+    fi
+    
     log_success "SaltGUI 安装完成"
     log_info "访问地址: http://localhost:$SALTGUI_PORT"
     log_info "认证方式: PAM (系统用户认证)"

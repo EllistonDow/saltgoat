@@ -2,6 +2,19 @@
 # 安装管理模块
 # core/install.sh
 
+# 抑制 Salt DeprecationWarning 警告
+export PYTHONWARNINGS="ignore::DeprecationWarning"
+export PYTHONPATH="/usr/local/lib/python3.12/dist-packages:$PYTHONPATH"
+
+# 创建临时的 Python 警告过滤器
+python3 -c "
+import warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', message='.*datetime.datetime.utcnow.*')
+warnings.filterwarnings('ignore', message='.*crypt.*')
+warnings.filterwarnings('ignore', message='.*spwd.*')
+" 2>/dev/null || true
+
 # 加载安装配置
 load_install_config() {
 	log_info "加载安装配置..."
@@ -39,6 +52,15 @@ pillar_roots:
   base:
     - $pillar_dir
 EOF
+	
+	# 配置警告抑制
+	sudo tee "/etc/salt/minion.d/suppress-warnings.conf" >/dev/null <<EOF
+# 抑制 Salt DeprecationWarning 警告
+log_level: warning
+log_level_logfile: warning
+python_warnings: false
+EOF
+	
 	# 刷新 pillar（不阻断）
 	sudo salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || true
 	log_success "Salt minion 配置完成"

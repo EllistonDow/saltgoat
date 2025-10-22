@@ -62,6 +62,9 @@ create_valkey_dirs:
     - require:
       - user: create_valkey_user
 
+{# 从 Pillar 读取 Valkey 密码，默认回退 #}
+{% set valkey_pass = pillar.get('valkey_password', 'SaltGoat2024!') %}
+
 # 配置 Valkey（可选，使用命令行参数）
 configure_valkey:
   file.managed:
@@ -85,7 +88,7 @@ configure_valkey:
         rdbchecksum yes
         dbfilename dump.rdb
         dir /var/lib/valkey
-        requirepass SaltGoat2024!
+        requirepass {{ valkey_pass }}
         maxmemory 256mb
         maxmemory-policy allkeys-lru
     - user: valkey
@@ -105,8 +108,8 @@ create_valkey_service:
 
         [Service]
         Type=simple
-        ExecStart=/usr/local/bin/valkey-server --port 6379 --requirepass SaltGoat2024! --daemonize no --pidfile /var/run/valkey/valkey.pid --logfile /var/log/valkey/valkey.log --dir /var/lib/valkey --maxmemory 256mb --maxmemory-policy allkeys-lru
-        ExecStop=/usr/local/bin/valkey-cli -a SaltGoat2024! shutdown
+        ExecStart=/usr/local/bin/valkey-server --port 6379 --requirepass {{ valkey_pass }} --daemonize no --pidfile /var/run/valkey/valkey.pid --logfile /var/log/valkey/valkey.log --dir /var/lib/valkey --maxmemory 256mb --maxmemory-policy allkeys-lru
+        ExecStop=/usr/local/bin/valkey-cli -a {{ valkey_pass }} shutdown
         TimeoutStopSec=0
         User=valkey
         Group=valkey

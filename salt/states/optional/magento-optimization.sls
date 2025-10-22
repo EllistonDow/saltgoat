@@ -224,7 +224,8 @@ optimize_mysql_config:
         # 使用sed优化MySQL配置
         sudo sed -i 's/innodb_buffer_pool_size = 128M/innodb_buffer_pool_size = 16G/' /etc/mysql/mysql.conf.d/lemp.cnf
         sudo sed -i 's/max_connections = 200/max_connections = 500/' /etc/mysql/mysql.conf.d/lemp.cnf
-        sudo sed -i 's/innodb_log_file_size = 256M/innodb_log_file_size = 256M/' /etc/mysql/mysql.conf.d/lemp.cnf
+        # innodb_log_file_size 在 Percona 8.4+ 中已移除，使用 innodb_redo_log_capacity
+        # sudo sed -i 's/innodb_log_file_size = 256M/innodb_log_file_size = 256M/' /etc/mysql/mysql.conf.d/lemp.cnf
         
         # 添加Magento优化配置
         echo "" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
@@ -233,8 +234,9 @@ optimize_mysql_config:
         echo "innodb_log_buffer_size = 16M" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
         echo "innodb_flush_log_at_trx_commit = 2" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
         echo "innodb_thread_concurrency = 16" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
-        echo "query_cache_size = 128M" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
-        echo "query_cache_type = 1" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        # query_cache 在 Percona 8.4+ 中已移除
+        # echo "query_cache_size = 128M" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
+        # echo "query_cache_type = 1" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
         echo "tmp_table_size = 64M" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
         echo "max_heap_table_size = 64M" | sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf
     - require:
@@ -353,15 +355,12 @@ magento_optimization_complete:
         echo "3. MySQL 优化:"
         echo "  - innodb_buffer_pool_size: 16G (InnoDB缓冲池)"
         echo "  - innodb_buffer_pool_instances: 8 (缓冲池实例数)"
-        echo "  - innodb_log_file_size: 256M (日志文件大小)"
         echo "  - innodb_log_buffer_size: 16M (日志缓冲区)"
         echo "  - innodb_flush_log_at_trx_commit: 2 (日志刷新策略)"
         echo "  - innodb_thread_concurrency: 16 (线程并发数)"
         echo "  - max_connections: 500 (最大连接数)"
-        echo "  - query_cache_size: 128M (查询缓存大小)"
-        echo "  - query_cache_type: 1 (启用查询缓存)"
         echo "  - tmp_table_size: 64M (临时表大小)"
-        echo "  - max_heap_table_size: 64M (堆表大小)"
+        echo "  - max_heap_table_size: 64M (堆表最大大小)"
         echo ""
         echo "4. Valkey 优化:"
         echo "  - maxmemory: 1gb (最大内存限制)"

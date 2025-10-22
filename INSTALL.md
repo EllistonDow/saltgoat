@@ -141,6 +141,9 @@ SaltGoat 配置一致性测试
 | Prometheus | http://your-server-ip:9090 | 监控数据收集 |
 | Grafana | http://your-server-ip:3000 | 监控仪表板 |
 | Node Exporter | http://your-server-ip:9100/metrics | 系统指标 |
+| Cockpit | https://your-server-ip:9091 | 系统管理面板 |
+| Adminer | http://your-server-ip:8081 | 数据库管理面板 |
+| Uptime Kuma | http://your-server-ip:3001 | 服务监控面板 |
 
 ### 🔒 安全配置
 
@@ -157,6 +160,46 @@ saltgoat database mysql password
 
 # 修改其他服务密码
 saltgoat passwords change
+```
+
+### 🎛️ 管理面板安装
+
+SaltGoat 支持多种管理面板，可以根据需要选择安装：
+
+#### Cockpit 系统管理面板
+```bash
+# 安装 Cockpit
+saltgoat cockpit install
+
+# 查看状态
+saltgoat cockpit status
+
+# 配置防火墙
+saltgoat cockpit config firewall
+```
+
+#### Adminer 数据库管理面板
+```bash
+# 安装 Adminer
+saltgoat adminer install
+
+# 查看状态
+saltgoat adminer status
+
+# 配置安全设置
+saltgoat adminer security
+```
+
+#### Uptime Kuma 监控面板
+```bash
+# 安装 Uptime Kuma
+saltgoat uptime-kuma install
+
+# 查看状态
+saltgoat uptime-kuma status
+
+# 配置 SaltGoat 服务监控
+saltgoat uptime-kuma monitor
 ```
 
 ### 🚨 故障排除

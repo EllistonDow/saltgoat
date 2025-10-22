@@ -79,11 +79,14 @@ enable_rabbitmq_management:
     - require:
       - cmd: wait_for_rabbitmq
 
+{# 从 Pillar 读取 RabbitMQ 密码，默认回退 #}
+{% set rabbitmq_pass = pillar.get('rabbitmq_password', 'SaltGoat2024!') %}
+
 # 创建管理员用户
 create_rabbitmq_admin:
   cmd.run:
     - name: |
-        rabbitmqctl add_user admin SaltGoat2024!
+        rabbitmqctl add_user admin {{ rabbitmq_pass }}
         rabbitmqctl set_user_tags admin administrator
         rabbitmqctl set_permissions -p / admin ".*" ".*" ".*"
     - require:
