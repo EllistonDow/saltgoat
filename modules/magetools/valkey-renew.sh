@@ -124,7 +124,7 @@ fi
 log_info "开始配置更新..."
 
 # 备份原文件
-if sudo cp app/etc/env.php app/etc/env.php.backup.$(date +%Y%m%d_%H%M%S); then
+if cp app/etc/env.php app/etc/env.php.backup.$(date +%Y%m%d_%H%M%S); then
     log_success "已备份原配置文件"
 else
     log_warning "备份文件失败，继续执行..."
@@ -135,18 +135,18 @@ log_info "第一步：自定义数据库配置..."
 
 # 修改env.php文件 - 使用更精确的替换
 # 替换默认缓存的数据库
-sudo sed -i "/'default' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$CACHE_DB'/g" app/etc/env.php
+sed -i "/'default' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$CACHE_DB'/g" app/etc/env.php
 
 # 替换页面缓存的数据库
-sudo sed -i "/'page_cache' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$PAGE_DB'/g" app/etc/env.php
+sed -i "/'page_cache' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$PAGE_DB'/g" app/etc/env.php
 
 # 替换会话存储的数据库
-sudo sed -i "/'session' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$SESSION_DB'/g" app/etc/env.php
+sed -i "/'session' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$SESSION_DB'/g" app/etc/env.php
 
 # 设置缓存前缀
-sudo sed -i "/'session' => \[/,/^[[:space:]]*\],/ s/'id_prefix' => '[^']*'/'id_prefix' => '${SITE_NAME}_session_'/g" app/etc/env.php
-sudo sed -i "s/'id_prefix' => '[^']*'/'id_prefix' => '${SITE_NAME}_cache_'/g" app/etc/env.php
-sudo sed -i "/'session' => \[/,/^[[:space:]]*\],/ s/'id_prefix' => '[^']*'/'id_prefix' => '${SITE_NAME}_session_'/g" app/etc/env.php
+sed -i "/'session' => \[/,/^[[:space:]]*\],/ s/'id_prefix' => '[^']*'/'id_prefix' => '${SITE_NAME}_session_'/g" app/etc/env.php
+sed -i "s/'id_prefix' => '[^']*'/'id_prefix' => '${SITE_NAME}_cache_'/g" app/etc/env.php
+sed -i "/'session' => \[/,/^[[:space:]]*\],/ s/'id_prefix' => '[^']*'/'id_prefix' => '${SITE_NAME}_session_'/g" app/etc/env.php
 
 log_success "数据库配置完成"
 

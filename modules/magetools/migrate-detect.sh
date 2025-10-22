@@ -139,22 +139,22 @@ fix_migration_config() {
     # 修复 AMQP 配置
     if [[ -n "$old_user" ]]; then
         log_info "修复 AMQP 用户: $old_user -> ${site_name}_user"
-        sudo sed -i "s/'user' => '$old_user'/'user' => '${site_name}_user'/g" "$env_file"
+        sed -i "s/'user' => '$old_user'/'user' => '${site_name}_user'/g" "$env_file"
     fi
     
     if [[ -n "$old_vhost" ]]; then
         log_info "修复 AMQP 虚拟主机: $old_vhost -> /$site_name"
-        sudo sed -i "s|'virtualhost' => '$old_vhost'|'virtualhost' => '/$site_name'|g" "$env_file"
+        sed -i "s|'virtualhost' => '$old_vhost'|'virtualhost' => '/$site_name'|g" "$env_file"
     fi
     
     # 修复密码（使用新的密码生成规则）
     local new_password="${site_name^}#2025!"
     log_info "更新 AMQP 密码为: $new_password"
-    sudo sed -i "s/'password' => '[^']*'/'password' => '$new_password'/g" "$env_file"
+    sed -i "s/'password' => '[^']*'/'password' => '$new_password'/g" "$env_file"
     
     # 修复数据库名
     log_info "修复数据库名: $site_name"
-    sudo sed -i "s/'dbname' => '[^']*'/'dbname' => '$site_name'/g" "$env_file"
+    sed -i "s/'dbname' => '[^']*'/'dbname' => '$site_name'/g" "$env_file"
     
     log_success "迁移配置修复完成"
     

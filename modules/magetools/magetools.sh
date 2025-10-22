@@ -80,7 +80,7 @@ magetools_handler() {
                     fix_magento_permissions "$3"
                     ;;
                 "check")
-                    check_magento_permissions
+                    check_magento_permissions "$3"
                     ;;
                 "reset")
                     reset_magento_permissions "$3"
@@ -1390,8 +1390,13 @@ fix_magento_permissions() {
     
     log_success "Magento 权限修复完成！"
     log_info "现在可以测试 Magento 命令："
-    echo "  php bin/magento --version"
-    echo "  n98-magerun2 --version"
+    echo "  sudo -u www-data php bin/magento --version"
+    echo "  sudo -u www-data n98-magerun2 --version"
+    echo ""
+    log_info "💡 权限管理最佳实践:"
+    echo "  ✅ 使用: sudo -u www-data php bin/magento <command>"
+    echo "  ❌ 避免: sudo php bin/magento <command>"
+    echo "  📖 详细说明: docs/MAGENTO_PERMISSIONS.md"
 }
 
 # 检查 Magento 权限状态
@@ -1445,22 +1450,28 @@ check_magento_permissions() {
     echo "----------------------------------------"
     
     # 测试 Magento 命令
-    if php bin/magento --version >/dev/null 2>&1; then
-        log_success "Magento CLI 正常工作"
+    if sudo -u www-data php bin/magento --version >/dev/null 2>&1; then
+        log_success "Magento CLI 正常工作 (使用 www-data 用户)"
     else
         log_error "Magento CLI 无法正常工作，可能需要修复权限"
     fi
     
     # 测试 N98 Magerun2
     if command -v n98-magerun2 >/dev/null 2>&1; then
-        if n98-magerun2 --version >/dev/null 2>&1; then
-            log_success "N98 Magerun2 正常工作"
+        if sudo -u www-data n98-magerun2 --version >/dev/null 2>&1; then
+            log_success "N98 Magerun2 正常工作 (使用 www-data 用户)"
         else
             log_error "N98 Magerun2 无法正常工作，可能需要修复权限"
         fi
     else
         log_info "N98 Magerun2 未安装，可以使用 'install n98-magerun2' 安装"
     fi
+    
+    echo ""
+    log_info "💡 权限管理最佳实践:"
+    echo "  ✅ 使用: sudo -u www-data php bin/magento <command>"
+    echo "  ❌ 避免: sudo php bin/magento <command>"
+    echo "  📖 详细说明: docs/MAGENTO_PERMISSIONS.md"
 }
 
 # 重置 Magento 权限 (强制修复)
@@ -1481,10 +1492,9 @@ reset_magento_permissions() {
     
     log_highlight "重置 Magento 权限: $site_path"
     
-    # 强制重置权限
-    log_info "强制重置所有权限..."
+    # 安全重置权限
+    log_info "安全重置所有权限..."
     sudo chown -R www-data:www-data "$site_path"
-    sudo chmod -R 777 "$site_path"
     
     # 重新设置正确的权限
     log_info "重新设置正确的权限..."
