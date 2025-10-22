@@ -75,7 +75,7 @@ generate_password() {
 fix_permissions_fast() {
     local site_path="$1"
     local nginx_group="${2:-www-data}"
-    local site_user="$(whoami)"
+    local site_user="www-data"  # 使用统一的 www-data 用户
     
     log_info "修复 Magento 权限（超高性能模式）..."
     
@@ -118,6 +118,10 @@ fix_permissions_fast() {
     find . -name "*.sh" -type f -print0 | xargs -0 -n $batch_size -P $max_parallel_jobs sudo chmod 755 2>/dev/null || true
     
     log_success "权限修复完成（超高性能模式）"
+    log_info "[INFO] 权限管理最佳实践:"
+    echo "  [SUCCESS] 使用: sudo -u www-data php bin/magento <command>"
+    echo "  [ERROR] 避免: sudo php bin/magento <command>"
+    echo "  [INFO] 详细说明: docs/MAGENTO_PERMISSIONS.md"
 }
 
 # 检查依赖

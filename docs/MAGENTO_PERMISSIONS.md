@@ -57,7 +57,7 @@ sudo find /var/www/site1 -type d -exec chmod 755 {} \;
 sudo find /var/www/site1 -type f -exec chmod 644 {} \;
 
 # 3. 特殊文件权限
-sudo chmod 660 /var/www/site1/app/etc/env.php
+sudo chmod 644 /var/www/site1/app/etc/env.php
 sudo chmod 777 /var/www/site1/var
 sudo chmod 777 /var/www/site1/pub/media
 ```
@@ -74,11 +74,11 @@ sudo chmod 777 /var/www/site1/pub/media
 # 可执行目录
 755: app, bin, dev, lib, phpserver, pub, setup, vendor
 
-# 配置文件
-660: app/etc/env.php
+# 配置文件（可读权限）
+644: app/etc/env.php
 
 # 可写目录
-777: var, pub/media, pub/static
+775: var, generated, pub/media, pub/static, app/etc
 ```
 
 ### **3. 安全考虑**

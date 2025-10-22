@@ -128,6 +128,10 @@ magetools_handler() {
                     ;;
             esac
             ;;
+        "opensearch")
+            # 调用 opensearch 认证配置脚本
+            "${SCRIPT_DIR}/modules/magetools/opensearch-auth.sh" "$2"
+            ;;
         "migrate")
             if [[ -z "$3" ]]; then
                 log_error "用法: saltgoat magetools migrate <site_path> <site_name> [action]"
@@ -151,6 +155,7 @@ magetools_handler() {
             log_info "  convert check        - 检查Magento2兼容性"
             log_info "  valkey-renew <site>  - Valkey缓存自动续期"
             log_info "  rabbitmq setup <mode> <site> - RabbitMQ队列管理"
+            log_info "  opensearch <user>     - OpenSearch Nginx认证配置"
             log_info "  help                 - 显示帮助"
             exit 1
             ;;
@@ -1094,9 +1099,9 @@ scan_magento_security() {
     if [[ -f "app/etc/env.php" ]]; then
         local env_perms=$(stat -c "%a" app/etc/env.php)
         if [[ "$env_perms" == "644" ]]; then
-            echo "  ✅ env.php 权限正确: $env_perms"
+            echo "  [SUCCESS] env.php 权限正确: $env_perms"
         else
-            echo "  ⚠️  env.php 权限异常: $env_perms (应为644)"
+            echo "  [WARNING] env.php 权限异常: $env_perms (应为644)"
         fi
     fi
     echo ""
@@ -1106,9 +1111,9 @@ scan_magento_security() {
     local sensitive_files=("app/etc/env.php" "composer.json" "composer.lock")
     for file in "${sensitive_files[@]}"; do
         if [[ -f "$file" ]]; then
-            echo "  ✅ $file 存在"
+            echo "  [SUCCESS] $file 存在"
         else
-            echo "  ❌ $file 缺失"
+            echo "  [ERROR] $file 缺失"
         fi
     done
     echo ""
@@ -1174,24 +1179,27 @@ show_magetools_help() {
     echo "  install phpunit      - 安装PHPUnit单元测试框架"
     echo "  install xdebug       - 安装Xdebug调试工具"
     echo ""
-    echo "🔧 权限管理:"
+    echo "[INFO] 权限管理:"
     echo "  permissions fix      - 修复Magento权限 (使用Salt原生功能)"
     echo "  permissions check    - 检查权限状态"
     echo "  permissions reset    - 重置权限"
     echo ""
-    echo "🔄 站点转换:"
+    echo "[INFO] 站点转换:"
     echo "  convert magento2     - 转换Nginx配置为Magento2格式 (仅Nginx配置)"
     echo "  convert check        - 检查Magento2兼容性"
     echo ""
-    echo "🔄 Valkey缓存管理:"
+    echo "[INFO] Valkey缓存管理:"
     echo "  valkey-renew <site>  - Valkey缓存自动续期 (随机分配数据库编号)"
     echo ""
-    echo "🔄 RabbitMQ队列管理:"
+    echo "[INFO] RabbitMQ队列管理:"
     echo "  rabbitmq all <site> [threads]   - 配置所有消费者（21个）"
     echo "  rabbitmq smart <site> [threads] - 智能配置（仅核心消费者）"
     echo "  rabbitmq check <site>           - 检查消费者状态"
     echo ""
-    echo "🔄 网站迁移管理:"
+    echo "[INFO] OpenSearch认证管理:"
+    echo "  opensearch <user>               - 配置OpenSearch Nginx认证"
+    echo ""
+    echo "[INFO] 网站迁移管理:"
     echo "  migrate <path> <site> detect    - 检测迁移配置问题"
     echo "  migrate <path> <site> fix       - 修复迁移配置问题"
     echo ""
@@ -1201,6 +1209,7 @@ show_magetools_help() {
     echo "  saltgoat magetools convert magento2"
     echo "  saltgoat magetools valkey-renew tank"
     echo "  saltgoat magetools rabbitmq check tank"
+    echo "  saltgoat magetools opensearch doge"
 }
 
 # 检查 RabbitMQ 状态
@@ -1251,19 +1260,19 @@ check_rabbitmq_status() {
         
         case "$status" in
             "active")
-                log_success "✅ $service (运行中)"
+                log_success "[SUCCESS] $service (运行中)"
                 ((running_services++))
                 ;;
             "failed")
-                log_error "❌ $service (失败)"
+                log_error "[ERROR] $service (失败)"
                 ((failed_services++))
                 ;;
             *)
                 if [[ "$state" == "activating" ]]; then
-                    log_warning "🔄 $service (重启中)"
+                    log_warning "[WARNING] $service (重启中)"
                     ((restarting_services++))
                 else
-                    log_warning "⚠️  $service ($status)"
+                    log_warning "[WARNING] $service ($status)"
                 fi
                 ;;
         esac
@@ -1320,11 +1329,11 @@ check_rabbitmq_status() {
     
     # 总结
     if [[ "$failed_services" -eq 0 && "$restarting_services" -eq 0 ]]; then
-        log_success "✅ RabbitMQ 消费者状态良好"
+        log_success "[SUCCESS] RabbitMQ 消费者状态良好"
     elif [[ "$failed_services" -gt 0 ]]; then
-        log_error "❌ 发现 $failed_services 个失败的服务，需要检查"
+        log_error "[ERROR] 发现 $failed_services 个失败的服务，需要检查"
     else
-        log_warning "⚠️  有 $restarting_services 个服务在重启，请关注"
+        log_warning "[WARNING] 有 $restarting_services 个服务在重启，请关注"
     fi
 }
 
@@ -1393,10 +1402,10 @@ fix_magento_permissions() {
     echo "  sudo -u www-data php bin/magento --version"
     echo "  sudo -u www-data n98-magerun2 --version"
     echo ""
-    log_info "💡 权限管理最佳实践:"
-    echo "  ✅ 使用: sudo -u www-data php bin/magento <command>"
-    echo "  ❌ 避免: sudo php bin/magento <command>"
-    echo "  📖 详细说明: docs/MAGENTO_PERMISSIONS.md"
+    log_info "[INFO] 权限管理最佳实践:"
+    echo "  [SUCCESS] 使用: sudo -u www-data php bin/magento <command>"
+    echo "  [ERROR] 避免: sudo php bin/magento <command>"
+    echo "  [INFO] 详细说明: docs/MAGENTO_PERMISSIONS.md"
 }
 
 # 检查 Magento 权限状态
@@ -1468,10 +1477,10 @@ check_magento_permissions() {
     fi
     
     echo ""
-    log_info "💡 权限管理最佳实践:"
-    echo "  ✅ 使用: sudo -u www-data php bin/magento <command>"
-    echo "  ❌ 避免: sudo php bin/magento <command>"
-    echo "  📖 详细说明: docs/MAGENTO_PERMISSIONS.md"
+    log_info "[INFO] 权限管理最佳实践:"
+    echo "  [SUCCESS] 使用: sudo -u www-data php bin/magento <command>"
+    echo "  [ERROR] 避免: sudo php bin/magento <command>"
+    echo "  [INFO] 详细说明: docs/MAGENTO_PERMISSIONS.md"
 }
 
 # 重置 Magento 权限 (强制修复)
@@ -1501,7 +1510,7 @@ reset_magento_permissions() {
     sudo chmod 755 "$site_path"
     sudo chmod -R 755 "$site_path"/{app,bin,dev,lib,phpserver,pub,setup,vendor}
     sudo chmod -R 775 "$site_path"/{var,generated,pub/media,pub/static,app/etc}
-    sudo chmod 660 "$site_path/app/etc/env.php"
+    sudo chmod 644 "$site_path/app/etc/env.php"
     
     log_success "Magento 权限重置完成！"
     log_info "建议运行 'permissions check' 验证权限状态"
@@ -1534,9 +1543,9 @@ check_magento2_compatibility() {
     
     for ext in "${required_extensions[@]}"; do
         if php -m | grep -q "^$ext$"; then
-            echo "✅ $ext"
+            echo "[SUCCESS] $ext"
         else
-            echo "❌ $ext (缺失)"
+            echo "[ERROR] $ext (缺失)"
             missing_extensions+=("$ext")
         fi
     done
@@ -1557,23 +1566,23 @@ check_magento2_compatibility() {
     local nginx_config="/etc/nginx/sites-enabled/$site_name"
     
     if [[ -f "$nginx_config" ]]; then
-        echo "✅ Nginx 站点配置存在"
+        echo "[SUCCESS] Nginx 站点配置存在"
         
         # 检查是否使用 Magento 2 简化配置（nginx.conf.sample）
         if grep -q "nginx.conf.sample" "$nginx_config"; then
-            echo "✅ 使用 Magento 2 简化配置（nginx.conf.sample）"
-            echo "✅ 包含 try_files 配置（在 nginx.conf.sample 中）"
-            echo "✅ PHP-FPM 配置存在（在 nginx.conf.sample 中）"
+            echo "[SUCCESS] 使用 Magento 2 简化配置（nginx.conf.sample）"
+            echo "[SUCCESS] 包含 try_files 配置（在 nginx.conf.sample 中）"
+            echo "[SUCCESS] PHP-FPM 配置存在（在 nginx.conf.sample 中）"
         else
             # 检查 Magento 2 特定的 Nginx 配置
             if grep -q "try_files" "$nginx_config"; then
-                echo "✅ 包含 try_files 配置"
+                echo "[SUCCESS] 包含 try_files 配置"
             else
                 log_warning "缺少 try_files 配置，需要 Magento 2 优化"
             fi
             
             if grep -q "fastcgi_pass" "$nginx_config"; then
-                echo "✅ PHP-FPM 配置存在"
+                echo "[SUCCESS] PHP-FPM 配置存在"
             else
                 log_warning "缺少 PHP-FPM 配置"
             fi
@@ -1601,7 +1610,7 @@ check_magento2_compatibility() {
     echo "----------------------------------------"
     if command -v composer >/dev/null 2>&1; then
         local composer_version=$(composer --version | awk '{print $3}')
-        echo "✅ Composer 版本: $composer_version"
+        echo "[SUCCESS] Composer 版本: $composer_version"
     else
         log_error "Composer 未安装"
     fi

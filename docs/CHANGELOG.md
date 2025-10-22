@@ -1,5 +1,32 @@
 # SaltGoat 更新日志
 
+## [0.8.1] - 2025-10-22
+
+### 🔧 **权限管理优化**
+- **修复权限问题**：解决 `valkey-renew` 脚本中的权限问题
+- **env.php 权限**：从 `660` 改为 `644`，确保 Magento CLI 可读取
+- **generated 目录**：在 `valkey-renew` 中删除重建，确保权限正确
+- **权限修复策略**：区分保守修复（permissions fix）和激进修复（valkey-renew）
+
+### 🆕 **新增功能**
+- **OpenSearch 认证配置**：新增 `saltgoat magetools opensearch <user>` 命令
+- **一键配置**：自动安装 apache2-utils，创建密码文件，配置 Nginx 认证
+- **智能命名**：用户名 + 2010 作为密码，端口 9210，配置文件自动命名
+
+### 🐛 **Bug 修复**
+- **Nginx 配置**：修复主配置文件缺少 `include /etc/nginx/sites-enabled/*;` 的问题
+- **站点清理**：清理 sites-enabled 目录中的备份文件
+- **权限脚本**：修复所有脚本中的 sudo 权限问题
+
+### 📚 **文档更新**
+- **权限管理指南**：更新 `docs/MAGENTO_PERMISSIONS.md` 中的权限设置
+- **帮助信息**：添加 OpenSearch 认证管理到帮助菜单
+- **最佳实践**：统一所有脚本的权限管理最佳实践提示
+
+### 🧹 **代码清理**
+- **移除 emoji**：将所有 emoji 图标替换为统一的日志格式
+- **统一格式**：使用 `[INFO]` `[SUCCESS]` `[WARNING]` `[ERROR]` 格式
+
 ## [0.8.0] - 2025-10-22
 
 ### 🎯 **重大改进**
