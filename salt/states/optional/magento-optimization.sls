@@ -148,6 +148,19 @@ optimize_php_config:
         # 修复PHP-FPM配置文件中的error_log设置
         sudo sed -i "s|error_log = /var/log/php$PHP_VERSION-fpm.log|;error_log = /var/log/php$PHP_VERSION-fpm.log|" "$PHP_FPM_CONF"
         
+        # 修复Pool配置冲突：移除Pool中的memory_limit设置，让php.ini生效
+        POOL_CONF="/etc/php/$PHP_VERSION/fpm/pool.d/www.conf"
+        if [[ -f "$POOL_CONF" ]]; then
+            echo "修复Pool配置冲突: $POOL_CONF"
+            sudo sed -i '/php_admin_value\[memory_limit\]/d' "$POOL_CONF"
+            
+            # 优化进程管理配置
+            sudo sed -i 's/pm.max_children = [0-9]*/pm.max_children = 30/' "$POOL_CONF"
+            sudo sed -i 's/pm.max_requests = [0-9]*/pm.max_requests = 500/' "$POOL_CONF"
+            sudo sed -i 's/pm.min_spare_servers = [0-9]*/pm.min_spare_servers = 3/' "$POOL_CONF"
+            sudo sed -i 's/pm.max_spare_servers = [0-9]*/pm.max_spare_servers = 20/' "$POOL_CONF"
+        fi
+        
         # 使用sed优化PHP配置（使用更灵活的匹配）
         sudo sed -i 's/memory_limit = [0-9]*[Mm]/memory_limit = 2G/' "$PHP_INI"
         sudo sed -i 's/max_execution_time = [0-9]*/max_execution_time = 300/' "$PHP_INI"
@@ -159,6 +172,11 @@ optimize_php_config:
         sudo sed -i 's/opcache.memory_consumption=[0-9]*/opcache.memory_consumption=512/' "$PHP_INI"
         sudo sed -i 's/opcache.max_accelerated_files=[0-9]*/opcache.max_accelerated_files=20000/' "$PHP_INI"
         sudo sed -i 's/opcache.validate_timestamps=[01]/opcache.validate_timestamps=0/' "$PHP_INI"
+        sudo sed -i 's/opcache.revalidate_freq=[0-9]*/opcache.revalidate_freq=0/' "$PHP_INI"
+        
+        # 添加路径缓存优化
+        sudo grep -q "realpath_cache_size" "$PHP_INI" || echo "realpath_cache_size = 4096K" | sudo tee -a "$PHP_INI"
+        sudo grep -q "realpath_cache_ttl" "$PHP_INI" || echo "realpath_cache_ttl = 600" | sudo tee -a "$PHP_INI"
         
         # 设置错误日志路径
         sudo sed -i "s|;error_log = php_errors.log|error_log = /var/log/php$PHP_VERSION-fpm.log|" "$PHP_INI"
@@ -167,17 +185,27 @@ optimize_php_config:
         CLI_INI="/etc/php/$PHP_VERSION/cli/php.ini"
         if [[ -f "$CLI_INI" ]]; then
             echo "优化CLI配置: $CLI_INI"
-            sudo sed -i 's/memory_limit = [0-9]*[Mm]/memory_limit = 4G/' "$CLI_INI"
+            sudo sed -i 's/memory_limit = [0-9]*[Mm]/memory_limit = 2G/' "$CLI_INI"
             sudo sed -i 's/max_execution_time = [0-9]*/max_execution_time = 300/' "$CLI_INI"
             sudo sed -i 's/max_input_vars = [0-9]*/max_input_vars = 3000/' "$CLI_INI"
             sudo sed -i 's/post_max_size = [0-9]*[Mm]/post_max_size = 64M/' "$CLI_INI"
             sudo sed -i 's/upload_max_filesize = [0-9]*[Mm]/upload_max_filesize = 64M/' "$CLI_INI"
             
-            # 优化CLI的OPcache
-            sudo sed -i 's/opcache.memory_consumption=[0-9]*/opcache.memory_consumption=512/' "$CLI_INI"
-            sudo sed -i 's/opcache.max_accelerated_files=[0-9]*/opcache.max_accelerated_files=20000/' "$CLI_INI"
-            sudo sed -i 's/opcache.validate_timestamps=[01]/opcache.validate_timestamps=0/' "$CLI_INI"
+            # 优化CLI的OPcache（修复注释问题）
+            sudo sed -i 's/;opcache.memory_consumption=[0-9]*/opcache.memory_consumption=512/' "$CLI_INI"
+            sudo sed -i 's/;opcache.max_accelerated_files=[0-9]*/opcache.max_accelerated_files=20000/' "$CLI_INI"
+            sudo sed -i 's/;opcache.validate_timestamps=[01]/opcache.validate_timestamps=0/' "$CLI_INI"
+            sudo sed -i 's/;opcache.revalidate_freq=[0-9]*/opcache.revalidate_freq=0/' "$CLI_INI"
+            
+            # 添加CLI路径缓存优化
+            sudo grep -q "realpath_cache_size" "$CLI_INI" || echo "realpath_cache_size = 4096K" | sudo tee -a "$CLI_INI"
+            sudo sed -i 's/realpath_cache_ttl = [0-9]*/realpath_cache_ttl = 600/' "$CLI_INI"
         fi
+        
+        # 修复XML模块重复加载问题
+        echo "修复XML模块重复加载问题..."
+        sudo rm -f "/etc/php/$PHP_VERSION/fpm/conf.d/20-xml.ini"
+        sudo rm -f "/etc/php/$PHP_VERSION/cli/conf.d/20-xml.ini"
     - require:
       - cmd: detect_system_memory
 
@@ -366,9 +394,21 @@ magento_optimization_complete:
         echo "  - upload_max_filesize: 64M (提升文件上传大小)"
         echo "  - opcache.memory_consumption: 512M (增加OPcache内存)"
         echo "  - opcache.max_accelerated_files: 20000 (增加缓存文件数)"
+        echo "  - opcache.validate_timestamps: 0 (禁用时间戳验证)"
+        echo "  - opcache.revalidate_freq: 0 (禁用重新验证)"
+        echo "  - realpath_cache_size: 4096K (路径缓存优化)"
+        echo "  - realpath_cache_ttl: 600 (路径缓存TTL)"
+        echo "  - Pool配置冲突已修复 (移除Pool中的memory_limit覆盖)"
+        echo "  - XML模块重复加载已修复"
         echo ""
-        echo "3. PHP-CLI 优化:"
-        echo "  - memory_limit: 4G (CLI需要更多内存运行Magento命令)"
+        echo "3. PHP-FPM Pool 优化:"
+        echo "  - pm.max_children: 30 (优化进程数)"
+        echo "  - pm.max_requests: 500 (更频繁的进程回收)"
+        echo "  - pm.min_spare_servers: 3 (最小空闲进程)"
+        echo "  - pm.max_spare_servers: 20 (最大空闲进程)"
+        echo ""
+        echo "4. PHP-CLI 优化:"
+        echo "  - memory_limit: 2G (CLI运行Magento命令的推荐内存限制)"
         echo "  - max_execution_time: 300s (延长执行时间)"
         echo "  - max_input_vars: 3000 (增加输入变量限制)"
         echo "  - post_max_size: 64M (提升POST数据大小)"
@@ -376,8 +416,11 @@ magento_optimization_complete:
         echo "  - opcache.memory_consumption: 512M (增加OPcache内存)"
         echo "  - opcache.max_accelerated_files: 20000 (增加缓存文件数)"
         echo "  - opcache.validate_timestamps: 0 (禁用时间戳验证)"
+        echo "  - opcache.revalidate_freq: 0 (禁用重新验证)"
+        echo "  - realpath_cache_size: 4096K (路径缓存优化)"
+        echo "  - realpath_cache_ttl: 600 (路径缓存TTL)"
         echo ""
-        echo "4. MySQL 优化:"
+        echo "5. MySQL 优化:"
         echo "  - innodb_buffer_pool_size: 16G (InnoDB缓冲池)"
         echo "  - innodb_buffer_pool_instances: 8 (缓冲池实例数)"
         echo "  - innodb_log_buffer_size: 16M (日志缓冲区)"
@@ -387,20 +430,20 @@ magento_optimization_complete:
         echo "  - tmp_table_size: 64M (临时表大小)"
         echo "  - max_heap_table_size: 64M (堆表最大大小)"
         echo ""
-        echo "4. Valkey 优化:"
+        echo "5. Valkey 优化:"
         echo "  - maxmemory: 1gb (最大内存限制)"
         echo "  - maxmemory-policy: allkeys-lru (内存淘汰策略)"
         echo "  - timeout: 300 (连接超时时间)"
         echo "  - tcp-keepalive: 60 (TCP保活时间)"
         echo ""
-        echo "5. OpenSearch 优化:"
+        echo "6. OpenSearch 优化:"
         echo "  - indices.memory.index_buffer_size: 20% (索引缓冲区)"
         echo "  - indices.queries.cache.size: 10% (查询缓存)"
         echo "  - indices.fielddata.cache.size: 20% (字段数据缓存)"
         echo "  - thread_pool.write.queue_size: 1000 (写入队列大小)"
         echo "  - thread_pool.search.queue_size: 1000 (搜索队列大小)"
         echo ""
-        echo "6. RabbitMQ 优化:"
+        echo "7. RabbitMQ 优化:"
         echo "  - 使用Magento专用配置文件"
         echo ""
         echo "优化建议:"
