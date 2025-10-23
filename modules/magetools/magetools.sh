@@ -1772,14 +1772,10 @@ optimize_nginx_for_magento2() {
     fi
     
     # 创建简化的 Magento 2 Nginx 配置（使用 nginx.conf.sample）
-    # 注意：nginx.conf.sample 需要 fastcgi_backend upstream 定义
+    # 注意：upstream fastcgi_backend 已在主配置文件中定义
     if [[ "$has_ssl" == "true" ]]; then
         # 如果有 SSL，创建 HTTP 重定向和 HTTPS 配置
         sudo tee "/etc/nginx/sites-enabled/$site_name" >/dev/null <<EOF
-upstream fastcgi_backend {
-  server  unix:/run/php/php8.3-fpm.sock;
-}
-
 server {
     listen 80;
     server_name $server_name;
@@ -1804,10 +1800,6 @@ EOF
     else
         # 如果没有 SSL，只创建 HTTP 配置
         sudo tee "/etc/nginx/sites-enabled/$site_name" >/dev/null <<EOF
-upstream fastcgi_backend {
-  server  unix:/run/php/php8.3-fpm.sock;
-}
-
 server {
     listen 80;
     server_name $server_name;
@@ -1816,7 +1808,7 @@ server {
 }
 EOF
     fi
-    log_info "已创建 Magento 2 配置（包含 fastcgi_backend upstream）"
+    log_info "已创建 Magento 2 配置（使用主配置文件中的 fastcgi_backend upstream）"
     
     # 测试 Nginx 配置
     if sudo /usr/sbin/nginx -t -c /etc/nginx/nginx.conf; then
