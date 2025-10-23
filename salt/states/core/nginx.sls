@@ -190,7 +190,7 @@ create_nginx_service:
         [Service]
         Type=forking
         PIDFile=/etc/nginx/logs/nginx.pid
-        ExecStartPre=/etc/nginx/sbin/nginx -t
+        ExecStartPre=/etc/nginx/sbin/nginx -t -c /etc/nginx/nginx.conf
         ExecStart=/etc/nginx/sbin/nginx
         ExecReload=/bin/kill -s HUP $MAINPID
         KillSignal=SIGQUIT
@@ -218,6 +218,14 @@ create_nginx_symlink:
     - require:
       - cmd: compile_nginx
 
+# 创建 Nginx 配置文件路径符号链接（确保 nginx -t 命令正常工作）
+create_nginx_conf_symlink:
+  file.symlink:
+    - name: /etc/nginx/conf/nginx.conf
+    - target: /etc/nginx/nginx.conf
+    - require:
+      - file: configure_nginx
+
 # 测试 Nginx 配置
 test_nginx_config:
   cmd.run:
@@ -225,6 +233,7 @@ test_nginx_config:
     - require:
       - file: configure_nginx
       - file: enable_default_site
+      - file: create_nginx_conf_symlink
 
 # 启动 Nginx 服务
 start_nginx:
