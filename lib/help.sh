@@ -176,11 +176,17 @@ show_nginx_help() {
     echo "  disable <site>           - 禁用站点"
     echo "  reload                    - 重新加载配置"
     echo "  test                      - 测试配置"
+    echo "  modsecurity level [1-10] - 设置 ModSecurity 等级"
+    echo "  modsecurity status       - 检查 ModSecurity 状态"
+    echo "  modsecurity disable      - 禁用 ModSecurity"
+    echo "  modsecurity enable       - 启用 ModSecurity"
     echo ""
     echo "示例:"
     echo "  saltgoat nginx create site1 example1.com"
     echo "  saltgoat nginx delete site1"
     echo "  saltgoat nginx list"
+    echo "  saltgoat nginx modsecurity level 5"
+    echo "  saltgoat nginx modsecurity status"
 }
 
 # 数据库帮助

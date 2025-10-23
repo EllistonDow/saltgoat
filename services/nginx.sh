@@ -38,9 +38,22 @@ nginx_handler() {
             log_highlight "删除 Nginx 站点: $3"
             nginx_delete_site "$3"
             ;;
+        "help")
+            show_nginx_help
+            ;;
+        "modsecurity")
+            # 加载 ModSecurity 模块
+            if [[ -f "${SCRIPT_DIR}/modules/security/modsecurity-levels.sh" ]]; then
+                source "${SCRIPT_DIR}/modules/security/modsecurity-levels.sh"
+                modsecurity_level_handler "modsecurity" "$3" "$4"
+            else
+                log_error "ModSecurity 模块不存在"
+                exit 1
+            fi
+            ;;
         *)
             log_error "未知的 Nginx 操作: $2"
-            log_info "支持: create, list, add-ssl, delete"
+            log_info "支持: create, list, add-ssl, delete, modsecurity, help"
             exit 1
             ;;
     esac

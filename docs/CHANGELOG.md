@@ -1,5 +1,41 @@
 # SaltGoat 更新日志
 
+## [0.9.0] - 2025-10-23
+
+### 🔒 **ModSecurity 等级配置系统**
+- **10 级安全等级**：从开发环境（等级1）到军事级安全（等级10）
+- **智能配置**：针对 Magento 2 特殊路径（admin、setup）优化
+- **渐进式安全**：适应不同环境需求，从宽松到严格
+- **自动备份**：每次配置更改自动备份原配置
+- **配置验证**：自动测试 Nginx 配置，失败时恢复备份
+
+### 🛡️ **安全检测规则**
+- **SQL 注入检测**：`@detectSQLi` 规则
+- **XSS 攻击检测**：`@detectXSS` 规则
+- **路径遍历检测**：`@detectPathTraversal` 规则
+- **命令注入检测**：`@detectCmdInjection` 规则
+- **文件上传限制**：危险文件类型检测
+- **异常请求检测**：HTTP 方法、头部验证
+
+### 🎯 **等级设计**
+- **等级 1-2**：开发/测试环境，宽松配置
+- **等级 3-4**：预生产环境，中等配置
+- **等级 5-6**：生产环境，标准到严格配置（推荐）
+- **等级 7-8**：高安全环境，企业级到金融级安全
+- **等级 9-10**：最高安全环境，政府级到军事级安全
+
+### 🚀 **新增命令**
+- `saltgoat nginx modsecurity level [1-10]` - 设置 ModSecurity 等级
+- `saltgoat nginx modsecurity status` - 检查 ModSecurity 状态
+- `saltgoat nginx modsecurity disable` - 禁用 ModSecurity
+- `saltgoat nginx modsecurity enable` - 启用 ModSecurity
+- `saltgoat nginx help` - 显示 Nginx 帮助信息
+
+### 📚 **文档更新**
+- **帮助系统**：更新 Nginx 帮助信息，包含 ModSecurity 命令
+- **模块集成**：ModSecurity 模块完全集成到主系统
+- **错误处理**：完善的错误处理和配置恢复机制
+
 ## [0.8.3] - 2025-10-23
 
 ### 🔄 **Magento 2 转换脚本优化**
