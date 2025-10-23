@@ -132,6 +132,18 @@ magetools_handler() {
             # 调用 opensearch 认证配置脚本
             "${SCRIPT_DIR}/modules/magetools/opensearch-auth.sh" "$2"
             ;;
+        "maintenance")
+            # 调用 Magento 维护管理脚本
+            "${SCRIPT_DIR}/modules/magetools/magento-maintenance.sh" "$2" "$3"
+            ;;
+        "cron")
+            # 调用定时任务管理脚本
+            "${SCRIPT_DIR}/modules/magetools/magento-cron.sh" "$2" "$3"
+            ;;
+        "salt-schedule")
+            # 调用 Salt Schedule 管理脚本
+            "${SCRIPT_DIR}/modules/magetools/magento-salt-schedule.sh" "$2" "$3"
+            ;;
         "migrate")
             if [[ -z "$3" ]]; then
                 log_error "用法: saltgoat magetools migrate <site_path> <site_name> [action]"
@@ -156,6 +168,9 @@ magetools_handler() {
             log_info "  valkey-renew <site>  - Valkey缓存自动续期"
             log_info "  rabbitmq setup <mode> <site> - RabbitMQ队列管理"
             log_info "  opensearch <user>     - OpenSearch Nginx认证配置"
+            log_info "  maintenance <site> <action> - Magento维护管理"
+            log_info "  cron <site> <action>       - 定时任务管理"
+            log_info "  salt-schedule <site> <action> - Salt Schedule 管理"
             log_info "  help                 - 显示帮助"
             exit 1
             ;;
@@ -1199,6 +1214,22 @@ show_magetools_help() {
     echo "[INFO] OpenSearch认证管理:"
     echo "  opensearch <user>               - 配置OpenSearch Nginx认证"
     echo ""
+    echo "[INFO] Magento维护管理:"
+    echo "  maintenance <site> status       - 检查维护状态"
+    echo "  maintenance <site> enable       - 启用维护模式"
+    echo "  maintenance <site> disable      - 禁用维护模式"
+    echo "  maintenance <site> daily       - 执行每日维护任务"
+    echo "  maintenance <site> weekly      - 执行每周维护任务"
+    echo "  maintenance <site> monthly     - 执行每月维护任务"
+    echo "  maintenance <site> backup     - 创建备份"
+    echo "  maintenance <site> health     - 健康检查"
+    echo "  maintenance <site> cleanup    - 清理日志和缓存"
+    echo "  maintenance <site> deploy     - 完整部署流程"
+    echo ""
+    echo "[INFO] 定时任务管理:"
+    echo "  cron <site> <action>           - 系统 Cron 定时任务管理"
+    echo "  salt-schedule <site> <action> - Salt Schedule 定时任务管理"
+    echo ""
     echo "[INFO] 网站迁移管理:"
     echo "  migrate <path> <site> detect    - 检测迁移配置问题"
     echo "  migrate <path> <site> fix       - 修复迁移配置问题"
@@ -1210,6 +1241,10 @@ show_magetools_help() {
     echo "  saltgoat magetools valkey-renew tank"
     echo "  saltgoat magetools rabbitmq check tank"
     echo "  saltgoat magetools opensearch doge"
+    echo "  saltgoat magetools maintenance tank daily"
+    echo "  saltgoat magetools maintenance tank backup"
+    echo "  saltgoat magetools maintenance tank deploy"
+    echo "  saltgoat magetools salt-schedule tank install"
 }
 
 # 检查 RabbitMQ 状态
