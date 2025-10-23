@@ -1,16 +1,206 @@
 #!/bin/bash
-# SaltGoat Magento Valkey 自动续期工具
-# 自动检测可用数据库编号，避免冲突
+# SaltGoat Magento Valkey 配置工具
+# 支持两种场景：
+# 1. 全新站点：添加完整的 Valkey 配置
+# 2. 迁移站点：更新现有的 Valkey 配置（renew）
 
 # 加载公共库
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${SCRIPT_DIR}/lib/logger.sh"
 
+# 检测站点类型：全新站点 vs 迁移站点
+detect_site_type() {
+    if grep -q "'backend' => 'Magento\\\\Framework\\\\Cache\\\\Backend\\\\Redis'" app/etc/env.php; then
+        echo "migrated"
+    else
+        echo "new"
+    fi
+}
+
+# 为全新站点添加 Valkey 配置
+add_valkey_config_for_new_site() {
+    local cache_db="$1"
+    local page_db="$2"
+    local session_db="$3"
+    local site_name="$4"
+    local valkey_password="$5"
+    
+    log_info "为全新站点添加 Valkey 配置..."
+    
+    # 备份原文件
+    sudo cp app/etc/env.php app/etc/env.php.backup.before_valkey.$(date +%Y%m%d_%H%M%S)
+    
+    # 使用 PHP 生成新的配置文件
+    sudo -u www-data php -r "
+    \$config = include 'app/etc/env.php';
+    
+    // 更新 cache 配置
+    \$config['cache'] = [
+        'frontend' => [
+            'default' => [
+                'backend' => 'Magento\\\\Framework\\\\Cache\\\\Backend\\\\Redis',
+                'backend_options' => [
+                    'server' => '127.0.0.1',
+                    'port' => '6379',
+                    'database' => '$cache_db',
+                    'password' => '$valkey_password',
+                    'compress_data' => '1',
+                    'id_prefix' => '${site_name}_cache_'
+                ]
+            ],
+            'page_cache' => [
+                'backend' => 'Magento\\\\Framework\\\\Cache\\\\Backend\\\\Redis',
+                'backend_options' => [
+                    'server' => '127.0.0.1',
+                    'port' => '6379',
+                    'database' => '$page_db',
+                    'password' => '$valkey_password',
+                    'compress_data' => '1',
+                    'id_prefix' => '${site_name}_cache_'
+                ]
+            ]
+        ]
+    ];
+    
+    // 更新 session 配置
+    \$config['session'] = [
+        'save' => 'redis',
+        'redis' => [
+            'host' => '127.0.0.1',
+            'port' => '6379',
+            'password' => '$valkey_password',
+            'timeout' => '2.5',
+            'persistent_identifier' => '',
+            'database' => '$session_db',
+            'compression_threshold' => '2048',
+            'compression_library' => 'gzip',
+            'log_level' => '1',
+            'max_concurrency' => '6',
+            'break_after_frontend' => '5',
+            'break_after_adminhtml' => '30',
+            'first_lifetime' => '600',
+            'bot_first_lifetime' => '60',
+            'bot_lifetime' => '7200',
+            'disable_locking' => '0',
+            'min_lifetime' => '60',
+            'max_lifetime' => '2592000',
+            'id_prefix' => '${site_name}_session_'
+        ]
+    ];
+    
+    file_put_contents('app/etc/env.php', '<?php\\nreturn ' . var_export(\$config, true) . ';\\n');
+    "
+    
+    log_success "全新站点 Valkey 配置添加完成"
+}
+
+# 为迁移站点更新 Valkey 配置
+update_valkey_config_for_migrated_site() {
+    local cache_db="$1"
+    local page_db="$2"
+    local session_db="$3"
+    local site_name="$4"
+    
+    log_info "为迁移站点更新 Valkey 配置..."
+    
+    # 修改env.php文件 - 使用更精确的替换
+    # 替换默认缓存的数据库
+    sudo sed -i "/'default' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$cache_db'/g" app/etc/env.php
+    
+    # 替换页面缓存的数据库
+    sudo sed -i "/'page_cache' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$page_db'/g" app/etc/env.php
+    
+    # 替换会话存储的数据库
+    sudo sed -i "/'session' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$session_db'/g" app/etc/env.php
+    
+    # 设置缓存前缀
+    sudo sed -i "/'session' => \[/,/^[[:space:]]*\],/ s/'id_prefix' => '[^']*'/'id_prefix' => '${site_name}_session_'/g" app/etc/env.php
+    sudo sed -i "s/'id_prefix' => '[^']*'/'id_prefix' => '${site_name}_cache_'/g" app/etc/env.php
+    sudo sed -i "/'session' => \[/,/^[[:space:]]*\],/ s/'id_prefix' => '[^']*'/'id_prefix' => '${site_name}_session_'/g" app/etc/env.php
+    
+    log_success "迁移站点 Valkey 配置更新完成"
+}
+
+# 安全清理当前站点的旧数据库（仅清理当前站点之前使用的数据库）
+cleanup_current_site_old_databases() {
+    local site_name="$1"
+    local current_cache_db="$2"
+    local current_page_db="$3"
+    local current_session_db="$4"
+    local valkey_password="$5"
+    
+    log_info "检查当前站点 $site_name 的旧数据库..."
+    
+    # 获取当前站点 env.php 文件路径
+    local current_env_file="/var/www/$site_name/app/etc/env.php"
+    
+    if [[ ! -f "$current_env_file" ]]; then
+        log_warning "无法找到 $site_name 的配置文件，跳过清理"
+        return 0
+    fi
+    
+    # 获取当前站点正在使用的数据库
+    local current_used_dbs=()
+    local db_nums=$(grep -o "'database' => '[0-9]*'" "$current_env_file" | grep -o "[0-9]*" || true)
+    for db_num in $db_nums; do
+        current_used_dbs+=("$db_num")
+    done
+    
+    log_info "当前站点 $site_name 使用的数据库: ${current_used_dbs[*]}"
+    
+    # 获取所有其他站点的数据库
+    local other_sites_dbs=()
+    for env_file in /var/www/*/app/etc/env.php; do
+        if [[ "$env_file" != "$current_env_file" ]] && [[ -f "$env_file" ]]; then
+            local other_db_nums=$(grep -o "'database' => '[0-9]*'" "$env_file" | grep -o "[0-9]*" || true)
+            for db_num in $other_db_nums; do
+                other_sites_dbs+=("$db_num")
+            done
+        fi
+    done
+    
+    # 去重其他站点的数据库
+    local unique_other_dbs=($(printf '%s\n' "${other_sites_dbs[@]}" | sort -u))
+    log_info "其他站点使用的数据库: ${unique_other_dbs[*]}"
+    
+    # 只清理当前站点之前使用但现在不使用的数据库
+    local cleaned_count=0
+    for db_num in {0..99}; do
+        # 跳过当前正在使用的数据库
+        if [[ " ${current_used_dbs[*]} " =~ " $db_num " ]]; then
+            continue
+        fi
+        
+        # 跳过其他站点正在使用的数据库
+        if [[ " ${unique_other_dbs[*]} " =~ " $db_num " ]]; then
+            continue
+        fi
+        
+        # 检查数据库是否有数据，并且键名包含当前站点前缀
+        local key_count=$(redis-cli -a "$valkey_password" -n "$db_num" dbsize 2>/dev/null || echo "0")
+        if [[ "$key_count" -gt 0 ]]; then
+            # 检查是否包含当前站点的缓存前缀
+            local site_keys=$(redis-cli -a "$valkey_password" -n "$db_num" keys "*${site_name}_*" 2>/dev/null | wc -l)
+            if [[ "$site_keys" -gt 0 ]]; then
+                log_info "清理站点 $site_name 的旧数据库 $db_num (包含 $key_count 个键，其中 $site_keys 个属于当前站点)"
+                redis-cli -a "$valkey_password" -n "$db_num" flushdb >/dev/null 2>&1
+                ((cleaned_count++))
+            fi
+        fi
+    done
+    
+    if [[ $cleaned_count -gt 0 ]]; then
+        log_success "已清理站点 $site_name 的 $cleaned_count 个旧数据库"
+    else
+        log_info "站点 $site_name 没有需要清理的旧数据库"
+    fi
+}
+
 # 错误处理：确保维护模式被禁用
 cleanup() {
     if [ -n "$MAINTENANCE_ENABLED" ]; then
         log_warning "脚本中断，正在禁用维护模式..."
-        php bin/magento maintenance:disable 2>/dev/null || true
+        sudo -u www-data php bin/magento maintenance:disable 2>/dev/null || true
         log_success "维护模式已禁用"
     fi
 }
@@ -19,9 +209,13 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # 使用方法：saltgoat magetools valkey-renew <站点名称> [--restart-valkey]
-
-# 示例：saltgoat magetools valkey-renew tank
-# 示例：saltgoat magetools valkey-renew tank --restart-valkey
+# 
+# 功能说明：
+# - 自动检测站点类型（全新站点 vs 迁移站点）
+# - 全新站点：添加完整的 Valkey 配置
+# - 迁移站点：更新现有的 Valkey 配置（renew）
+# - 自动分配不冲突的数据库编号
+# - 支持缓存前缀隔离
 
 # 检查参数
 RESTART_VALKEY=false
@@ -150,20 +344,17 @@ fi
 # 第一步：自定义数据库配置
 log_info "第一步：自定义数据库配置..."
 
-# 修改env.php文件 - 使用更精确的替换
-# 替换默认缓存的数据库
-sudo sed -i "/'default' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$CACHE_DB'/g" app/etc/env.php
+# 检测站点类型
+SITE_TYPE=$(detect_site_type)
+log_info "检测到站点类型: $SITE_TYPE"
 
-# 替换页面缓存的数据库
-sudo sed -i "/'page_cache' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$PAGE_DB'/g" app/etc/env.php
-
-# 替换会话存储的数据库
-sudo sed -i "/'session' => \[/,/\]/ s/'database' => '[0-9]*'/'database' => '$SESSION_DB'/g" app/etc/env.php
-
-# 设置缓存前缀
-sudo sed -i "/'session' => \[/,/^[[:space:]]*\],/ s/'id_prefix' => '[^']*'/'id_prefix' => '${SITE_NAME}_session_'/g" app/etc/env.php
-sudo sed -i "s/'id_prefix' => '[^']*'/'id_prefix' => '${SITE_NAME}_cache_'/g" app/etc/env.php
-sudo sed -i "/'session' => \[/,/^[[:space:]]*\],/ s/'id_prefix' => '[^']*'/'id_prefix' => '${SITE_NAME}_session_'/g" app/etc/env.php
+if [ "$SITE_TYPE" = "new" ]; then
+    log_info "全新站点：添加 Valkey 配置"
+    add_valkey_config_for_new_site "$CACHE_DB" "$PAGE_DB" "$SESSION_DB" "$SITE_NAME" "$VALKEY_PASSWORD"
+else
+    log_info "迁移站点：更新 Valkey 配置"
+    update_valkey_config_for_migrated_site "$CACHE_DB" "$PAGE_DB" "$SESSION_DB" "$SITE_NAME"
+fi
 
 log_success "数据库配置完成"
 
@@ -172,7 +363,7 @@ log_info "第二步：执行renew流程..."
 
 # 启用维护模式
 log_warning "启用维护模式..."
-if ! php bin/magento maintenance:enable 2>/dev/null; then
+if ! sudo -u www-data php bin/magento maintenance:enable 2>/dev/null; then
     log_warning "维护模式启用失败，继续执行..."
 else
     log_success "维护模式已启用"
@@ -191,11 +382,11 @@ log_success "Redis/Valkey服务正常运行"
 log_warning "清理缓存和生成文件..."
 
 # 清理缓存
-if ! php bin/magento cache:clean 2>/dev/null; then
+if ! sudo -u www-data php bin/magento cache:clean 2>/dev/null; then
     log_warning "缓存清理失败，继续执行..."
 fi
 
-if ! php bin/magento cache:flush 2>/dev/null; then
+if ! sudo -u www-data php bin/magento cache:flush 2>/dev/null; then
     log_warning "缓存刷新失败，继续执行..."
 fi
 
@@ -215,16 +406,19 @@ log_success "文件清理完成"
 log_warning "重新编译和部署..."
 
 # 重新编译
-if ! php bin/magento setup:di:compile 2>/dev/null; then
+if ! sudo -u www-data php bin/magento setup:di:compile 2>/dev/null; then
     log_warning "依赖注入编译失败，继续执行..."
 fi
 
 # 部署静态内容
-if ! php bin/magento setup:static-content:deploy -f 2>/dev/null; then
+if ! sudo -u www-data php bin/magento setup:static-content:deploy -f 2>/dev/null; then
     log_warning "静态内容部署失败，继续执行..."
 fi
 
 log_success "编译和部署完成"
+
+# 安全清理当前站点的旧数据库
+cleanup_current_site_old_databases "$SITE_NAME" "$CACHE_DB" "$PAGE_DB" "$SESSION_DB" "$VALKEY_PASSWORD"
 
 # 清空Valkey缓存
 log_warning "清空站点 $SITE_NAME 的Valkey缓存..."
@@ -276,7 +470,7 @@ log_success "目录检查完成"
 log_warning "验证配置..."
 
 # 检查缓存状态
-if ! php bin/magento cache:status 2>/dev/null; then
+if ! sudo -u www-data php bin/magento cache:status 2>/dev/null; then
     echo -e "${YELLOW}⚠ 无法获取缓存状态${NC}"
 fi
 
@@ -315,7 +509,7 @@ echo " 使用数据库: $CACHE_DB, $PAGE_DB, $SESSION_DB"
 
 # 禁用维护模式
 log_warning "禁用维护模式..."
-if ! php bin/magento maintenance:disable 2>/dev/null; then
+if ! sudo -u www-data php bin/magento maintenance:disable 2>/dev/null; then
     log_warning "维护模式禁用失败，请手动检查"
 else
     log_success "维护模式已禁用"
@@ -324,8 +518,8 @@ fi
 
 echo ""
 log_warning "建议运行以下命令进行最终检查:"
-echo " php bin/magento cache:status"
-echo " php bin/magento setup:upgrade"
-echo " php bin/magento indexer:reindex"
+echo " sudo -u www-data php bin/magento cache:status"
+echo " sudo -u www-data php bin/magento setup:upgrade"
+echo " sudo -u www-data php bin/magento indexer:reindex"
 
 log_success "Valkey 自动续期完成！"

@@ -181,6 +181,10 @@ show_nginx_help() {
     echo "  modsecurity status       - 检查 ModSecurity 状态"
     echo "  modsecurity disable      - 禁用 ModSecurity"
     echo "  modsecurity enable       - 启用 ModSecurity"
+    echo "  csp level [1-5]         - 设置 CSP 安全等级"
+    echo "  csp status              - 检查 CSP 状态"
+    echo "  csp disable             - 禁用 CSP"
+    echo "  csp enable              - 启用 CSP"
     echo ""
     echo "示例:"
     echo "  saltgoat nginx create site1 example1.com"
@@ -191,6 +195,8 @@ show_nginx_help() {
     echo "  saltgoat nginx list"
     echo "  saltgoat nginx modsecurity level 5"
     echo "  saltgoat nginx modsecurity status"
+    echo "  saltgoat nginx csp level 3"
+    echo "  saltgoat nginx csp status"
 }
 
 # 数据库帮助

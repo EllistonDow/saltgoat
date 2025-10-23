@@ -62,6 +62,10 @@ nginx_handler() {
             log_highlight "测试 Nginx 配置..."
             nginx_test_config
             ;;
+               "csp")
+                   source "${SCRIPT_DIR}/modules/security/csp-salt.sh"
+                   csp_salt_handler "csp" "$3" "$4"
+                   ;;
         "help")
             show_nginx_help
             ;;
