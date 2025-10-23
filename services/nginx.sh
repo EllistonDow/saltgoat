@@ -98,7 +98,7 @@ EOF
     sudo ln -sf "$config_file" "/etc/nginx/sites-enabled/$site"
     
     log_info "测试 Nginx 配置"
-    sudo nginx -t
+    sudo /usr/sbin/nginx -t -c /etc/nginx/nginx.conf
     
     log_info "重新加载 Nginx"
     sudo systemctl reload nginx
@@ -173,7 +173,7 @@ server {
 EOF
         
         # 测试并重新加载 Nginx
-        if sudo nginx -t; then
+        if sudo /usr/sbin/nginx -t -c /etc/nginx/nginx.conf; then
             sudo systemctl reload nginx
             log_success "SSL 证书申请完成: $site ($domain)"
         else

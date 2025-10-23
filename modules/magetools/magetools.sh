@@ -1200,7 +1200,7 @@ show_magetools_help() {
     echo "  permissions reset    - 重置权限"
     echo ""
     echo "[INFO] 站点转换:"
-    echo "  convert magento2     - 转换Nginx配置为Magento2格式 (仅Nginx配置)"
+    echo "  convert magento2 [site] - 转换Nginx配置为Magento2格式 (支持站点名称或路径)"
     echo "  convert check        - 检查Magento2兼容性"
     echo ""
     echo "[INFO] Valkey缓存管理:"
@@ -1237,7 +1237,7 @@ show_magetools_help() {
     echo "示例:"
     echo "  saltgoat magetools install n98-magerun2"
     echo "  saltgoat magetools permissions fix"
-    echo "  saltgoat magetools convert magento2"
+    echo "  saltgoat magetools convert magento2 tank"
     echo "  saltgoat magetools valkey-renew tank"
     echo "  saltgoat magetools rabbitmq check tank"
     echo "  saltgoat magetools opensearch doge"
@@ -1694,12 +1694,23 @@ check_magento2_compatibility() {
 
 # 转换为 Magento 2 配置
 convert_to_magento2() {
-    local site_path="${1:-$(pwd)}"
+    local site_input="${1:-$(pwd)}"
+    local site_path=""
+    
+    # 判断输入是路径还是站点名称
+    if [[ "$site_input" =~ ^/ ]]; then
+        # 如果是绝对路径，直接使用
+        site_path="$site_input"
+    else
+        # 如果是站点名称，构建标准路径
+        site_path="/var/www/$site_input"
+    fi
     
     # 检查是否在 Magento 目录中
     if [[ ! -f "$site_path/bin/magento" ]]; then
-        log_error "未在 Magento 目录中，请指定正确的路径"
-        log_info "用法: saltgoat magetools convert magento2 [path]"
+        log_error "未在 Magento 目录中，请指定正确的路径或站点名称"
+        log_info "用法: saltgoat magetools convert magento2 [site_name|path]"
+        log_info "示例: saltgoat magetools convert magento2 tank"
         log_info "示例: saltgoat magetools convert magento2 /var/www/tank"
         return 1
     fi
@@ -1732,25 +1743,97 @@ optimize_nginx_for_magento2() {
     
     log_info "优化 Nginx 配置为 Magento 2..."
     
-    # 备份原配置
-             sudo cp "/etc/nginx/sites-enabled/$site_name" "/etc/nginx/sites-enabled/$site_name.backup.$(date +%Y%m%d_%H%M%S)"
+    # 检查站点配置文件是否存在
+    if [[ ! -f "/etc/nginx/sites-enabled/$site_name" ]]; then
+        log_error "站点配置文件不存在: /etc/nginx/sites-enabled/$site_name"
+        log_info "请先使用 'saltgoat nginx create $site_name <domain>' 创建站点"
+        return 1
+    fi
+    
+    # 备份原配置到 sites-available 目录
+    sudo cp "/etc/nginx/sites-enabled/$site_name" "/etc/nginx/sites-available/$site_name.backup.$(date +%Y%m%d_%H%M%S)"
+    
+    # 从原配置中提取域名信息
+    local server_name=$(grep "server_name" "/etc/nginx/sites-enabled/$site_name" | head -1 | sed 's/.*server_name[[:space:]]*//; s/;.*//')
+    
+    if [[ -z "$server_name" ]]; then
+        log_error "无法从原配置中提取域名信息"
+        return 1
+    fi
+    
+    log_info "检测到域名: $server_name"
+    
+    # 检查是否有 SSL 配置
+    local has_ssl=false
+    local backup_file=$(ls -t /etc/nginx/sites-available/$site_name.backup.* 2>/dev/null | head -1)
+    if [[ -n "$backup_file" ]] && grep -q "ssl_certificate" "$backup_file"; then
+        has_ssl=true
+        log_info "检测到 SSL 配置，将保持 HTTPS 设置"
+    fi
     
     # 创建简化的 Magento 2 Nginx 配置（使用 nginx.conf.sample）
-    sudo tee "/etc/nginx/sites-enabled/$site_name" >/dev/null <<EOF
+    # 注意：nginx.conf.sample 需要 fastcgi_backend upstream 定义
+    if [[ "$has_ssl" == "true" ]]; then
+        # 如果有 SSL，创建 HTTP 重定向和 HTTPS 配置
+        sudo tee "/etc/nginx/sites-enabled/$site_name" >/dev/null <<EOF
+upstream fastcgi_backend {
+  server  unix:/run/php/php8.3-fpm.sock;
+}
+
 server {
     listen 80;
-    server_name tank.magento.tattoogoat.com www.tank.magento.tattoogoat.com;
+    server_name $server_name;
+    return 301 https://\$server_name\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name $server_name;
+    set \$MAGE_ROOT $site_path;
+    include $site_path/nginx.conf.sample;
+    
+    # SSL 配置
+    ssl_certificate /etc/letsencrypt/live/$site_name/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$site_name/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384;
+    ssl_prefer_server_ciphers off;
+}
+EOF
+    else
+        # 如果没有 SSL，只创建 HTTP 配置
+        sudo tee "/etc/nginx/sites-enabled/$site_name" >/dev/null <<EOF
+upstream fastcgi_backend {
+  server  unix:/run/php/php8.3-fpm.sock;
+}
+
+server {
+    listen 80;
+    server_name $server_name;
     set \$MAGE_ROOT $site_path;
     include $site_path/nginx.conf.sample;
 }
 EOF
+    fi
+    log_info "已创建 Magento 2 配置（包含 fastcgi_backend upstream）"
     
     # 测试 Nginx 配置
-    if sudo nginx -t; then
+    if sudo /usr/sbin/nginx -t -c /etc/nginx/nginx.conf; then
         sudo systemctl reload nginx
         log_success "Nginx 配置已更新为 Magento 2 简化配置（使用 nginx.conf.sample）"
+        log_info "配置特点:"
+        log_info "  - 使用官方 nginx.conf.sample"
+        log_info "  - 包含 fastcgi_backend upstream 定义"
+        log_info "  - 自动提取原域名配置"
     else
         log_error "Nginx 配置有误，请检查"
+        # 恢复备份
+        local backup_file=$(ls -t /etc/nginx/sites-available/$site_name.backup.* 2>/dev/null | head -1)
+        if [[ -n "$backup_file" ]]; then
+            sudo cp "$backup_file" "/etc/nginx/sites-enabled/$site_name"
+            log_info "已恢复备份配置"
+        fi
         return 1
     fi
 }
