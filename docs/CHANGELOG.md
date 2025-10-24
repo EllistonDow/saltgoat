@@ -1,5 +1,36 @@
 # SaltGoat 更新日志
 
+## [0.9.7] - 2025-10-24
+
+### 🛠️ Valkey 稳定性补丁
+- **修复 Salt 渲染错误**：`optional.magento-valkey` 使用 Heredoc 传递 JSON 时现在保持缩进，避免出现 “could not find expected ':'” 并导致 env.php 写入失败。
+- **多实例健康检查**：`optional.magento-valkey-check` 在 PING 时使用每个缓存区的独立主机/端口/密码，正确支持分离式 Valkey 拓扑并提供更准确的诊断。
+
+## [0.9.6] - 2025-10-24
+
+### 🧪 Magento Valkey 检测与健壮性
+- **新增 `valkey-check`**：提供 Salt 原生检测流程，逐项校验 env.php 配置、Valkey 连接、权限与密码一致性，命令为 `saltgoat magetools valkey-check <site>`.
+- **稳定写入配置**：`optional.magento-valkey` 现在直接使用 pillar 数据渲染，避免 `sudo` 环境变量丢失导致的空值写入。
+- **更安全的数据库分配**：`valkey-setup` 默认复用既有 DB 编号，仅在变更时清理旧库，并会跳过其他站点正在使用的数据库。
+
+## [0.9.4] - 2025-01-27
+
+### 🔧 **CSP 管理系统重构**
+- **Salt 原生方式**：重构 CSP 管理系统，使用 Salt 原生方式管理
+- **删除旧脚本**：移除 `csp-levels.sh` 脚本，避免命令冲突
+- **简化检测逻辑**：使用直接文件操作，更可靠稳定
+- **修复检测问题**：解决 CSP 状态检测不准确的问题
+- **自动备份**：修改前自动备份配置，失败时自动恢复
+- **配置验证**：修改后自动测试 Nginx 配置
+
+### 📋 **可用命令**
+```bash
+saltgoat nginx csp status    # 检查 CSP 状态
+saltgoat nginx csp level 3   # 设置 CSP 等级
+saltgoat nginx csp disable   # 禁用 CSP
+saltgoat nginx csp enable    # 启用 CSP
+```
+
 ## [0.9.3] - 2025-10-23
 
 ### 🔒 **CSP 等级配置系统**

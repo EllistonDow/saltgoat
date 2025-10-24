@@ -27,6 +27,7 @@ Magento工具集为SaltGoat提供了专门的Magento开发和维护工具，包�
 - 清理所有缓存
 - 检查缓存状态
 - 预热缓存
+- Magento Valkey 配置与检测（Salt 原生）
 
 ### 📊 索引管理
 - 重建所有索引
@@ -77,7 +78,22 @@ saltgoat magetools cache status
 
 # 预热缓存
 saltgoat magetools cache warm
+
+# 使用 Salt 原生流程配置 Valkey
+saltgoat magetools valkey-setup bank
+saltgoat magetools valkey-setup bank --reuse-existing --cache-db 13 --page-db 14 --session-db 15
+
+# 检测当前 Valkey 配置是否生效
+saltgoat magetools valkey-check bank --expected-owner www-data --expected-perms 755
+
+# 兼容旧流程：使用 Shell 脚本重新分配数据库
+saltgoat magetools valkey-renew bank
 ```
+
+#### Valkey 配置命令说明
+- `valkey-setup`：通过 Salt 状态写入 env.php，支持 `--reuse-existing`、`--cache-db`、`--page-db`、`--session-db`、`--cache-prefix`、`--session-prefix`、`--host`、`--port` 等参数。
+- `valkey-check`：验证 env.php、Valkey 连接、权限与密码一致性，可选参数包括 `--site-path`、`--expected-owner`、`--expected-group`、`--expected-perms`、`--valkey-conf`。
+- `valkey-renew`：保留传统 Shell 脚本流程，用于快速重新分配数据库或清理旧缓存。
 
 ### 索引管理
 ```bash
@@ -194,6 +210,6 @@ saltgoat help magetools
 
 ## 版本信息
 
-- **SaltGoat版本**: v0.6.0+
+- **SaltGoat版本**: v0.9.7+
 - **支持Magento**: 1.x, 2.x
 - **PHP要求**: 7.4+
