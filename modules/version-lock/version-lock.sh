@@ -123,7 +123,8 @@ unlock_software_versions() {
     log_info "解锁软件版本..."
     
     # 解锁所有被锁定的包
-    local locked_packages=$(apt-mark showhold)
+    local locked_packages
+    locked_packages=$(apt-mark showhold)
     if [[ -n "$locked_packages" ]]; then
         echo "$locked_packages" | while read -r package; do
             sudo apt-mark unhold "$package" 2>/dev/null
@@ -141,10 +142,12 @@ show_locked_versions() {
     log_info "当前锁定的软件版本:"
     echo "=========================================="
     
-    local locked_packages=$(apt-mark showhold)
+    local locked_packages
+    locked_packages=$(apt-mark showhold)
     if [[ -n "$locked_packages" ]]; then
         echo "$locked_packages" | while read -r package; do
-            local version=$(dpkg -l "$package" 2>/dev/null | grep "^ii" | awk '{print $3}')
+            local version
+            version=$(dpkg -l "$package" 2>/dev/null | grep "^ii" | awk '{print $3}')
             if [[ -n "$version" ]]; then
                 log_success "$package: $version"
             else
@@ -165,10 +168,12 @@ check_version_status() {
     
     # 检查Nginx版本
     if command -v nginx >/dev/null 2>&1; then
-        local nginx_version=$(nginx -v 2>&1 | cut -d' ' -f3)
+        local nginx_version
+        nginx_version=$(nginx -v 2>&1 | cut -d' ' -f3)
         log_success "Nginx: $nginx_version+ModSecurity (源码编译，版本固定)"
     elif [[ -f "/usr/local/nginx/sbin/nginx" ]]; then
-        local nginx_version=$(/usr/local/nginx/sbin/nginx -v 2>&1 | cut -d' ' -f3)
+        local nginx_version
+        nginx_version=$(/usr/local/nginx/sbin/nginx -v 2>&1 | cut -d' ' -f3)
         log_success "Nginx: $nginx_version+ModSecurity (源码编译，版本固定)"
     else
         log_warning "Nginx: 未安装"
@@ -176,7 +181,8 @@ check_version_status() {
     
     # 检查Percona MySQL版本
     if command -v mysql >/dev/null 2>&1; then
-        local mysql_version=$(mysql --version | cut -d' ' -f3)
+        local mysql_version
+        mysql_version=$(mysql --version | cut -d' ' -f3)
         log_success "Percona: $mysql_version (目标: 8.4)"
     else
         log_warning "Percona MySQL: 未安装"
@@ -184,7 +190,8 @@ check_version_status() {
     
     # 检查PHP版本
     if command -v php >/dev/null 2>&1; then
-        local php_version=$(php -v | head -1 | cut -d' ' -f2)
+        local php_version
+        php_version=$(php -v | head -1 | cut -d' ' -f2)
         log_success "PHP: $php_version (目标: 8.3)"
     else
         log_warning "PHP: 未安装"
@@ -192,7 +199,8 @@ check_version_status() {
     
     # 检查Valkey版本
     if command -v valkey-cli >/dev/null 2>&1; then
-        local valkey_version=$(valkey-cli --version | cut -d' ' -f2)
+        local valkey_version
+        valkey_version=$(valkey-cli --version | cut -d' ' -f2)
         log_success "Valkey: $valkey_version (目标: 8)"
     else
         log_warning "Valkey: 未安装"
@@ -200,7 +208,8 @@ check_version_status() {
     
     # 检查RabbitMQ版本
     if command -v rabbitmqctl >/dev/null 2>&1; then
-        local rabbitmq_version=$(rabbitmqctl version 2>/dev/null | head -1 | cut -d' ' -f3)
+        local rabbitmq_version
+        rabbitmq_version=$(rabbitmqctl version 2>/dev/null | head -1 | cut -d' ' -f3)
         log_success "RabbitMQ: $rabbitmq_version (目标: 4.1)"
     else
         log_warning "RabbitMQ: 未安装"
@@ -208,7 +217,8 @@ check_version_status() {
     
     # 检查OpenSearch版本
     if command -v opensearch >/dev/null 2>&1; then
-        local opensearch_version=$(opensearch --version 2>/dev/null | head -1 | cut -d' ' -f2 || echo "未知")
+        local opensearch_version
+        opensearch_version=$(opensearch --version 2>/dev/null | head -1 | cut -d' ' -f2 || echo "未知")
         log_success "OpenSearch: $opensearch_version (目标: 2.19)"
     else
         log_warning "OpenSearch: 未安装"
@@ -216,7 +226,8 @@ check_version_status() {
     
     # 检查Varnish版本
     if command -v varnishd >/dev/null 2>&1; then
-        local varnish_version=$(varnishd -V 2>&1 | head -1 | cut -d' ' -f2 || echo "未知")
+        local varnish_version
+        varnish_version=$(varnishd -V 2>&1 | head -1 | cut -d' ' -f2 || echo "未知")
         log_success "Varnish: $varnish_version (目标: 7.6)"
     else
         log_warning "Varnish: 未安装"
@@ -224,7 +235,8 @@ check_version_status() {
     
     # 检查Composer版本
     if command -v composer >/dev/null 2>&1; then
-        local composer_version=$(composer --version 2>&1 | head -1 | cut -d' ' -f3)
+        local composer_version
+        composer_version=$(composer --version 2>&1 | head -1 | cut -d' ' -f3)
         log_success "Composer: $composer_version (目标: 2.8)"
     else
         log_warning "Composer: 未安装"
@@ -234,7 +246,8 @@ check_version_status() {
     
     # 显示锁定状态
     log_info "版本锁定状态:"
-    local locked_count=$(apt-mark showhold | wc -l)
+    local locked_count
+    locked_count=$(apt-mark showhold | wc -l)
     if [[ "$locked_count" -gt 0 ]]; then
         log_success "已锁定 $locked_count 个软件包"
         log_info "使用 'saltgoat version-lock show' 查看详细信息"

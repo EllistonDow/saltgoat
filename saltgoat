@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore', message='.*spwd.*')
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.9.9"
+SCRIPT_VERSION="0.9.10"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -32,7 +32,6 @@ fi
 # 加载公共库
 source "${SCRIPT_DIR}/lib/logger.sh"
 source "${SCRIPT_DIR}/lib/utils.sh"
-source "${SCRIPT_DIR}/lib/config.sh"
 source "${SCRIPT_DIR}/lib/help.sh"
 
 # 加载核心功能
@@ -69,6 +68,8 @@ source "${SCRIPT_DIR}/modules/diagnose/diagnose.sh"
 source "${SCRIPT_DIR}/modules/version-lock/version-lock.sh"
 source "${SCRIPT_DIR}/modules/profile/performance-analysis.sh"
 source "${SCRIPT_DIR}/modules/magetools/magetools.sh"
+source "${SCRIPT_DIR}/modules/analyse/analyse.sh"
+source "${SCRIPT_DIR}/modules/git/git.sh"
 
 # 加载管理面板模块
 source "${SCRIPT_DIR}/modules/cockpit/cockpit.sh"
@@ -479,8 +480,14 @@ case "$1" in
                 log_error "未知的安全操作: $2"
                 log_info "支持: scan, ports, services, files, firewall, updates, users, logs, report"
                 exit 1
-                ;;
+            ;;
         esac
+        ;;
+    "analyse")
+        analyse_handler "${@:2}"
+        ;;
+    "git")
+        git_handler "${@:2}"
         ;;
         "performance")
             case "$2" in

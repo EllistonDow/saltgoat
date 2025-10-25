@@ -4,7 +4,9 @@
 
 # 加载公共库
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
 source "${MODULE_DIR}/../../lib/logger.sh"
+# shellcheck disable=SC1091
 source "${MODULE_DIR}/../../lib/utils.sh"
 
 # Adminer 配置
@@ -22,9 +24,7 @@ adminer_install() {
     
     # 下载 Adminer
     log_info "下载 Adminer v${ADMINER_VERSION}..."
-    sudo wget -O "${ADMINER_DIR}/adminer.php" "$ADMINER_URL"
-    
-    if [[ $? -eq 0 ]]; then
+    if sudo wget -O "${ADMINER_DIR}/adminer.php" "$ADMINER_URL"; then
         log_success "Adminer 下载成功"
     else
         log_error "Adminer 下载失败"
@@ -47,8 +47,14 @@ adminer_install() {
             log_info "通过 systemctl 重新加载 Nginx"
         elif pgrep -f "nginx.*master" >/dev/null; then
             # 编译安装的 Nginx，使用信号重新加载
-            sudo kill -HUP $(pgrep -f "nginx.*master" | head -1)
-            log_info "通过信号重新加载 Nginx"
+            local master_pid
+            master_pid="$(pgrep -f "nginx.*master" | head -1)"
+            if [[ -n "$master_pid" ]]; then
+                sudo kill -HUP "$master_pid"
+                log_info "通过信号重新加载 Nginx"
+            else
+                log_warning "未找到 Nginx 主进程，跳过 HUP 信号"
+            fi
         else
             log_warning "无法重新加载 Nginx，请手动重启"
         fi
@@ -173,7 +179,8 @@ adminer_status() {
 }
 
 adminer_config() {
-    local action="${1:-show}"
+    local action
+    action="${1:-show}"
     
     case "$action" in
         "show")
@@ -198,9 +205,7 @@ adminer_config() {
             fi
             
             # 下载新版本
-            sudo wget -O "${ADMINER_DIR}/adminer.php" "$ADMINER_URL"
-            
-            if [[ $? -eq 0 ]]; then
+            if sudo wget -O "${ADMINER_DIR}/adminer.php" "$ADMINER_URL"; then
                 sudo chown www-data:www-data "${ADMINER_DIR}/adminer.php"
                 sudo chmod 644 "${ADMINER_DIR}/adminer.php"
                 log_success "Adminer 更新完成"
@@ -304,7 +309,8 @@ adminer_backup() {
     log_info "备份 Adminer 配置..."
     
     local backup_dir="/opt/saltgoat/backups/adminer"
-    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local timestamp
+    timestamp="$(date +%Y%m%d_%H%M%S)"
     
     sudo mkdir -p "$backup_dir"
     

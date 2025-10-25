@@ -7,6 +7,7 @@ set -euo pipefail
 
 # 加载公共库
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
 # 默认配置
@@ -126,7 +127,8 @@ fix_site_base_url() {
     fi
     
     # 检查 XML 配置文件
-    local xml_files=$(find . -name "*.xml" -path "*/etc/*" -exec grep -l "base_url" {} \; 2>/dev/null | grep -v vendor | head -5)
+    local xml_files
+    xml_files=$(find . -name "*.xml" -path "*/etc/*" -exec grep -l "base_url" {} \; 2>/dev/null | grep -v vendor | head -5)
     if [[ -n "$xml_files" ]]; then
         config_files_found=true
         log_warning "发现 XML 配置文件中包含 base_url 配置"
@@ -178,8 +180,10 @@ fix_site_base_url() {
     # 6. 验证配置
     log_info "6. 验证配置..."
     if [[ "$dry_run" != "true" ]]; then
-        local http_url=$(sudo -u www-data php bin/magento config:show web/unsecure/base_url 2>/dev/null || echo "无法获取")
-        local https_url=$(sudo -u www-data php bin/magento config:show web/secure/base_url 2>/dev/null || echo "无法获取")
+        local http_url
+        http_url=$(sudo -u www-data php bin/magento config:show web/unsecure/base_url 2>/dev/null || echo "无法获取")
+        local https_url
+        https_url=$(sudo -u www-data php bin/magento config:show web/secure/base_url 2>/dev/null || echo "无法获取")
         
         log_info "当前配置:"
         log_info "  HTTP Base URL:  $http_url"

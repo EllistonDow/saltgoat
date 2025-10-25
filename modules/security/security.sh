@@ -2,14 +2,6 @@
 # 安全扫描模块 - 完全 Salt 原生功能
 # services/security.sh
 
-# 安全扫描配置
-SECURITY_SCAN_DIRS=(
-    "/etc"
-    "/var/www"
-    "/home"
-    "/root"
-)
-
 # 检查开放端口
 security_port_scan() {
     log_highlight "扫描开放端口..."
@@ -18,7 +10,8 @@ security_port_scan() {
     echo "=========================================="
     
     # 使用 Salt 命令模块扫描端口
-    local open_ports=$(salt-call --local cmd.run "ss -tlnp" 2>/dev/null | grep LISTEN)
+    local open_ports
+    open_ports=$(salt-call --local cmd.run "ss -tlnp" 2>/dev/null | grep LISTEN)
     
     if [[ -n "$open_ports" ]]; then
         echo "$open_ports"
@@ -59,7 +52,8 @@ security_service_check() {
     local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
     
     for service in "${services[@]}"; do
-        local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
+        local status
+        status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
         if [[ "$status" == "True" ]]; then
             echo "✅ $service: 运行中"
         else
@@ -73,7 +67,8 @@ security_service_check() {
     
     # 检查 Nginx 安全配置
     if salt-call --local file.file_exists "/etc/nginx/nginx.conf" --out=txt 2>/dev/null | grep -q "True"; then
-        local server_tokens=$(salt-call --local cmd.run "grep -c 'server_tokens off' /etc/nginx/nginx.conf" 2>/dev/null)
+        local server_tokens
+        server_tokens=$(salt-call --local cmd.run "grep -c 'server_tokens off' /etc/nginx/nginx.conf" 2>/dev/null)
         if [[ "$server_tokens" == "0" ]]; then
             log_warning "Nginx: server_tokens 未关闭，可能泄露版本信息"
         else
@@ -83,7 +78,8 @@ security_service_check() {
     
     # 检查 MySQL 安全配置
     if salt-call --local file.file_exists "/etc/mysql/mysql.conf.d/mysqld.cnf" --out=txt 2>/dev/null | grep -q "True"; then
-        local bind_address=$(salt-call --local cmd.run "grep -c 'bind-address.*127.0.0.1' /etc/mysql/mysql.conf.d/mysqld.cnf" 2>/dev/null)
+        local bind_address
+        bind_address=$(salt-call --local cmd.run "grep -c 'bind-address.*127.0.0.1' /etc/mysql/mysql.conf.d/mysqld.cnf" 2>/dev/null)
         if [[ "$bind_address" == "0" ]]; then
             log_warning "MySQL: 可能允许远程连接"
         else
@@ -112,8 +108,10 @@ security_file_permissions() {
     
     for file in "${critical_files[@]}"; do
         if salt-call --local file.file_exists "$file" --out=txt 2>/dev/null | grep -q "True"; then
-            local perms=$(salt-call --local file.stat "$file" --out=txt 2>/dev/null | grep "mode:" | awk '{print $2}')
-            local owner=$(salt-call --local file.stat "$file" --out=txt 2>/dev/null | grep "user:" | awk '{print $2}')
+            local perms
+            perms=$(salt-call --local file.stat "$file" --out=txt 2>/dev/null | grep "mode:" | awk '{print $2}')
+            local owner
+            owner=$(salt-call --local file.stat "$file" --out=txt 2>/dev/null | grep "user:" | awk '{print $2}')
             
             echo "$file: $perms (owner: $owner)"
             
@@ -135,8 +133,10 @@ security_file_permissions() {
     
     for dir in "${web_dirs[@]}"; do
         if salt-call --local file.directory_exists "$dir" --out=txt 2>/dev/null | grep -q "True"; then
-            local perms=$(salt-call --local file.stat "$dir" --out=txt 2>/dev/null | grep "mode:" | awk '{print $2}')
-            local owner=$(salt-call --local file.stat "$dir" --out=txt 2>/dev/null | grep "user:" | awk '{print $2}')
+            local perms
+            perms=$(salt-call --local file.stat "$dir" --out=txt 2>/dev/null | grep "mode:" | awk '{print $2}')
+            local owner
+            owner=$(salt-call --local file.stat "$dir" --out=txt 2>/dev/null | grep "user:" | awk '{print $2}')
             
             echo "$dir: $perms (owner: $owner)"
             
@@ -155,7 +155,8 @@ security_firewall_check() {
     echo "=========================================="
     
     # 检查 UFW 状态
-    local ufw_status=$(salt-call --local cmd.run "ufw status" 2>/dev/null)
+    local ufw_status
+    ufw_status=$(salt-call --local cmd.run "ufw status" 2>/dev/null)
     
     if echo "$ufw_status" | grep -q "Status: active"; then
         log_success "UFW 防火墙: 已启用"
@@ -170,7 +171,8 @@ security_firewall_check() {
     echo "----------------------------------------"
     
     # 检查 iptables 规则
-    local iptables_rules=$(salt-call --local cmd.run "iptables -L -n" 2>/dev/null)
+    local iptables_rules
+    iptables_rules=$(salt-call --local cmd.run "iptables -L -n" 2>/dev/null)
     echo "$iptables_rules"
 }
 
@@ -182,7 +184,8 @@ security_updates_check() {
     echo "=========================================="
     
     # 检查可用的安全更新
-    local updates_count=$(apt list --upgradable 2>/dev/null | grep -c 'upgradable' 2>/dev/null)
+    local updates_count
+    updates_count=$(apt list --upgradable 2>/dev/null | grep -c 'upgradable' 2>/dev/null)
     local updates=${updates_count:-0}
     
     if [[ $updates -gt 0 ]]; then
@@ -202,7 +205,8 @@ security_updates_check() {
     echo "----------------------------------------"
     
     # 检查 unattended-upgrades 状态
-    local auto_update_status=$(salt-call --local service.status "unattended-upgrades" --out=txt 2>/dev/null | tail -n 1)
+    local auto_update_status
+    auto_update_status=$(salt-call --local service.status "unattended-upgrades" --out=txt 2>/dev/null | tail -n 1)
     if [[ "$auto_update_status" == "True" ]]; then
         log_success "自动安全更新: 已启用"
     else
@@ -219,7 +223,8 @@ security_user_check() {
     echo "=========================================="
     
     # 检查 root 用户登录
-    local root_login=$(salt-call --local cmd.run "grep '^PermitRootLogin' /etc/ssh/sshd_config" 2>/dev/null)
+    local root_login
+    root_login=$(salt-call --local cmd.run "grep '^PermitRootLogin' /etc/ssh/sshd_config" 2>/dev/null)
     if echo "$root_login" | grep -q "no"; then
         log_success "SSH: Root 登录已禁用"
     else
@@ -228,7 +233,8 @@ security_user_check() {
     fi
     
     # 检查密码策略
-    local passwd_policy=$(salt-call --local cmd.run "grep -E '^PASS_' /etc/login.defs" 2>/dev/null)
+    local passwd_policy
+    passwd_policy=$(salt-call --local cmd.run "grep -E '^PASS_' /etc/login.defs" 2>/dev/null)
     echo "密码策略:"
     echo "$passwd_policy"
     
@@ -261,7 +267,8 @@ security_log_check() {
     
     for log_file in "${log_files[@]}"; do
         if salt-call --local file.file_exists "$log_file" --out=txt 2>/dev/null | grep -q "True"; then
-            local size=$(salt-call --local cmd.run "du -h $log_file" 2>/dev/null | awk '{print $1}')
+            local size
+            size=$(salt-call --local cmd.run "du -h $log_file" 2>/dev/null | awk '{print $1}')
             echo "✅ $log_file: $size"
         else
             echo "❌ $log_file: 不存在"
@@ -310,7 +317,8 @@ security_full_scan() {
 
 # 生成安全报告
 security_report() {
-    local report_file="$HOME/saltgoat_security_report_$(date +%Y%m%d_%H%M%S).txt"
+    local report_file
+    report_file="$HOME/saltgoat_security_report_$(date +%Y%m%d_%H%M%S).txt"
     
     log_highlight "生成安全报告: $report_file"
     

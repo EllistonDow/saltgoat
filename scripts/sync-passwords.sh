@@ -4,7 +4,9 @@
 
 # 加载公共库
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/utils.sh"
 
 check_permissions "$@"

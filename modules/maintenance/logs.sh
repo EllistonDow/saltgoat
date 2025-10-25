@@ -126,7 +126,7 @@ log_cleanup() {
     
     log_highlight "清理 $log_type 日志（保留 $days 天）..."
     log_warning "这将删除超过 $days 天的日志文件，请确认是否继续？"
-    read -p "输入 'yes' 确认继续: " confirm
+    read -r -p "输入 'yes' 确认继续: " confirm
     
     if [[ "$confirm" != "yes" ]]; then
         log_info "清理操作已取消"
@@ -258,15 +258,18 @@ log_stats() {
     
     for log_dir in "${LOG_DIRS[@]}"; do
         if salt-call --local file.directory_exists "$log_dir" --out=txt 2>/dev/null | grep -q "True"; then
-            local size=$(du -sh "$log_dir" 2>/dev/null | awk '{print $1}')
-            local files=$(find "$log_dir" -type f 2>/dev/null | wc -l)
+            local size
+            size=$(du -sh "$log_dir" 2>/dev/null | awk '{print $1}')
+            local files
+            files=$(find "$log_dir" -type f 2>/dev/null | wc -l)
             echo "$log_dir: $size ($files 个文件)"
         fi
     done
     
     echo ""
     echo "系统日志总大小:"
-    local total_size=$(du -sh /var/log 2>/dev/null | awk '{print $1}')
+    local total_size
+    total_size=$(du -sh /var/log 2>/dev/null | awk '{print $1}')
     echo "/var/log: $total_size"
     
     echo ""

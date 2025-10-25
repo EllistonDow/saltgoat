@@ -3,6 +3,8 @@
 # modules/magetools/migrate-detect.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../lib/logger.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
 # 检测网站迁移配置
@@ -26,8 +28,10 @@ detect_migration_config() {
     
     # 检测 AMQP 配置中的旧网站名称
     log_info "检测 AMQP 配置..."
-    local amqp_user=$(grep -A 10 "'amqp'" "$env_file" | grep "'user'" | sed "s/.*'user' => '\([^']*\)'.*/\1/")
-    local amqp_vhost=$(grep -A 10 "'amqp'" "$env_file" | grep "'virtualhost'" | sed "s/.*'virtualhost' => '\([^']*\)'.*/\1/")
+    local amqp_user
+    amqp_user=$(grep -A 10 "'amqp'" "$env_file" | grep "'user'" | sed "s/.*'user' => '\([^']*\)'.*/\1/")
+    local amqp_vhost
+    amqp_vhost=$(grep -A 10 "'amqp'" "$env_file" | grep "'virtualhost'" | sed "s/.*'virtualhost' => '\([^']*\)'.*/\1/")
     
     if [[ -n "$amqp_user" && "$amqp_user" != "${site_name}_user" ]]; then
         log_warning "检测到旧 AMQP 用户: $amqp_user (应为: ${site_name}_user)"
@@ -41,7 +45,8 @@ detect_migration_config() {
     
     # 检测数据库配置
     log_info "检测数据库配置..."
-    local db_name=$(grep -A 20 "'db'" "$env_file" | grep "'dbname'" | sed "s/.*'dbname' => '\([^']*\)'.*/\1/")
+    local db_name
+    db_name=$(grep -A 20 "'db'" "$env_file" | grep "'dbname'" | sed "s/.*'dbname' => '\([^']*\)'.*/\1/")
     
     if [[ -n "$db_name" && "$db_name" != "$site_name" ]]; then
         log_warning "检测到旧数据库名: $db_name (应为: $site_name)"
@@ -50,10 +55,12 @@ detect_migration_config() {
     
     # 检测缓存配置
     log_info "检测缓存配置..."
-    local cache_backend=$(grep -A 10 "'cache'" "$env_file" | grep "'backend'" | sed "s/.*'backend' => '\([^']*\)'.*/\1/")
+    local cache_backend
+    cache_backend=$(grep -A 10 "'cache'" "$env_file" | grep "'backend'" | sed "s/.*'backend' => '\([^']*\)'.*/\1/")
     
     if [[ "$cache_backend" == "Cm_Cache_Backend_Redis" ]]; then
-        local redis_database=$(grep -A 20 "'cache'" "$env_file" | grep "'database'" | sed "s/.*'database' => \([0-9]*\).*/\1/")
+        local redis_database
+        redis_database=$(grep -A 20 "'cache'" "$env_file" | grep "'database'" | sed "s/.*'database' => \([0-9]*\).*/\1/")
         if [[ -n "$redis_database" ]]; then
             log_info "当前 Redis 数据库: $redis_database"
             echo "REDIS_DATABASE=$redis_database"
@@ -62,10 +69,12 @@ detect_migration_config() {
     
     # 检测会话配置
     log_info "检测会话配置..."
-    local session_save=$(grep -A 10 "'session'" "$env_file" | grep "'save'" | sed "s/.*'save' => '\([^']*\)'.*/\1/")
+    local session_save
+    session_save=$(grep -A 10 "'session'" "$env_file" | grep "'save'" | sed "s/.*'save' => '\([^']*\)'.*/\1/")
     
     if [[ "$session_save" == "redis" ]]; then
-        local session_database=$(grep -A 20 "'session'" "$env_file" | grep "'database'" | sed "s/.*'database' => \([0-9]*\).*/\1/")
+        local session_database
+        session_database=$(grep -A 20 "'session'" "$env_file" | grep "'database'" | sed "s/.*'database' => \([0-9]*\).*/\1/")
         if [[ -n "$session_database" ]]; then
             log_info "当前会话 Redis 数据库: $session_database"
             echo "SESSION_DATABASE=$session_database"
@@ -75,7 +84,8 @@ detect_migration_config() {
     # 检测 RabbitMQ 用户是否存在
     log_info "检测 RabbitMQ 用户..."
     if command -v rabbitmqctl >/dev/null 2>&1; then
-        local rabbitmq_users=$(sudo rabbitmqctl list_users 2>/dev/null | grep -v "Listing users" | awk '{print $1}')
+        local rabbitmq_users
+        rabbitmq_users=$(sudo rabbitmqctl list_users 2>/dev/null | grep -v "Listing users" | awk '{print $1}')
         local old_user_found=false
         local new_user_found=false
         
@@ -97,10 +107,12 @@ detect_migration_config() {
     # 检测 Valkey 数据库使用情况
     log_info "检测 Valkey 数据库使用情况..."
     if command -v redis-cli >/dev/null 2>&1; then
-        local valkey_password=$(sudo cat /etc/valkey/valkey.conf 2>/dev/null | grep "requirepass" | awk '{print $2}' | head -1)
+        local valkey_password
+        valkey_password=$(sudo cat /etc/valkey/valkey.conf 2>/dev/null | grep "requirepass" | awk '{print $2}' | head -1)
         if [[ -n "$valkey_password" ]]; then
             for db in {0..99}; do
-                local key_count=$(redis-cli -a "$valkey_password" -n "$db" dbsize 2>/dev/null | grep -o '[0-9]*')
+                local key_count
+                key_count=$(redis-cli -a "$valkey_password" -n "$db" dbsize 2>/dev/null | grep -o '[0-9]*')
                 if [[ "$key_count" -gt 0 ]]; then
                     log_info "Valkey 数据库 $db 有 $key_count 个键"
                     echo "USED_VALKEY_DB=$db"
@@ -189,11 +201,14 @@ main() {
             ;;
         "fix")
             # 先检测
-            local detection_result=$(detect_migration_config "$site_path" "$site_name")
+            local detection_result
+            detection_result=$(detect_migration_config "$site_path" "$site_name")
             
             # 提取检测结果
-            local old_user=$(echo "$detection_result" | grep "OLD_AMQP_USER=" | cut -d'=' -f2)
-            local old_vhost=$(echo "$detection_result" | grep "OLD_AMQP_VHOST=" | cut -d'=' -f2)
+            local old_user
+            old_user=$(echo "$detection_result" | grep "OLD_AMQP_USER=" | cut -d'=' -f2)
+            local old_vhost
+            old_vhost=$(echo "$detection_result" | grep "OLD_AMQP_VHOST=" | cut -d'=' -f2)
             
             # 修复配置
             fix_migration_config "$site_path" "$site_name" "$old_user" "$old_vhost"

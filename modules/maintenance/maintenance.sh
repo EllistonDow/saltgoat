@@ -10,7 +10,8 @@ maintenance_update() {
             
             # 直接使用apt命令，避免Salt超时
             if sudo apt update >/dev/null 2>&1; then
-                local updates=$(apt list --upgradable 2>/dev/null | grep -c "upgradable" || echo "0")
+                local updates
+                updates=$(apt list --upgradable 2>/dev/null | grep -c "upgradable" || echo "0")
                 
                 if [[ "$updates" -gt 0 ]]; then
                     log_info "发现 $updates 个可更新的包"
@@ -154,7 +155,8 @@ maintenance_service() {
             local service="$2"
             log_highlight "检查服务状态: $service"
             
-            local status=$(systemctl is-active "$service" 2>/dev/null || echo "inactive")
+            local status
+            status=$(systemctl is-active "$service" 2>/dev/null || echo "inactive")
             if [[ "$status" == "active" ]]; then
                 log_success "服务 $service 正在运行"
             else
@@ -254,7 +256,7 @@ maintenance_disk() {
             echo "大于 $size 的文件:"
             echo "=========================================="
             # 使用 Salt 原生功能查找大文件
-            salt-call --local file.find / type=f size=+$size 2>/dev/null | head -20
+            salt-call --local file.find / type=f size=+"$size" 2>/dev/null | head -20
             ;;
         "cleanup-large")
             local size="${2:-100M}"
@@ -262,7 +264,8 @@ maintenance_disk() {
             log_highlight "清理大于 $size 且超过 $days 天的文件..."
             
             # 使用 Salt 原生功能查找大文件
-            local files=$(salt-call --local file.find /tmp,/var/tmp type=f size=+$size mtime=+$days 2>/dev/null)
+            local files
+            files=$(salt-call --local file.find /tmp,/var/tmp type=f size=+"$size" mtime=+"$days" 2>/dev/null)
             
             if [[ -n "$files" ]]; then
                 echo "找到以下文件:"
@@ -298,7 +301,8 @@ maintenance_health() {
     # 检查磁盘空间
     echo "磁盘空间检查:"
     echo "----------------------------------------"
-    local disk_usage=$(salt-call --local disk.usage / 2>/dev/null | grep -o '[0-9]*%' | sed 's/%//' | head -1)
+    local disk_usage
+    disk_usage=$(salt-call --local disk.usage / 2>/dev/null | grep -o '[0-9]*%' | sed 's/%//' | head -1)
     
     if [[ "$disk_usage" -gt 90 ]]; then
         log_error "磁盘空间不足: ${disk_usage}%"
@@ -312,9 +316,12 @@ maintenance_health() {
     echo ""
     echo "内存使用检查:"
     echo "----------------------------------------"
-    local mem_info=$(salt-call --local status.meminfo 2>/dev/null)
-    local mem_total=$(echo "$mem_info" | grep MemTotal | grep -o '[0-9]*')
-    local mem_available=$(echo "$mem_info" | grep MemAvailable | grep -o '[0-9]*')
+    local mem_info
+    mem_info=$(salt-call --local status.meminfo 2>/dev/null)
+    local mem_total
+    mem_total=$(echo "$mem_info" | grep MemTotal | grep -o '[0-9]*')
+    local mem_available
+    mem_available=$(echo "$mem_info" | grep MemAvailable | grep -o '[0-9]*')
     
     if [[ -n "$mem_total" && -n "$mem_available" ]]; then
         local mem_usage=$(( (mem_total - mem_available) * 100 / mem_total ))
@@ -332,8 +339,10 @@ maintenance_health() {
     echo ""
     echo "系统负载检查:"
     echo "----------------------------------------"
-    local load_avg=$(salt-call --local status.loadavg 2>/dev/null)
-    local cpu_cores=$(salt-call --local grains.get num_cpus 2>/dev/null)
+    local load_avg
+    load_avg=$(salt-call --local status.loadavg 2>/dev/null)
+    local cpu_cores
+    cpu_cores=$(salt-call --local grains.get num_cpus 2>/dev/null)
     
     log_info "系统负载: $load_avg"
     log_info "CPU 核心数: $cpu_cores"
@@ -345,7 +354,8 @@ maintenance_health() {
     local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq")
     
     for service in "${services[@]}"; do
-        local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
+        local status
+        status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
         if [[ "$status" == "True" ]]; then
             log_success "✅ $service: 运行中"
         else
@@ -357,7 +367,8 @@ maintenance_health() {
     echo ""
     echo "系统更新检查:"
     echo "----------------------------------------"
-    local updates=$(salt-call --local pkg.list_upgrades 2>/dev/null | grep -c ":" 2>/dev/null | tr -d '\n' || echo "0")
+    local updates
+    updates=$(salt-call --local pkg.list_upgrades 2>/dev/null | grep -c ":" 2>/dev/null | tr -d '\n' || echo "0")
     
     if [[ "$updates" -gt 0 ]]; then
         log_warning "有 $updates 个包可更新"

@@ -6,6 +6,8 @@
 
 # 加载公共库
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../lib/logger.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
 # 检测站点类型：全新站点 vs 迁移站点
@@ -28,7 +30,7 @@ add_valkey_config_for_new_site() {
     log_info "为全新站点添加 Valkey 配置..."
     
     # 备份原文件
-    sudo cp app/etc/env.php app/etc/env.php.backup.before_valkey.$(date +%Y%m%d_%H%M%S)
+    sudo cp app/etc/env.php "app/etc/env.php.backup.before_valkey.$(date +%Y%m%d_%H%M%S)"
     
     # 使用 PHP 生成新的配置文件
     sudo -u www-data php -r "
@@ -140,8 +142,9 @@ cleanup_current_site_old_databases() {
     fi
     
     # 获取当前站点正在使用的数据库
-    local current_used_dbs=()
-    local db_nums=$(grep -o "'database' => '[0-9]*'" "$current_env_file" | grep -o "[0-9]*" || true)
+    local current_used_dbs=("$current_cache_db" "$current_page_db" "$current_session_db")
+    local db_nums
+    db_nums=$(grep -o "'database' => '[0-9]*'" "$current_env_file" | grep -o "[0-9]*" || true)
     for db_num in $db_nums; do
         current_used_dbs+=("$db_num")
     done
@@ -152,7 +155,8 @@ cleanup_current_site_old_databases() {
     local other_sites_dbs=()
     for env_file in /var/www/*/app/etc/env.php; do
         if [[ "$env_file" != "$current_env_file" ]] && [[ -f "$env_file" ]]; then
-            local other_db_nums=$(grep -o "'database' => '[0-9]*'" "$env_file" | grep -o "[0-9]*" || true)
+            local other_db_nums
+            other_db_nums=$(grep -o "'database' => '[0-9]*'" "$env_file" | grep -o "[0-9]*" || true)
             for db_num in $other_db_nums; do
                 other_sites_dbs+=("$db_num")
             done
@@ -160,27 +164,32 @@ cleanup_current_site_old_databases() {
     done
     
     # 去重其他站点的数据库
-    local unique_other_dbs=($(printf '%s\n' "${other_sites_dbs[@]}" | sort -u))
+    local unique_other_dbs=()
+    if [ "${#other_sites_dbs[@]}" -gt 0 ]; then
+        mapfile -t unique_other_dbs < <(printf '%s\n' "${other_sites_dbs[@]}" | sort -u)
+    fi
     log_info "其他站点使用的数据库: ${unique_other_dbs[*]}"
     
     # 只清理当前站点之前使用但现在不使用的数据库
     local cleaned_count=0
     for db_num in {0..99}; do
         # 跳过当前正在使用的数据库
-        if [[ " ${current_used_dbs[*]} " =~ " $db_num " ]]; then
+        if [[ " ${current_used_dbs[*]} " =~ [[:space:]]${db_num}[[:space:]] ]]; then
             continue
         fi
         
         # 跳过其他站点正在使用的数据库
-        if [[ " ${unique_other_dbs[*]} " =~ " $db_num " ]]; then
+        if [[ " ${unique_other_dbs[*]} " =~ [[:space:]]${db_num}[[:space:]] ]]; then
             continue
         fi
         
         # 检查数据库是否有数据，并且键名包含当前站点前缀
-        local key_count=$(redis-cli -a "$valkey_password" -n "$db_num" dbsize 2>/dev/null || echo "0")
+        local key_count
+        key_count=$(redis-cli -a "$valkey_password" -n "$db_num" dbsize 2>/dev/null || echo "0")
         if [[ "$key_count" -gt 0 ]]; then
             # 检查是否包含当前站点的缓存前缀
-            local site_keys=$(redis-cli -a "$valkey_password" -n "$db_num" keys "*${site_name}_*" 2>/dev/null | wc -l)
+            local site_keys
+            site_keys=$(redis-cli -a "$valkey_password" -n "$db_num" keys "*${site_name}_*" 2>/dev/null | wc -l)
             if [[ "$site_keys" -gt 0 ]]; then
                 log_info "清理站点 $site_name 的旧数据库 $db_num (包含 $key_count 个键，其中 $site_keys 个属于当前站点)"
                 redis-cli -a "$valkey_password" -n "$db_num" flushdb >/dev/null 2>&1
@@ -301,7 +310,7 @@ generate_random_dbs() {
 
 # 获取随机数据库编号
 AVAILABLE_DBS=$(generate_random_dbs)
-read CACHE_DB PAGE_DB SESSION_DB <<< "$AVAILABLE_DBS"
+read -r CACHE_DB PAGE_DB SESSION_DB <<< "$AVAILABLE_DBS"
 
 log_success "自动分配的数据库:"
 echo " 默认缓存: DB $CACHE_DB"
@@ -319,23 +328,23 @@ log_info "开始配置更新..."
 
 # 修复权限（确保文件操作权限正确）
 log_info "修复 Magento 权限..."
-sudo chown -R www-data:www-data /var/www/$SITE_NAME
-sudo chmod 644 /var/www/$SITE_NAME/app/etc/env.php
-sudo chmod -R 775 /var/www/$SITE_NAME/var
-sudo chmod -R 775 /var/www/$SITE_NAME/generated
-sudo chmod -R 755 /var/www/$SITE_NAME/app/etc
+sudo chown -R www-data:www-data "/var/www/$SITE_NAME"
+sudo chmod 644 "/var/www/$SITE_NAME/app/etc/env.php"
+sudo chmod -R 775 "/var/www/$SITE_NAME/var"
+sudo chmod -R 775 "/var/www/$SITE_NAME/generated"
+sudo chmod -R 755 "/var/www/$SITE_NAME/app/etc"
 
 # 删除 generated 文件夹，让 Magento 重新生成
 log_info "删除 generated 文件夹，确保权限正确..."
-sudo rm -rf /var/www/$SITE_NAME/generated
-sudo mkdir -p /var/www/$SITE_NAME/generated
-sudo chown -R www-data:www-data /var/www/$SITE_NAME/generated
-sudo chmod -R 775 /var/www/$SITE_NAME/generated
+sudo rm -rf "/var/www/$SITE_NAME/generated"
+sudo mkdir -p "/var/www/$SITE_NAME/generated"
+sudo chown -R www-data:www-data "/var/www/$SITE_NAME/generated"
+sudo chmod -R 775 "/var/www/$SITE_NAME/generated"
 
 log_success "权限修复完成"
 
 # 备份原文件
-if sudo cp app/etc/env.php app/etc/env.php.backup.$(date +%Y%m%d_%H%M%S); then
+if sudo cp app/etc/env.php "app/etc/env.php.backup.$(date +%Y%m%d_%H%M%S)"; then
     log_success "已备份原配置文件"
 else
     log_warning "备份文件失败，继续执行..."
@@ -425,15 +434,15 @@ log_warning "清空站点 $SITE_NAME 的Valkey缓存..."
 
 # 清空指定数据库
 if [ -n "$VALKEY_PASSWORD" ]; then
-    if ! redis-cli -a "$VALKEY_PASSWORD" -n $CACHE_DB flushdb 2>/dev/null; then
+    if ! redis-cli -a "$VALKEY_PASSWORD" -n "$CACHE_DB" flushdb 2>/dev/null; then
         log_warning "清空缓存数据库 $CACHE_DB 失败"
     fi
     
-    if ! redis-cli -a "$VALKEY_PASSWORD" -n $PAGE_DB flushdb 2>/dev/null; then
+    if ! redis-cli -a "$VALKEY_PASSWORD" -n "$PAGE_DB" flushdb 2>/dev/null; then
         log_warning "清空页面缓存数据库 $PAGE_DB 失败"
     fi
     
-    if ! redis-cli -a "$VALKEY_PASSWORD" -n $SESSION_DB flushdb 2>/dev/null; then
+    if ! redis-cli -a "$VALKEY_PASSWORD" -n "$SESSION_DB" flushdb 2>/dev/null; then
         log_warning "清空会话数据库 $SESSION_DB 失败"
     fi
 else

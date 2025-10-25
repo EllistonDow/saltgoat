@@ -5,6 +5,8 @@
 # 加载日志函数
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if [[ -f "${SCRIPT_DIR}/lib/logger.sh" ]]; then
+    # shellcheck source=../../lib/logger.sh
+    # shellcheck disable=SC1091
     source "${SCRIPT_DIR}/lib/logger.sh"
 else
     echo "错误: 无法找到 logger.sh"
@@ -57,7 +59,10 @@ set_csp_level() {
     log_info "策略: $csp_policy"
     
     # 备份配置文件
-    sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup.$(date +%Y%m%d_%H%M%S)
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_file="/etc/nginx/nginx.conf.backup.${timestamp}"
+    sudo cp /etc/nginx/nginx.conf "$backup_file"
     
     # 直接更新 Nginx 配置
     sudo sed -i "s|^[[:space:]]*add_header Content-Security-Policy.*|    add_header Content-Security-Policy \"$csp_policy\" always;|" /etc/nginx/nginx.conf
@@ -69,7 +74,7 @@ set_csp_level() {
         log_info "Nginx 已重新加载配置"
     else
         log_error "Nginx 配置有误，恢复备份"
-        sudo cp /etc/nginx/nginx.conf.backup.$(date +%Y%m%d_%H%M%S) /etc/nginx/nginx.conf
+        sudo cp "$backup_file" /etc/nginx/nginx.conf
         return 1
     fi
 }
@@ -93,7 +98,8 @@ check_csp_status() {
     fi
     
     if [[ -n "$csp_line" ]]; then
-        local current_csp=$(echo "$csp_line" | sed 's/.*"\(.*\)".*/\1/')
+        local current_csp="${csp_line#*\"}"
+        current_csp="${current_csp%\"*}"
         log_success "CSP 已启用"
         log_info "当前策略: $current_csp"
         
@@ -139,7 +145,10 @@ disable_csp() {
     log_highlight "禁用 CSP..."
     
     # 备份配置文件
-    sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup.$(date +%Y%m%d_%H%M%S)
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_file="/etc/nginx/nginx.conf.backup.${timestamp}"
+    sudo cp /etc/nginx/nginx.conf "$backup_file"
     
     # 注释掉 CSP 配置
     sudo sed -i 's|^[[:space:]]*add_header Content-Security-Policy|    # add_header Content-Security-Policy|' /etc/nginx/nginx.conf
@@ -150,7 +159,7 @@ disable_csp() {
         log_success "CSP 已禁用"
     else
         log_error "Nginx 配置有误，恢复备份"
-        sudo cp /etc/nginx/nginx.conf.backup.$(date +%Y%m%d_%H%M%S) /etc/nginx/nginx.conf
+        sudo cp "$backup_file" /etc/nginx/nginx.conf
         return 1
     fi
 }
@@ -160,7 +169,10 @@ enable_csp() {
     log_highlight "启用 CSP..."
     
     # 备份配置文件
-    sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup.$(date +%Y%m%d_%H%M%S)
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_file="/etc/nginx/nginx.conf.backup.${timestamp}"
+    sudo cp /etc/nginx/nginx.conf "$backup_file"
     
     # 取消注释 CSP 配置
     sudo sed -i 's|^[[:space:]]*# add_header Content-Security-Policy|    add_header Content-Security-Policy|' /etc/nginx/nginx.conf
@@ -171,7 +183,7 @@ enable_csp() {
         log_success "CSP 已启用"
     else
         log_error "Nginx 配置有误，恢复备份"
-        sudo cp /etc/nginx/nginx.conf.backup.$(date +%Y%m%d_%H%M%S) /etc/nginx/nginx.conf
+        sudo cp "$backup_file" /etc/nginx/nginx.conf
         return 1
     fi
 }

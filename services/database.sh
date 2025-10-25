@@ -101,7 +101,8 @@ database_status() {
             log_info "MySQL 状态检查..."
             
             # 检查服务状态
-            local service_status=$(salt-call --local service.status mysql --out=txt 2>/dev/null | tail -n 1)
+            local service_status
+            service_status=$(salt-call --local service.status mysql --out=txt 2>/dev/null | tail -n 1)
             if [[ "$service_status" == "local: True" ]]; then
                 log_success "MySQL 服务正在运行"
             else
@@ -110,15 +111,18 @@ database_status() {
             fi
             
             # 检查版本（Salt 原生 + unix_socket）
-            local version=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SELECT VERSION();" 2>/dev/null | tail -n 1)
+            local version
+            version=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SELECT VERSION();" 2>/dev/null | tail -n 1)
             echo "MySQL 版本: $version"
             
             # 检查连接数（Salt 原生 + unix_socket）
-            local connections=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW STATUS LIKE 'Threads_connected';" 2>/dev/null | awk 'NR==2 {print $2}')
+            local connections
+            connections=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW STATUS LIKE 'Threads_connected';" 2>/dev/null | awk 'NR==2 {print $2}')
             echo "当前连接数: $connections"
             
             # 检查数据库列表（Salt 原生 + unix_socket）
-            local databases=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW DATABASES;" 2>/dev/null | tail -n +2)
+            local databases
+            databases=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW DATABASES;" 2>/dev/null | tail -n +2)
             echo "数据库列表:"
             echo "$databases"
             ;;
@@ -126,7 +130,8 @@ database_status() {
             log_info "PostgreSQL 状态检查..."
             
             # 检查服务状态
-            local service_status=$(salt-call --local service.status postgresql --out=txt 2>/dev/null | tail -n 1)
+            local service_status
+            service_status=$(salt-call --local service.status postgresql --out=txt 2>/dev/null | tail -n 1)
             if [[ "$service_status" == "local: True" ]]; then
                 log_success "PostgreSQL 服务正在运行"
             else
@@ -135,18 +140,21 @@ database_status() {
             fi
             
             # 检查版本
-            local version=$(salt-call --local cmd.run "psql --version" 2>/dev/null)
+            local version
+            version=$(salt-call --local cmd.run "psql --version" 2>/dev/null)
             echo "PostgreSQL 版本: $version"
             
             # 检查连接数
-            local connections=$(salt-call --local cmd.run "psql -U postgres -d postgres -c 'SELECT count(*) FROM pg_stat_activity;'" 2>/dev/null)
+            local connections
+            connections=$(salt-call --local cmd.run "psql -U postgres -d postgres -c 'SELECT count(*) FROM pg_stat_activity;'" 2>/dev/null)
             echo "当前连接数: $connections"
             ;;
         "mongodb")
             log_info "MongoDB 状态检查..."
             
             # 检查服务状态
-            local service_status=$(salt-call --local service.status mongodb --out=txt 2>/dev/null | tail -n 1)
+            local service_status
+            service_status=$(salt-call --local service.status mongodb --out=txt 2>/dev/null | tail -n 1)
             if [[ "$service_status" == "local: True" ]]; then
                 log_success "MongoDB 服务正在运行"
             else
@@ -155,18 +163,21 @@ database_status() {
             fi
             
             # 检查版本
-            local version=$(salt-call --local cmd.run "mongosh --version" 2>/dev/null)
+            local version
+            version=$(salt-call --local cmd.run "mongosh --version" 2>/dev/null)
             echo "MongoDB 版本: $version"
             
             # 检查连接数
-            local connections=$(salt-call --local cmd.run "mongosh --eval 'db.serverStatus().connections'" 2>/dev/null)
+            local connections
+            connections=$(salt-call --local cmd.run "mongosh --eval 'db.serverStatus().connections'" 2>/dev/null)
             echo "连接信息: $connections"
             ;;
         "redis")
             log_info "Redis 状态检查..."
             
             # 检查服务状态
-            local service_status=$(salt-call --local service.status redis --out=txt 2>/dev/null | tail -n 1)
+            local service_status
+            service_status=$(salt-call --local service.status redis --out=txt 2>/dev/null | tail -n 1)
             if [[ "$service_status" == "local: True" ]]; then
                 log_success "Redis 服务正在运行"
             else
@@ -175,11 +186,13 @@ database_status() {
             fi
             
             # 检查版本
-            local version=$(salt-call --local cmd.run "redis-server --version" 2>/dev/null)
+            local version
+            version=$(salt-call --local cmd.run "redis-server --version" 2>/dev/null)
             echo "Redis 版本: $version"
             
             # 检查连接数
-            local connections=$(salt-call --local cmd.run "redis-cli info clients" 2>/dev/null)
+            local connections
+            connections=$(salt-call --local cmd.run "redis-cli info clients" 2>/dev/null)
             echo "连接信息: $connections"
             ;;
         *)
@@ -226,8 +239,10 @@ database_backup() {
     fi
     
     # 创建项目化备份目录
-    local project_backup_dir="/home/doge/Dropbox/${project_name}/database/$(date +%Y%m%d)"
-    local backup_file="$project_backup_dir/${backup_name}.sql.gz"
+    local project_backup_dir
+    project_backup_dir="/home/doge/Dropbox/${project_name}/database/$(date +%Y%m%d)"
+    local backup_file
+    backup_file="$project_backup_dir/${backup_name}.sql.gz"
     
     # 确保目录存在
     mkdir -p "$project_backup_dir" 2>/dev/null || {
@@ -243,7 +258,8 @@ database_backup() {
             # 使用原生 mysqldump 命令，避免 Salt 模块的性能开销，并压缩备份
             if mysqldump --defaults-file=/etc/salt/mysql_saltuser.cnf "$db_name" | gzip > "$backup_file" 2>/dev/null; then
                 # 获取备份文件大小
-                local backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
+                local backup_size
+                backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
                 log_success "MySQL 数据库备份完成: $backup_file"
                 log_info "备份文件大小: $backup_size"
                 log_info "备份路径: $backup_file"
@@ -280,7 +296,8 @@ database_backup() {
     esac
     
     # 创建备份信息文件
-    local backup_info="数据库备份信息
+    local backup_info
+    backup_info="数据库备份信息
 ==================
 备份类型: $db_type
 数据库名: $db_name
@@ -315,8 +332,10 @@ database_restore() {
     fi
     
     # 显示备份文件信息
-    local backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
-    local backup_date=$(stat -c %y "$backup_file" 2>/dev/null)
+    local backup_size
+    backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
+    local backup_date
+    backup_date=$(stat -c %y "$backup_file" 2>/dev/null)
     log_info "备份文件大小: $backup_size"
     log_info "备份文件时间: $backup_date"
     
@@ -325,7 +344,7 @@ database_restore() {
         log_info "使用强制模式，跳过确认"
     else
         log_warning "这将覆盖目标数据库，请确认是否继续？"
-        read -p "输入 'yes' 确认继续: " confirm
+        read -r -p "输入 'yes' 确认继续: " confirm
         
         if [[ "$confirm" != "yes" ]]; then
             log_info "恢复操作已取消"
@@ -411,28 +430,34 @@ database_performance() {
             
             echo "连接统计:"
             echo "----------------------------------------"
-            local connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Connections\";'" 2>/dev/null)
+            local connections
+            connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Connections\";'" 2>/dev/null)
             echo "$connections"
             
-            local max_connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Max_used_connections\";'" 2>/dev/null)
+            local max_connections
+            max_connections=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Max_used_connections\";'" 2>/dev/null)
             echo "$max_connections"
             
             echo ""
             echo "查询统计:"
             echo "----------------------------------------"
-            local queries=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Queries\";'" 2>/dev/null)
+            local queries
+            queries=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Queries\";'" 2>/dev/null)
             echo "$queries"
             
-            local slow_queries=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Slow_queries\";'" 2>/dev/null)
+            local slow_queries
+            slow_queries=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Slow_queries\";'" 2>/dev/null)
             echo "$slow_queries"
             
             echo ""
             echo "缓存统计:"
             echo "----------------------------------------"
-            local cache_hits=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Qcache_hits\";'" 2>/dev/null)
+            local cache_hits
+            cache_hits=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Qcache_hits\";'" 2>/dev/null)
             echo "$cache_hits"
             
-            local cache_misses=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Qcache_misses\";'" 2>/dev/null)
+            local cache_misses
+            cache_misses=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SHOW STATUS LIKE \"Qcache_misses\";'" 2>/dev/null)
             echo "$cache_misses"
             ;;
         "postgresql")
@@ -440,13 +465,15 @@ database_performance() {
             
             echo "连接统计:"
             echo "----------------------------------------"
-            local connections=$(salt-call --local cmd.run "psql -U postgres -d postgres -c 'SELECT count(*) as active_connections FROM pg_stat_activity;'" 2>/dev/null)
+            local connections
+            connections=$(salt-call --local cmd.run "psql -U postgres -d postgres -c 'SELECT count(*) as active_connections FROM pg_stat_activity;'" 2>/dev/null)
             echo "$connections"
             
             echo ""
             echo "查询统计:"
             echo "----------------------------------------"
-            local queries=$(salt-call --local cmd.run "psql -U postgres -d postgres -c 'SELECT * FROM pg_stat_database;'" 2>/dev/null)
+            local queries
+            queries=$(salt-call --local cmd.run "psql -U postgres -d postgres -c 'SELECT * FROM pg_stat_database;'" 2>/dev/null)
             echo "$queries"
             ;;
         "mongodb")
@@ -454,13 +481,15 @@ database_performance() {
             
             echo "连接统计:"
             echo "----------------------------------------"
-            local connections=$(salt-call --local cmd.run "mongosh --eval 'db.serverStatus().connections'" 2>/dev/null)
+            local connections
+            connections=$(salt-call --local cmd.run "mongosh --eval 'db.serverStatus().connections'" 2>/dev/null)
             echo "$connections"
             
             echo ""
             echo "操作统计:"
             echo "----------------------------------------"
-            local operations=$(salt-call --local cmd.run "mongosh --eval 'db.serverStatus().opcounters'" 2>/dev/null)
+            local operations
+            operations=$(salt-call --local cmd.run "mongosh --eval 'db.serverStatus().opcounters'" 2>/dev/null)
             echo "$operations"
             ;;
         "redis")
@@ -468,19 +497,22 @@ database_performance() {
             
             echo "连接统计:"
             echo "----------------------------------------"
-            local connections=$(salt-call --local cmd.run "redis-cli info clients" 2>/dev/null)
+            local connections
+            connections=$(salt-call --local cmd.run "redis-cli info clients" 2>/dev/null)
             echo "$connections"
             
             echo ""
             echo "内存统计:"
             echo "----------------------------------------"
-            local memory=$(salt-call --local cmd.run "redis-cli info memory" 2>/dev/null)
+            local memory
+            memory=$(salt-call --local cmd.run "redis-cli info memory" 2>/dev/null)
             echo "$memory"
             
             echo ""
             echo "操作统计:"
             echo "----------------------------------------"
-            local stats=$(salt-call --local cmd.run "redis-cli info stats" 2>/dev/null)
+            local stats
+            stats=$(salt-call --local cmd.run "redis-cli info stats" 2>/dev/null)
             echo "$stats"
             ;;
         *)
@@ -540,7 +572,8 @@ database_user_management() {
                     ;;
                 "list")
                     log_info "列出 MySQL 用户..."
-                    local users=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SELECT User, Host FROM mysql.user;'" 2>/dev/null)
+                    local users
+                    users=$(salt-call --local cmd.run "mysql --defaults-file=/home/doge/.my.cnf -e 'SELECT User, Host FROM mysql.user;'" 2>/dev/null)
                     echo "$users"
                     ;;
                 "grant")
@@ -593,7 +626,8 @@ database_user_management() {
                     ;;
                 "list")
                     log_info "列出 PostgreSQL 用户..."
-                    local users=$(salt-call --local cmd.run "psql -U postgres -d postgres -c '\\du'" 2>/dev/null)
+                    local users
+                    users=$(salt-call --local cmd.run "psql -U postgres -d postgres -c '\\du'" 2>/dev/null)
                     echo "$users"
                     ;;
                 "grant")
@@ -744,17 +778,24 @@ database_list_backups() {
     
     for project_dir in /home/doge/Dropbox/*/database/*/; do
         if [[ -d "$project_dir" ]]; then
-            local project_name=$(basename $(dirname $(dirname "$project_dir")))
-            local date_dir=$(basename "$project_dir")
+            local project_path
+            project_path=$(dirname "$(dirname "$project_dir")")
+            local project_name
+            project_name=$(basename "$project_path")
+            local date_dir
+            date_dir=$(basename "$project_dir")
             
             echo "项目: $project_name (日期: $date_dir)"
             echo "----------------------------------------"
             
             for file in "$project_dir"*.sql.gz; do
                 if [[ -f "$file" ]]; then
-                    local name=$(basename "$file" .sql.gz)
-                    local size=$(du -h "$file" 2>/dev/null | cut -f1)
-                    local date=$(stat -c %y "$file" 2>/dev/null)
+                    local name
+                    name=$(basename "$file" .sql.gz)
+                    local size
+                    size=$(du -h "$file" 2>/dev/null | cut -f1)
+                    local date
+                    date=$(stat -c %y "$file" 2>/dev/null)
                     
                     echo "备份名称: $name (项目备份)"
                     echo "文件大小: $size"
@@ -776,47 +817,63 @@ database_list_backups() {
     # 列出 .sql.gz 压缩备份文件
     for file in "$DB_BACKUP_DIR"/*.sql.gz; do
         if [[ -f "$file" ]]; then
-            local name=$(basename "$file" .sql.gz)
-            local size=$(du -h "$file" 2>/dev/null | cut -f1)
-            local date=$(stat -c %y "$file" 2>/dev/null)
+            local name
+            name=$(basename "$file" .sql.gz)
+            local size
+            size=$(du -h "$file" 2>/dev/null | cut -f1)
+            local date
+            date=$(stat -c %y "$file" 2>/dev/null)
             
             echo "备份名称: $name (默认备份)"
             echo "文件大小: $size"
             echo "创建时间: $date"
             echo "文件路径: $file"
             echo "----------------------------------------"
+            found_backups=true
         fi
     done
     
     # 列出 .sql 普通备份文件（向后兼容）
     for file in "$DB_BACKUP_DIR"/*.sql; do
         if [[ -f "$file" && "$file" != *.sql.gz ]]; then
-            local name=$(basename "$file" .sql)
-            local size=$(du -h "$file" 2>/dev/null | cut -f1)
-            local date=$(stat -c %y "$file" 2>/dev/null)
+            local name
+            name=$(basename "$file" .sql)
+            local size
+            size=$(du -h "$file" 2>/dev/null | cut -f1)
+            local date
+            date=$(stat -c %y "$file" 2>/dev/null)
             
             echo "备份名称: $name (默认备份)"
             echo "文件大小: $size"
             echo "创建时间: $date"
             echo "文件路径: $file"
             echo "----------------------------------------"
+            found_backups=true
         fi
     done
     
     # 列出 MongoDB 备份目录
     for dir in "$DB_BACKUP_DIR"/*/; do
         if [[ -d "$dir" ]]; then
-            local name=$(basename "$dir")
-            local size=$(salt-call --local cmd.run "du -sh $dir" 2>/dev/null)
-            local date=$(salt-call --local cmd.run "stat -c %y $dir" 2>/dev/null)
+            local name
+            name=$(basename "$dir")
+            local size
+            size=$(salt-call --local cmd.run "du -sh $dir" 2>/dev/null)
+            local date
+            date=$(salt-call --local cmd.run "stat -c %y $dir" 2>/dev/null)
             
             echo "备份名称: $name"
             echo "目录大小: $size"
             echo "创建时间: $date"
             echo "目录路径: $dir"
             echo "----------------------------------------"
+            found_backups=true
         fi
     done
+    fi
+    
+    if [[ "$found_backups" == "false" ]]; then
+        echo "未找到任何数据库备份"
     fi
 }
 
@@ -830,11 +887,13 @@ database_cleanup_backups() {
     local cleaned_count=0
     
     # 清理旧的 SQL 备份文件
-    local old_files=$(salt-call --local file.find "$DB_BACKUP_DIR" name="*.sql" mtime="+$days" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    local old_files
+    old_files=$(salt-call --local file.find "$DB_BACKUP_DIR" name="*.sql" mtime="+$days" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
     
     for file in $old_files; do
         if [[ -n "$file" ]]; then
-            local filename=$(basename "$file")
+            local filename
+            filename=$(basename "$file")
             log_info "删除过期备份: $filename"
             salt-call --local file.remove "$file" >/dev/null 2>&1
             ((cleaned_count++))
@@ -842,11 +901,13 @@ database_cleanup_backups() {
     done
     
     # 清理旧的 MongoDB 备份目录
-    local old_dirs=$(salt-call --local file.find "$DB_BACKUP_DIR" type="d" mtime="+$days" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    local old_dirs
+    old_dirs=$(salt-call --local file.find "$DB_BACKUP_DIR" type="d" mtime="+$days" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
     
     for dir in $old_dirs; do
         if [[ -n "$dir" && "$dir" != "$DB_BACKUP_DIR" ]]; then
-            local dirname=$(basename "$dir")
+            local dirname
+            dirname=$(basename "$dir")
             log_info "删除过期备份目录: $dirname"
             salt-call --local file.remove "$dir" recurse=True >/dev/null 2>&1
             ((cleaned_count++))
@@ -922,7 +983,7 @@ database_mysql_convenience() {
             
             # 3. 显示权限信息
             log_highlight "用户权限信息:"
-            mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW GRANTS FOR '${username}'@'localhost';" 2>/dev/null | while read line; do
+            mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW GRANTS FOR '${username}'@'localhost';" 2>/dev/null | while IFS= read -r line; do
                 if [[ "$line" =~ ^Grants\ for ]]; then
                     log_info "用户: $line"
                 else
@@ -972,7 +1033,7 @@ database_mysql_convenience() {
             
             # 显示用户权限信息
             log_highlight "用户权限信息:"
-            mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW GRANTS FOR '${username}'@'localhost';" 2>/dev/null | while read line; do
+            mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW GRANTS FOR '${username}'@'localhost';" 2>/dev/null | while IFS= read -r line; do
                 if [[ "$line" =~ ^Grants\ for ]]; then
                     log_info "用户: $line"
                 else
@@ -1008,7 +1069,8 @@ database_mysql_convenience() {
             log_highlight "MySQL 状态检查..."
             
             # 检查服务状态
-            local service_status=$(systemctl is-active mysql 2>/dev/null || echo "inactive")
+            local service_status
+            service_status=$(systemctl is-active mysql 2>/dev/null || echo "inactive")
             if [[ "$service_status" == "active" ]]; then
                 log_success "MySQL 服务正在运行"
             else
@@ -1017,26 +1079,31 @@ database_mysql_convenience() {
             fi
             
             # 检查版本
-            local version=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SELECT VERSION();" 2>/dev/null | tail -n 1)
+            local version
+            version=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SELECT VERSION();" 2>/dev/null | tail -n 1)
             log_info "MySQL 版本: $version"
             
             # 检查连接数
-            local connections=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW STATUS LIKE 'Threads_connected';" 2>/dev/null | awk 'NR==2 {print $2}')
+            local connections
+            connections=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW STATUS LIKE 'Threads_connected';" 2>/dev/null | awk 'NR==2 {print $2}')
             log_info "当前连接数: $connections"
             
             # 检查最大连接数
-            local max_connections=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW VARIABLES LIKE 'max_connections';" 2>/dev/null | awk 'NR==2 {print $2}')
+            local max_connections
+            max_connections=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW VARIABLES LIKE 'max_connections';" 2>/dev/null | awk 'NR==2 {print $2}')
             log_info "最大连接数: $max_connections"
             
             # 检查数据库数量
-            local db_count=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW DATABASES;" 2>/dev/null | tail -n +2 | wc -l)
+            local db_count
+            db_count=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW DATABASES;" 2>/dev/null | tail -n +2 | wc -l)
             log_info "数据库数量: $db_count"
             
             # 检查InnoDB状态
-            local innodb_status=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW ENGINE INNODB STATUS\\G" 2>/dev/null | grep -E "(InnoDB|Buffer pool|Log sequence)" | head -3)
+            local innodb_status
+            innodb_status=$(mysql --defaults-file=/etc/salt/mysql_saltuser.cnf -e "SHOW ENGINE INNODB STATUS\\G" 2>/dev/null | grep -E "(InnoDB|Buffer pool|Log sequence)" | head -3)
             if [[ -n "$innodb_status" ]]; then
                 log_info "InnoDB 状态:"
-                echo "$innodb_status" | while read line; do
+                echo "$innodb_status" | while IFS= read -r line; do
                     log_info "  $line"
                 done
             fi

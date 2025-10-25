@@ -31,8 +31,10 @@ memory_monitor() {
     sudo mkdir -p "$(dirname "$LOG_FILE")"
 
     # 获取内存使用率
-    local MEMORY_USAGE=$(free | grep Mem | awk '{printf "%.0f", $3/$2 * 100.0}')
-    local TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+    local MEMORY_USAGE
+    MEMORY_USAGE=$(free | grep Mem | awk '{printf "%.0f", $3/$2 * 100.0}')
+    local TIMESTAMP
+    TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
     # 记录内存使用情况
     echo "[$TIMESTAMP] 内存使用率: ${MEMORY_USAGE}%" | sudo tee -a "$LOG_FILE" > /dev/null

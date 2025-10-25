@@ -4,7 +4,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../lib/logger.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
+# shellcheck source=../../lib/utils.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/utils.sh"
 
 RMQ_MODE="smart"
@@ -38,7 +42,7 @@ mode: all | smart
   --service-user USER  systemd 运行用户（默认 www-data）
   --php-memory STR     PHP 内存限制（默认 2G）
   --cpu-quota PCT      CPU 配额（例如 50%），默认 50%
-  --nice N             nice 值（-20..19，正数更“温和”），默认 10
+  --nice N             nice 值(-20..19，正数更"温和")，默认 10
   --mode all|smart     覆盖模式（仅在 check 时有用；配置时由第一个位置参数决定）
   -h, --help           显示帮助
 EOF
@@ -117,8 +121,6 @@ parse_args() {
             --php-memory)
                 val="${2-}"; [[ -z "$val" ]] && abort "--php-memory 需要一个值";
                 PHP_MEMORY_LIMIT="$val"; shift 2 ;;
-            --php-memory=*)
-                PHP_MEMORY_LIMIT="${1#*=}"; shift ;;
             --cpu-quota)
                 val="${2-}"; [[ -z "$val" ]] && abort "--cpu-quota 需要一个值 (如 50%)";
                 CPU_QUOTA="$val"; shift 2 ;;

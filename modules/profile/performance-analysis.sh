@@ -2,9 +2,6 @@
 # 性能分析模块
 # services/performance-analysis.sh
 
-# 性能分析类型
-PERFORMANCE_TYPES=("system" "nginx" "mysql" "php" "memory" "disk" "network")
-
 # 性能分析结果存储
 PERFORMANCE_RESULTS=()
 
@@ -17,7 +14,8 @@ analyze_system_performance() {
     local score=100
     
     # CPU使用率分析
-    local cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | sed 's/%us,//')
+    local cpu_usage
+    cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | sed 's/%us,//')
     if (( $(echo "$cpu_usage > 80" | bc -l) )); then
         issues+=("CPU使用率过高: ${cpu_usage}%")
         recommendations+=("检查CPU密集型进程，考虑优化或增加CPU资源")
@@ -29,7 +27,8 @@ analyze_system_performance() {
     fi
     
     # 内存使用率分析
-    local mem_usage=$(free | awk 'NR==2{printf "%.0f", $3*100/$2}')
+    local mem_usage
+    mem_usage=$(free | awk 'NR==2{printf "%.0f", $3*100/$2}')
     if [[ "$mem_usage" -gt 90 ]]; then
         issues+=("内存使用率过高: ${mem_usage}%")
         recommendations+=("增加内存或优化内存使用，检查内存泄漏")
@@ -41,9 +40,12 @@ analyze_system_performance() {
     fi
     
     # 系统负载分析
-    local load_avg=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
-    local cpu_cores=$(nproc)
-    local load_threshold=$(echo "$cpu_cores * 1.5" | bc)
+    local load_avg
+    load_avg=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
+    local cpu_cores
+    cpu_cores=$(nproc)
+    local load_threshold
+    load_threshold=$(echo "$cpu_cores * 1.5" | bc)
     if (( $(echo "$load_avg > $load_threshold" | bc -l) )); then
         issues+=("系统负载过高: $load_avg (CPU核心数: $cpu_cores)")
         recommendations+=("检查系统负载，优化进程调度")
@@ -51,8 +53,10 @@ analyze_system_performance() {
     fi
     
     # 进程分析
-    local top_processes=$(ps aux --sort=-%cpu | head -6 | tail -5)
-    local high_cpu_processes=$(echo "$top_processes" | awk '$3 > 10.0 {print $2, $3, $11}' | wc -l)
+    local top_processes
+    top_processes=$(ps aux --sort=-%cpu | head -6 | tail -5)
+    local high_cpu_processes
+    high_cpu_processes=$(echo "$top_processes" | awk '$3 > 10.0 {print $2, $3, $11}' | wc -l)
     if [[ "$high_cpu_processes" -gt 0 ]]; then
         issues+=("发现 $high_cpu_processes 个高CPU使用进程")
         recommendations+=("检查高CPU使用进程，优化或限制资源使用")
@@ -109,7 +113,8 @@ analyze_nginx_performance() {
         fi
         
         # 检查Nginx进程
-        local nginx_processes=$(pgrep nginx | wc -l)
+        local nginx_processes
+        nginx_processes=$(pgrep nginx | wc -l)
         if [[ "$nginx_processes" -lt 2 ]]; then
             issues+=("Nginx进程数量异常: $nginx_processes")
             recommendations+=("检查Nginx进程配置")
@@ -118,7 +123,8 @@ analyze_nginx_performance() {
         
         # 检查Nginx连接数
         if command -v ss >/dev/null 2>&1; then
-            local nginx_connections=$(ss -tlnp | grep nginx | wc -l)
+            local nginx_connections
+            nginx_connections=$(ss -tlnp | grep -c nginx)
             if [[ "$nginx_connections" -gt 1000 ]]; then
                 issues+=("Nginx连接数过多: $nginx_connections")
                 recommendations+=("优化Nginx连接配置，增加worker_connections")
@@ -129,7 +135,8 @@ analyze_nginx_performance() {
         # 检查Nginx日志错误
         local nginx_error_log="/var/log/nginx/error.log"
         if [[ -f "$nginx_error_log" ]]; then
-            local error_count=$(grep -c "ERROR\|FATAL" "$nginx_error_log" 2>/dev/null || echo "0")
+            local error_count
+            error_count=$(grep -c "ERROR\|FATAL" "$nginx_error_log" 2>/dev/null || echo "0")
             if [[ "$error_count" -gt 100 ]]; then
                 issues+=("Nginx错误日志过多: $error_count 个错误")
                 recommendations+=("检查Nginx错误日志，修复配置问题")
@@ -181,8 +188,10 @@ analyze_mysql_performance() {
             score=$((score - 30))
         else
             # 检查MySQL连接数
-            local connections=$(mysql -e "SHOW STATUS LIKE 'Threads_connected';" 2>/dev/null | awk 'NR==2{print $2}')
-            local max_connections=$(mysql -e "SHOW VARIABLES LIKE 'max_connections';" 2>/dev/null | awk 'NR==2{print $2}')
+            local connections
+            connections=$(mysql -e "SHOW STATUS LIKE 'Threads_connected';" 2>/dev/null | awk 'NR==2{print $2}')
+            local max_connections
+            max_connections=$(mysql -e "SHOW VARIABLES LIKE 'max_connections';" 2>/dev/null | awk 'NR==2{print $2}')
             if [[ -n "$connections" && -n "$max_connections" ]]; then
                 local connection_usage=$((connections * 100 / max_connections))
                 if [[ "$connection_usage" -gt 80 ]]; then
@@ -193,7 +202,8 @@ analyze_mysql_performance() {
             fi
             
             # 检查MySQL查询缓存
-            local query_cache=$(mysql -e "SHOW VARIABLES LIKE 'query_cache%';" 2>/dev/null | grep -c "ON")
+            local query_cache
+            query_cache=$(mysql -e "SHOW VARIABLES LIKE 'query_cache%';" 2>/dev/null | grep -c "ON")
             if [[ "$query_cache" -eq 0 ]]; then
                 issues+=("MySQL查询缓存未启用")
                 recommendations+=("启用MySQL查询缓存以提高性能")
@@ -201,7 +211,8 @@ analyze_mysql_performance() {
             fi
             
             # 检查MySQL慢查询
-            local slow_queries=$(mysql -e "SHOW STATUS LIKE 'Slow_queries';" 2>/dev/null | awk 'NR==2{print $2}')
+            local slow_queries
+            slow_queries=$(mysql -e "SHOW STATUS LIKE 'Slow_queries';" 2>/dev/null | awk 'NR==2{print $2}')
             if [[ -n "$slow_queries" && "$slow_queries" -gt 100 ]]; then
                 issues+=("MySQL慢查询过多: $slow_queries")
                 recommendations+=("优化MySQL查询，启用慢查询日志分析")
@@ -247,7 +258,8 @@ analyze_php_performance() {
         score=$((score - 50))
     else
         # 检查PHP-FPM进程
-        local php_processes=$(pgrep php-fpm | wc -l)
+        local php_processes
+        php_processes=$(pgrep php-fpm | wc -l)
         if [[ "$php_processes" -lt 2 ]]; then
             issues+=("PHP-FPM进程数量异常: $php_processes")
             recommendations+=("检查PHP-FPM进程配置")
@@ -255,10 +267,11 @@ analyze_php_performance() {
         fi
         
         # 检查PHP内存限制
-        local memory_limit=$(php -r "echo ini_get('memory_limit');" 2>/dev/null)
+        local memory_limit
+        memory_limit=$(php -r "echo ini_get('memory_limit');" 2>/dev/null)
         if [[ -n "$memory_limit" ]]; then
-            local memory_mb=$(echo "$memory_limit" | sed 's/M//')
-            if [[ "$memory_mb" -lt 128 ]]; then
+            local memory_mb="${memory_limit%M}"
+            if [[ ${memory_mb%.*} -lt 128 ]]; then
                 issues+=("PHP内存限制过低: ${memory_limit}")
                 recommendations+=("增加PHP内存限制到至少128M")
                 score=$((score - 15))
@@ -266,7 +279,8 @@ analyze_php_performance() {
         fi
         
         # 检查PHP OPcache
-        local opcache_enabled=$(php -r "echo ini_get('opcache.enable');" 2>/dev/null)
+        local opcache_enabled
+        opcache_enabled=$(php -r "echo ini_get('opcache.enable');" 2>/dev/null)
         if [[ "$opcache_enabled" != "1" ]]; then
             issues+=("PHP OPcache未启用")
             recommendations+=("启用PHP OPcache以提高性能")
@@ -276,7 +290,8 @@ analyze_php_performance() {
         # 检查PHP错误日志
         local php_log="/var/log/php8.3-fpm.log"
         if [[ -f "$php_log" ]]; then
-            local error_count=$(grep -c "ERROR\|FATAL" "$php_log" 2>/dev/null || echo "0")
+            local error_count
+            error_count=$(grep -c "ERROR\|FATAL" "$php_log" 2>/dev/null || echo "0")
             if [[ "$error_count" -gt 50 ]]; then
                 issues+=("PHP错误日志过多: $error_count 个错误")
                 recommendations+=("检查PHP错误日志，修复代码问题")
@@ -316,11 +331,14 @@ analyze_memory_performance() {
     local score=100
     
     # 内存使用分析
-    local mem_info=$(free -m)
-    local total_mem=$(echo "$mem_info" | awk 'NR==2{print $2}')
-    local used_mem=$(echo "$mem_info" | awk 'NR==2{print $3}')
-    local free_mem=$(echo "$mem_info" | awk 'NR==2{print $4}')
-    local available_mem=$(echo "$mem_info" | awk 'NR==2{print $7}')
+    local mem_info
+    mem_info=$(free -m)
+    local total_mem
+    total_mem=$(echo "$mem_info" | awk 'NR==2{print $2}')
+    local used_mem
+    used_mem=$(echo "$mem_info" | awk 'NR==2{print $3}')
+    local available_mem
+    available_mem=$(echo "$mem_info" | awk 'NR==2{print $7}')
     
     local mem_usage=$((used_mem * 100 / total_mem))
     local mem_available=$((available_mem * 100 / total_mem))
@@ -342,7 +360,8 @@ analyze_memory_performance() {
     fi
     
     # 交换空间分析
-    local swap_used=$(echo "$mem_info" | awk 'NR==3{print $3}')
+    local swap_used
+    swap_used=$(echo "$mem_info" | awk 'NR==3{print $3}')
     if [[ "$swap_used" -gt 0 ]]; then
         issues+=("系统正在使用交换空间: ${swap_used}MB")
         recommendations+=("优化内存使用，减少交换空间使用")
@@ -350,7 +369,8 @@ analyze_memory_performance() {
     fi
     
     # 内存泄漏检查
-    local high_mem_processes=$(ps aux --sort=-%mem | awk '$4 > 10.0 {count++} END {print count+0}')
+    local high_mem_processes
+    high_mem_processes=$(ps aux --sort=-%mem | awk '$4 > 10.0 {count++} END {print count+0}')
     if [[ "$high_mem_processes" -gt 0 ]]; then
         issues+=("发现 $high_mem_processes 个高内存使用进程")
         recommendations+=("检查高内存使用进程，优化内存使用")
@@ -393,7 +413,8 @@ analyze_disk_performance() {
     local score=100
     
     # 磁盘使用率分析
-    local disk_usage=$(df / | awk 'NR==2{print $5}' | sed 's/%//')
+    local disk_usage
+    disk_usage=$(df / | awk 'NR==2{print $5}' | sed 's/%//')
     if [[ "$disk_usage" -gt 90 ]]; then
         issues+=("根分区磁盘使用率过高: ${disk_usage}%")
         recommendations+=("清理磁盘空间或增加磁盘容量")
@@ -406,8 +427,10 @@ analyze_disk_performance() {
     
     # 磁盘I/O分析
     if command -v iostat >/dev/null 2>&1; then
-        local iostat_output=$(iostat -x 1 1 2>/dev/null | tail -n +4)
-        local avg_await=$(echo "$iostat_output" | awk '{sum+=$10} END {print sum/NR}')
+        local iostat_output
+        iostat_output=$(iostat -x 1 1 2>/dev/null | tail -n +4)
+        local avg_await
+        avg_await=$(echo "$iostat_output" | awk '{sum+=$10} END {print sum/NR}')
         if (( $(echo "$avg_await > 100" | bc -l) )); then
             issues+=("磁盘I/O等待时间过长: ${avg_await}ms")
             recommendations+=("优化磁盘I/O，考虑使用SSD")
@@ -416,7 +439,8 @@ analyze_disk_performance() {
     fi
     
     # 检查大文件
-    local large_files=$(find / -type f -size +100M 2>/dev/null | wc -l)
+    local large_files
+    large_files=$(find / -type f -size +100M 2>/dev/null | wc -l)
     if [[ "$large_files" -gt 10 ]]; then
         issues+=("发现 $large_files 个大文件 (>100MB)")
         recommendations+=("检查大文件，考虑清理或移动")
@@ -424,10 +448,12 @@ analyze_disk_performance() {
     fi
     
     # 检查日志文件大小
-    local log_size=$(du -sh /var/log 2>/dev/null | awk '{print $1}')
+    local log_size
+    log_size=$(du -sh /var/log 2>/dev/null | awk '{print $1}')
     if [[ -n "$log_size" ]]; then
-        local log_size_mb=$(echo "$log_size" | sed 's/M//')
-        if [[ "$log_size_mb" -gt 1000 ]]; then
+        local log_size_value="${log_size%?}"
+        local log_size_unit="${log_size: -1}"
+        if [[ "$log_size_unit" == "M" && ${log_size_value%.*} -gt 1000 ]]; then
             issues+=("日志文件过大: ${log_size}")
             recommendations+=("清理旧日志文件")
             score=$((score - 10))
@@ -470,7 +496,8 @@ analyze_network_performance() {
     
     # 网络连接数分析
     if command -v ss >/dev/null 2>&1; then
-        local total_connections=$(ss -tuln | wc -l)
+        local total_connections
+        total_connections=$(ss -tuln | wc -l)
         if [[ "$total_connections" -gt 1000 ]]; then
             issues+=("网络连接数过多: $total_connections")
             recommendations+=("检查网络连接，优化连接管理")
@@ -478,7 +505,8 @@ analyze_network_performance() {
         fi
         
         # 检查TIME_WAIT连接
-        local time_wait=$(ss -tuln | grep TIME_WAIT | wc -l)
+        local time_wait
+        time_wait=$(ss -tuln | grep -c TIME_WAIT)
         if [[ "$time_wait" -gt 100 ]]; then
             issues+=("TIME_WAIT连接过多: $time_wait")
             recommendations+=("优化TCP连接配置")
@@ -488,9 +516,11 @@ analyze_network_performance() {
     
     # 网络延迟测试
     if ping -c 1 8.8.8.8 >/dev/null 2>&1; then
-        local ping_time=$(ping -c 1 8.8.8.8 2>/dev/null | grep "time=" | awk '{print $7}' | cut -d'=' -f2)
+        local ping_time
+        ping_time=$(ping -c 1 8.8.8.8 2>/dev/null | grep "time=" | awk '{print $7}' | cut -d'=' -f2)
         if [[ -n "$ping_time" ]]; then
-            local ping_ms=$(echo "$ping_time" | sed 's/ms//')
+            local ping_ms
+            ping_ms=${ping_time//ms/}
             if (( $(echo "$ping_ms > 100" | bc -l) )); then
                 issues+=("网络延迟过高: ${ping_ms}ms")
                 recommendations+=("检查网络连接质量")
@@ -504,7 +534,8 @@ analyze_network_performance() {
     fi
     
     # 检查网络接口状态
-    local network_interfaces=$(ip link show | grep -c "state UP")
+    local network_interfaces
+    network_interfaces=$(ip link show | grep -c "state UP")
     if [[ "$network_interfaces" -lt 1 ]]; then
         issues+=("没有活跃的网络接口")
         recommendations+=("检查网络接口配置")
@@ -548,12 +579,15 @@ show_performance_summary() {
     local analysis_count=0
     
     for result in "${PERFORMANCE_RESULTS[@]}"; do
-        local type=$(echo "$result" | cut -d':' -f1)
-        local score=$(echo "$result" | cut -d':' -f2)
-        local issues=$(echo "$result" | cut -d':' -f3)
+        local type
+        type=$(echo "$result" | cut -d':' -f1)
+        local score
+        score=$(echo "$result" | cut -d':' -f2)
+        local issue_count
+        issue_count=$(echo "$result" | cut -d':' -f3)
         
         total_score=$((total_score + score))
-        total_issues=$((total_issues + issues))
+        total_issues=$((total_issues + issue_count))
         analysis_count=$((analysis_count + 1))
         
         if [[ "$score" -ge 90 ]]; then

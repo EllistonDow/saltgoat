@@ -33,10 +33,8 @@ monitor_prometheus_setup() {
     local prometheus_url="https://github.com/prometheus/prometheus/releases/download/v${prometheus_version}/prometheus-${prometheus_version}.linux-amd64.tar.gz"
     
     log_info "下载 Prometheus v${prometheus_version}..."
-    cd /tmp
-    wget -q "$prometheus_url" -O prometheus.tar.gz
-    
-    if [[ $? -ne 0 ]]; then
+    cd /tmp || exit 1
+    if ! wget -q "$prometheus_url" -O prometheus.tar.gz; then
         log_error "下载 Prometheus 失败"
         exit 1
     fi
@@ -64,7 +62,8 @@ monitor_prometheus_setup() {
     
     if systemctl is-active --quiet prometheus; then
         log_success "Prometheus 安装成功"
-        local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+        local server_ip
+        server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
         log_info "访问地址: http://${server_ip}:9090"
         show_prometheus_status
         
@@ -155,7 +154,8 @@ EOF
 
 # 显示Prometheus状态
 show_prometheus_status() {
-    local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+    local server_ip
+    server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
     echo ""
     echo "Prometheus 状态信息:"
     echo "----------------------------------------"
@@ -207,9 +207,7 @@ monitor_grafana_setup() {
     
     # 安装Grafana
     log_info "安装 Grafana..."
-    sudo apt install -y grafana
-    
-    if [[ $? -ne 0 ]]; then
+    if ! sudo apt install -y grafana; then
         log_error "Grafana 安装失败"
         exit 1
     fi
@@ -223,7 +221,8 @@ monitor_grafana_setup() {
     
     if systemctl is-active --quiet grafana-server; then
         log_success "Grafana 安装成功"
-        local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+        local server_ip
+        server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
         log_info "访问地址: http://${server_ip}:3000"
         log_info "默认用户名: admin"
         log_info "默认密码: admin"
@@ -237,7 +236,8 @@ monitor_grafana_setup() {
 
 # 显示Grafana状态
 show_grafana_status() {
-    local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+    local server_ip
+    server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
     echo ""
     echo "Grafana 状态信息:"
     echo "----------------------------------------"
@@ -276,8 +276,11 @@ install_node_exporter() {
     local node_exporter_version="1.6.1"
     local node_exporter_url="https://github.com/prometheus/node_exporter/releases/download/v${node_exporter_version}/node_exporter-${node_exporter_version}.linux-amd64.tar.gz"
     
-    cd /tmp
-    wget -q "$node_exporter_url" -O node_exporter.tar.gz
+    cd /tmp || return 1
+    if ! wget -q "$node_exporter_url" -O node_exporter.tar.gz; then
+        log_error "下载 Node Exporter 失败"
+        return 1
+    fi
     tar xzf node_exporter.tar.gz
     
     sudo cp node_exporter-${node_exporter_version}.linux-amd64/node_exporter /usr/local/bin/
@@ -309,7 +312,8 @@ EOF
     
     if systemctl is-active --quiet node_exporter; then
         log_success "Node Exporter 安装成功"
-        local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+        local server_ip
+        server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
         log_info "访问地址: http://${server_ip}:9100/metrics"
     else
         log_error "Node Exporter 启动失败"
@@ -331,10 +335,8 @@ install_nginx_exporter() {
     local nginx_exporter_version="0.11.0"
     local nginx_exporter_url="https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v${nginx_exporter_version}/nginx-prometheus-exporter_${nginx_exporter_version}_linux_amd64.tar.gz"
     
-    cd /tmp
-    wget -q "$nginx_exporter_url" -O nginx_exporter.tar.gz
-    
-    if [[ $? -ne 0 ]]; then
+    cd /tmp || return 1
+    if ! wget -q "$nginx_exporter_url" -O nginx_exporter.tar.gz; then
         log_error "下载 Nginx Exporter 失败"
         return 1
     fi
@@ -369,7 +371,8 @@ EOF
     
     if systemctl is-active --quiet nginx_exporter; then
         log_success "Nginx Exporter 安装成功"
-        local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+        local server_ip
+        server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
         log_info "访问地址: http://${server_ip}:9113/metrics"
     else
         log_error "Nginx Exporter 启动失败"
@@ -385,14 +388,14 @@ configure_firewall_port() {
     
     log_info "配置防火墙规则: ${service_name} (${port})..."
     if command -v ufw >/dev/null 2>&1; then
-        sudo ufw allow ${port}/tcp comment "${service_name}"
+        sudo ufw allow "${port}"/tcp comment "${service_name}"
         log_success "UFW: 已放行${port}端口"
     elif command -v firewall-cmd >/dev/null 2>&1; then
-        sudo firewall-cmd --permanent --add-port=${port}/tcp
+        sudo firewall-cmd --permanent --add-port="${port}"/tcp
         sudo firewall-cmd --reload
         log_success "Firewalld: 已放行${port}端口"
     elif command -v iptables >/dev/null 2>&1; then
-        sudo iptables -A INPUT -p tcp --dport ${port} -j ACCEPT
+        sudo iptables -A INPUT -p tcp --dport "${port}" -j ACCEPT
         log_success "iptables: 已放行${port}端口"
     else
         log_info "未检测到防火墙，请手动放行${port}端口"
@@ -430,7 +433,8 @@ check_firewall_status() {
 
 # 监控集成状态检查
 monitor_integration_status() {
-    local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+    local server_ip
+    server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
     echo "监控集成状态检查"
     echo "=========================================="
     

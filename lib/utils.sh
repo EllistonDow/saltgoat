@@ -59,7 +59,9 @@ set_pillar() {
 
 # 获取脚本目录
 get_script_dir() {
-    echo "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local dir
+    dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    printf '%s\n' "$dir"
 }
 
 # 检查命令是否存在

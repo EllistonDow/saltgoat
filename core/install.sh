@@ -45,7 +45,7 @@ load_pillar_defaults() {
 	pillar_file="$(get_local_pillar_file)"
 
 	if [[ -f "$pillar_file" ]]; then
-		log_info "从 Pillar 加载默认配置: ${pillar_file#${SCRIPT_DIR}/}"
+        log_info "从 Pillar 加载默认配置: ${pillar_file#"${SCRIPT_DIR}/"}"
 		MYSQL_PASSWORD="${MYSQL_PASSWORD:-$(get_local_pillar_value mysql_password)}"
 		VALKEY_PASSWORD="${VALKEY_PASSWORD:-$(get_local_pillar_value valkey_password)}"
 		RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(get_local_pillar_value rabbitmq_password)}"

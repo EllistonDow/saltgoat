@@ -30,7 +30,8 @@ backup_create_site() {
     fi
     
     local site_path="/var/www/$site_name"
-    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
     
     # 检查站点目录是否存在
     if [[ ! -d "$site_path" ]]; then
@@ -54,7 +55,8 @@ backup_create_site() {
     log_highlight "备份站点文件: $site_name -> $backup_file"
     
     # 显示站点信息
-    local site_size=$(du -sh "$site_path" 2>/dev/null | cut -f1)
+    local site_size
+    site_size=$(du -sh "$site_path" 2>/dev/null | cut -f1)
     log_info "站点路径: $site_path"
     log_info "站点大小: $site_size"
     log_info "备份文件: $backup_file"
@@ -63,13 +65,15 @@ backup_create_site() {
     log_info "创建站点备份..."
     if salt-call --local cmd.run "sudo tar -czf '$backup_file' -C /var/www '$site_name'" >/dev/null 2>&1; then
         # 获取备份文件大小
-        local backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
+        local backup_size
+        backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
         log_success "站点备份完成: $backup_file"
         log_info "备份文件大小: $backup_size"
         log_info "备份路径: $backup_file"
         
         # 创建备份信息文件
-        local backup_info="站点备份信息
+        local backup_info
+        backup_info="站点备份信息
 ==================
 站点名称: $site_name
 项目名称: $project_name
@@ -110,8 +114,10 @@ backup_restore_site() {
     fi
     
     # 显示备份文件信息
-    local backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
-    local backup_date=$(stat -c %y "$backup_file" 2>/dev/null)
+    local backup_size
+    backup_size=$(du -h "$backup_file" 2>/dev/null | cut -f1)
+    local backup_date
+    backup_date=$(stat -c %y "$backup_file" 2>/dev/null)
     log_info "备份文件大小: $backup_size"
     log_info "备份文件时间: $backup_date"
     
@@ -120,7 +126,7 @@ backup_restore_site() {
         log_info "使用强制模式，跳过确认"
     else
         log_warning "这将覆盖目标站点目录，请确认是否继续？"
-        read -p "输入 'yes' 确认继续: " confirm
+        read -r -p "输入 'yes' 确认继续: " confirm
         
         if [[ "$confirm" != "yes" ]]; then
             log_info "恢复操作已取消"
@@ -139,7 +145,8 @@ backup_restore_site() {
         log_success "备份文件解压成功"
         
         # 查找解压后的站点目录
-        local extracted_site_dir=$(find "$restore_dir" -name "$site_name" -type d | head -1)
+        local extracted_site_dir
+        extracted_site_dir=$(find "$restore_dir" -name "$site_name" -type d | head -1)
         
         if [[ -z "$extracted_site_dir" ]]; then
             log_error "在备份文件中未找到站点目录: $site_name"
@@ -149,7 +156,8 @@ backup_restore_site() {
         
         # 备份当前站点（如果存在）
         if [[ -d "$site_path" ]]; then
-            local backup_current="/tmp/${site_name}_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
+            local backup_current
+            backup_current="/tmp/${site_name}_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
             log_info "备份当前站点到: $backup_current"
             salt-call --local archive.tar czf "$backup_current" sources="[\"$site_path\"]" >/dev/null 2>&1
         fi
@@ -189,16 +197,20 @@ backup_list_sites() {
     
     for project_dir in /home/doge/Dropbox/*/snapshot/; do
         if [[ -d "$project_dir" ]]; then
-            local project_name=$(basename $(dirname "$project_dir"))
+            local project_name
+            project_name=$(basename "$(dirname "$project_dir")")
             
             echo "项目: $project_name"
             echo "----------------------------------------"
             
             for file in "$project_dir"*.tar.gz; do
                 if [[ -f "$file" ]]; then
-                    local name=$(basename "$file" .tar.gz)
-                    local size=$(du -h "$file" 2>/dev/null | cut -f1)
-                    local date=$(stat -c %y "$file" 2>/dev/null)
+                    local name
+                    name=$(basename "$file" .tar.gz)
+                    local size
+                    size=$(du -h "$file" 2>/dev/null | cut -f1)
+                    local date
+                    date=$(stat -c %y "$file" 2>/dev/null)
                     
                     echo "备份名称: $name"
                     echo "文件大小: $size"
@@ -219,9 +231,12 @@ backup_list_sites() {
         
         for file in "$BACKUP_BASE_DIR"/*.tar.gz; do
             if [[ -f "$file" ]]; then
-                local name=$(basename "$file" .tar.gz)
-                local size=$(du -h "$file" 2>/dev/null | cut -f1)
-                local date=$(stat -c %y "$file" 2>/dev/null)
+                local name
+                name=$(basename "$file" .tar.gz)
+                local size
+                size=$(du -h "$file" 2>/dev/null | cut -f1)
+                local date
+                date=$(stat -c %y "$file" 2>/dev/null)
                 
                 echo "备份名称: $name"
                 echo "文件大小: $size"
@@ -240,7 +255,8 @@ backup_list_sites() {
 # 创建系统备份
 backup_create() {
     local backup_name="$1"
-    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
     local backup_dir="$BACKUP_BASE_DIR/${backup_name}_${timestamp}"
     
     if [[ -z "$backup_name" ]]; then
@@ -288,7 +304,8 @@ backup_create() {
     salt-call --local file.copy "/home/doge/saltgoat/salt" "$saltgoat_backup_dir/salt" recurse=True >/dev/null 2>&1
     
     # 创建备份信息文件 - 使用 Salt 文件模块
-    local backup_info_content="SaltGoat 系统备份
+    local backup_info_content
+    backup_info_content="SaltGoat 系统备份
 ==================
 备份名称: $backup_name
 创建时间: $(date)
@@ -327,9 +344,12 @@ backup_list() {
     
     for file in "$BACKUP_BASE_DIR"/*.tar.gz; do
         if [[ -f "$file" ]]; then
-            local name=$(basename "$file" .tar.gz)
-            local size=$(du -h "$file" 2>/dev/null | awk '{print $1}')
-            local date=$(stat -c %y "$file" 2>/dev/null | cut -d'.' -f1)
+            local name
+            name=$(basename "$file" .tar.gz)
+            local size
+            size=$(du -h "$file" 2>/dev/null | awk '{print $1}')
+            local date
+            date=$(stat -c %y "$file" 2>/dev/null | cut -d'.' -f1)
             
             echo "备份名称: $name"
             echo "文件大小: $size"
@@ -361,7 +381,7 @@ backup_restore() {
     
     log_highlight "恢复备份: $backup_name"
     log_warning "这将覆盖当前系统配置，请确认是否继续？"
-    read -p "输入 'yes' 确认继续: " confirm
+    read -r -p "输入 'yes' 确认继续: " confirm
     
     if [[ "$confirm" != "yes" ]]; then
         log_info "恢复操作已取消"
@@ -438,7 +458,7 @@ backup_delete() {
     
     log_highlight "删除备份: $backup_name"
     log_warning "确认删除备份文件: $backup_file"
-    read -p "输入 'yes' 确认删除: " confirm
+    read -r -p "输入 'yes' 确认删除: " confirm
     
     if [[ "$confirm" != "yes" ]]; then
         log_info "删除操作已取消"
@@ -455,15 +475,17 @@ backup_cleanup() {
     ensure_backup_dir
     
     # 使用 Salt 文件模块查找过期文件
-    local old_files=$(salt-call --local file.find "$BACKUP_BASE_DIR" name="*.tar.gz" mtime="+$BACKUP_RETENTION_DAYS" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    local old_files
+    old_files=$(salt-call --local file.find "$BACKUP_BASE_DIR" name="*.tar.gz" mtime="+$BACKUP_RETENTION_DAYS" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
     
-    for file in $old_files; do
+    while IFS= read -r file; do
         if [[ -n "$file" ]]; then
-            local filename=$(basename "$file")
+            local filename
+            filename=$(basename "$file")
             log_info "删除过期备份: $filename"
             salt-call --local file.remove "$file" >/dev/null 2>&1
         fi
-    done
+    done <<<"$old_files"
     
     log_success "备份清理完成"
 }

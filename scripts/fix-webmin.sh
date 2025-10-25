@@ -4,6 +4,7 @@
 
 # 加载公共库
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
 WEBMIN_PASSWORD="${1:-Webmin123!}"
@@ -57,7 +58,7 @@ sleep 3
 
 # 7. 测试连接
 log_info "测试 Webmin 连接..."
-if curl -u root:${WEBMIN_PASSWORD} http://localhost:10000 2>/dev/null | grep -q "401"; then
+if curl -u "root:${WEBMIN_PASSWORD}" http://localhost:10000 2>/dev/null | grep -q "401"; then
     log_error "Webmin 认证仍然失败"
     log_info "检查 Webmin 日志："
     sudo tail -10 /var/webmin/miniserv.log

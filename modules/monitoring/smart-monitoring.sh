@@ -28,8 +28,13 @@ detect_business_scenario() {
     local server_role="web"
     if [[ ${#services[@]} -gt 3 ]]; then
         server_role="fullstack"
-    elif [[ " ${services[@]} " =~ " database " ]]; then
-        server_role="database"
+    else
+        for svc in "${services[@]}"; do
+            if [[ "$svc" == "database" ]]; then
+                server_role="database"
+                break
+            fi
+        done
     fi
     
     echo "检测结果:"
@@ -371,8 +376,10 @@ install_smart_monitoring() {
     echo "智能监控配置"
     echo "=========================================="
     
-    local scenario=$(detect_business_scenario)
-    local web_type=$(echo "$scenario" | cut -d: -f1)
+    local scenario
+    scenario=$(detect_business_scenario)
+    local web_type
+    web_type=$(echo "$scenario" | cut -d: -f1)
     
     # 安装Prometheus
     monitor_prometheus_setup
@@ -398,7 +405,8 @@ install_smart_monitoring() {
     
     if systemctl is-active --quiet prometheus; then
         log_success "智能监控系统安装完成"
-        local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+        local server_ip
+        server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
         log_info "Prometheus访问地址: http://${server_ip}:9090"
         log_info "业务场景: $web_type"
         

@@ -3,6 +3,9 @@
 # 使用 Salt 原生语法管理 ModSecurity
 
 # 加载日志函数
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../lib/logger.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
 # ModSecurity Salt 处理器
@@ -50,7 +53,8 @@ set_modsecurity_level_salt() {
     # 动态检测 Magento 后台路径
     local admin_path="/admin"
     if [[ -f "/var/www/tank/bin/magento" ]]; then
-        local detected_admin_path=$(cd /var/www/tank && sudo -u www-data php bin/magento info:adminuri 2>/dev/null | grep "Admin URI:" | sed 's/Admin URI: //' | tr -d ' ')
+        local detected_admin_path
+        detected_admin_path=$(cd /var/www/tank && sudo -u www-data php bin/magento info:adminuri 2>/dev/null | grep "Admin URI:" | sed 's/Admin URI: //' | tr -d ' ')
         if [[ -n "$detected_admin_path" ]]; then
             admin_path="$detected_admin_path"
             log_info "检测到 Magento 后台路径: $admin_path"
@@ -59,9 +63,7 @@ set_modsecurity_level_salt() {
     
     # 使用 Salt 应用配置
     log_info "应用 Salt State: optional.modsecurity"
-    sudo salt-call state.apply optional.modsecurity pillar='{"modsecurity_level": '$level', "magento_admin_path": "'$admin_path'"}' --local
-    
-    if [[ $? -eq 0 ]]; then
+    if sudo salt-call --local state.apply optional.modsecurity pillar='{"modsecurity_level": '"$level"', "magento_admin_path": "'"$admin_path"'"}'; then
         log_success "ModSecurity 等级 $level 设置成功！"
         log_info "配置特点: $(get_level_description "$level")"
         
@@ -79,8 +81,10 @@ check_modsecurity_status_salt() {
     log_highlight "检查 ModSecurity 状态..."
     
     if [[ -f "/etc/nginx/conf/modsecurity.conf" ]]; then
-        local engine_status=$(grep "SecRuleEngine" /etc/nginx/conf/modsecurity.conf | head -1)
-        local level=$(grep "ModSecurity 等级" /etc/nginx/conf/modsecurity.conf | head -1 | sed 's/.*等级 \([0-9]*\).*/\1/')
+        local engine_status
+        engine_status=$(grep "SecRuleEngine" /etc/nginx/conf/modsecurity.conf | head -1)
+        local level
+        level=$(grep "ModSecurity 等级" /etc/nginx/conf/modsecurity.conf | head -1 | sed 's/.*等级 \([0-9]*\).*/\1/')
         
         if [[ "$engine_status" == *"On"* ]]; then
             log_success "ModSecurity 已启用"

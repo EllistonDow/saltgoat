@@ -4,7 +4,6 @@
 
 # 报告配置
 REPORT_BASE_DIR="$HOME/saltgoat_reports"
-REPORT_FORMATS=("text" "json" "html")
 
 # 确保报告目录存在
 ensure_report_dirs() {
@@ -13,6 +12,26 @@ ensure_report_dirs() {
     salt-call --local file.mkdir "$REPORT_BASE_DIR/performance" 2>/dev/null || true
     salt-call --local file.mkdir "$REPORT_BASE_DIR/security" 2>/dev/null || true
     salt-call --local file.mkdir "$REPORT_BASE_DIR/maintenance" 2>/dev/null || true
+}
+
+get_service_status_flag() {
+    local service="$1"
+    local raw_status
+    raw_status="$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")"
+    if [[ "$raw_status" == "True" ]]; then
+        printf 'True\n'
+    else
+        printf 'False\n'
+    fi
+}
+
+count_available_updates() {
+    local updates
+    updates="$(salt-call --local pkg.list_upgrades 2>/dev/null | grep -c ":" 2>/dev/null | tr -d '\n')"
+    if [[ -z "$updates" ]]; then
+        updates='0'
+    fi
+    printf '%s\n' "$updates"
 }
 
 # 系统健康报告
@@ -82,7 +101,8 @@ generate_system_health_text() {
         echo "----------------------------------------"
         local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
         for service in "${services[@]}"; do
-            local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
+            local status
+            status="$(get_service_status_flag "$service")"
             if [[ "$status" == "True" ]]; then
                 echo "✅ $service: 运行中"
             else
@@ -93,7 +113,8 @@ generate_system_health_text() {
         
         echo "系统更新状态:"
         echo "----------------------------------------"
-        local updates=$(salt-call --local pkg.list_upgrades 2>/dev/null | grep -c ":" 2>/dev/null | tr -d '\n' || echo "0")
+        local updates
+        updates="$(count_available_updates)"
         if [[ "$updates" -gt 0 ]]; then
             echo "⚠️  有 $updates 个包可更新"
         else
@@ -133,18 +154,26 @@ generate_system_health_json() {
         local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
         local first=true
         for service in "${services[@]}"; do
-            local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
+            local status
+            status="$(get_service_status_flag "$service")"
+            local status_value
+            if [[ "$status" == "True" ]]; then
+                status_value="true"
+            else
+                status_value="false"
+            fi
             if [[ "$first" == "true" ]]; then
                 first=false
             else
-                echo ","
+                printf ',\n'
             fi
-            echo -n "    \"$service\": $status"
+            printf '    "%s": %s' "$service" "$status_value"
         done
-        echo ""
+        printf '\n'
         echo "  },"
         
-        local updates=$(salt-call --local pkg.list_upgrades 2>/dev/null | grep -c ":" 2>/dev/null | tr -d '\n' || echo "0")
+        local updates
+        updates="$(count_available_updates)"
         echo "  \"updates_available\": $updates"
         echo "}"
         
@@ -197,7 +226,8 @@ generate_system_health_html() {
         
         local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
         for service in "${services[@]}"; do
-            local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
+            local status
+            status="$(get_service_status_flag "$service")"
             if [[ "$status" == "True" ]]; then
                 echo "      <tr><td>$service</td><td class='success'>✅ 运行中</td></tr>"
             else
@@ -210,7 +240,8 @@ generate_system_health_html() {
         echo ""
         echo "  <div class='section'>"
         echo "    <h2>系统更新状态</h2>"
-        local updates=$(salt-call --local pkg.list_upgrades 2>/dev/null | grep -c ":" 2>/dev/null | tr -d '\n' || echo "0")
+        local updates
+        updates="$(count_available_updates)"
         if [[ "$updates" -gt 0 ]]; then
             echo "    <p class='warning'>⚠️ 有 $updates 个包可更新</p>"
         else
@@ -418,7 +449,8 @@ generate_security_text() {
         echo "----------------------------------------"
         local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
         for service in "${services[@]}"; do
-            local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
+            local status
+            status="$(get_service_status_flag "$service")"
             if [[ "$status" == "True" ]]; then
                 echo "✅ $service: 运行中"
             else
@@ -429,7 +461,8 @@ generate_security_text() {
         
         echo "系统更新状态:"
         echo "----------------------------------------"
-        local updates=$(salt-call --local pkg.list_upgrades 2>/dev/null | grep -c ":" 2>/dev/null | tr -d '\n' || echo "0")
+        local updates
+        updates="$(count_available_updates)"
         if [[ "$updates" -gt 0 ]]; then
             echo "⚠️  有 $updates 个包可更新"
         else
@@ -467,18 +500,26 @@ generate_security_json() {
         local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
         local first=true
         for service in "${services[@]}"; do
-            local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
+            local status
+            status="$(get_service_status_flag "$service")"
+            local status_value
+            if [[ "$status" == "True" ]]; then
+                status_value="true"
+            else
+                status_value="false"
+            fi
             if [[ "$first" == "true" ]]; then
                 first=false
             else
-                echo ","
+                printf ',\n'
             fi
-            echo -n "    \"$service\": $status"
+            printf '    "%s": %s' "$service" "$status_value"
         done
-        echo ""
+        printf '\n'
         echo "  },"
         
-        local updates=$(salt-call --local pkg.list_upgrades 2>/dev/null | grep -c ":" 2>/dev/null | tr -d '\n' || echo "0")
+        local updates
+        updates="$(count_available_updates)"
         echo "  \"updates_available\": $updates"
         echo "}"
         
@@ -519,7 +560,8 @@ generate_security_html() {
         
         local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
         for service in "${services[@]}"; do
-            local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
+            local status
+            status="$(get_service_status_flag "$service")"
             if [[ "$status" == "True" ]]; then
                 echo "      <tr><td>$service</td><td class='success'>✅ 运行中</td></tr>"
             else
@@ -532,7 +574,8 @@ generate_security_html() {
         echo ""
         echo "  <div class='section'>"
         echo "    <h2>系统更新状态</h2>"
-        local updates=$(salt-call --local pkg.list_upgrades 2>/dev/null | grep -c ":" 2>/dev/null | tr -d '\n' || echo "0")
+        local updates
+        updates="$(count_available_updates)"
         if [[ "$updates" -gt 0 ]]; then
             echo "    <p class='warning'>⚠️ 有 $updates 个包可更新</p>"
         else
@@ -590,7 +633,7 @@ report_cleanup() {
     ensure_report_dirs
     
     # 查找并删除旧报告
-    salt-call --local file.find "$REPORT_BASE_DIR" type=f mtime=+$days 2>/dev/null | while read -r file; do
+    salt-call --local file.find "$REPORT_BASE_DIR" type=f mtime=+"$days" 2>/dev/null | while read -r file; do
         salt-call --local file.remove "$file" 2>/dev/null
         echo "已删除: $file"
     done

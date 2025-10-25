@@ -36,7 +36,7 @@ ssl_generate_self_signed() {
     # 检查证书是否已存在
     if [[ -f "$cert_file" ]]; then
         log_warning "证书文件已存在: $cert_file"
-        read -p "是否覆盖现有证书？(y/N): " confirm
+        read -r -p "是否覆盖现有证书？(y/N): " confirm
         if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
             log_info "操作已取消"
             exit 0
@@ -161,9 +161,12 @@ ssl_verify_cert() {
     
     # 验证证书有效期
     log_info "检查证书有效期..."
-    local expiry_date=$(salt-call --local cmd.run "openssl x509 -in $cert_file -enddate -noout | cut -d= -f2" 2>/dev/null)
-    local expiry_timestamp=$(date -d "$expiry_date" +%s 2>/dev/null)
-    local current_timestamp=$(date +%s)
+    local expiry_date
+    expiry_date=$(salt-call --local cmd.run "openssl x509 -in $cert_file -enddate -noout | cut -d= -f2" 2>/dev/null)
+    local expiry_timestamp
+    expiry_timestamp=$(date -d "$expiry_date" +%s 2>/dev/null)
+    local current_timestamp
+    current_timestamp=$(date +%s)
     local days_until_expiry=$(( (expiry_timestamp - current_timestamp) / 86400 ))
     
     if [[ $days_until_expiry -gt 0 ]]; then
@@ -176,8 +179,10 @@ ssl_verify_cert() {
     if [[ -n "$key_file" ]]; then
         if salt-call --local file.file_exists "$key_file" --out=txt 2>/dev/null | grep -q "True"; then
             log_info "验证证书和私钥匹配..."
-            local cert_md5=$(salt-call --local cmd.run "openssl x509 -noout -modulus -in $cert_file | openssl md5" 2>/dev/null)
-            local key_md5=$(salt-call --local cmd.run "openssl rsa -noout -modulus -in $key_file | openssl md5" 2>/dev/null)
+            local cert_md5
+            cert_md5=$(salt-call --local cmd.run "openssl x509 -noout -modulus -in $cert_file | openssl md5" 2>/dev/null)
+            local key_md5
+            key_md5=$(salt-call --local cmd.run "openssl rsa -noout -modulus -in $key_file | openssl md5" 2>/dev/null)
             
             if [[ "$cert_md5" == "$key_md5" ]]; then
                 log_success "证书和私钥匹配"
@@ -200,7 +205,8 @@ ssl_list_certs() {
     # 列出系统证书目录
     if salt-call --local file.directory_exists "$SSL_CERT_DIR" --out=txt 2>/dev/null | grep -q "True"; then
         echo "证书文件 ($SSL_CERT_DIR):"
-        local cert_files=$(salt-call --local file.find "$SSL_CERT_DIR" name="*.crt" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+        local cert_files
+        cert_files=$(salt-call --local file.find "$SSL_CERT_DIR" name="*.crt" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
         if [[ -n "$cert_files" ]]; then
             for file in $cert_files; do
                 if [[ -n "$file" ]]; then
@@ -214,7 +220,8 @@ ssl_list_certs() {
     
     echo ""
     echo "私钥文件 ($SSL_KEY_DIR):"
-    local key_files=$(salt-call --local file.find "$SSL_KEY_DIR" name="*.key" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    local key_files
+    key_files=$(salt-call --local file.find "$SSL_KEY_DIR" name="*.key" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
     if [[ -n "$key_files" ]]; then
         for file in $key_files; do
             if [[ -n "$file" ]]; then
@@ -227,7 +234,8 @@ ssl_list_certs() {
     
     echo ""
     echo "CSR 文件 ($SSL_CSR_DIR):"
-    local csr_files=$(salt-call --local file.find "$SSL_CSR_DIR" name="*.csr" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    local csr_files
+    csr_files=$(salt-call --local file.find "$SSL_CSR_DIR" name="*.csr" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
     if [[ -n "$csr_files" ]]; then
         for file in $csr_files; do
             if [[ -n "$file" ]]; then
@@ -245,10 +253,14 @@ ssl_list_certs() {
     # 显示每个证书的详细信息
     for cert_file in "$SSL_CERT_DIR"/*.crt; do
         if salt-call --local file.file_exists "$cert_file" --out=txt 2>/dev/null | grep -q "True"; then
-            local domain=$(basename "$cert_file" .crt)
-            local expiry_date=$(salt-call --local cmd.run "openssl x509 -in $cert_file -enddate -noout | cut -d= -f2" 2>/dev/null)
-            local expiry_timestamp=$(date -d "$expiry_date" +%s 2>/dev/null)
-            local current_timestamp=$(date +%s)
+            local domain
+            domain=$(basename "$cert_file" .crt)
+            local expiry_date
+            expiry_date=$(salt-call --local cmd.run "openssl x509 -in $cert_file -enddate -noout | cut -d= -f2" 2>/dev/null)
+            local expiry_timestamp
+            expiry_timestamp=$(date -d "$expiry_date" +%s 2>/dev/null)
+            local current_timestamp
+            current_timestamp=$(date +%s)
             local days_until_expiry=$(( (expiry_timestamp - current_timestamp) / 86400 ))
             
             echo "域名: $domain"
@@ -279,9 +291,12 @@ ssl_renew_cert() {
     
     log_highlight "续期证书: $cert_file (有效期: $days 天)"
     
-    local domain=$(basename "$cert_file" .crt)
+    local domain
+    domain=$(basename "$cert_file" .crt)
     local key_file="$SSL_KEY_DIR/${domain}.key"
-    local backup_cert="$SSL_BACKUP_DIR/${domain}_$(date +%Y%m%d_%H%M%S).crt"
+    local backup_timestamp
+    backup_timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_cert="$SSL_BACKUP_DIR/${domain}_${backup_timestamp}.crt"
     
     # 检查私钥文件是否存在
     if ! salt-call --local file.file_exists "$key_file" --out=txt 2>/dev/null | grep -q "True"; then
@@ -337,7 +352,8 @@ ssl_backup_certs() {
     fi
     
     # 创建备份信息文件
-    local backup_info="SSL 证书备份
+    local backup_info
+    backup_info="SSL 证书备份
 ==================
 备份名称: $backup_name
 备份时间: $(date)
@@ -346,7 +362,6 @@ ssl_backup_certs() {
 - 证书文件
 - 私钥文件
 - CSR 文件"
-    
     salt-call --local file.write "$backup_dir/backup_info.txt" contents="$backup_info" >/dev/null 2>&1
     
     # 创建压缩包
@@ -369,13 +384,17 @@ ssl_cleanup_expired() {
     # 清理过期的证书文件
     for cert_file in "$SSL_CERT_DIR"/*.crt; do
         if salt-call --local file.file_exists "$cert_file" --out=txt 2>/dev/null | grep -q "True"; then
-            local expiry_date=$(salt-call --local cmd.run "openssl x509 -in $cert_file -enddate -noout | cut -d= -f2" 2>/dev/null)
-            local expiry_timestamp=$(date -d "$expiry_date" +%s 2>/dev/null)
-            local current_timestamp=$(date +%s)
+            local expiry_date
+            expiry_date=$(salt-call --local cmd.run "openssl x509 -in $cert_file -enddate -noout | cut -d= -f2" 2>/dev/null)
+            local expiry_timestamp
+            expiry_timestamp=$(date -d "$expiry_date" +%s 2>/dev/null)
+            local current_timestamp
+            current_timestamp=$(date +%s)
             local days_since_expiry=$(( (current_timestamp - expiry_timestamp) / 86400 ))
             
             if [[ $days_since_expiry -gt $days ]]; then
-                local domain=$(basename "$cert_file" .crt)
+                local domain
+                domain=$(basename "$cert_file" .crt)
                 log_info "删除过期证书: $domain (过期 $days_since_expiry 天)"
                 salt-call --local file.remove "$cert_file" >/dev/null 2>&1
                 
@@ -401,8 +420,10 @@ ssl_status() {
     echo "=========================================="
     
     # 检查目录权限
-    local cert_dir_perms=$(salt-call --local file.stat "$SSL_CERT_DIR" --out=txt 2>/dev/null | grep "mode:" | awk '{print $2}')
-    local key_dir_perms=$(salt-call --local file.stat "$SSL_KEY_DIR" --out=txt 2>/dev/null | grep "mode:" | awk '{print $2}')
+    local cert_dir_perms
+    cert_dir_perms=$(salt-call --local file.stat "$SSL_CERT_DIR" --out=txt 2>/dev/null | grep "mode:" | awk '{print $2}')
+    local key_dir_perms
+    key_dir_perms=$(salt-call --local file.stat "$SSL_KEY_DIR" --out=txt 2>/dev/null | grep "mode:" | awk '{print $2}')
     
     echo "证书目录权限: $cert_dir_perms"
     echo "私钥目录权限: $key_dir_perms"
@@ -412,9 +433,12 @@ ssl_status() {
     echo "----------------------------------------"
     
     # 使用 Salt 文件模块统计文件数量
-    local cert_files=$(salt-call --local file.find "$SSL_CERT_DIR" name="*.crt" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
-    local key_files=$(salt-call --local file.find "$SSL_KEY_DIR" name="*.key" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
-    local csr_files=$(salt-call --local file.find "$SSL_CSR_DIR" name="*.csr" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    local cert_files
+    cert_files=$(salt-call --local file.find "$SSL_CERT_DIR" name="*.crt" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    local key_files
+    key_files=$(salt-call --local file.find "$SSL_KEY_DIR" name="*.key" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    local csr_files
+    csr_files=$(salt-call --local file.find "$SSL_CSR_DIR" name="*.csr" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
     
     local cert_count=0
     local key_count=0
@@ -449,17 +473,22 @@ ssl_status() {
     local expiring_count=0
     for cert_file in "$SSL_CERT_DIR"/*.crt; do
         if salt-call --local file.file_exists "$cert_file" --out=txt 2>/dev/null | grep -q "True"; then
-            local expiry_date=$(salt-call --local cmd.run "openssl x509 -in $cert_file -enddate -noout | cut -d= -f2" 2>/dev/null)
-            local expiry_timestamp=$(date -d "$expiry_date" +%s 2>/dev/null)
-            local current_timestamp=$(date +%s)
+            local expiry_date
+            expiry_date=$(salt-call --local cmd.run "openssl x509 -in $cert_file -enddate -noout | cut -d= -f2" 2>/dev/null)
+            local expiry_timestamp
+            expiry_timestamp=$(date -d "$expiry_date" +%s 2>/dev/null)
+            local current_timestamp
+            current_timestamp=$(date +%s)
             local days_until_expiry=$(( (expiry_timestamp - current_timestamp) / 86400 ))
             
             if [[ $days_until_expiry -lt 30 && $days_until_expiry -gt 0 ]]; then
-                local domain=$(basename "$cert_file" .crt)
+                local domain
+                domain=$(basename "$cert_file" .crt)
                 echo "⚠️  $domain: $days_until_expiry 天后过期"
                 ((expiring_count++))
             elif [[ $days_until_expiry -le 0 ]]; then
-                local domain=$(basename "$cert_file" .crt)
+                local domain
+                domain=$(basename "$cert_file" .crt)
                 echo "❌ $domain: 已过期 $(( -days_until_expiry )) 天"
                 ((expiring_count++))
             fi

@@ -123,7 +123,8 @@ list_aliases() {
     echo -e "${BLUE}SaltGoat 别名列表:${NC}"
     echo ""
     
-    local aliases=$(grep "alias.*='/usr/local/bin/saltgoat'" ~/.bashrc 2>/dev/null | sed "s/alias //" | sed "s/='\/usr\/local\/bin\/saltgoat'//")
+    local aliases
+    aliases=$(grep "alias.*='/usr/local/bin/saltgoat'" ~/.bashrc 2>/dev/null | sed "s/alias //" | sed "s/='\/usr\/local\/bin\/saltgoat'//")
     
     if [[ -z "$aliases" ]]; then
         echo -e "${YELLOW}没有找到任何别名${NC}"

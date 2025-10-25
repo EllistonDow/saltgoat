@@ -23,9 +23,12 @@ monitor_system_status() {
     echo "=========================================="
     
     # 系统信息
-    local hostname=$(salt-call --local cmd.run "hostname" 2>/dev/null)
-    local uptime=$(salt-call --local cmd.run "uptime" 2>/dev/null)
-    local load_avg=$(salt-call --local cmd.run "uptime" 2>/dev/null | grep -o 'load average:.*' | cut -d: -f2)
+    local hostname
+    hostname=$(salt-call --local cmd.run "hostname" 2>/dev/null)
+    local uptime
+    uptime=$(salt-call --local cmd.run "uptime" 2>/dev/null)
+    local load_avg
+    load_avg=$(salt-call --local cmd.run "uptime" 2>/dev/null | grep -o 'load average:.*' | cut -d: -f2)
     
     echo "主机名: $hostname"
     echo "运行时间: $uptime"
@@ -36,23 +39,27 @@ monitor_system_status() {
     echo "----------------------------------------"
     
     # CPU 使用率
-    local cpu_usage=$(salt-call --local cmd.run "top -bn1" 2>/dev/null | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%//')
+    local cpu_usage
+    cpu_usage=$(salt-call --local cmd.run "top -bn1" 2>/dev/null | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%//')
     echo "CPU 使用率: ${cpu_usage}%"
     
     # 内存使用情况
-    local mem_info=$(salt-call --local cmd.run "free -h" 2>/dev/null)
+    local mem_info
+    mem_info=$(salt-call --local cmd.run "free -h" 2>/dev/null)
     echo "内存使用情况:"
     echo "$mem_info"
     
     # 磁盘使用情况
-    local disk_info=$(salt-call --local cmd.run "df -h" 2>/dev/null)
+    local disk_info
+    disk_info=$(salt-call --local cmd.run "df -h" 2>/dev/null)
     echo "磁盘使用情况:"
     echo "$disk_info"
     
     echo ""
     echo "网络连接状态:"
     echo "----------------------------------------"
-    local network_info=$(salt-call --local cmd.run "ss -tlnp" 2>/dev/null)
+    local network_info
+    network_info=$(salt-call --local cmd.run "ss -tlnp" 2>/dev/null)
     echo "$network_info"
 }
 
@@ -66,7 +73,8 @@ monitor_service_status() {
     local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
     
     for service in "${services[@]}"; do
-        local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
+        local status
+        status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
         if [[ "$status" == "True" ]]; then
             log_success "✅ $service: 正在运行"
         else
@@ -80,11 +88,14 @@ monitor_service_status() {
     
     # 检查服务配置
     for service in "${services[@]}"; do
-        local status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
+        local status
+        status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
         if [[ "$status" == "True" ]]; then
-            local pid=$(pgrep "$service" 2>/dev/null | head -1)
+            local pid
+            pid=$(pgrep "$service" 2>/dev/null | head -1)
             if [[ -n "$pid" ]]; then
-                local memory=$(ps -o pid,vsz,rss,comm -p "$pid" 2>/dev/null | tail -n +2)
+                local memory
+                memory=$(ps -o pid,vsz,rss,comm -p "$pid" 2>/dev/null | tail -n +2)
                 echo "$service (PID: $pid):"
                 echo "$memory"
             else
@@ -103,13 +114,15 @@ monitor_resource_usage() {
     echo "=========================================="
     
     # CPU 详细信息
-    local cpu_info=$(salt-call --local cmd.run "lscpu" 2>/dev/null)
+    local cpu_info
+    cpu_info=$(salt-call --local cmd.run "lscpu" 2>/dev/null)
     echo "$cpu_info"
     
     echo ""
     echo "CPU 使用率最高的进程:"
     echo "----------------------------------------"
-    local top_processes=$(salt-call --local cmd.run "ps aux" 2>/dev/null | sort -k3 -nr | head -10)
+    local top_processes
+    top_processes=$(salt-call --local cmd.run "ps aux" 2>/dev/null | sort -k3 -nr | head -10)
     echo "$top_processes"
     
     echo ""
@@ -117,19 +130,22 @@ monitor_resource_usage() {
     echo "----------------------------------------"
     
     # 内存详细信息
-    local mem_info=$(salt-call --local cmd.run "cat /proc/meminfo" 2>/dev/null)
+    local mem_info
+    mem_info=$(salt-call --local cmd.run "cat /proc/meminfo" 2>/dev/null)
     echo "$mem_info"
     
     echo ""
     echo "内存使用率最高的进程:"
     echo "----------------------------------------"
-    local top_mem_processes=$(salt-call --local cmd.run "ps aux" 2>/dev/null | sort -k4 -nr | head -10)
+    local top_mem_processes
+    top_mem_processes=$(salt-call --local cmd.run "ps aux" 2>/dev/null | sort -k4 -nr | head -10)
     echo "$top_mem_processes"
     
     echo ""
     echo "磁盘 I/O 统计:"
     echo "----------------------------------------"
-    local disk_io=$(salt-call --local cmd.run "iostat -xz 1 2" 2>/dev/null)
+    local disk_io
+    disk_io=$(salt-call --local cmd.run "iostat -xz 1 2" 2>/dev/null)
     echo "$disk_io"
 }
 
@@ -141,25 +157,29 @@ monitor_network_status() {
     echo "=========================================="
     
     # 网络接口信息
-    local network_interfaces=$(salt-call --local cmd.run "ip -s link" 2>/dev/null)
+    local network_interfaces
+    network_interfaces=$(salt-call --local cmd.run "ip -s link" 2>/dev/null)
     echo "$network_interfaces"
     
     echo ""
     echo "网络连接统计:"
     echo "----------------------------------------"
-    local connection_stats=$(salt-call --local cmd.run "ss -s" 2>/dev/null)
+    local connection_stats
+    connection_stats=$(salt-call --local cmd.run "ss -s" 2>/dev/null)
     echo "$connection_stats"
     
     echo ""
     echo "监听端口:"
     echo "----------------------------------------"
-    local listening_ports=$(salt-call --local cmd.run "ss -tlnp" 2>/dev/null)
+    local listening_ports
+    listening_ports=$(salt-call --local cmd.run "ss -tlnp" 2>/dev/null)
     echo "$listening_ports"
     
     echo ""
     echo "网络流量统计:"
     echo "----------------------------------------"
-    local traffic_stats=$(salt-call --local cmd.run "cat /proc/net/dev" 2>/dev/null)
+    local traffic_stats
+    traffic_stats=$(salt-call --local cmd.run "cat /proc/net/dev" 2>/dev/null)
     echo "$traffic_stats"
 }
 
@@ -182,8 +202,10 @@ monitor_log_status() {
     
     for log_file in "${log_files[@]}"; do
         if salt-call --local file.file_exists "$log_file" --out=txt 2>/dev/null | grep -q "True"; then
-            local size=$(salt-call --local cmd.run "du -h $log_file" 2>/dev/null)
-            local lines=$(salt-call --local cmd.run "wc -l $log_file" 2>/dev/null)
+            local size
+            size=$(salt-call --local cmd.run "du -h $log_file" 2>/dev/null)
+            local lines
+            lines=$(salt-call --local cmd.run "wc -l $log_file" 2>/dev/null)
             echo "✅ $log_file: $size ($lines 行)"
         else
             echo "❌ $log_file: 不存在"
@@ -197,7 +219,8 @@ monitor_log_status() {
     # 检查最近的错误
     for log_file in "${log_files[@]}"; do
         if salt-call --local file.file_exists "$log_file" --out=txt 2>/dev/null | grep -q "True"; then
-            local recent_errors=$(salt-call --local cmd.run "tail -n 5 $log_file | grep -i error" 2>/dev/null)
+            local recent_errors
+            recent_errors=$(salt-call --local cmd.run "tail -n 5 $log_file | grep -i error" 2>/dev/null)
             if [[ -n "$recent_errors" ]]; then
                 echo "=== $log_file ==="
                 echo "$recent_errors"
@@ -214,26 +237,30 @@ monitor_security_status() {
     echo "=========================================="
     
     # 检查防火墙状态
-    local firewall_status=$(salt-call --local cmd.run "ufw status" 2>/dev/null)
+    local firewall_status
+    firewall_status=$(salt-call --local cmd.run "ufw status" 2>/dev/null)
     echo "防火墙状态:"
     echo "$firewall_status"
     
     echo ""
     echo "最近登录记录:"
     echo "----------------------------------------"
-    local login_records=$(salt-call --local cmd.run "last -n 10" 2>/dev/null)
+    local login_records
+    login_records=$(salt-call --local cmd.run "last -n 10" 2>/dev/null)
     echo "$login_records"
     
     echo ""
     echo "SSH 连接状态:"
     echo "----------------------------------------"
-    local ssh_connections=$(salt-call --local cmd.run "ss -tlnp | grep ssh" 2>/dev/null)
+    local ssh_connections
+    ssh_connections=$(salt-call --local cmd.run "ss -tlnp | grep ssh" 2>/dev/null)
     echo "$ssh_connections"
     
     echo ""
     echo "系统更新状态:"
     echo "----------------------------------------"
-    local update_status=$(salt-call --local cmd.run "apt list --upgradable 2>/dev/null | wc -l" 2>/dev/null)
+    local update_status
+    update_status=$(salt-call --local cmd.run "apt list --upgradable 2>/dev/null | wc -l" 2>/dev/null)
     echo "可用更新数量: $update_status"
 }
 
@@ -245,19 +272,28 @@ monitor_performance() {
     echo "=========================================="
     
     # 系统负载
-    local load_info=$(salt-call --local cmd.run "cat /proc/loadavg" 2>/dev/null)
+    local load_info
+    load_info=$(salt-call --local cmd.run "cat /proc/loadavg" 2>/dev/null)
     echo "系统负载: $load_info"
     
+    # CPU 使用率
+    local cpu_usage
+    cpu_usage=$(salt-call --local cmd.run "top -bn1" 2>/dev/null | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%//')
+    echo "CPU 使用率: ${cpu_usage}%"
+    
     # CPU 核心数
-    local cpu_cores=$(salt-call --local cmd.run "nproc" 2>/dev/null)
+    local cpu_cores
+    cpu_cores=$(salt-call --local cmd.run "nproc" 2>/dev/null)
     echo "CPU 核心数: $cpu_cores"
     
     # 内存使用率
-    local mem_usage=$(salt-call --local cmd.run "free | grep Mem | awk '{printf \"%.1f\", \$3/\$2 * 100.0}'" 2>/dev/null)
+    local mem_usage
+    mem_usage=$(salt-call --local cmd.run "free | grep Mem | awk '{printf \"%.1f\", \$3/\$2 * 100.0}'" 2>/dev/null)
     echo "内存使用率: ${mem_usage}%"
     
     # 磁盘使用率
-    local disk_usage=$(salt-call --local cmd.run "df -h / | tail -1 | awk '{print \$5}'" 2>/dev/null)
+    local disk_usage
+    disk_usage=$(salt-call --local cmd.run "df -h / | tail -1 | awk '{print \$5}'" 2>/dev/null)
     echo "根分区使用率: $disk_usage"
     
     echo ""
@@ -265,8 +301,10 @@ monitor_performance() {
     echo "----------------------------------------"
     
     # 检查性能阈值
-    local cpu_usage_num=$(echo "$cpu_usage" | sed 's/%//')
-    local mem_usage_num=$(echo "$mem_usage" | sed 's/%//')
+    local cpu_usage_num
+    cpu_usage_num="$cpu_usage"
+    local mem_usage_num
+    mem_usage_num="$mem_usage"
     
     if [[ $cpu_usage_num -gt $MONITOR_THRESHOLD_CPU ]]; then
         log_warning "⚠️ CPU 使用率过高: ${cpu_usage}% (阈值: ${MONITOR_THRESHOLD_CPU}%)"
@@ -277,7 +315,8 @@ monitor_performance() {
     fi
     
     if [[ "$disk_usage" =~ [0-9]+% ]]; then
-        local disk_num=$(echo "$disk_usage" | sed 's/%//')
+        local disk_num
+        disk_num="${disk_usage%\%}"
         if [[ $disk_num -gt $MONITOR_THRESHOLD_DISK ]]; then
             log_warning "⚠️ 磁盘使用率过高: $disk_usage (阈值: ${MONITOR_THRESHOLD_DISK}%)"
         fi
@@ -347,7 +386,8 @@ monitor_realtime() {
     log_highlight "实时监控 (持续 $duration 秒)..."
     log_info "按 Ctrl+C 停止监控"
     
-    local start_time=$(date +%s)
+    local start_time
+    start_time=$(date +%s)
     local end_time=$((start_time + duration))
     
     while [[ $(date +%s) -lt $end_time ]]; do
@@ -360,9 +400,12 @@ monitor_realtime() {
         echo ""
         
         # 显示关键指标
-        local cpu_usage=$(salt-call --local cmd.run "top -bn1" 2>/dev/null | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%//')
-        local mem_usage=$(salt-call --local cmd.run "free | grep Mem | awk '{printf \"%.1f\", \$3/\$2 * 100.0}'" 2>/dev/null)
-        local load_avg=$(salt-call --local cmd.run "uptime" 2>/dev/null | grep -o 'load average:.*' | cut -d: -f2)
+        local cpu_usage
+        cpu_usage=$(salt-call --local cmd.run "top -bn1" 2>/dev/null | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%//')
+        local mem_usage
+        mem_usage=$(salt-call --local cmd.run "free | grep Mem | awk '{printf \"%.1f\", \$3/\$2 * 100.0}'" 2>/dev/null)
+        local load_avg
+        load_avg=$(salt-call --local cmd.run "uptime" 2>/dev/null | grep -o 'load average:.*' | cut -d: -f2)
         
         echo "CPU 使用率: ${cpu_usage}%"
         echo "内存使用率: ${mem_usage}%"
@@ -413,12 +456,14 @@ monitor_cleanup() {
     ensure_monitor_dirs
     
     # 清理旧的监控日志
-    local old_files=$(salt-call --local file.find "$MONITOR_LOG_DIR" name="*.txt" mtime="+$days" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
+    local old_files
+    old_files=$(salt-call --local file.find "$MONITOR_LOG_DIR" name="*.txt" mtime="+$days" --out=txt 2>/dev/null | tail -n +2 | awk '{print $2}')
     
     local cleaned_count=0
     for file in $old_files; do
         if [[ -n "$file" ]]; then
-            local filename=$(basename "$file")
+            local filename
+            filename=$(basename "$file")
             log_info "删除过期监控日志: $filename"
             salt-call --local file.remove "$file" >/dev/null 2>&1
             ((cleaned_count++))

@@ -2,9 +2,6 @@
 # 故障诊断模块
 # services/diagnose.sh
 
-# 诊断类型
-DIAGNOSE_TYPES=("nginx" "mysql" "php" "system" "network")
-
 # 诊断结果存储
 DIAGNOSE_RESULTS=()
 
@@ -36,7 +33,8 @@ diagnose_nginx() {
     
     # 检查端口占用
     if ss -tlnp | grep -q ":80 "; then
-        local port80_process=$(ss -tlnp | grep ":80 " | awk '{print $NF}' | cut -d',' -f2 | cut -d'=' -f2)
+        local port80_process
+        port80_process="$(ss -tlnp | grep ":80 " | awk '{print $NF}' | cut -d',' -f2 | cut -d'=' -f2)"
         if [[ "$port80_process" != "nginx"* ]]; then
             issues+=("端口80被其他进程占用: $port80_process")
             fixes+=("检查并停止占用端口80的进程")
@@ -99,7 +97,8 @@ diagnose_mysql() {
     local mysql_log_dir="/var/log/mysql"
     if [[ -d "$mysql_log_dir" ]]; then
         if [[ -f "$mysql_log_dir/error.log" ]]; then
-            local error_count=$(grep -c "ERROR" "$mysql_log_dir/error.log" 2>/dev/null || echo "0")
+            local error_count
+            error_count="$(grep -c "ERROR" "$mysql_log_dir/error.log" 2>/dev/null || echo "0")"
             if [[ "$error_count" -gt 0 ]]; then
                 issues+=("MySQL错误日志中发现 $error_count 个错误")
                 fixes+=("检查MySQL错误日志: tail -f $mysql_log_dir/error.log")
@@ -110,7 +109,8 @@ diagnose_mysql() {
     # 检查磁盘空间
     local mysql_data_dir="/var/lib/mysql"
     if [[ -d "$mysql_data_dir" ]]; then
-        local disk_usage=$(df "$mysql_data_dir" | awk 'NR==2{print $5}' | sed 's/%//')
+        local disk_usage
+        disk_usage="$(df "$mysql_data_dir" | awk 'NR==2{print $5}' | sed 's/%//')"
         if [[ "$disk_usage" -gt 90 ]]; then
             issues+=("MySQL数据目录磁盘使用率过高: ${disk_usage}%")
             fixes+=("清理MySQL日志文件或增加磁盘空间")
@@ -146,7 +146,8 @@ diagnose_php() {
     fi
     
     # 检查PHP版本
-    local php_version=$(php -v 2>/dev/null | head -1 | cut -d' ' -f2)
+    local php_version
+    php_version="$(php -v 2>/dev/null | head -1 | cut -d' ' -f2)"
     if [[ -z "$php_version" ]]; then
         issues+=("PHP未安装或无法执行")
         fixes+=("安装PHP: sudo apt install php8.3-fpm")
@@ -169,7 +170,8 @@ diagnose_php() {
     # 检查PHP日志
     local php_log="/var/log/php8.3-fpm.log"
     if [[ -f "$php_log" ]]; then
-        local error_count=$(grep -c "ERROR\|FATAL" "$php_log" 2>/dev/null || echo "0")
+        local error_count
+        error_count="$(grep -c "ERROR\|FATAL" "$php_log" 2>/dev/null || echo "0")"
         if [[ "$error_count" -gt 0 ]]; then
             issues+=("PHP-FPM日志中发现 $error_count 个错误")
             fixes+=("检查PHP-FPM日志: tail -f $php_log")
@@ -208,23 +210,28 @@ diagnose_system() {
     local fixes=()
     
     # 检查磁盘空间
-    local disk_usage=$(df / | awk 'NR==2{print $5}' | sed 's/%//')
+    local disk_usage
+    disk_usage="$(df / | awk 'NR==2{print $5}' | sed 's/%//')"
     if [[ "$disk_usage" -gt 90 ]]; then
         issues+=("根分区磁盘使用率过高: ${disk_usage}%")
         fixes+=("清理临时文件或增加磁盘空间")
     fi
     
     # 检查内存使用
-    local mem_usage=$(free | awk 'NR==2{printf "%.0f", $3*100/$2}')
+    local mem_usage
+    mem_usage="$(free | awk 'NR==2{printf "%.0f", $3*100/$2}')"
     if [[ "$mem_usage" -gt 90 ]]; then
         issues+=("内存使用率过高: ${mem_usage}%")
         fixes+=("检查内存使用情况: htop 或 free -h")
     fi
     
     # 检查负载
-    local load_avg=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
-    local cpu_cores=$(nproc)
-    local load_threshold=$(echo "$cpu_cores * 2" | bc)
+    local load_avg
+    load_avg="$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')"
+    local cpu_cores
+    cpu_cores="$(nproc)"
+    local load_threshold
+    load_threshold="$(echo "$cpu_cores * 2" | bc)"
     if (( $(echo "$load_avg > $load_threshold" | bc -l) )); then
         issues+=("系统负载过高: $load_avg (CPU核心数: $cpu_cores)")
         fixes+=("检查系统负载: top 或 htop")
@@ -232,11 +239,14 @@ diagnose_system() {
     
     # 检查系统更新
     if command -v apt >/dev/null 2>&1; then
-        local update_count=$(apt list --upgradable 2>/dev/null | grep -c "upgradable")
+        local update_count
+        update_count="$(apt list --upgradable 2>/dev/null | grep -c "upgradable")"
         if [[ "$update_count" -gt 0 ]]; then
             # 检查是否只是内核更新
-            local kernel_updates=$(apt list --upgradable 2>/dev/null | grep -c "linux-")
-            local total_updates=$(apt list --upgradable 2>/dev/null | wc -l)
+            local kernel_updates
+            kernel_updates="$(apt list --upgradable 2>/dev/null | grep -c "linux-")"
+            local total_updates
+            total_updates="$(apt list --upgradable 2>/dev/null | wc -l)"
             
             if [[ "$kernel_updates" -eq "$total_updates" ]]; then
                 issues+=("发现 $update_count 个内核更新（安全更新）")
@@ -249,7 +259,8 @@ diagnose_system() {
     fi
     
     # 检查系统时间
-    local time_sync=$(timedatectl status | grep "NTP service" | awk '{print $3}')
+    local time_sync
+    time_sync="$(timedatectl status | grep "NTP service" | awk '{print $3}')"
     if [[ "$time_sync" != "active" ]]; then
         issues+=("NTP时间同步服务未激活")
         fixes+=("启用NTP同步: sudo timedatectl set-ntp true")
@@ -291,7 +302,8 @@ diagnose_network() {
     
     # 检查防火墙状态
     if command -v ufw >/dev/null 2>&1; then
-        local ufw_status=$(ufw status | head -1 | awk '{print $2}')
+        local ufw_status
+        ufw_status="$(ufw status | head -1 | awk '{print $2}')"
         if [[ "$ufw_status" == "inactive" ]]; then
             issues+=("UFW防火墙未启用")
             fixes+=("启用防火墙: sudo ufw enable")
@@ -331,8 +343,10 @@ show_diagnose_summary() {
     
     local total_issues=0
     for result in "${DIAGNOSE_RESULTS[@]}"; do
-        local type=$(echo "$result" | cut -d':' -f1)
-        local count=$(echo "$result" | cut -d':' -f2)
+        local type
+        type="$(echo "$result" | cut -d':' -f1)"
+        local count
+        count="$(echo "$result" | cut -d':' -f2)"
         
         if [[ "$count" -eq 0 ]]; then
             log_success "$type: 无问题"

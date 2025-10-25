@@ -7,18 +7,24 @@ analyze_performance_requirements() {
     echo "分析性能需求..."
     
     # 检测系统负载
-    local load_avg=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
-    local cpu_cores=$(nproc)
-    local load_ratio=$(echo "scale=2; $load_avg / $cpu_cores" | bc)
+    local load_avg
+    load_avg=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
+    local cpu_cores
+    cpu_cores=$(nproc)
+    local load_ratio
+    load_ratio=$(echo "scale=2; $load_avg / $cpu_cores" | bc)
     
     # 检测内存使用
-    local memory_usage=$(free | awk 'NR==2{printf "%.2f", $3*100/$2}')
+    local memory_usage
+    memory_usage=$(free | awk 'NR==2{printf "%.2f", $3*100/$2}')
     
     # 检测磁盘IO
-    local disk_io=$(iostat -x 1 1 | tail -n +4 | awk '{sum+=$10} END {print sum/NR}')
+    local disk_io
+    disk_io=$(iostat -x 1 1 | tail -n +4 | awk '{sum+=$10} END {print sum/NR}')
     
     # 检测网络流量
-    local network_traffic=$(cat /proc/net/dev | grep -v lo | awk '{sum+=$2+$10} END {print sum}')
+    local network_traffic
+    network_traffic=$(awk 'NR>2 {sum+=$2+$10} END {print sum}' /proc/net/dev)
     
     echo "性能分析结果:"
     echo "  CPU负载比: $load_ratio"
@@ -274,7 +280,8 @@ EOF
 
 # 动态监控安装
 install_dynamic_monitoring() {
-    local load_level=$(analyze_performance_requirements)
+    local load_level
+    load_level=$(analyze_performance_requirements)
     
     echo "动态监控配置"
     echo "=========================================="
@@ -301,7 +308,8 @@ install_dynamic_monitoring() {
     
     if systemctl is-active --quiet prometheus; then
         log_success "动态监控系统安装完成"
-        local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+        local server_ip
+        server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
         log_info "Prometheus访问地址: http://${server_ip}:9090"
         log_info "负载级别: $load_level"
         

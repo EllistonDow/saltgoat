@@ -10,9 +10,12 @@ auto_tune() {
     echo "=========================================="
     
     # 获取系统资源信息
-    local cpu_cores=$(nproc)
-    local total_memory=$(free -m | awk 'NR==2{print $2}')
-    local disk_space=$(df / | awk 'NR==2{print $2}')
+    local cpu_cores
+    cpu_cores=$(nproc)
+    local total_memory
+    total_memory=$(free -m | awk 'NR==2{print $2}')
+    local disk_space
+    disk_space=$(df / | awk 'NR==2{print $2}')
     
     echo "CPU 核心数: $cpu_cores"
     echo "总内存: $total_memory MB"
@@ -39,7 +42,7 @@ auto_tune() {
     echo "=========================================="
     
     # 询问是否应用配置
-    read -p "是否应用这些优化配置？(y/N): " apply_config
+    read -r -p "是否应用这些优化配置？(y/N): " apply_config
     if [[ "$apply_config" == "y" || "$apply_config" == "Y" ]]; then
         apply_auto_tune_config
     else

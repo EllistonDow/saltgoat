@@ -194,7 +194,8 @@ health_check() {
     # 1. Magento 状态
     log_info "1. 检查 Magento 状态..."
     if sudo -u www-data php bin/magento --version >/dev/null 2>&1; then
-        local version=$(sudo -u www-data php bin/magento --version | head -1)
+        local version
+        version=$(sudo -u www-data php bin/magento --version | head -1)
         log_success "[SUCCESS] Magento 状态正常: $version"
     else
         log_error "[ERROR] Magento 状态异常"
@@ -205,7 +206,8 @@ health_check() {
     if sudo -u www-data php bin/magento setup:db:status >/dev/null 2>&1; then
         log_success "[SUCCESS] 数据库连接正常"
     else
-        local db_status=$(sudo -u www-data php bin/magento setup:db:status 2>&1)
+        local db_status
+        db_status=$(sudo -u www-data php bin/magento setup:db:status 2>&1)
         if echo "$db_status" | grep -q "Declarative Schema is not up to date"; then
             log_warning "[WARNING] 数据库架构需要更新，运行 setup:upgrade"
             log_info "2.1. 执行数据库升级..."
@@ -227,7 +229,8 @@ health_check() {
     
     # 3. 缓存状态
     log_info "3. 检查缓存状态..."
-    local cache_status=$(sudo -u www-data php bin/magento cache:status 2>/dev/null)
+    local cache_status
+    cache_status=$(sudo -u www-data php bin/magento cache:status 2>/dev/null)
     if echo "$cache_status" | grep -q ": 1"; then
         log_success "[SUCCESS] 缓存状态正常"
     else
@@ -238,7 +241,8 @@ health_check() {
     
     # 4. 索引状态
     log_info "4. 检查索引状态..."
-    local invalid_indexes=$(sudo -u www-data php bin/magento indexer:status | grep "invalid" | wc -l)
+    local invalid_indexes
+    invalid_indexes=$(sudo -u www-data php bin/magento indexer:status | grep -c "invalid")
     if [[ "$invalid_indexes" -gt 0 ]]; then
         log_warning "[WARNING] 发现 $invalid_indexes 个无效索引"
     else

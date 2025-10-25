@@ -27,7 +27,8 @@ speedtest() {
     fi
     
     # 创建测试结果目录
-    local speedtest_dir="/tmp/saltgoat_speedtest_$(date +%Y%m%d_%H%M%S)"
+    local speedtest_dir
+    speedtest_dir="/tmp/saltgoat_speedtest_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$speedtest_dir"
     
     # 执行速度测试
@@ -59,7 +60,8 @@ speedtest_detailed() {
     
     # 解析JSON结果
     if [[ -f "$speedtest_dir/detailed_speedtest.json" ]]; then
-        local download_speed=$(python3 -c "
+        local download_speed
+        download_speed=$(python3 -c "
 import json
 try:
     with open('$speedtest_dir/detailed_speedtest.json', 'r') as f:
@@ -69,7 +71,8 @@ except:
     print('解析失败')
 " 2>/dev/null)
         
-        local upload_speed=$(python3 -c "
+        local upload_speed
+        upload_speed=$(python3 -c "
 import json
 try:
     with open('$speedtest_dir/detailed_speedtest.json', 'r') as f:
@@ -79,7 +82,8 @@ except:
     print('解析失败')
 " 2>/dev/null)
         
-        local ping=$(python3 -c "
+        local ping
+        ping=$(python3 -c "
 import json
 try:
     with open('$speedtest_dir/detailed_speedtest.json', 'r') as f:
@@ -106,7 +110,8 @@ except:
     echo "指定服务器测试:"
     echo "----------------------------------------"
     # 提取服务器ID（只取数字部分，去掉括号和距离信息）
-    local nearest_server=$(speedtest-cli --list | head -5 | tail -1 | grep -o '^[0-9]*')
+    local nearest_server
+    nearest_server=$(speedtest-cli --list | head -5 | tail -1 | grep -o '^[0-9]*')
     if [[ -n "$nearest_server" && "$nearest_server" =~ ^[0-9]+$ ]]; then
         echo "使用服务器ID: $nearest_server"
         speedtest-cli --server "$nearest_server" --simple > "$speedtest_dir/server_specific.txt" 2>&1

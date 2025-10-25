@@ -10,7 +10,8 @@ optimize() {
     echo "=========================================="
     
     # 收集系统信息
-    local system_info=$(collect_system_info)
+    local system_info
+    system_info=$(collect_system_info)
     
     # 分析各个组件
     analyze_nginx "$system_info"
@@ -30,10 +31,14 @@ optimize() {
 
 # 收集系统信息
 collect_system_info() {
-    local cpu_cores=$(nproc)
-    local total_memory=$(free -m | awk 'NR==2{print $2}')
-    local disk_space=$(df / | awk 'NR==2{print $2}')
-    local load_avg=$(uptime | grep -o 'load average:.*' | cut -d: -f2)
+    local cpu_cores
+    cpu_cores=$(nproc)
+    local total_memory
+    total_memory=$(free -m | awk 'NR==2{print $2}')
+    local disk_space
+    disk_space=$(df / | awk 'NR==2{print $2}')
+    local load_avg
+    load_avg=$(uptime | grep -o 'load average:.*' | cut -d: -f2)
     
     # 返回系统信息（用|分隔）
     echo "$cpu_cores|$total_memory|$disk_space|$load_avg"
@@ -42,8 +47,10 @@ collect_system_info() {
 # 分析 Nginx 配置
 analyze_nginx() {
     local system_info="$1"
-    local cpu_cores=$(echo "$system_info" | cut -d'|' -f1)
-    local total_memory=$(echo "$system_info" | cut -d'|' -f2)
+    local cpu_cores
+    cpu_cores=$(echo "$system_info" | cut -d'|' -f1)
+    local total_memory
+    total_memory=$(echo "$system_info" | cut -d'|' -f2)
     
     echo ""
     echo "Nginx 配置分析:"
@@ -52,8 +59,10 @@ analyze_nginx() {
     # 检查 Nginx 配置
     local nginx_config="/etc/nginx/nginx.conf"
     if [[ -f "$nginx_config" ]]; then
-        local current_workers=$(grep 'worker_processes' "$nginx_config" 2>/dev/null | grep -o '[0-9]*' | head -1)
-        local current_connections=$(grep 'worker_connections' "$nginx_config" 2>/dev/null | grep -o '[0-9]*' | head -1)
+        local current_workers
+        current_workers=$(grep 'worker_processes' "$nginx_config" 2>/dev/null | grep -o '[0-9]*' | head -1)
+        local current_connections
+        current_connections=$(grep 'worker_connections' "$nginx_config" 2>/dev/null | grep -o '[0-9]*' | head -1)
         
         echo "  当前 worker_processes: $current_workers"
         echo "  当前 worker_connections: $current_connections"
@@ -106,20 +115,25 @@ check_nginx_optimizations() {
 # 分析 MySQL 配置
 analyze_mysql() {
     local system_info="$1"
-    local cpu_cores=$(echo "$system_info" | cut -d'|' -f1)
-    local total_memory=$(echo "$system_info" | cut -d'|' -f2)
+    local cpu_cores
+    cpu_cores=$(echo "$system_info" | cut -d'|' -f1)
+    local total_memory
+    total_memory=$(echo "$system_info" | cut -d'|' -f2)
     
     echo ""
     echo "MySQL 配置分析:"
     echo "----------------------------------------"
     
     # 检查 MySQL 服务状态
-    local mysql_status=$(salt-call --local service.status mysql 2>/dev/null | grep -o "True\|False")
+    local mysql_status
+    mysql_status=$(salt-call --local service.status mysql 2>/dev/null | grep -o "True\|False")
     
     if [[ "$mysql_status" == "True" ]]; then
         # 获取当前配置
-        local current_buffer_pool=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"innodb_buffer_pool_size\"'" 2>/dev/null | awk 'NR==2 {print $2}')
-        local current_max_connections=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"max_connections\"'" 2>/dev/null | awk 'NR==2 {print $2}')
+        local current_buffer_pool
+        current_buffer_pool=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"innodb_buffer_pool_size\"'" 2>/dev/null | awk 'NR==2 {print $2}')
+        local current_max_connections
+        current_max_connections=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"max_connections\"'" 2>/dev/null | awk 'NR==2 {print $2}')
         
         echo "  当前 innodb_buffer_pool_size: $current_buffer_pool"
         echo "  当前 max_connections: $current_max_connections"
@@ -152,19 +166,22 @@ analyze_mysql() {
 # 检查 MySQL 其他优化项
 check_mysql_optimizations() {
     # 检查查询缓存
-    local query_cache=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"query_cache_size\"'" 2>/dev/null | awk 'NR==2 {print $2}')
+    local query_cache
+    query_cache=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"query_cache_size\"'" 2>/dev/null | awk 'NR==2 {print $2}')
     if [[ "$query_cache" == "0" ]]; then
         echo "  🔧 建议: 启用查询缓存以提高查询性能"
     fi
     
     # 检查慢查询日志
-    local slow_query_log=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"slow_query_log\"'" 2>/dev/null | awk 'NR==2 {print $2}')
+    local slow_query_log
+    slow_query_log=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"slow_query_log\"'" 2>/dev/null | awk 'NR==2 {print $2}')
     if [[ "$slow_query_log" == "OFF" ]]; then
         echo "  🔧 建议: 启用慢查询日志以识别性能问题"
     fi
     
     # 检查 InnoDB 配置
-    local innodb_log_file_size=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"innodb_log_file_size\"'" 2>/dev/null | awk 'NR==2 {print $2}')
+    local innodb_log_file_size
+    innodb_log_file_size=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"innodb_log_file_size\"'" 2>/dev/null | awk 'NR==2 {print $2}')
     if [[ $innodb_log_file_size -lt 256 ]]; then
         echo "  🔧 建议: 增加 innodb_log_file_size 到 256M 或更高"
     fi
@@ -173,8 +190,10 @@ check_mysql_optimizations() {
 # 分析 PHP-FPM 配置
 analyze_php() {
     local system_info="$1"
-    local cpu_cores=$(echo "$system_info" | cut -d'|' -f1)
-    local total_memory=$(echo "$system_info" | cut -d'|' -f2)
+    local cpu_cores
+    cpu_cores=$(echo "$system_info" | cut -d'|' -f1)
+    local total_memory
+    total_memory=$(echo "$system_info" | cut -d'|' -f2)
     
     echo ""
     echo "PHP-FPM 配置分析:"
@@ -183,8 +202,10 @@ analyze_php() {
     # 检查 PHP-FPM 配置
     local php_config="/etc/php/8.3/fpm/pool.d/www.conf"
     if [[ -f "$php_config" ]]; then
-        local current_pm=$(salt-call --local cmd.run "grep 'pm =' $php_config" 2>/dev/null | awk '{print $3}')
-        local current_max_children=$(salt-call --local cmd.run "grep 'pm.max_children' $php_config" 2>/dev/null | awk '{print $3}')
+        local current_pm
+        current_pm=$(salt-call --local cmd.run "grep 'pm =' $php_config" 2>/dev/null | awk '{print $3}')
+        local current_max_children
+        current_max_children=$(salt-call --local cmd.run "grep 'pm.max_children' $php_config" 2>/dev/null | awk '{print $3}')
         
         echo "  当前 pm 模式: $current_pm"
         echo "  当前 pm.max_children: $current_max_children"
@@ -220,13 +241,15 @@ check_php_optimizations() {
     local php_config="$1"
     
     # 检查内存限制
-    local memory_limit=$(salt-call --local cmd.run "grep 'memory_limit' $php_config" 2>/dev/null | awk '{print $3}')
+    local memory_limit
+    memory_limit=$(salt-call --local cmd.run "grep 'memory_limit' $php_config" 2>/dev/null | awk '{print $3}')
     if [[ -z "$memory_limit" ]]; then
         echo "  🔧 建议: 设置合适的 memory_limit"
     fi
     
     # 检查执行时间
-    local max_execution_time=$(salt-call --local cmd.run "grep 'max_execution_time' $php_config" 2>/dev/null | awk '{print $3}')
+    local max_execution_time
+    max_execution_time=$(salt-call --local cmd.run "grep 'max_execution_time' $php_config" 2>/dev/null | awk '{print $3}')
     if [[ "$max_execution_time" == "0" ]]; then
         echo "  🔧 建议: 设置合理的 max_execution_time"
     fi
@@ -235,19 +258,23 @@ check_php_optimizations() {
 # 分析 Valkey 配置
 analyze_valkey() {
     local system_info="$1"
-    local total_memory=$(echo "$system_info" | cut -d'|' -f2)
+    local total_memory
+    total_memory=$(echo "$system_info" | cut -d'|' -f2)
     
     echo ""
     echo "Valkey 配置分析:"
     echo "----------------------------------------"
     
     # 检查 Valkey 服务状态
-    local valkey_status=$(salt-call --local service.status valkey 2>/dev/null | grep -o "True\|False")
+    local valkey_status
+    valkey_status=$(salt-call --local service.status valkey 2>/dev/null | grep -o "True\|False")
     
     if [[ "$valkey_status" == "True" ]]; then
         # 获取当前配置
-        local current_maxmemory=$(salt-call --local cmd.run "valkey-cli config get maxmemory" 2>/dev/null | tail -1)
-        local current_policy=$(salt-call --local cmd.run "valkey-cli config get maxmemory-policy" 2>/dev/null | tail -1)
+        local current_maxmemory
+        current_maxmemory=$(salt-call --local cmd.run "valkey-cli config get maxmemory" 2>/dev/null | tail -1)
+        local current_policy
+        current_policy=$(salt-call --local cmd.run "valkey-cli config get maxmemory-policy" 2>/dev/null | tail -1)
         
         echo "  当前 maxmemory: $current_maxmemory"
         echo "  当前 maxmemory-policy: $current_policy"
@@ -273,13 +300,15 @@ analyze_valkey() {
 # 检查 Valkey 其他优化项
 check_valkey_optimizations() {
     # 检查持久化配置
-    local save_config=$(salt-call --local cmd.run "valkey-cli config get save" 2>/dev/null | tail -1)
+    local save_config
+    save_config=$(salt-call --local cmd.run "valkey-cli config get save" 2>/dev/null | tail -1)
     if [[ "$save_config" == '""' ]]; then
         echo "  🔧 建议: 配置合适的持久化策略"
     fi
     
     # 检查 TCP keepalive
-    local tcp_keepalive=$(salt-call --local cmd.run "valkey-cli config get tcp-keepalive" 2>/dev/null | tail -1)
+    local tcp_keepalive
+    tcp_keepalive=$(salt-call --local cmd.run "valkey-cli config get tcp-keepalive" 2>/dev/null | tail -1)
     if [[ "$tcp_keepalive" == "0" ]]; then
         echo "  🔧 建议: 启用 TCP keepalive"
     fi
@@ -288,15 +317,18 @@ check_valkey_optimizations() {
 # 分析系统配置
 analyze_system() {
     local system_info="$1"
-    local load_avg=$(echo "$system_info" | cut -d'|' -f4)
+    local load_avg
+    load_avg=$(echo "$system_info" | cut -d'|' -f4)
     
     echo ""
     echo "系统配置分析:"
     echo "----------------------------------------"
     
     # 分析系统负载
-    local load_avg_num=$(echo "$load_avg" | awk '{print $1}' | sed 's/,//')
-    local cpu_cores=$(echo "$system_info" | cut -d'|' -f1)
+    local load_avg_num
+    load_avg_num=$(echo "$load_avg" | awk '{print $1}' | sed 's/,//')
+    local cpu_cores
+    cpu_cores=$(echo "$system_info" | cut -d'|' -f1)
     
     if (( $(echo "$load_avg_num > $cpu_cores" | bc -l) )); then
         echo "  ⚠️  系统负载较高: $load_avg (CPU核心数: $cpu_cores)"
@@ -306,7 +338,8 @@ analyze_system() {
     fi
     
     # 检查磁盘使用率
-    local disk_usage=$(salt-call --local cmd.run "df -h /" 2>/dev/null | awk 'NR==2 {print $5}' | sed 's/%//')
+    local disk_usage
+    disk_usage=$(salt-call --local cmd.run "df -h /" 2>/dev/null | awk 'NR==2 {print $5}' | sed 's/%//')
     if [[ $disk_usage -gt 80 ]]; then
         echo "  ⚠️  磁盘使用率较高: ${disk_usage}%"
         echo "  🔧 建议: 清理不必要的文件或增加磁盘空间"
@@ -315,7 +348,8 @@ analyze_system() {
     fi
     
     # 检查内存使用率
-    local memory_usage=$(free | awk 'NR==2{printf "%.0f", $3/$2*100}')
+    local memory_usage
+    memory_usage=$(free | awk 'NR==2{printf "%.0f", $3/$2*100}')
     if [[ $memory_usage -gt 85 ]]; then
         echo "  ⚠️  内存使用率较高: ${memory_usage}%"
         echo "  🔧 建议: 检查内存泄漏或增加内存"

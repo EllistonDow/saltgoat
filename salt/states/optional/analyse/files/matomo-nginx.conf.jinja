@@ -1,0 +1,52 @@
+server {
+    listen 80;
+    server_name {{ server_name }};
+
+    root {{ install_dir }}/matomo;
+    index index.php index.html index.htm;
+
+    access_log /var/log/nginx/matomo.access.log;
+    error_log  /var/log/nginx/matomo.error.log;
+
+    ## Matomo URL rewriting
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    location ~ ^/(?:index|matomo|piwik|js/index|plugins/HeatmapSessionRecording/configs).php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass unix:{{ php_socket }};
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_read_timeout 300;
+    }
+
+    location ~* \.(?:css|js|gif|jpe?g|png|ico|webp)$ {
+        expires 365d;
+        add_header Cache-Control "public";
+    }
+
+    location ~* \.(?:svg|ttf|woff|woff2)$ {
+        expires 365d;
+        add_header Cache-Control "public";
+        add_header Access-Control-Allow-Origin "*";
+    }
+
+    location = /favicon.ico {
+        log_not_found off;
+    }
+
+    location = /robots.txt {
+        allow all;
+        log_not_found off;
+    }
+
+    ## Security hardening
+    location ~* \.(?:ini|log|sh)$ {
+        deny all;
+    }
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+}

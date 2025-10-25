@@ -13,7 +13,6 @@ NC='\033[0m' # No Color
 
 # 获取版本号
 VERSION=$(grep 'SCRIPT_VERSION=' saltgoat | cut -d'"' -f2)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo -e "${BLUE}==========================================${NC}"
 echo -e "${BLUE}    SaltGoat Release Script${NC}"

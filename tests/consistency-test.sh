@@ -107,7 +107,8 @@ test_config_consistency() {
     echo "----------------------------------------"
     
     # 检查SaltGoat版本
-    local saltgoat_path=$(which saltgoat 2>/dev/null || find /usr/local/bin /home -name "saltgoat" 2>/dev/null | head -1)
+    local saltgoat_path
+    saltgoat_path=$(which saltgoat 2>/dev/null || find /usr/local/bin /home -name "saltgoat" 2>/dev/null | head -1)
     if [ -n "$saltgoat_path" ] && [ -f "$saltgoat_path" ]; then
         SCRIPT_VERSION=$(grep "SCRIPT_VERSION=" "$saltgoat_path" | cut -d'"' -f2)
         echo "  SaltGoat版本: $SCRIPT_VERSION ✅"
@@ -125,7 +126,7 @@ test_config_consistency() {
         if [ -f "$file" ]; then
             PERMS=$(stat -c "%a" "$file" 2>/dev/null)
             OWNER=$(stat -c "%U:%G" "$file" 2>/dev/null)
-            echo "  $(basename $file): $PERMS ($OWNER) ✅"
+            echo "  $(basename "$file"): $PERMS ($OWNER) ✅"
         fi
     done
 }

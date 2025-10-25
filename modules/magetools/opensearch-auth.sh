@@ -3,6 +3,8 @@
 # modules/magetools/opensearch-auth.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../lib/logger.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
 # 配置参数
@@ -51,8 +53,7 @@ echo ""
 log_info "1. 检查 htpasswd 命令..."
 if ! command -v htpasswd >/dev/null 2>&1; then
     log_info "安装 apache2-utils..."
-    sudo apt -y install apache2-utils
-    if [[ $? -eq 0 ]]; then
+    if sudo apt -y install apache2-utils; then
         log_success "apache2-utils 安装完成"
     else
         log_error "apache2-utils 安装失败"
@@ -71,18 +72,18 @@ log_success "密码文件目录已创建"
 log_info "3. 创建密码文件..."
 if [[ -f "$PASSWD_FILE" ]]; then
     log_warning "密码文件已存在，更新密码..."
-    sudo htpasswd "$PASSWD_FILE" "$USERNAME"
+    if ! sudo htpasswd "$PASSWD_FILE" "$USERNAME"; then
+        log_error "密码文件更新失败"
+        exit 1
+    fi
 else
     log_info "创建新密码文件..."
-    sudo htpasswd -c "$PASSWD_FILE" "$USERNAME"
+    if ! sudo htpasswd -c "$PASSWD_FILE" "$USERNAME"; then
+        log_error "密码文件创建失败"
+        exit 1
+    fi
 fi
-
-if [[ $? -eq 0 ]]; then
-    log_success "密码文件创建/更新完成"
-else
-    log_error "密码文件创建失败"
-    exit 1
-fi
+log_success "密码文件创建/更新完成"
 
 # 4. 创建 Nginx 主配置文件
 log_info "4. 创建 Nginx 主配置文件..."
@@ -155,8 +156,7 @@ fi
 
 # 8. 重启 Nginx
 log_info "8. 重启 Nginx..."
-sudo systemctl restart nginx
-if [[ $? -eq 0 ]]; then
+if sudo systemctl restart nginx; then
     log_success "Nginx 重启成功"
 else
     log_error "Nginx 重启失败"

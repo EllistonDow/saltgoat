@@ -175,33 +175,45 @@ saltgui_install() {
     sudo mkdir -p "$install_dir"
     
     # 克隆 SaltGUI 仓库
-    local temp_dir=$(mktemp -d)
-    cd "$temp_dir"
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    local original_dir
+    original_dir=$(pwd)
+    if ! cd "$temp_dir"; then
+        log_error "无法进入临时目录: $temp_dir"
+        rm -rf "$temp_dir"
+        return 1
+    fi
     
     log_info "从 GitHub 克隆 SaltGUI..."
     git clone https://github.com/erwindon/SaltGUI.git 2>/dev/null || {
         log_error "无法克隆 SaltGUI 仓库"
-        cd - >/dev/null
+        cd "$original_dir" || true
         rm -rf "$temp_dir"
         return 1
     }
     
-    cd SaltGUI
+    if ! cd SaltGUI; then
+        log_error "SaltGUI 仓库缺少预期目录"
+        cd "$original_dir" || true
+        rm -rf "$temp_dir"
+        return 1
+    fi
     
     # 复制文件到安装目录
     log_info "安装 SaltGUI 文件..."
-    sudo cp -r * "$install_dir/" 2>/dev/null || {
+    if ! sudo cp -r ./* "$install_dir/" 2>/dev/null; then
         log_error "复制 SaltGUI 文件失败"
-        cd - >/dev/null
+        cd "$original_dir" || true
         rm -rf "$temp_dir"
         return 1
-    }
+    fi
     
     # 设置权限
     sudo chown -R root:root "$install_dir"
     sudo chmod -R 755 "$install_dir"
     
-    cd - >/dev/null
+    cd "$original_dir" || true
     rm -rf "$temp_dir"
     
     log_success "SaltGUI 安装完成"
@@ -349,19 +361,19 @@ EOF
     
     # 测试 Nginx 配置
     if command -v nginx >/dev/null 2>&1; then
-        sudo nginx -t -c /etc/nginx/nginx.conf 2>/dev/null && {
+        if sudo nginx -t -c /etc/nginx/nginx.conf 2>/dev/null; then
             sudo systemctl reload nginx 2>/dev/null || sudo nginx -s reload 2>/dev/null
             log_success "SaltGUI Nginx 配置已创建并启用"
-        } || {
+        else
             log_warning "Nginx 配置测试失败，请手动检查"
-        }
+        fi
     elif [[ -f "/usr/local/nginx/sbin/nginx" ]]; then
-        sudo /usr/local/nginx/sbin/nginx -t 2>/dev/null && {
+        if sudo /usr/local/nginx/sbin/nginx -t 2>/dev/null; then
             sudo /usr/local/nginx/sbin/nginx -s reload 2>/dev/null
             log_success "SaltGUI Nginx 配置已创建并启用"
-        } || {
+        else
             log_warning "Nginx 配置测试失败，请手动检查"
-        }
+        fi
     fi
 }
 
@@ -456,7 +468,8 @@ saltgui_status() {
         log_info "访问地址: http://localhost:$SALTGUI_PORT"
         
         # 显示端口状态
-        local port_status=$(sudo netstat -tlnp | grep ":$SALTGUI_PORT " || echo "端口未监听")
+        local port_status
+        port_status=$(sudo netstat -tlnp | grep ":$SALTGUI_PORT " || echo "端口未监听")
         log_info "端口状态: $port_status"
     else
         log_warning "SaltGUI 未运行"

@@ -1,0 +1,11 @@
+Salt optional.analyse
+====================
+
+Pillar example::
+
+    matomo:
+      install_dir: /var/www/matomo
+      domain: analytics.example.com
+      php_fpm_socket: /run/php/php8.3-fpm.sock
+      owner: www-data
+      group: www-data

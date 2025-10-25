@@ -7,7 +7,6 @@ MAGENTO_OPTIMIZE_PILLAR="${SCRIPT_DIR}/salt/pillar/magento-optimize.sls"
 MAGENTO_OPTIMIZE_REPORT="/var/lib/saltgoat/reports/magento-optimize-summary.txt"
 MAGENTO_SEARCH_ROOTS=("/var/www" "/srv" "/opt/magento")
 MAGENTO_SITE_STATUS="unknown"
-MAGENTO_SITE_HINT=""
 MAGENTO_SITE_ROOT=""
 MAGENTO_ENV_PATH=""
 MAGENTO_SITE_LABEL=""
@@ -58,7 +57,6 @@ magento_env_from_hint() {
 
 detect_magento_site() {
     local hint="$1"
-    MAGENTO_SITE_HINT="$hint"
     MAGENTO_SITE_STATUS="unknown"
     MAGENTO_SITE_ROOT=""
     MAGENTO_ENV_PATH=""

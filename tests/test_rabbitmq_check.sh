@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # 测试 RabbitMQ 检查功能
+# shellcheck disable=SC1091
 source lib/logger.sh
 
 check_rabbitmq_status() {
@@ -22,7 +23,8 @@ check_rabbitmq_status() {
     
     # 检查消费者服务状态
     log_info "2. 消费者服务状态:"
-    local services=$(systemctl list-units --type=service | grep "magento-consumer-$site_name" | awk '{print $1}' | sed 's/\.service$//')
+    local services
+    services=$(systemctl list-units --type=service | grep "magento-consumer-$site_name" | awk '{print $1}' | sed 's/\.service$//')
     
     echo "Debug: services variable content:"
     echo "$services"
@@ -50,9 +52,12 @@ check_rabbitmq_status() {
     
     for service in "${service_array[@]}"; do
         ((total_services++))
-        local status=$(systemctl is-active "$service" 2>/dev/null)
-        local state=$(systemctl show "$service" --property=ActiveState --value 2>/dev/null)
-        local restart_count=$(systemctl show "$service" --property=NRestarts --value 2>/dev/null)
+        local status
+        status=$(systemctl is-active "$service" 2>/dev/null)
+        local state
+        state=$(systemctl show "$service" --property=ActiveState --value 2>/dev/null)
+        local restart_count
+        restart_count=$(systemctl show "$service" --property=NRestarts --value 2>/dev/null)
         
         case "$status" in
             "active")

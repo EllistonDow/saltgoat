@@ -170,7 +170,8 @@ magetools_handler() {
                 log_info "示例: saltgoat magetools migrate /var/www/tank tank detect"
                 exit 1
             fi
-            source "${SCRIPT_DIR}/modules/magetools/migrate-detect.sh" "$3" "$4" "$5"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/modules/magetools/migrate-detect.sh" "$3" "$4" "$5"
             ;;
         "help"|"--help"|"-h")
             show_magetools_help
@@ -307,7 +308,8 @@ install_phpunit() {
     fi
     
     # 检查PHP版本
-    local php_version=$(php -v | head -1 | awk '{print $2}' | cut -d. -f1,2)
+    local php_version
+    php_version="$(php -v | head -1 | awk '{print $2}' | cut -d. -f1,2)"
     log_info "检测到PHP版本: $php_version"
     
     # 检查并安装必需的PHP扩展
@@ -683,7 +685,7 @@ create_basic_template() {
     
     # 创建项目目录
     sudo mkdir -p "$project_dir"
-    cd "$project_dir"
+    cd "$project_dir" || return 1
     
     # 创建基础目录结构
     log_info "创建目录结构..."
@@ -784,7 +786,7 @@ create_advanced_template() {
     
     # 重命名目录
     sudo mv "/var/www/magento-project" "$project_dir"
-    cd "$project_dir"
+    cd "$project_dir" || return 1
     
     # 安装前端工具
     log_info "安装前端开发工具..."
@@ -900,8 +902,8 @@ create_custom_template() {
     echo "6. 调试工具 (Xdebug)"
     echo ""
     
-    read -p "请输入项目名称: " project_name
-    read -p "选择功能 (用空格分隔，如: 1 2 3): " selected_features
+    read -r -p "请输入项目名称: " project_name
+    read -r -p "选择功能 (用空格分隔，如: 1 2 3): " selected_features
     
     log_info "创建自定义项目: $project_name"
     log_info "选择的功能: $selected_features"
@@ -1022,7 +1024,8 @@ backup_magento() {
     log_highlight "备份Magento..."
     
     local backup_dir="/home/doge/magento_backups"
-    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
     local backup_name="magento_backup_$timestamp"
     
     mkdir -p "$backup_dir"
@@ -1134,7 +1137,8 @@ scan_magento_security() {
     # 检查文件权限
     log_info "文件权限检查:"
     if [[ -f "app/etc/env.php" ]]; then
-        local env_perms=$(stat -c "%a" app/etc/env.php)
+        local env_perms
+        env_perms=$(stat -c "%a" app/etc/env.php)
         if [[ "$env_perms" == "644" ]]; then
             echo "  [SUCCESS] env.php 权限正确: $env_perms"
         else
@@ -1158,7 +1162,8 @@ scan_magento_security() {
     # 检查版本
     log_info "版本检查:"
     if [[ -f "composer.json" ]]; then
-        local version=$(grep -o '"version": "[^"]*"' composer.json | cut -d'"' -f4)
+        local version
+        version=$(grep -o '"version": "[^"]*"' composer.json | cut -d'"' -f4)
         echo "  Magento版本: $version"
     fi
     echo ""
@@ -1293,7 +1298,8 @@ check_rabbitmq_status() {
     
     # 检查消费者服务状态
     log_info "2. 消费者服务状态:"
-    local services=$(systemctl list-units --type=service | grep "magento-consumer-$site_name" | awk '{print $1}' | sed 's/\.service$//')
+    local services
+    services=$(systemctl list-units --type=service | grep "magento-consumer-$site_name" | awk '{print $1}' | sed 's/\.service$//')
     
     if [[ -z "$services" ]]; then
         log_warning "未找到 $site_name 的消费者服务"
@@ -1315,9 +1321,12 @@ check_rabbitmq_status() {
     
     for service in "${service_array[@]}"; do
         ((total_services++))
-        local status=$(systemctl is-active "$service" 2>/dev/null)
-        local state=$(systemctl show "$service" --property=ActiveState --value 2>/dev/null)
-        local restart_count=$(systemctl show "$service" --property=NRestarts --value 2>/dev/null)
+        local status
+        status=$(systemctl is-active "$service" 2>/dev/null)
+        local state
+        state=$(systemctl show "$service" --property=ActiveState --value 2>/dev/null)
+        local restart_count
+        restart_count=$(systemctl show "$service" --property=NRestarts --value 2>/dev/null)
         
         case "$status" in
             "active")
@@ -1359,7 +1368,8 @@ check_rabbitmq_status() {
     if sudo rabbitmqctl list_queues -p "$vhost" 2>/dev/null | grep -q "Timeout"; then
         log_warning "队列查询超时，可能 RabbitMQ 服务繁忙"
     else
-        local queue_count=$(sudo rabbitmqctl list_queues -p "$vhost" 2>/dev/null | wc -l)
+        local queue_count
+        queue_count=$(sudo rabbitmqctl list_queues -p "$vhost" 2>/dev/null | wc -l)
         if [[ "$queue_count" -gt 1 ]]; then
             log_success "发现 $((queue_count-1)) 个队列"
             sudo rabbitmqctl list_queues -p "$vhost" 2>/dev/null | head -10
@@ -1372,7 +1382,8 @@ check_rabbitmq_status() {
     
     # 检查最近日志
     log_info "5. 最近服务日志 (失败的服务):"
-    local failed_services_list=$(systemctl list-units --type=service | grep "magento-consumer-$site_name" | grep "failed\|activating" | awk '{print $1}')
+    local failed_services_list
+    failed_services_list=$(systemctl list-units --type=service | grep "magento-consumer-$site_name" | grep "failed\|activating" | awk '{print $1}')
     
     if [[ -n "$failed_services_list" ]]; then
         while IFS= read -r service; do
@@ -1443,7 +1454,8 @@ fix_magento_permissions() {
     fi
     
     log_info "5. 确保父目录访问权限..."
-    local parent_dir=$(dirname "$site_path")
+    local parent_dir
+    parent_dir=$(dirname "$site_path")
     sudo chmod 755 "$parent_dir"
     sudo chown root:www-data "$parent_dir"
     
@@ -1487,8 +1499,10 @@ check_magento_permissions() {
     local critical_dirs=("var" "generated" "pub/media" "pub/static" "app/etc")
     for dir in "${critical_dirs[@]}"; do
         if [[ -d "$site_path/$dir" ]]; then
-            local perms=$(ls -ld "$site_path/$dir" | awk '{print $1}')
-            local owner=$(ls -ld "$site_path/$dir" | awk '{print $3":"$4}')
+            local perms
+            perms=$(stat -c "%A" "$site_path/$dir")
+            local owner
+            owner=$(stat -c "%U:%G" "$site_path/$dir")
             echo "$dir: $perms (owner: $owner)"
             
             # 检查权限是否正确
@@ -1506,8 +1520,10 @@ check_magento_permissions() {
     
     # 检查配置文件权限
     if [[ -f "$site_path/app/etc/env.php" ]]; then
-        local perms=$(ls -l "$site_path/app/etc/env.php" | awk '{print $1}')
-        local owner=$(ls -l "$site_path/app/etc/env.php" | awk '{print $3":"$4}')
+        local perms
+        perms=$(stat -c "%A" "$site_path/app/etc/env.php")
+        local owner
+        owner=$(stat -c "%U:%G" "$site_path/app/etc/env.php")
         echo "app/etc/env.php: $perms (owner: $owner)"
         
         if [[ "$perms" != "-rw-rw----" ]]; then
@@ -1587,7 +1603,8 @@ check_magento2_compatibility() {
     echo "=========================================="
     
     # 检查 PHP 版本
-    local php_version=$(php -v | head -1 | awk '{print $2}' | cut -d. -f1,2)
+    local php_version
+    php_version=$(php -v | head -1 | awk '{print $2}' | cut -d. -f1,2)
     echo "PHP 版本: $php_version"
     if [[ "$php_version" == "8.3" || "$php_version" == "8.2" || "$php_version" == "8.1" ]]; then
         log_success "PHP 版本兼容 Magento 2"
@@ -1623,7 +1640,8 @@ check_magento2_compatibility() {
     echo "----------------------------------------"
     
     # 动态检测站点名称
-    local site_name=$(basename "$site_path")
+    local site_name
+    site_name="$(basename "$site_path")"
     local nginx_config="/etc/nginx/sites-enabled/$site_name"
     
     if [[ -f "$nginx_config" ]]; then
@@ -1656,7 +1674,8 @@ check_magento2_compatibility() {
     echo ""
     echo "MySQL 配置检查:"
     echo "----------------------------------------"
-    local mysql_version=$(mysql --version | awk '{print $3}' | cut -d. -f1,2)
+    local mysql_version
+    mysql_version="$(mysql --version | awk '{print $3}' | cut -d. -f1,2)"
     echo "MySQL 版本: $mysql_version"
     
     if [[ "$mysql_version" == "8.0" || "$mysql_version" == "8.4" ]]; then
@@ -1670,7 +1689,8 @@ check_magento2_compatibility() {
     echo "Composer 检查:"
     echo "----------------------------------------"
     if command -v composer >/dev/null 2>&1; then
-        local composer_version=$(composer --version | awk '{print $3}')
+        local composer_version
+        composer_version="$(composer --version | awk '{print $3}')"
         echo "[SUCCESS] Composer 版本: $composer_version"
     else
         log_error "Composer 未安装"
@@ -1684,20 +1704,25 @@ check_magento2_compatibility() {
     # 检查FPM配置
     local fpm_ini="/etc/php/8.3/fpm/php.ini"
     if [[ -f "$fpm_ini" ]]; then
-        local memory_limit=$(grep "^memory_limit" "$fpm_ini" | cut -d'=' -f2 | tr -d ' ')
-        local max_execution_time=$(grep "^max_execution_time" "$fpm_ini" | cut -d'=' -f2 | tr -d ' ')
+        local memory_limit
+        memory_limit="$(grep "^memory_limit" "$fpm_ini" | cut -d'=' -f2 | tr -d ' ')"
+        local max_execution_time
+        max_execution_time="$(grep "^max_execution_time" "$fpm_ini" | cut -d'=' -f2 | tr -d ' ')"
         echo "PHP 内存限制: $memory_limit (FPM配置)"
         echo "PHP 执行时间限制: ${max_execution_time}s (FPM配置)"
     else
         # 回退到CLI配置
-        local memory_limit=$(php -r "echo ini_get('memory_limit');")
-        local max_execution_time=$(php -r "echo ini_get('max_execution_time');")
+        local memory_limit
+        memory_limit="$(php -r "echo ini_get('memory_limit');")"
+        local max_execution_time
+        max_execution_time="$(php -r "echo ini_get('max_execution_time');")"
         echo "PHP 内存限制: $memory_limit (CLI配置)"
         echo "PHP 执行时间限制: ${max_execution_time}s (CLI配置)"
     fi
     
     # 检查磁盘空间
-    local disk_usage=$(df -h "$site_path" | awk 'NR==2 {print $5}' | sed 's/%//')
+    local disk_usage
+    disk_usage="$(df -h "$site_path" | awk 'NR==2 {print $5}' | sed 's/%//')"
     echo "磁盘使用率: ${disk_usage}%"
     
     if [[ "$disk_usage" -lt 80 ]]; then
@@ -1765,7 +1790,8 @@ convert_to_magento2() {
 # 优化 Nginx 配置为 Magento 2
 optimize_nginx_for_magento2() {
     local site_path="$1"
-    local site_name=$(basename "$site_path")
+    local site_name
+    site_name="$(basename "$site_path")"
     
     log_info "优化 Nginx 配置为 Magento 2..."
     
@@ -1777,10 +1803,13 @@ optimize_nginx_for_magento2() {
     fi
     
     # 备份原配置到 sites-available 目录
-    sudo cp "/etc/nginx/sites-enabled/$site_name" "/etc/nginx/sites-available/$site_name.backup.$(date +%Y%m%d_%H%M%S)"
+    local nginx_backup_ts
+    nginx_backup_ts="$(date +%Y%m%d_%H%M%S)"
+    sudo cp "/etc/nginx/sites-enabled/$site_name" "/etc/nginx/sites-available/$site_name.backup.${nginx_backup_ts}"
     
     # 从原配置中提取域名信息
-    local server_name=$(grep "server_name" "/etc/nginx/sites-enabled/$site_name" | head -1 | sed 's/.*server_name[[:space:]]*//; s/;.*//')
+    local server_name
+    server_name="$(grep "server_name" "/etc/nginx/sites-enabled/$site_name" | head -1 | sed 's/.*server_name[[:space:]]*//; s/;.*//')"
     
     if [[ -z "$server_name" ]]; then
         log_error "无法从原配置中提取域名信息"
@@ -1791,7 +1820,8 @@ optimize_nginx_for_magento2() {
     
     # 检查是否有 SSL 配置
     local has_ssl=false
-    local backup_file=$(ls -t /etc/nginx/sites-available/$site_name.backup.* 2>/dev/null | head -1)
+    local backup_file
+    backup_file="$(find /etc/nginx/sites-available -maxdepth 1 -name "${site_name}.backup.*" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | awk '{print $2}')"
     if [[ -n "$backup_file" ]] && grep -q "ssl_certificate" "$backup_file"; then
         has_ssl=true
         log_info "检测到 SSL 配置，将保持 HTTPS 设置"
@@ -1847,7 +1877,8 @@ EOF
     else
         log_error "Nginx 配置有误，请检查"
         # 恢复备份
-        local backup_file=$(ls -t /etc/nginx/sites-available/$site_name.backup.* 2>/dev/null | head -1)
+        local backup_file
+        backup_file="$(find /etc/nginx/sites-available -maxdepth 1 -name "${site_name}.backup.*" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | awk '{print $2}')"
         if [[ -n "$backup_file" ]]; then
             sudo cp "$backup_file" "/etc/nginx/sites-enabled/$site_name"
             log_info "已恢复备份配置"
@@ -1861,7 +1892,9 @@ optimize_php_for_magento2() {
     log_info "优化 PHP 配置为 Magento 2..."
     
     # 备份原配置
-    sudo cp /etc/php/8.3/fpm/php.ini /etc/php/8.3/fpm/php.ini.backup.$(date +%Y%m%d_%H%M%S)
+    local php_backup_ts
+    php_backup_ts="$(date +%Y%m%d_%H%M%S)"
+    sudo cp /etc/php/8.3/fpm/php.ini "/etc/php/8.3/fpm/php.ini.backup.${php_backup_ts}"
     
     # 优化 PHP 配置
     sudo sed -i 's/memory_limit = .*/memory_limit = 2G/' /etc/php/8.3/fpm/php.ini
@@ -1888,7 +1921,9 @@ optimize_mysql_for_magento2() {
     fi
     
     # 备份原配置
-    sudo cp /etc/mysql/mysql.conf.d/lemp.cnf /etc/mysql/mysql.conf.d/lemp.cnf.backup.$(date +%Y%m%d_%H%M%S)
+    local mysql_backup_ts
+    mysql_backup_ts="$(date +%Y%m%d_%H%M%S)"
+    sudo cp /etc/mysql/mysql.conf.d/lemp.cnf "/etc/mysql/mysql.conf.d/lemp.cnf.backup.${mysql_backup_ts}"
     
     # 添加 Magento 2 优化配置（使用 Percona 8.4+ 兼容参数）
     sudo tee -a /etc/mysql/mysql.conf.d/lemp.cnf >/dev/null <<EOF
@@ -1919,7 +1954,7 @@ EOF
     else
         log_error "MySQL 重启失败，请检查配置"
         log_info "恢复备份配置..."
-        sudo cp /etc/mysql/mysql.conf.d/lemp.cnf.backup.$(date +%Y%m%d_%H%M%S) /etc/mysql/mysql.conf.d/lemp.cnf
+        sudo cp "/etc/mysql/mysql.conf.d/lemp.cnf.backup.${mysql_backup_ts}" /etc/mysql/mysql.conf.d/lemp.cnf
         sudo systemctl restart mysql
         return 1
     fi

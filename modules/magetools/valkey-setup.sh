@@ -473,8 +473,7 @@ fetch_valkey_password() {
     if [[ -z "$VALKEY_PASSWORD" ]]; then
         local output
         if output="$(salt-call --local --out=json pillar.get valkey_password 2>/dev/null)"; then
-            VALKEY_PASSWORD="$(python3 <<'PY' <<<"$output"
-import json, sys
+            VALKEY_PASSWORD="$(python3 -c 'import json, sys
 try:
     data = json.load(sys.stdin)
     value = data.get("local", "")
@@ -482,9 +481,7 @@ try:
         value = ""
 except Exception:
     value = ""
-print(value if value is not None else "")
-PY
-)"
+print(value if value is not None else "")' <<<"$output")"
         fi
     fi
 

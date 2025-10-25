@@ -1,9 +1,12 @@
 #!/bin/bash
 # SaltGoat RabbitMQ 高级站点管理脚本
 # 使用 systemd 管理、双线程、全量消费者、高性能权限修复
+# shellcheck disable=SC2317
 
 # 加载公共库
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../lib/logger.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
 # 全局变量
@@ -24,7 +27,7 @@ handle_error() {
     # 清理锁文件
     cleanup_lock
     
-    exit $exit_code
+    exit "$exit_code"
 }
 
 # 设置错误陷阱
@@ -41,7 +44,8 @@ acquire_lock() {
             return 0
         fi
         
-        local lock_pid=$(cat "$LOCK_FILE" 2>/dev/null)
+        local lock_pid
+        lock_pid=$(cat "$LOCK_FILE" 2>/dev/null)
         if [ -n "$lock_pid" ] && ! kill -0 "$lock_pid" 2>/dev/null; then
             rm -f "$LOCK_FILE"
             continue
@@ -62,7 +66,7 @@ cleanup_lock() {
 # 安全退出函数
 safe_exit() {
     cleanup_lock
-    exit ${1:-0}
+    exit "${1:-0}"
 }
 
 # 生成统一密码
@@ -380,12 +384,13 @@ health_check() {
     
     log_info "消费者服务: $active_services/$total_services 运行中"
     
-    if [ $active_services -lt $total_services ]; then
+    if [ "$active_services" -lt "$total_services" ]; then
         ((issues++))
     fi
     
     # 检查磁盘空间
-    local disk_usage=$(df "$SITE_PATH" | awk 'NR==2 {print $5}' | sed 's/%//')
+    local disk_usage
+    disk_usage=$(df "$SITE_PATH" | awk 'NR==2 {print $5}' | sed 's/%//')
     if [ "$disk_usage" -lt 90 ]; then
         log_success "磁盘空间正常 (${disk_usage}%)"
     else
@@ -394,7 +399,8 @@ health_check() {
     fi
     
     # 检查内存使用
-    local memory_usage=$(free | awk 'NR==2{printf "%.0f", $3*100/$2}')
+    local memory_usage
+    memory_usage=$(free | awk 'NR==2{printf "%.0f", $3*100/$2}')
     if [ "$memory_usage" -lt 90 ]; then
         log_success "内存使用正常 (${memory_usage}%)"
     else
@@ -403,13 +409,13 @@ health_check() {
     fi
     
     echo ""
-    if [ $issues -eq 0 ]; then
+    if [ "$issues" -eq 0 ]; then
         log_success "健康检查通过，无问题发现"
     else
         log_warning "发现 $issues 个问题，建议检查"
     fi
     
-    return $issues
+    return "$issues"
 }
 
 # 配置站点
@@ -610,6 +616,7 @@ main() {
 
     local mode="$1"
     SITE_NAME="$2"
+    # shellcheck disable=SC2034
     local threads="${3:-2}"
     SITE_PATH="/var/www/$SITE_NAME"
     VHOST_NAME="/$SITE_NAME"

@@ -82,7 +82,7 @@ schedule_status() {
         echo "配置文件: /etc/cron.d/saltgoat-tasks"
         echo ""
         echo "任务列表:"
-        grep -v "^#" /etc/cron.d/saltgoat-tasks | grep -v "^$" | while read line; do
+        grep -v "^#" /etc/cron.d/saltgoat-tasks | grep -v "^$" | while IFS= read -r line; do
             if [[ -n "$line" ]]; then
                 echo "  $line"
             fi

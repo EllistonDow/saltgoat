@@ -29,14 +29,16 @@ log_success() {
 
 # 获取内存使用率
 get_memory_usage() {
-    local mem_info=$(free | grep Mem)
-    local total=$(echo $mem_info | awk '{print $2}')
-    local used=$(echo $mem_info | awk '{print $3}')
-    local available=$(echo $mem_info | awk '{print $7}')
+    local mem_info
+    mem_info=$(free | grep Mem)
+    local total
+    total=$(echo "$mem_info" | awk '{print $2}')
+    local used
+    used=$(echo "$mem_info" | awk '{print $3}')
     
     # 计算使用率 (used / total * 100)
     local usage_percent=$((used * 100 / total))
-    echo $usage_percent
+    echo "$usage_percent"
 }
 
 # 清理系统缓存
@@ -100,17 +102,18 @@ restart_services() {
 
 # 主监控函数
 monitor_memory() {
-    local usage=$(get_memory_usage)
+    local usage
+    usage=$(get_memory_usage)
     
     log_info "当前内存使用率: ${usage}%"
     
-    if [ $usage -ge 85 ]; then
+    if [ "$usage" -ge 85 ]; then
         log_error "内存使用率达到 ${usage}%，执行紧急处理..."
         
         # 85% 以上：重启服务
         restart_services
         
-    elif [ $usage -ge 75 ]; then
+    elif [ "$usage" -ge 75 ]; then
         log_warning "内存使用率达到 ${usage}%，执行深度清理..."
         
         # 75% 以上：深度清理
@@ -118,7 +121,7 @@ monitor_memory() {
         clean_valkey_memory
         clean_opensearch_cache
         
-    elif [ $usage -ge 65 ]; then
+    elif [ "$usage" -ge 65 ]; then
         log_warning "内存使用率达到 ${usage}%，执行基础清理..."
         
         # 65% 以上：基础清理

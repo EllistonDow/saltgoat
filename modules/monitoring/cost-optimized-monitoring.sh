@@ -7,9 +7,12 @@ analyze_cost_requirements() {
     echo "分析成本需求..."
     
     # 检测系统资源
-    local total_memory_gb=$(free -m | awk 'NR==2{print int($2/1024)}')
-    local cpu_cores=$(nproc)
-    local disk_size_gb=$(df / | awk 'NR==2{print int($2/1024/1024)}')
+    local total_memory_gb
+    total_memory_gb=$(free -m | awk 'NR==2{print int($2/1024)}')
+    local cpu_cores
+    cpu_cores=$(nproc)
+    local disk_size_gb
+    disk_size_gb=$(df / | awk 'NR==2{print int($2/1024/1024)}')
     
     # 估算监控成本
     local estimated_cost=0
@@ -316,7 +319,8 @@ EOF
 
 # 成本优化监控安装
 install_cost_optimized_monitoring() {
-    local cost_level=$(analyze_cost_requirements)
+    local cost_level
+    cost_level=$(analyze_cost_requirements)
     
     echo "成本优化监控配置"
     echo "=========================================="
@@ -343,7 +347,8 @@ install_cost_optimized_monitoring() {
     
     if systemctl is-active --quiet prometheus; then
         log_success "成本优化监控系统安装完成"
-        local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+        local server_ip
+        server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
         log_info "Prometheus访问地址: http://${server_ip}:9090"
         log_info "成本级别: $cost_level"
         

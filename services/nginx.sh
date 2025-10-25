@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_ROOT="${SCRIPT_DIR}"
 PILLAR_FILE="${PROJECT_ROOT}/salt/pillar/nginx.sls"
 
+# shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/logger.sh"
 
 ensure_pillar_file() {
@@ -276,6 +277,7 @@ _nginx_dispatch() {
             ;;
         modsecurity)
             if [[ -f "${PROJECT_ROOT}/modules/security/modsecurity-salt.sh" ]]; then
+                # shellcheck disable=SC1091
                 source "${PROJECT_ROOT}/modules/security/modsecurity-salt.sh"
                 modsecurity_salt_handler "modsecurity" "$2" "$3"
             else
@@ -285,6 +287,7 @@ _nginx_dispatch() {
             ;;
         csp)
             if [[ -f "${PROJECT_ROOT}/modules/security/csp-salt.sh" ]]; then
+                # shellcheck disable=SC1091
                 source "${PROJECT_ROOT}/modules/security/csp-salt.sh"
                 csp_salt_handler "csp" "$2" "$3"
             else

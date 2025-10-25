@@ -1,5 +1,33 @@
 # SaltGoat 更新日志
 
+## [0.9.11] - 2025-10-25
+
+### Changes
+- 修改 71 个文件: core/install.sh, core/optimize.sh, core/system.sh, docs/CHANGELOG.md, lib/config.sh 等
+
+
+## [0.9.10] - 2025-10-25
+
+### 🧭 CLI 导航
+- `saltgoat help install|pillar|optimize|speedtest` 全面升级为彩色分组布局，快速区分常用动作、进阶参数与示例流程。
+- 每个子菜单新增场景化提示与 NOTE，引导用户结合 Pillar、报告目录等关键路径操作。
+
+### 🛡️ Shell 合规
+- 为全仓库 60+ Shell 脚本补充安全赋值、变量引用与 `cd` 回退逻辑，`bash scripts/code-review.sh -a` 现默认零警告通过。
+- `services/database/state/performance`、`monitoring/*`、`scripts/*` 等模块统一引用 Pillar 凭据并加强错误输出，提升可维护性。
+
+### 🛠️ 服务操作体验
+- SaltGUI、Nginx、Salt state 相关脚本新增原子目录切换、重载回退与日志定位提示，避免部分环境下的未捕获异常。
+- `tests/test_rabbitmq_check.sh` 与维护类脚本同步采用新的日志工具，确保安装后验证流程更直观。
+
+### 📊 分析平台
+- 新增 `saltgoat analyse install matomo`，通过 Salt 状态一次性安装 Matomo、Nginx 站点与定时任务，支持 Pillar 覆盖安装目录与域名。
+- `optional.matomo` state 提供默认依赖、权限和 Nginx 模板，安装完成后输出访问与后续操作指引。
+
+### 🔁 Git 发布助手
+- `saltgoat git push [version] [note]` 默认补丁号 +0.0.1，亦可指定自定义版本；自动检测重复版本/tag 后再发布。
+- 未填写 note 时根据当前 diff 生成摘要并写入 changelog 与提交信息，仅收集已跟踪文件，若需纳入新文件请先手动 `git add`。
+
 ## [0.9.9] - 2025-10-25
 
 ### 🖥️ CLI 体验

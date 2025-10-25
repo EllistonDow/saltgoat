@@ -3,6 +3,7 @@
 # lib/logger.sh
 
 # 颜色定义
+# shellcheck disable=SC2034  # 多个颜色常量供其他模块引用
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

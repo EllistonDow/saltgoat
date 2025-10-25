@@ -83,10 +83,14 @@ automation_script() {
             echo "=========================================="
             salt-call --local file.find "$AUTOMATION_SCRIPTS_DIR" type=f name="*.sh" 2>/dev/null | grep -E "^local:" | awk '{print $2}' | while read -r script; do
                 if [[ -n "$script" && "$script" != "local:" ]]; then
-                    local script_name=$(basename "$script")
-                    local script_size=$(salt-call --local file.stat "$script" 2>/dev/null | grep size | grep -o '[0-9]*')
-                    local script_mtime=$(salt-call --local file.stat "$script" 2>/dev/null | grep mtime | grep -o '[0-9]*')
-                    local script_date=$(date -d "@$script_mtime" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "未知")
+                    local script_name
+                    script_name="$(basename "$script")"
+                    local script_size
+                    script_size="$(salt-call --local file.stat "$script" 2>/dev/null | grep size | grep -o '[0-9]*')"
+                    local script_mtime
+                    script_mtime="$(salt-call --local file.stat "$script" 2>/dev/null | grep mtime | grep -o '[0-9]*')"
+                    local script_date
+                    script_date="$(date -d "@$script_mtime" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "未知")"
                     
                     echo "📄 $script_name"
                     echo "   大小: ${script_size} 字节"
@@ -215,15 +219,20 @@ automation_job() {
             echo "=========================================="
             salt-call --local file.find "$AUTOMATION_JOBS_DIR" type=f name="*.job" 2>/dev/null | grep "^- " | sed 's/^- //' | while read -r job; do
                 if [[ -n "$job" ]]; then
-                    local job_name=$(basename "$job" .job)
-                    local job_content=$(salt-call --local file.read "$job" 2>/dev/null)
+                    local job_name
+                    job_name="$(basename "$job" .job)"
+                    local job_content
+                    job_content="$(salt-call --local file.read "$job" 2>/dev/null)"
                     
                     echo "📋 $job_name"
                     
                     # 提取任务信息
-                    local cron_schedule=$(echo "$job_content" | grep "CRON_SCHEDULE=" | cut -d'"' -f2)
-                    local script_name=$(echo "$job_content" | grep "SCRIPT_NAME=" | cut -d'"' -f2)
-                    local enabled=$(echo "$job_content" | grep "ENABLED=" | cut -d'"' -f2)
+                    local cron_schedule
+                    cron_schedule="$(echo "$job_content" | grep "CRON_SCHEDULE=" | cut -d'"' -f2)"
+                    local script_name
+                    script_name="$(echo "$job_content" | grep "SCRIPT_NAME=" | cut -d'"' -f2)"
+                    local enabled
+                    enabled="$(echo "$job_content" | grep "ENABLED=" | cut -d'"' -f2)"
                     
                     echo "   调度: $cron_schedule"
                     echo "   脚本: $script_name"
@@ -239,19 +248,25 @@ automation_job() {
                 exit 1
             fi
             
-            local job_name="$2"
-            local job_file="$AUTOMATION_JOBS_DIR/$job_name.job"
+            local job_name
+            job_name="$2"
+            local job_file
+            job_file="$AUTOMATION_JOBS_DIR/$job_name.job"
             
             if salt-call --local file.file_exists "$job_file" 2>/dev/null | grep -q "True"; then
                 log_highlight "启用任务: $job_name"
                 
                 # 读取任务配置
-                local job_content=$(salt-call --local file.read "$job_file" 2>/dev/null)
-                local cron_schedule=$(echo "$job_content" | grep "CRON_SCHEDULE=" | cut -d'"' -f2)
-                local command=$(echo "$job_content" | grep "COMMAND=" | cut -d'"' -f2)
+                local job_content
+                job_content="$(salt-call --local file.read "$job_file" 2>/dev/null)"
+                local cron_schedule
+                cron_schedule="$(echo "$job_content" | grep "CRON_SCHEDULE=" | cut -d'"' -f2)"
+                local command
+                command="$(echo "$job_content" | grep "COMMAND=" | cut -d'"' -f2)"
                 
                 # 创建 cron 任务
-                local cron_entry="$cron_schedule $command # SaltGoat: $job_name"
+                local cron_entry
+                cron_entry="$cron_schedule $command # SaltGoat: $job_name"
                 
                 # 添加到 crontab
                 (crontab -l 2>/dev/null; echo "$cron_entry") | crontab -
@@ -284,15 +299,19 @@ automation_job() {
                 exit 1
             fi
             
-            local job_name="$2"
-            local job_file="$AUTOMATION_JOBS_DIR/$job_name.job"
+            local job_name
+            job_name="$2"
+            local job_file
+            job_file="$AUTOMATION_JOBS_DIR/$job_name.job"
             
             if salt-call --local file.file_exists "$job_file" 2>/dev/null | grep -q "True"; then
                 log_highlight "手动执行任务: $job_name"
                 
                 # 读取任务配置
-                local job_content=$(salt-call --local file.read "$job_file" 2>/dev/null)
-                local command=$(echo "$job_content" | grep "COMMAND=" | cut -d'"' -f2)
+                local job_content
+                job_content="$(salt-call --local file.read "$job_file" 2>/dev/null)"
+                local command
+                command="$(echo "$job_content" | grep "COMMAND=" | cut -d'"' -f2)"
                 
                 # 执行任务
                 eval "$command"
@@ -346,10 +365,14 @@ automation_logs() {
             echo "=========================================="
             salt-call --local file.find "$AUTOMATION_LOGS_DIR" type=f name="*.log" 2>/dev/null | while read -r log; do
                 if [[ -n "$log" ]]; then
-                    local log_name=$(basename "$log")
-                    local log_size=$(salt-call --local file.stat "$log" 2>/dev/null | grep size | grep -o '[0-9]*')
-                    local log_mtime=$(salt-call --local file.stat "$log" 2>/dev/null | grep mtime | grep -o '[0-9]*')
-                    local log_date=$(date -d "@$log_mtime" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "未知")
+                    local log_name
+                    log_name="$(basename "$log")"
+                    local log_size
+                    log_size="$(salt-call --local file.stat "$log" 2>/dev/null | grep size | grep -o '[0-9]*')"
+                    local log_mtime
+                    log_mtime="$(salt-call --local file.stat "$log" 2>/dev/null | grep mtime | grep -o '[0-9]*')"
+                    local log_date
+                    log_date="$(date -d "@$log_mtime" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "未知")"
                     
                     echo "📄 $log_name"
                     echo "   大小: ${log_size} 字节"
@@ -402,7 +425,7 @@ automation_logs() {
             ensure_automation_dirs
             
             # 查找并删除旧日志
-            salt-call --local file.find "$AUTOMATION_LOGS_DIR" type=f mtime=+$days 2>/dev/null | while read -r log; do
+            salt-call --local file.find "$AUTOMATION_LOGS_DIR" type=f mtime=+"$days" 2>/dev/null | while read -r log; do
                 if [[ -n "$log" ]]; then
                     salt-call --local file.remove "$log" 2>/dev/null
                     echo "已删除: $log"

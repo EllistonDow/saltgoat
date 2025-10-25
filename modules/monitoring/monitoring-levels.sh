@@ -4,8 +4,10 @@
 
 # 检测系统资源并确定监控级别
 detect_monitoring_level() {
-    local total_memory_gb=$(free -m | awk 'NR==2{print int($2/1024)}')
-    local cpu_cores=$(nproc)
+    local total_memory_gb
+    total_memory_gb=$(free -m | awk 'NR==2{print int($2/1024)}')
+    local cpu_cores
+    cpu_cores=$(nproc)
     
     echo "系统资源检测:"
     echo "  内存: ${total_memory_gb}GB"
@@ -410,7 +412,8 @@ install_monitoring_by_level() {
     
     if systemctl is-active --quiet prometheus; then
         log_success "$level 级别监控系统安装完成"
-        local server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
+        local server_ip
+        server_ip=$(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
         log_info "Prometheus访问地址: http://${server_ip}:9090"
         log_info "监控级别: $level"
         

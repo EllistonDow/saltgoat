@@ -74,18 +74,19 @@ test_email_sending() {
     log_info "使用系统mail命令测试SMTP配置..."
     
     # 创建测试邮件
-    local test_message="SaltGoat SMTP测试邮件
+    local test_message
+    test_message=$(cat <<EOF
+SaltGoat SMTP测试邮件
 发送时间: $(date)
 服务器: $(hostname)
 IP地址: $(ip route get 1.1.1.1 | awk '{print $7}' | head -1)
 
 如果您收到此邮件，说明SMTP配置成功！
-"
+EOF
+)
     
     # 发送测试邮件
-    echo "$test_message" | mail -s "SaltGoat SMTP测试" "$test_email" 2>/dev/null
-    
-    if [[ $? -eq 0 ]]; then
+    if echo "$test_message" | mail -s "SaltGoat SMTP测试" "$test_email" 2>/dev/null; then
         log_success "测试邮件发送成功"
         log_info "请检查邮箱: $test_email"
         log_info "如果未收到邮件，请检查垃圾邮件文件夹"

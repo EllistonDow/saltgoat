@@ -19,15 +19,18 @@ performance_cpu() {
     echo "=========================================="
     
     # CPU 使用率
-    local cpu_usage=$(top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | awk -F'%' '{print $1}' 2>/dev/null)
+    local cpu_usage
+    cpu_usage=$(top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | awk -F'%' '{print $1}' 2>/dev/null)
     echo "CPU 使用率: ${cpu_usage}%"
     
     # CPU 核心数
-    local cpu_cores=$(nproc 2>/dev/null)
+    local cpu_cores
+    cpu_cores=$(nproc 2>/dev/null)
     echo "CPU 核心数: $cpu_cores"
     
     # CPU 负载
-    local load_avg=$(uptime | awk -F'load average:' '{print $2}' 2>/dev/null)
+    local load_avg
+    load_avg=$(uptime | awk -F'load average:' '{print $2}' 2>/dev/null)
     echo "系统负载: $load_avg"
     
     # CPU 信息
@@ -58,11 +61,13 @@ performance_memory() {
     echo "----------------------------------------"
     
     # 内存使用率
-    local mem_usage=$(free | grep Mem | awk '{printf "%.1f", $3/$2 * 100.0}' 2>/dev/null)
+    local mem_usage
+    mem_usage=$(free | grep Mem | awk '{printf "%.1f", $3/$2 * 100.0}' 2>/dev/null)
     echo "内存使用率: ${mem_usage}%"
     
     # 交换分区使用情况
-    local swap_usage=$(free | grep Swap | awk '{printf "%.1f", $3/$2 * 100.0}' 2>/dev/null)
+    local swap_usage
+    swap_usage=$(free | grep Swap | awk '{printf "%.1f", $3/$2 * 100.0}' 2>/dev/null)
     echo "交换分区使用率: ${swap_usage}%"
     
     # 内存使用率最高的进程
@@ -75,7 +80,7 @@ performance_memory() {
     echo ""
     echo "缓存和缓冲区:"
     echo "----------------------------------------"
-    cat /proc/meminfo | grep -E '(Cached|Buffers|MemAvailable)' 2>/dev/null
+    grep -E '(Cached|Buffers|MemAvailable)' /proc/meminfo 2>/dev/null
 }
 
 # 磁盘性能监控
@@ -149,15 +154,18 @@ performance_processes() {
     echo "=========================================="
     
     # 进程总数
-    local total_processes=$(salt-call --local cmd.run "ps aux | wc -l" 2>/dev/null)
+    local total_processes
+    total_processes=$(salt-call --local cmd.run "ps aux | wc -l" 2>/dev/null)
     echo "总进程数: $total_processes"
     
     # 运行中的进程
-    local running_processes=$(salt-call --local cmd.run "ps aux | grep -c ' R '" 2>/dev/null)
+    local running_processes
+    running_processes=$(salt-call --local cmd.run "ps aux | grep -c ' R '" 2>/dev/null)
     echo "运行中的进程: $running_processes"
     
     # 睡眠中的进程
-    local sleeping_processes=$(salt-call --local cmd.run "ps aux | grep -c ' S '" 2>/dev/null)
+    local sleeping_processes
+    sleeping_processes=$(salt-call --local cmd.run "ps aux | grep -c ' S '" 2>/dev/null)
     echo "睡眠中的进程: $sleeping_processes"
     
     echo ""
@@ -175,7 +183,8 @@ performance_processes() {
     echo "----------------------------------------"
     local services=("nginx" "mysql" "php8.3-fpm" "valkey" "rabbitmq" "opensearch")
     for service in "${services[@]}"; do
-        local status=$(salt-call --local service.status "$service" --out=txt 2>/dev/null | tail -n 1)
+        local status
+        status=$(salt-call --local service.status "$service" --out=txt 2>/dev/null | tail -n 1)
         if [[ "$status" == "True" ]]; then
             echo "✅ $service: 运行中"
         else
@@ -223,10 +232,13 @@ performance_benchmark() {
     echo "=========================================="
     
     # CPU 基准测试（简单计算）
-    local start_time=$(date +%s.%N)
+    local start_time
+    start_time=$(date +%s.%N)
     salt-call --local cmd.run "for i in {1..1000}; do echo \$i > /dev/null; done" 2>/dev/null
-    local end_time=$(date +%s.%N)
-    local cpu_time=$(echo "$end_time - $start_time" | bc 2>/dev/null || echo "计算失败")
+    local end_time
+    end_time=$(date +%s.%N)
+    local cpu_time
+    cpu_time=$(echo "$end_time - $start_time" | bc 2>/dev/null || echo "计算失败")
     echo "CPU 基准测试时间: ${cpu_time}秒"
     
     echo ""
@@ -234,17 +246,23 @@ performance_benchmark() {
     echo "----------------------------------------"
     
     # 磁盘写入测试
-    local write_start=$(date +%s.%N)
+    local write_start
+    write_start=$(date +%s.%N)
     salt-call --local cmd.run "dd if=/dev/zero of=/tmp/test_write bs=1M count=100 2>/dev/null" 2>/dev/null
-    local write_end=$(date +%s.%N)
-    local write_time=$(echo "$write_end - $write_start" | bc 2>/dev/null || echo "计算失败")
+    local write_end
+    write_end=$(date +%s.%N)
+    local write_time
+    write_time=$(echo "$write_end - $write_start" | bc 2>/dev/null || echo "计算失败")
     echo "磁盘写入测试时间: ${write_time}秒"
     
     # 磁盘读取测试
-    local read_start=$(date +%s.%N)
+    local read_start
+    read_start=$(date +%s.%N)
     salt-call --local cmd.run "dd if=/tmp/test_write of=/dev/null bs=1M 2>/dev/null" 2>/dev/null
-    local read_end=$(date +%s.%N)
-    local read_time=$(echo "$read_end - $read_start" | bc 2>/dev/null || echo "计算失败")
+    local read_end
+    read_end=$(date +%s.%N)
+    local read_time
+    read_time=$(echo "$read_end - $read_start" | bc 2>/dev/null || echo "计算失败")
     echo "磁盘读取测试时间: ${read_time}秒"
     
     # 清理测试文件
@@ -264,7 +282,8 @@ performance_history() {
     
     ensure_performance_log_dir
     
-    local log_file="$PERFORMANCE_LOG_DIR/performance_$(date +%Y%m%d).log"
+    local log_file
+    log_file="$PERFORMANCE_LOG_DIR/performance_$(date +%Y%m%d).log"
     
     echo "记录性能数据到: $log_file"
     
@@ -303,7 +322,8 @@ performance_history() {
 
 # 性能报告生成
 performance_report() {
-    local report_file="$HOME/saltgoat_performance_report_$(date +%Y%m%d_%H%M%S).txt"
+    local report_file
+    report_file="$HOME/saltgoat_performance_report_$(date +%Y%m%d_%H%M%S).txt"
     
     log_highlight "生成性能报告: $report_file"
     

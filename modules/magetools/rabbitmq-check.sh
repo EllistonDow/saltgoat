@@ -3,6 +3,8 @@
 # modules/magetools/rabbitmq-check.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../../lib/logger.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
 # 检查 RabbitMQ 消费者状态
@@ -33,7 +35,8 @@ check_rabbitmq_consumers() {
     local restarting_services=0
     
     # 获取所有相关的消费者服务
-    local services=$(systemctl list-units --type=service | grep "magento-consumer-$site_name-" | awk '{print $1}')
+    local services
+    services=$(systemctl list-units --type=service | grep "magento-consumer-$site_name-" | awk '{print $1}')
     
     if [[ -z "$services" ]]; then
         log_warning "未找到 $site_name 的消费者服务"
@@ -45,8 +48,10 @@ check_rabbitmq_consumers() {
     echo "----------------------------------------"
     
     for service in $services; do
-        local status=$(systemctl is-active "$service" 2>/dev/null)
-        local restart_count=$(systemctl show "$service" --property=ExecMainStatus --value 2>/dev/null)
+        local status
+        status=$(systemctl is-active "$service" 2>/dev/null)
+        local restart_count
+        restart_count=$(systemctl show "$service" --property=ExecMainStatus --value 2>/dev/null)
         
         total_services=$((total_services + 1))
         
@@ -84,14 +89,16 @@ check_rabbitmq_consumers() {
     # 检查队列状态
     log_info "检查队列状态..."
     local vhost="/$site_name"
-    local queue_output=$(sudo rabbitmqctl list_queues -p "$vhost" 2>/dev/null)
+    local queue_output
+    queue_output=$(sudo rabbitmqctl list_queues -p "$vhost" 2>/dev/null)
     
     if echo "$queue_output" | grep -q "Timeout"; then
         log_warning "RabbitMQ 连接超时"
     elif echo "$queue_output" | grep -q "Error"; then
         log_error "RabbitMQ 连接错误"
     else
-        local queue_count=$(echo "$queue_output" | wc -l)
+        local queue_count
+        queue_count=$(echo "$queue_output" | wc -l)
         if [[ "$queue_count" -gt 1 ]]; then
             log_success "发现 $((queue_count-1)) 个队列"
             echo "$queue_output" | head -10
@@ -106,7 +113,8 @@ check_rabbitmq_consumers() {
         log_info "失败服务日志:"
         echo "----------------------------------------"
         for service in $services; do
-            local status=$(systemctl is-active "$service" 2>/dev/null)
+            local status
+            status=$(systemctl is-active "$service" 2>/dev/null)
             if [[ "$status" == "failed" ]]; then
                 echo "服务: $service"
                 sudo journalctl -u "$service" --no-pager -n 5

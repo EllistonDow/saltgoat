@@ -4,7 +4,11 @@
 
 # 加载公共库
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../lib/logger.sh
+# shellcheck disable=SC1091
 source "${MODULE_DIR}/../../lib/logger.sh"
+# shellcheck source=../../lib/utils.sh
+# shellcheck disable=SC1091
 source "${MODULE_DIR}/../../lib/utils.sh"
 
 # Uptime Kuma 配置
@@ -25,7 +29,8 @@ uptime_kuma_install() {
     fi
     
     # 检查 Node.js 版本
-    local node_version=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
+    local node_version
+    node_version=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
     if [[ $node_version -lt 18 ]]; then
         log_error "Node.js 版本过低，需要 18+ 版本"
         return 1
@@ -42,9 +47,7 @@ uptime_kuma_install() {
     
     # 下载 Uptime Kuma
     log_info "下载 Uptime Kuma..."
-    sudo git clone https://github.com/louislam/uptime-kuma.git "$KUMA_DIR"
-    
-    if [[ $? -eq 0 ]]; then
+    if sudo git clone https://github.com/louislam/uptime-kuma.git "$KUMA_DIR"; then
         log_success "Uptime Kuma 下载成功"
     else
         log_error "Uptime Kuma 下载失败"
@@ -53,10 +56,11 @@ uptime_kuma_install() {
     
     # 安装依赖
     log_info "安装依赖包..."
-    cd "$KUMA_DIR"
-    sudo npm ci --production
-    
-    if [[ $? -eq 0 ]]; then
+    if ! cd "$KUMA_DIR"; then
+        log_error "无法进入目录 $KUMA_DIR"
+        return 1
+    fi
+    if sudo npm ci --production; then
         log_success "依赖安装成功"
     else
         log_error "依赖安装失败"
@@ -76,12 +80,12 @@ uptime_kuma_install() {
     # 配置防火墙
     log_info "配置防火墙规则..."
     if command -v ufw >/dev/null 2>&1; then
-        sudo ufw allow ${KUMA_PORT}/tcp
+        sudo ufw allow "${KUMA_PORT}"/tcp
         log_success "UFW 规则已添加: 允许端口 ${KUMA_PORT}"
     fi
     
     if command -v firewall-cmd >/dev/null 2>&1; then
-        sudo firewall-cmd --permanent --add-port=${KUMA_PORT}/tcp
+        sudo firewall-cmd --permanent --add-port="${KUMA_PORT}"/tcp
         sudo firewall-cmd --reload
         log_success "Firewalld 规则已添加: 允许端口 ${KUMA_PORT}"
     fi
@@ -262,11 +266,20 @@ uptime_kuma_update() {
     uptime_kuma_backup
     
     # 更新代码
-    cd "$KUMA_DIR"
-    sudo -u "$KUMA_USER" git pull origin master
+    if ! cd "$KUMA_DIR"; then
+        log_error "无法进入目录 $KUMA_DIR"
+        return 1
+    fi
+    if ! sudo -u "$KUMA_USER" git pull origin master >/dev/null 2>&1; then
+        log_error "拉取最新代码失败"
+        return 1
+    fi
     
     # 更新依赖
-    sudo -u "$KUMA_USER" npm ci --production
+    if ! sudo -u "$KUMA_USER" npm ci --production >/dev/null 2>&1; then
+        log_error "依赖更新失败"
+        return 1
+    fi
     
     # 启动服务
     sudo systemctl start uptime-kuma
@@ -283,7 +296,8 @@ uptime_kuma_backup() {
     log_info "备份 Uptime Kuma 数据..."
     
     local backup_dir="/opt/saltgoat/backups/uptime-kuma"
-    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
     
     sudo mkdir -p "$backup_dir"
     

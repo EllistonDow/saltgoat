@@ -10,7 +10,8 @@ benchmark() {
     echo "=========================================="
     
     # 创建测试结果目录
-    local benchmark_dir="/tmp/saltgoat_benchmark_$(date +%Y%m%d_%H%M%S)"
+    local benchmark_dir
+    benchmark_dir="/tmp/saltgoat_benchmark_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$benchmark_dir"
     
     # 系统信息收集
@@ -56,16 +57,16 @@ SaltGoat 性能基准测试报告
 EOF
     
     # 使用直接命令收集系统信息
-    echo "CPU 信息:" >> "$benchmark_dir/system_info.txt"
-    lscpu >> "$benchmark_dir/system_info.txt" 2>/dev/null
-    
-    echo "" >> "$benchmark_dir/system_info.txt"
-    echo "内存信息:" >> "$benchmark_dir/system_info.txt"
-    free -h >> "$benchmark_dir/system_info.txt" 2>/dev/null
-    
-    echo "" >> "$benchmark_dir/system_info.txt"
-    echo "磁盘信息:" >> "$benchmark_dir/system_info.txt"
-    df -h >> "$benchmark_dir/system_info.txt" 2>/dev/null
+    {
+        echo "CPU 信息:"
+        lscpu 2>/dev/null
+        echo ""
+        echo "内存信息:"
+        free -h 2>/dev/null
+        echo ""
+        echo "磁盘信息:"
+        df -h 2>/dev/null
+    } >> "$benchmark_dir/system_info.txt"
     
     echo "  ✅ 系统信息收集完成"
 }
@@ -80,13 +81,17 @@ benchmark_cpu() {
     mkdir -p "$benchmark_dir"
     
     # CPU 基准测试 - 使用简单的计算测试
-    local cpu_test_start=$(date +%s.%N)
+    local cpu_test_start
+    cpu_test_start=$(date +%s.%N)
     echo 'scale=1000; 4*a(1)' | bc -l >/dev/null 2>&1
-    local cpu_test_end=$(date +%s.%N)
-    local cpu_test_time=$(echo "$cpu_test_end - $cpu_test_start" | bc 2>/dev/null || echo "计算失败")
+    local cpu_test_end
+    cpu_test_end=$(date +%s.%N)
+    local cpu_test_time
+    cpu_test_time=$(echo "$cpu_test_end - $cpu_test_start" | bc 2>/dev/null || echo "计算失败")
     
     # CPU 核心数
-    local cpu_cores=$(nproc)
+    local cpu_cores
+    cpu_cores=$(nproc)
     
     cat > "$benchmark_dir/cpu_benchmark.txt" << EOF
 CPU 性能测试结果
@@ -114,16 +119,22 @@ benchmark_memory() {
     mkdir -p "$benchmark_dir"
     
     # 内存分配测试
-    local mem_test_start=$(date +%s.%N)
+    local mem_test_start
+    mem_test_start=$(date +%s.%N)
     dd if=/dev/zero of=/tmp/mem_test bs=1M count=100 2>/dev/null
-    local mem_test_end=$(date +%s.%N)
-    local mem_test_time=$(echo "$mem_test_end - $mem_test_start" | bc 2>/dev/null || echo "计算失败")
+    local mem_test_end
+    mem_test_end=$(date +%s.%N)
+    local mem_test_time
+    mem_test_time=$(echo "$mem_test_end - $mem_test_start" | bc 2>/dev/null || echo "计算失败")
     
     # 内存读取测试
-    local mem_read_start=$(date +%s.%N)
+    local mem_read_start
+    mem_read_start=$(date +%s.%N)
     dd if=/tmp/mem_test of=/dev/null bs=1M 2>/dev/null
-    local mem_read_end=$(date +%s.%N)
-    local mem_read_time=$(echo "$mem_read_end - $mem_read_start" | bc 2>/dev/null || echo "计算失败")
+    local mem_read_end
+    mem_read_end=$(date +%s.%N)
+    local mem_read_time
+    mem_read_time=$(echo "$mem_read_end - $mem_read_start" | bc 2>/dev/null || echo "计算失败")
     
     cat > "$benchmark_dir/memory_benchmark.txt" << EOF
 内存性能测试结果
@@ -153,22 +164,31 @@ benchmark_disk() {
     mkdir -p "$benchmark_dir"
     
     # 磁盘写入测试
-    local disk_write_start=$(date +%s.%N)
+    local disk_write_start
+    disk_write_start=$(date +%s.%N)
     dd if=/dev/zero of=/tmp/disk_test bs=1M count=500 2>/dev/null
-    local disk_write_end=$(date +%s.%N)
-    local disk_write_time=$(echo "$disk_write_end - $disk_write_start" | bc 2>/dev/null || echo "计算失败")
+    local disk_write_end
+    disk_write_end=$(date +%s.%N)
+    local disk_write_time
+    disk_write_time=$(echo "$disk_write_end - $disk_write_start" | bc 2>/dev/null || echo "计算失败")
     
     # 磁盘读取测试
-    local disk_read_start=$(date +%s.%N)
+    local disk_read_start
+    disk_read_start=$(date +%s.%N)
     dd if=/tmp/disk_test of=/dev/null bs=1M 2>/dev/null
-    local disk_read_end=$(date +%s.%N)
-    local disk_read_time=$(echo "$disk_read_end - $disk_read_start" | bc 2>/dev/null || echo "计算失败")
+    local disk_read_end
+    disk_read_end=$(date +%s.%N)
+    local disk_read_time
+    disk_read_time=$(echo "$disk_read_end - $disk_read_start" | bc 2>/dev/null || echo "计算失败")
     
     # 随机 I/O 测试
-    local random_io_start=$(date +%s.%N)
+    local random_io_start
+    random_io_start=$(date +%s.%N)
     dd if=/dev/urandom of=/tmp/random_test bs=1M count=100 2>/dev/null
-    local random_io_end=$(date +%s.%N)
-    local random_io_time=$(echo "$random_io_end - $random_io_start" | bc 2>/dev/null || echo "计算失败")
+    local random_io_end
+    random_io_end=$(date +%s.%N)
+    local random_io_time
+    random_io_time=$(echo "$random_io_end - $random_io_start" | bc 2>/dev/null || echo "计算失败")
     
     cat > "$benchmark_dir/disk_benchmark.txt" << EOF
 磁盘 I/O 测试结果
@@ -199,15 +219,19 @@ benchmark_network() {
     mkdir -p "$benchmark_dir"
     
     # 网络延迟测试
-    local ping_result=$(ping -c 4 8.8.8.8 2>/dev/null | grep "avg" | tail -1)
+    local ping_result
+    ping_result=$(ping -c 4 8.8.8.8 2>/dev/null | grep "avg" | tail -1)
     
     # 网络速度测试 (如果有 wget)
     local download_speed="未测试"
     if command -v wget >/dev/null 2>&1; then
-        local download_start=$(date +%s.%N)
+        local download_start
+        download_start=$(date +%s.%N)
         wget -O /dev/null http://speedtest.tele2.net/100MB.zip >/dev/null 2>&1
-        local download_end=$(date +%s.%N)
-        local download_time=$(echo "$download_end - $download_start" | bc 2>/dev/null || echo "计算失败")
+        local download_end
+        download_end=$(date +%s.%N)
+        local download_time
+        download_time=$(echo "$download_end - $download_start" | bc 2>/dev/null || echo "计算失败")
         download_speed="下载时间: ${download_time}秒"
     fi
     
@@ -239,7 +263,8 @@ benchmark_database() {
     mkdir -p "$benchmark_dir"
     
     # 检查 MySQL 是否运行
-    local mysql_status=$(systemctl is-active mysql 2>/dev/null || echo "inactive")
+    local mysql_status
+    mysql_status=$(systemctl is-active mysql 2>/dev/null || echo "inactive")
     
     if [[ "$mysql_status" == "active" ]]; then
         cat > "$benchmark_dir/database_benchmark.txt" << EOF
@@ -252,12 +277,12 @@ MySQL 服务状态: 运行中
 EOF
         
         # 数据库连接测试
-        mysql -e 'SELECT 1;' >> "$benchmark_dir/database_benchmark.txt" 2>/dev/null
-        
-        echo "" >> "$benchmark_dir/database_benchmark.txt"
-        echo "数据库状态信息:" >> "$benchmark_dir/database_benchmark.txt"
-        mysql -e 'SHOW STATUS;' >> "$benchmark_dir/database_benchmark.txt" 2>/dev/null
-        
+        {
+            mysql -e 'SELECT 1;' 2>/dev/null
+            echo ""
+            echo "数据库状态信息:"
+            mysql -e 'SHOW STATUS;' 2>/dev/null
+        } >> "$benchmark_dir/database_benchmark.txt"
         echo "  ✅ 数据库性能测试完成"
     else
         cat > "$benchmark_dir/database_benchmark.txt" << EOF
@@ -281,7 +306,8 @@ benchmark_web() {
     mkdir -p "$benchmark_dir"
     
     # 检查 Nginx 是否运行
-    local nginx_status=$(systemctl is-active nginx 2>/dev/null || echo "inactive")
+    local nginx_status
+    nginx_status=$(systemctl is-active nginx 2>/dev/null || echo "inactive")
     
     if [[ "$nginx_status" == "active" ]]; then
         cat > "$benchmark_dir/web_benchmark.txt" << EOF
@@ -294,11 +320,12 @@ Web 服务器配置:
 EOF
         
         # Nginx 配置信息
-        nginx -T 2>/dev/null | head -50 >> "$benchmark_dir/web_benchmark.txt"
-        
-        echo "" >> "$benchmark_dir/web_benchmark.txt"
-        echo "Nginx 状态信息:" >> "$benchmark_dir/web_benchmark.txt"
-        curl -s http://localhost/nginx_status >> "$benchmark_dir/web_benchmark.txt" 2>/dev/null
+        {
+            nginx -T 2>/dev/null | head -50
+            echo ""
+            echo "Nginx 状态信息:"
+            curl -s http://localhost/nginx_status 2>/dev/null
+        } >> "$benchmark_dir/web_benchmark.txt"
         
         echo "  ✅ Web 服务器性能测试完成"
     else

@@ -3,6 +3,7 @@
 # modules/magetools/magento-salt-schedule.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
 # 配置参数
@@ -100,7 +101,7 @@ install_salt_schedule() {
     log_info "安装 Salt Schedule 任务..."
     
     # 应用 Salt Schedule 状态
-    if sudo salt-call state.apply optional.magento-schedule pillar='{"site_name": "'$SITE_NAME'"}'; then
+    if sudo salt-call state.apply optional.magento-schedule pillar='{"site_name": "'"$SITE_NAME"'"}'; then
         log_success "[SUCCESS] Salt Schedule 任务安装完成"
     else
         log_error "[ERROR] Salt Schedule 任务安装失败"

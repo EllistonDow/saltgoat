@@ -3,7 +3,9 @@
 # modules/magetools/magento-maintenance.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/utils.sh"
 
 # 配置参数
@@ -123,7 +125,8 @@ daily_maintenance() {
     
     # 3. 权限检查
     log_info "3. 检查权限..."
-    local root_files=$(sudo find var generated -user root 2>/dev/null | wc -l)
+    local root_files
+    root_files="$(sudo find var generated -user root 2>/dev/null | wc -l)"
     if [[ "$root_files" -gt 0 ]]; then
         log_warning "[WARNING] 发现 $root_files 个 root 文件，建议修复权限"
         sudo find var generated -user root 2>/dev/null | head -5
@@ -295,7 +298,8 @@ monthly_maintenance() {
 backup_site() {
     log_info "创建站点备份..."
     local backup_dir="/var/backups/magento"
-    local backup_file="${backup_dir}/${SITE_NAME}_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
+    local backup_file
+    backup_file="${backup_dir}/${SITE_NAME}_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
     
     sudo mkdir -p "$backup_dir"
     
@@ -310,10 +314,11 @@ backup_site() {
     
     # 创建数据库备份
     log_info "备份数据库..."
-    local db_backup="${backup_dir}/${SITE_NAME}_db_$(date +%Y%m%d_%H%M%S).sql"
+    local db_backup
+    db_backup="${backup_dir}/${SITE_NAME}_db_$(date +%Y%m%d_%H%M%S).sql"
     local mysql_password
     mysql_password=$(get_local_pillar_value mysql_password)
-    if sudo mysqldump -u root ${mysql_password:+-p"$mysql_password"} "$SITE_NAME" > "$db_backup"; then
+    if sudo mysqldump -u root ${mysql_password:+-p"$mysql_password"} "$SITE_NAME" | sudo tee "$db_backup" >/dev/null; then
         log_success "[SUCCESS] 数据库备份完成: $db_backup"
     else
         log_warning "[WARNING] 数据库备份失败"
@@ -332,7 +337,8 @@ health_check() {
     # 1. Magento 状态
     log_info "1. 检查 Magento 状态..."
     if sudo -u www-data php bin/magento --version >/dev/null 2>&1; then
-        local version=$(sudo -u www-data php bin/magento --version | head -1)
+        local version
+        version="$(sudo -u www-data php bin/magento --version | head -1)"
         log_success "[SUCCESS] Magento 状态正常: $version"
     else
         log_error "[ERROR] Magento 状态异常"
@@ -356,7 +362,8 @@ health_check() {
     
     # 4. 索引状态
     log_info "4. 检查索引状态..."
-    local invalid_indexes=$(sudo -u www-data php bin/magento indexer:status | grep "invalid" | wc -l)
+    local invalid_indexes
+    invalid_indexes="$(sudo -u www-data php bin/magento indexer:status | grep -c "invalid")"
     if [[ "$invalid_indexes" -gt 0 ]]; then
         log_warning "[WARNING] 发现 $invalid_indexes 个无效索引"
     else
@@ -365,7 +372,8 @@ health_check() {
     
     # 5. 磁盘空间
     log_info "5. 检查磁盘空间..."
-    local disk_usage=$(df -h "$SITE_PATH" | awk 'NR==2 {print $5}' | sed 's/%//')
+    local disk_usage
+    disk_usage="$(df -h "$SITE_PATH" | awk 'NR==2 {print $5}' | sed 's/%//')"
     if [[ "$disk_usage" -gt 80 ]]; then
         log_warning "[WARNING] 磁盘使用率过高: ${disk_usage}%"
     else

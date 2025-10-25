@@ -46,7 +46,8 @@ EOF
 # 系统安装
 system_install() {
     # 获取 SaltGoat 安装路径（从主脚本目录）
-    local saltgoat_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    local saltgoat_path
+    saltgoat_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     log_info "SaltGoat 路径: $saltgoat_path"
 
     # 识别实际需要授权的用户（避免在 sudo 下写入 root）
@@ -146,7 +147,8 @@ detect_ssh_port() {
     
     # 检查 UFW 状态
     if command_exists ufw; then
-        local ufw_status=$(sudo ufw status | head -1)
+        local ufw_status
+        ufw_status=$(sudo ufw status | head -1)
         log_info "UFW 状态: $ufw_status"
         
         # 检查端口是否已允许
