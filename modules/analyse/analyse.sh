@@ -87,6 +87,7 @@ analyse_install_matomo() {
     db_admin_user="root"
     db_admin_password=""
     db_password=""
+    local db_password_source="default"
 
     local with_db="false"
     local override_db_name=""
@@ -190,6 +191,7 @@ analyse_install_matomo() {
         pillar_value=$(get_pillar_value "matomo:db:password")
         if [[ -n "$pillar_value" && "$pillar_value" != "None" ]]; then
             db_password="$pillar_value"
+            db_password_source="pillar"
         fi
 
         pillar_value=$(get_pillar_value "matomo:db:host")
@@ -233,6 +235,7 @@ analyse_install_matomo() {
     if [[ -n "$override_db_password" ]]; then
         db_password="$override_db_password"
         with_db="true"
+        db_password_source="override"
     fi
 
     if [[ -n "$override_db_provider" ]]; then
@@ -288,6 +291,7 @@ analyse_install_matomo() {
 
     if [[ "$db_enabled" == "true" && -z "$db_password" ]]; then
         db_password=$(generate_random_password)
+        db_password_source="generated"
         log_info "未检测到 Pillar 中的 Matomo 数据库密码，已临时生成随机密码。"
         log_note "请将以下密码写入 Pillar (matomo:db:password) 以便后续使用: ${db_password}"
     fi
@@ -383,7 +387,26 @@ PY
         log_note "如需 HTTPS，可运行: saltgoat nginx add-ssl ${domain} <email>"
         if [[ "$db_enabled" == "true" ]]; then
             log_note "已尝试创建数据库 ${db_name} 并授予用户 ${db_user} 权限。"
-            log_note "数据库密码: ${db_password}"
+            case "$db_password_source" in
+                "generated")
+                    local report_dir="/var/lib/saltgoat/reports"
+                    local password_file="${report_dir}/matomo-db-password.txt"
+                    sudo mkdir -p "$report_dir"
+                    sudo chmod 700 "$report_dir"
+                    printf 'Matomo database password (%s): %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$db_password" | sudo tee "$password_file" >/dev/null
+                    sudo chmod 600 "$password_file"
+                    log_note "临时数据库密码已写入 ${password_file}，请尽快同步到 Pillar 后安全删除该文件。"
+                    ;;
+                "pillar")
+                    log_note "数据库密码已在 Pillar (matomo:db:password) 中维护，请使用 saltgoat pillar show 查看。"
+                    ;;
+                "override")
+                    log_note "数据库密码来源于命令行参数，请确认已在安全存储中备份。"
+                    ;;
+                *)
+                    log_note "数据库密码已配置，请确认负责方已妥善存储。"
+                    ;;
+            esac
         fi
         return 0
     else

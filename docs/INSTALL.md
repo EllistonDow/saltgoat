@@ -62,6 +62,57 @@ sudo saltgoat install all --optimize-magento
 sudo saltgoat install all --optimize-magento-profile high --optimize-magento-site mystore
 ```
 
+### 📈 部署 Matomo 分析平台
+
+SaltGoat 自带 `analyse` 模块，用于快速部署 Matomo：
+
+```bash
+# 仅预览（test=True），不会改动系统
+bash tests/test_analyse_state.sh
+
+# 使用默认设置安装 Matomo，并创建数据库/用户
+saltgoat analyse install matomo --with-db
+
+# 指定域名、数据库与管理员账户
+saltgoat analyse install matomo --with-db \
+  --domain analytics.example.com \
+  --db-name matomo_prod --db-user matomo_prod \
+  --db-password 'StrongPass123!' \
+  --db-provider existing
+
+# 复用既有数据库管理员凭据
+saltgoat analyse install matomo --with-db \
+  --db-admin-user saltuser --db-admin-password 'YourRootPass'
+```
+
+- 若系统存在 `/etc/salt/mysql_saltuser.cnf`，CLI 会自动复用 `saltuser` 凭据。
+- CLI 支持 `--domain`、`--install-dir`、`--with-db`、`--db-provider (existing|mariadb|percona)`、`--db-*` 系列参数，所有值都可以在 Pillar 中覆盖。
+- 需要自定义管理账户时，请补充 `--db-admin-user/--db-admin-password`，并在 `salt/pillar/saltgoat.sls` 中持久化 `matomo:db.*` 配置。
+- 部署完成后访问 `http://<域名>/` 完成 Matomo Web 安装；如需 HTTPS，可执行 `saltgoat nginx add-ssl <域名> <email>`。
+
+#### Matomo Pillar 示例
+
+```yaml
+matomo:
+  install_dir: /var/www/matomo
+  domain: analytics.example.com
+  php_fpm_socket: /run/php/php8.3-fpm.sock
+  owner: www-data
+  group: www-data
+  db:
+    enabled: true
+    provider: existing        # 可选：mariadb/percona
+    name: matomo_prod
+    user: matomo_prod
+    password: 'ChangeMe!'
+    host: localhost
+    socket: /var/run/mysqld/mysqld.sock
+    admin_user: saltuser
+    admin_password: 'RootOrSaltUserPass'
+```
+
+保存后执行 `saltgoat pillar refresh`，再运行 `saltgoat analyse install matomo` 即可引用 Pillar 参数。
+
 #### Magento 优化站点检测
 - 运行 `saltgoat optimize magento` 时，CLI 会在 `/var/www`、`/srv`、`/opt/magento` 下自动查找 `app/etc/env.php`，以推断站点根目录。
 - 如果存在多个站点，需要使用 `--site <站点名称|绝对路径|env.php>` 明确指定目标，避免误修改配置。
@@ -96,6 +147,11 @@ sudo saltgoat test consistency
 # 或直接运行测试脚本
 bash tests/consistency-test.sh
 ```
+
+#### 自动化验证脚本
+- `bash tests/test_analyse_state.sh`：对 `optional.analyse` 状态执行 `test=True` 渲染，验证 Matomo 相关 Pillar 是否有效。
+- `bash tests/test_git_release.sh`：dry-run `saltgoat git push` 并确保不会修改版本文件或生成实际提交。
+- `bash tests/test_salt_versions.sh`：收集 `salt-call test.versions_report` 与 `state.show_lowstate optional.analyse`，快速确认 Salt 运行环境。
 
 #### 测试结果示例
 ```
@@ -170,6 +226,26 @@ saltgoat passwords
 # 编辑 pillar 后重新渲染密码相关状态
 saltgoat passwords --refresh
 ```
+
+### 🚀 Git 发布流程
+
+SaltGoat 提供快捷发布命令，帮助保持版本与 Changelog 一致：
+
+```bash
+# 预览（不会修改仓库）
+saltgoat git push --dry-run "准备发布摘要"
+
+# 正式发布（默认补丁号 +0.0.1）
+saltgoat git push "演进说明"
+
+# 指定版本号
+saltgoat git push 0.10.0 "Release notes"
+```
+
+- Dry-run 会显示预期版本、提交信息与当前差异，便于检查。
+- 未提供版本号时会自动把 `SCRIPT_VERSION` 的补丁号 +1；传入版本号会进行 tag 冲突检查并在重复时提示退出。
+- 未提供摘要时，命令会根据 `git diff --name-only` 自动生成“修改 N 个文件...”的说明，可用自定义文本覆盖。
+- 发布失败时，可执行 `git tag -d vX.Y.Z && git reset --hard HEAD~1` 回滚标签与提交。
 
 #### 修改密码
 ```bash

@@ -118,17 +118,18 @@ PY
 }
 
 run_git_release() {
+    local dry_run="$1"
+    shift || true
+
     local repo_root="${MODULE_DIR}/../.."
     local requested_version="" user_message="" release_note=""
     local current_version new_version
 
-    if [[ -n "$1" ]]; then
+    if [[ $# -gt 0 ]]; then
         if is_semver "$1"; then
             requested_version="$1"
             shift || true
-            if [[ $# -gt 0 ]]; then
-                user_message="$*"
-            fi
+            user_message="$*"
         else
             user_message="$*"
         fi
@@ -164,8 +165,12 @@ run_git_release() {
 
     local tag_name="v${new_version}"
     if remote_tag_exists "$repo_root" "$tag_name"; then
-        log_error "远程已存在 tag ${tag_name}，请指定更高版本或先删除远端标签。"
-        return 1
+        if [[ "$dry_run" == "true" ]]; then
+            log_warning "远程已有标签 ${tag_name}，正式发布前需要选择新的版本号或清理旧标签。"
+        else
+            log_error "远程已存在 tag ${tag_name}，请指定更高版本或先删除远端标签。"
+            return 1
+        fi
     fi
 
     if [[ -n "$user_message" ]]; then
@@ -178,7 +183,29 @@ run_git_release() {
         log_info "自动生成摘要: ${release_note}"
     fi
 
+    local commit_msg="chore: release v${new_version}"
+    if [[ -n "$release_note" ]]; then
+        commit_msg+=" - ${release_note}"
+    fi
+
+    if [[ "$dry_run" == "true" ]]; then
+        log_highlight "Release 预览 (dry-run): ${current_version} -> ${new_version}"
+        log_info "提交信息: ${commit_msg}"
+        log_info "将更新文件: saltgoat, docs/CHANGELOG.md"
+        local status_output
+        status_output=$(cd "$repo_root" && git status --short)
+        if [[ -n "$status_output" ]]; then
+            echo "$status_output"
+        else
+            log_warning "未检测到已跟踪文件的改动，正式发布仍会失败。"
+        fi
+        log_note "Dry-run 未修改任何文件，也不会推送到远程。"
+        log_note "正式执行: saltgoat git push${requested_version:+ ${requested_version}}${user_message:+ \"${user_message}\"}"
+        return 0
+    fi
+
     log_highlight "版本: ${current_version} -> ${new_version}"
+
     update_version_file "$current_version" "$new_version"
     update_changelog "$new_version" "$release_note"
 
@@ -193,22 +220,24 @@ run_git_release() {
             exit 1
         fi
 
-        local commit_msg="chore: release v${new_version}"
-        if [[ -n "$release_note" ]]; then
-            commit_msg+=" - ${release_note}"
-        fi
-
         if ! git commit -m "$commit_msg"; then
             log_error "git commit 失败"
+            log_note "如需回滚：git reset --soft HEAD~1"
             exit 1
         fi
 
-        git tag -f "v${new_version}"
+        if ! git tag -f "v${new_version}"; then
+            log_error "创建/更新标签失败"
+            log_note "如需回滚：git reset --soft HEAD~1"
+            exit 1
+        fi
 
         if git push && git push --tags; then
             log_success "已推送 v${new_version} 到远程仓库"
+            log_note "如需撤销本次发布：git tag -d v${new_version}; git reset --hard HEAD~1"
         else
             log_error "git push 失败，请检查网络或凭据"
+            log_note "可执行：git tag -d v${new_version}; git reset --hard HEAD~1 回滚版本号与提交"
             exit 1
         fi
     )
@@ -219,7 +248,20 @@ git_handler() {
     shift || true
     case "$action" in
         "push")
-            run_git_release "$@"
+            local dry_run="false"
+            local args=()
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --dry-run)
+                        dry_run="true"
+                        ;;
+                    *)
+                        args+=("$1")
+                        ;;
+                esac
+                shift || true
+            done
+            run_git_release "$dry_run" "${args[@]}"
             ;;
         ""|"-h"|"--help"|"help")
             show_git_help

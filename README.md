@@ -78,7 +78,7 @@ sudo ./saltgoat system install
 source ~/.bashrc
 
 # 现在可以直接使用
-saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!' --webmin-password 'Webmin123!' --phpmyadmin-password 'phpMyAdmin123!'
+saltgoat install all
 
 # SSH 端口检测（可选）
 saltgoat system ssh-port
@@ -92,7 +92,7 @@ git clone https://github.com/EllistonDow/saltgoat.git
 cd saltgoat
 
 # 直接运行（需要 ./ 和 sudo）
-sudo ./saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!' --webmin-password 'Webmin123!' --phpmyadmin-password 'phpMyAdmin123!'
+sudo ./saltgoat install all
 ```
 
 ### 1. 基础安装（推荐方式）
@@ -106,11 +106,11 @@ saltgoat pillar init
 
 # 2. 如果需要自定义内容，可直接覆盖文件
 cat > salt/pillar/saltgoat.sls <<'EOF'
-mysql_password: 'MyPass123!'
-valkey_password: 'Valkey123!'
-rabbitmq_password: 'RabbitMQ123!'
-webmin_password: 'Webmin123!'
-phpmyadmin_password: 'phpMyAdmin123!'
+- mysql_password: 'MyPass123!'
+- valkey_password: 'Valkey123!'
+- rabbitmq_password: 'RabbitMQ123!'
+- webmin_password: 'Webmin123!'
+- phpmyadmin_password: 'phpMyAdmin123!'
 ssl_email: 'admin@example.com'
 timezone: 'Asia/Shanghai'
 language: 'zh_CN.UTF-8'
@@ -708,7 +708,7 @@ saltgoat/
 ├── lib/                   # 公共库
 │   ├── logger.sh         # 日志函数库
 │   ├── utils.sh          # 工具函数库
-│   └── config.sh         # 配置管理库
+│   └── help.sh           # 帮助菜单渲染
 ├── core/                  # 核心功能模块
 │   ├── install.sh        # 安装管理
 │   ├── system.sh         # 系统管理

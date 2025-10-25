@@ -1,33 +1,20 @@
 # SaltGoat 更新日志
 
-## [0.9.14] - 2025-10-25
+## [0.9.15] - 2025-10-25
 
 ### Changes
-- 修改 8 个文件: docs/CHANGELOG.md, lib/help.sh, lib/logger.sh, modules/analyse/analyse.sh, salt/pillar/saltgoat.sls 等
+- 修改 18 个文件: README.md, docs/CHANGELOG.md, docs/INSTALL.md, modules/analyse/analyse.sh, modules/git/git.sh 等
 
 
-## [0.9.13] - 2025-10-25
+## [Unreleased]
 
-### Changes
-- 修改 1 个文件: modules/git/git.sh
+### ✨ 新功能
+- `saltgoat analyse install matomo` 支持自定义域名与数据库管理账号，默认复用 `/etc/salt/mysql_saltuser.cnf`，并新增 `tests/test_analyse_state.sh` 干跑测试。
+- `saltgoat git push` 新增 `--dry-run` 模式、推送失败回滚提示与辅助信息，同时提供 `tests/test_git_release.sh` 做回归验证。
 
-
-## [0.9.12] - 2025-10-25
-
-### Changes
-- 修改 1 个文件: modules/magetools/magetools.sh
-
-
-## [0.9.12] - 2025-10-25
-
-### Changes
-- 修改 2 个文件: docs/CHANGELOG.md, saltgoat
-
-
-## [0.9.11] - 2025-10-25
-
-### Changes
-- 修改 71 个文件: core/install.sh, core/optimize.sh, core/system.sh, docs/CHANGELOG.md, lib/config.sh 等
+### 📚 文档
+- `docs/INSTALL.md` 补充 Matomo 快速部署与 Git 发布流程说明。
+- 帮助菜单更新，指引 Dry-run 用法与回滚指令。
 
 
 ## [0.9.11] - 2025-10-25

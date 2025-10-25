@@ -183,7 +183,11 @@ matomo-mysql-service:
 matomo-db:
   mysql_database.present:
     - name: {{ db_name }}
+    {% if db_socket %}
     - connection_unix_socket: {{ db_socket }}
+    {% else %}
+    - connection_host: {{ db_host }}
+    {% endif %}
     {% if db_admin_user %}
     - connection_user: {{ db_admin_user }}
     {% endif %}
@@ -203,7 +207,7 @@ matomo-db:
 matomo-db-user:
   cmd.run:
     - name: |
-        {{ mysql_cli }} -e "CREATE USER IF NOT EXISTS '{{ db_user }}'@'{{ db_host }}' IDENTIFIED WITH caching_sha2_password BY '{{ escaped_password }}';"
+        {{ mysql_cli }} -e "CREATE USER IF NOT EXISTS '{{ db_user }}'@'{{ db_host }}' IDENTIFIED BY '{{ escaped_password }}';"
     - require:
       - mysql_database: matomo-db
 
