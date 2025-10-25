@@ -56,6 +56,21 @@ generate_auto_summary() {
     printf '修改 %d 个文件: %s%s' "$count" "$preview" "$suffix"
 }
 
+remote_tag_exists() {
+    local repo_root="$1"
+    local tag="$2"
+    local remote="${3:-origin}"
+
+    if ! git -C "$repo_root" remote | grep -qx "$remote"; then
+        return 1
+    fi
+
+    if git -C "$repo_root" ls-remote --tags "$remote" "refs/tags/${tag}" | grep -q .; then
+        return 0
+    fi
+    return 1
+}
+
 update_changelog() {
     local new_version="$1"
     local message="${2:-}"
@@ -145,6 +160,12 @@ run_git_release() {
         new_version="$requested_version"
     else
         new_version=$(bump_patch_version "$current_version")
+    fi
+
+    local tag_name="v${new_version}"
+    if remote_tag_exists "$repo_root" "$tag_name"; then
+        log_error "远程已存在 tag ${tag_name}，请指定更高版本或先删除远端标签。"
+        return 1
     fi
 
     if [[ -n "$user_message" ]]; then
