@@ -5,6 +5,10 @@
 ### 🖥️ CLI 体验
 - 重写 `saltgoat help` 主菜单与各子菜单，统一使用彩色标题、命令行对齐布局，并补充 Nginx、监控、诊断、面板等详细指令说明，帮助新人快速上手。
 
+### 🧩 Salt 服务
+- 新增 `services.nginx` 状态模块，使用包管理器部署 Nginx，并通过 Pillar (`salt/pillar/nginx.sls`) 管理站点映射与模板；`core.nginx` 现在仅聚合服务状态。
+- 引入 RabbitMQ/Valkey Salt 原生脚本（`saltgoat magetools rabbitmq-salt|valkey-setup|valkey-check`）及对应状态，支持 Pillar 驱动的消息队列/缓存配置与检测。
+
 ### 🛠️ Magento 调优
 - `optional.magento-optimization` State 不再使用易匹配过多的 `file.line`，改用安全的 `file.replace` / `file.managed` 操作，Salt 3000 系列及 dry-run 全部通过测试。
 - `tests/test_magento_optimization.sh` 干跑验证已更新逻辑，确保模板在 CI 与本地均可渲染。
