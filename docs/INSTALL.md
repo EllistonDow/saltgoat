@@ -62,6 +62,11 @@ sudo saltgoat install all --optimize-magento
 sudo saltgoat install all --optimize-magento-profile high --optimize-magento-site mystore
 ```
 
+#### Magento 优化站点检测
+- 运行 `saltgoat optimize magento` 时，CLI 会在 `/var/www`、`/srv`、`/opt/magento` 下自动查找 `app/etc/env.php`，以推断站点根目录。
+- 如果存在多个站点，需要使用 `--site <站点名称|绝对路径|env.php>` 明确指定目标，避免误修改配置。
+- 自动检测结果会写入 `salt/pillar/magento-optimize.sls`，后续 Salt state 会根据 `detection_status` 决定是否继续执行或提示用户。
+
 ### 🔧 一致性保证机制
 
 #### 1. 自动路径检测

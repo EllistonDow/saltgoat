@@ -17,6 +17,27 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
+    - name: Prepare Pillar defaults
+      run: |
+        sudo mkdir -p salt/pillar
+        cat <<'EOF' | sudo tee salt/pillar/saltgoat.sls >/dev/null
+mysql_password: 'CI-MySQL123!'
+valkey_password: 'CI-Valkey123!'
+rabbitmq_password: 'CI-Rabbit123!'
+webmin_password: 'CI-Webmin123!'
+phpmyadmin_password: 'CI-PhpMyAdmin123!'
+ssl_email: 'ci@example.com'
+timezone: 'UTC'
+language: 'en_US.UTF-8'
+smtp_host: ''
+smtp_user: ''
+smtp_password: ''
+smtp_from_email: ''
+smtp_from_name: 'SaltGoat CI'
+EOF
+        sudo chmod 600 salt/pillar/saltgoat.sls
+        sudo chown root:root salt/pillar/saltgoat.sls
+
     - name: Setup Salt
       run: |
         curl -L https://bootstrap.saltproject.io | sudo sh
@@ -34,10 +55,20 @@ jobs:
     - name: Run SaltGoat code review
       run: |
         ./scripts/salt-code-review.sh -a -c -v
-        
+
+    - name: Magento optimization dry-run (test mode)
+      run: |
+        bash tests/test_magento_optimization.sh
+
     - name: Check Salt state files
       run: |
-        find salt/ -name "*.sls" -exec salt-call --local state.show_sls {} --out=null \;
+        find salt/ -name "*.sls" -not -path "*/pillar/*" -print0 | while IFS= read -r -d '' file; do
+          sls="${file#salt/}"
+          sls="${sls%.sls}"
+          sls="${sls//\//.}"
+          echo "Validating $sls"
+          salt-call --local state.show_sls "$sls" --out=json >/dev/null
+        done
         
     - name: Test main script
       run: |
@@ -54,18 +85,23 @@ jobs:
       
     - name: Run security scan
       run: |
+        set -eo pipefail
         # 检查硬编码密码
-        if grep -r "password.*=" --include="*.sh" --include="*.sls" . | grep -v "MYSQL_PASSWORD\|VALKEY_PASSWORD"; then
+        if grep -R --line-number --no-color "password\s*=" --include="*.sh" --include="*.sls" . | grep -v "MYSQL_PASSWORD\|VALKEY_PASSWORD" ; then
           echo "发现可能的硬编码密码"
           exit 1
         fi
-        
-        # 检查文件权限
-        find . -name "*.sh" -not -perm 755 -exec chmod 755 {} \;
-        
+
+        # 检查脚本权限
+        if find . -name "*.sh" -not -perm 755 -print -quit | grep -q .; then
+          echo "存在权限不是 755 的脚本文件"
+          find . -name "*.sh" -not -perm 755 -print
+          exit 1
+        fi
+
         # 检查敏感文件
-        if find . -name "*.key" -o -name "*.pem" -o -name "*.p12"; then
-          echo "发现敏感文件"
+        if find . \( -name "*.key" -o -name "*.pem" -o -name "*.p12" \) -print -quit | grep -q .; then
+          echo "发现敏感证书文件"
           exit 1
         fi
 
@@ -76,6 +112,27 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
+    - name: Prepare Pillar defaults
+      run: |
+        sudo mkdir -p salt/pillar
+        cat <<'EOF' | sudo tee salt/pillar/saltgoat.sls >/dev/null
+mysql_password: 'CI-MySQL123!'
+valkey_password: 'CI-Valkey123!'
+rabbitmq_password: 'CI-Rabbit123!'
+webmin_password: 'CI-Webmin123!'
+phpmyadmin_password: 'CI-PhpMyAdmin123!'
+ssl_email: 'ci@example.com'
+timezone: 'UTC'
+language: 'en_US.UTF-8'
+smtp_host: ''
+smtp_user: ''
+smtp_password: ''
+smtp_from_email: ''
+smtp_from_name: 'SaltGoat CI'
+EOF
+        sudo chmod 600 salt/pillar/saltgoat.sls
+        sudo chown root:root salt/pillar/saltgoat.sls
+
     - name: Setup test environment
       run: |
         sudo apt update
@@ -94,5 +151,5 @@ jobs:
     - name: Test modules
       run: |
         saltgoat monitor system
-        saltgoat database status mysql
-        saltgoat security scan
+        saltgoat database mysql status
+        saltgoat security-scan

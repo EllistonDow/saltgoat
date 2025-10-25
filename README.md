@@ -1,6 +1,6 @@
 # SaltGoat - LEMP Stack Automation
 
-**版本**: v0.9.7 | **状态**: ✅ 生产就绪
+**版本**: v0.9.8 | **状态**: ✅ 生产就绪
 
 基于 Salt 的全自动 LEMP 安装项目，专为 Ubuntu 24.04 设计。使用 Salt 原生功能，提供完整的 LEMP 环境安装、配置和管理功能。
 
@@ -14,11 +14,11 @@
 - 自动设置防火墙和安全规则
 
 ### ✅ Salt 原生功能
-- **Salt Pillars**：配置数据管理
+- **Salt Pillars**：集中管理配置数据
 - **Salt Grains**：系统信息检测
 - **Salt States**：状态管理
-- **Salt CLI**：命令行参数传递
-- **环境配置**：支持 .env 文件和命令行参数
+- **Salt CLI**：命令行参数传递（可覆盖 Pillar）
+- **配置流程**：通过 `salt/pillar/*.sls` 管理凭据，可选命令行覆盖
 
 ### ✅ 模块化架构
 - **核心模块**：系统安装和基础配置
@@ -97,19 +97,33 @@ sudo ./saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Val
 
 ### 1. 基础安装（推荐方式）
 
-#### 方式A：使用 .env 文件（推荐）
+#### 方式A：编辑 Pillar（推荐）
 ```bash
-# 1. 创建环境配置文件
-saltgoat env create
+# 1. 使用内建命令生成随机密码（可修改）
+saltgoat pillar init
 
-# 2. 编辑密码
-nano .env
+# Pillar 模板包含随机密码和示例邮箱，请务必根据实际环境修改并妥善保存。
 
-# 3. 安装所有组件
+# 2. 如果需要自定义内容，可直接覆盖文件
+cat > salt/pillar/saltgoat.sls <<'EOF'
+mysql_password: 'MyPass123!'
+valkey_password: 'Valkey123!'
+rabbitmq_password: 'RabbitMQ123!'
+webmin_password: 'Webmin123!'
+phpmyadmin_password: 'phpMyAdmin123!'
+ssl_email: 'admin@example.com'
+timezone: 'Asia/Shanghai'
+language: 'zh_CN.UTF-8'
+EOF
+
+# 3. 刷新 Pillar（Salt 会在安装过程中自动刷新，此步骤可选）
+saltgoat pillar refresh
+
+# 4. 安装所有组件
 saltgoat install all
 ```
 
-#### 方式B：命令行参数（传统方式）
+#### 方式B：命令行参数（临时覆盖）
 ```bash
 # 设置密码并安装所有组件
 saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!' --webmin-password 'Webmin123!' --phpmyadmin-password 'phpMyAdmin123!'
@@ -117,40 +131,48 @@ saltgoat install all --mysql-password 'MyPass123!' --valkey-password 'Valkey123!
 # 或者分步安装
 saltgoat install core --mysql-password 'MyPass123!'
 saltgoat install optional --valkey-password 'Valkey123!' --rabbitmq-password 'RabbitMQ123!'
-```
 
-#### 方式C：混合方式（最灵活）
-```bash
-# 使用 .env 文件 + 命令行参数覆盖
-saltgoat install all --mysql-password 'NewPassword123!'
+# 安装完成后自动执行 Magento 优化（可选）
+saltgoat install all --optimize-magento
+saltgoat install all --optimize-magento-profile high --optimize-magento-site mystore
 ```
 
 **安装方式对比：**
 
 | 方式 | 优势 | 适用场景 |
 |------|------|----------|
-| **.env 文件** | ✅ 配置持久化<br>✅ 版本控制友好<br>✅ 密码安全 | 生产环境<br>团队协作<br>重复部署 |
-| **命令行参数** | ✅ 一次性使用<br>✅ 脚本自动化<br>✅ 临时配置 | 测试环境<br>CI/CD<br>快速部署 |
-| **混合方式** | ✅ 灵活性最高<br>✅ 配置覆盖<br>✅ 最佳实践 | 复杂环境<br>多环境部署 |
+| **Pillar 文件** | ✅ 与 Salt 状态同步<br>✅ 可审计、可版本化<br>✅ 便于团队共享 | 生产环境<br>长期维护站点 |
+| **命令行参数** | ✅ 快速一次性覆盖<br>✅ 易于集成 CI/CD | 临时部署<br>测试环境 |
 
-**优先级：** 命令行参数 > .env 文件 > 默认值
+**优先级：** 命令行参数 > Pillar 值 > 内置默认值
 
 ### 2. Magento 优化（智能检测）
 ```bash
-# 使用 Salt 原生方式优化
+# 根据服务器内存自动选择档位（默认）；CLI 会尝试在 /var/www、/srv、/opt/magento 下寻找站点
 saltgoat optimize magento
+
+# 指定档位并记录站点信息
+# 支持传入站点名称、绝对路径或 env.php 文件
+saltgoat optimize magento --profile standard --site mymagento
+
+# 仅预览改动并查看上一份优化报告
+saltgoat optimize magento --plan --show-results
 ```
 
-### 3. 环境配置管理
+### 3. 配置管理
 ```bash
-# 创建环境配置文件
-saltgoat env create
+# 查看当前 Pillar 配置
+saltgoat pillar show
 
-# 查看当前环境配置
-saltgoat env show
+# 使用脚本批量更新密码（写入 Pillar）
+./scripts/sync-passwords.sh 'MySQL123!' 'Valkey123!' 'RabbitMQ123!' 'Webmin123!' 'phpMyAdmin123!'
 
-# 加载指定环境配置文件
-saltgoat env load /path/to/custom.env
+# 手动编辑并刷新 Pillar
+nano salt/pillar/saltgoat.sls
+saltgoat pillar refresh
+
+# 刷新并重新应用密码相关状态
+saltgoat passwords --refresh
 ```
 
 ### 4. 服务状态检查
@@ -566,14 +588,18 @@ SaltGoat 完全支持 Magento 2.4.8 的官方推荐配置优化，基于 Salt St
 ```bash
 # 使用 Salt 原生方式优化（推荐）
 saltgoat optimize magento
+
+# 强制使用 Enterprise 档位并输出报告
+saltgoat optimize magento --profile enterprise --show-results
 ```
 
 **特点：**
 - ✅ 与 SaltGoat 项目架构完全一致
 - ✅ 利用 Salt 的状态管理和幂等性
-- ✅ 支持自动内存检测和动态配置
-- ✅ 配置变更可被 Salt 跟踪
-- ✅ 集成内存监控和自动清理
+- ✅ 支持自动内存检测动态选择 `auto → low/high/enterprise` 档位
+- ✅ 可通过 `--profile/--site` 精准控制优化方案
+- ✅ 生成结构化优化报告，可随时 `--show-results` 查看
+- ✅ 配置变更可被 Salt 跟踪，支持 `--plan` 预演结果
 
 ### Magento 官方推荐配置
 
