@@ -1,6 +1,9 @@
 {% set optimize_pillar = pillar.get('magento_optimize', {}) %}
 {% set requested_profile = optimize_pillar.get('profile', 'auto') %}
-{% set site_hint = optimize_pillar.get('site', '') %}
+{% set site_hint = optimize_pillar.get('site_hint', '') %}
+{% set detection_status = optimize_pillar.get('detection_status', 'unknown') %}
+{% set env_path = optimize_pillar.get('env_path', '') %}
+{% set site_root = optimize_pillar.get('site_root', '') %}
 {% set overrides = optimize_pillar.get('overrides', {}) or {} %}
 {% set mem_total_mb = salt['grains.get']('mem_total', 0) %}
 {% set mem_total_gb = (mem_total_mb / 1024) | int %}
@@ -160,7 +163,11 @@
   'effective_profile': effective_profile,
   'auto_profile': auto_profile,
   'memory_gb': mem_total_gb,
-  'site': site_hint
+  'site': optimize_pillar.get('site', ''),
+  'site_hint': site_hint,
+  'env_path': env_path,
+  'site_root': site_root,
+  'detection_status': detection_status
 } %}
 {% set nginx_conf_candidates = ['/etc/nginx/nginx.conf', '/usr/local/nginx/conf/nginx.conf'] %}
 {% set nginx_ns = namespace(conf=None) %}
@@ -186,6 +193,20 @@
 magento_nginx_config_missing:
   test.fail_without_changes:
     - comment: "未找到 Nginx 配置文件，请先安装并初始化 Nginx"
+{% elif detection_status == 'ambiguous' %}
+magento_site_selection_required:
+  test.fail_without_changes:
+    - comment: "检测到多个 Magento 站点，请使用 '--site <name|path>' 指定后再运行"
+{% elif detection_status == 'missing' %}
+magento_env_missing_warning:
+  test.show_notification:
+    - text: "未检测到 Magento env.php，已跳过站点级配置，仅应用服务级优化"
+{% endif %}
+
+{% if detection_status == 'ambiguous' %}
+{# Skip rest of state when ambiguous #}
+{% elif not nginx_ns.conf %}
+{# Already handled above #}
 {% else %}
 
 optimize_nginx_worker_connections:

@@ -8,6 +8,7 @@
 ### 🛠️ Magento 调优
 - `optional.magento-optimization` State 不再使用易匹配过多的 `file.line`，改用安全的 `file.replace` / `file.managed` 操作，Salt 3000 系列及 dry-run 全部通过测试。
 - `tests/test_magento_optimization.sh` 干跑验证已更新逻辑，确保模板在 CI 与本地均可渲染。
+- CLI 现在自动探测 `/var/www`、`/srv`、`/opt/magento` 下的 Magento 站点，并在 `--site` 未指定时填充 Pillar；若检测失败或出现多站冲突，Salt state 会提示或直接中止，避免误改配置。
 
 ### 📘 文档
 - `docs/INSTALL.md` 增补 Pillar 初始化 / 查看 / 刷新的操作说明，并记录 `saltgoat passwords --refresh` 的最佳实践流程。
