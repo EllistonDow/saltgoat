@@ -1,0 +1,94 @@
+{% set site_cfg = salt['slsutil.deserialize']('json', site) %}
+{% set settings_cfg = salt['slsutil.deserialize']('json', settings) %}
+{% set listen_blocks = site_cfg.get('listen', [{'port': 80}]) %}
+{% set server_names = site_cfg.get('server_name', ['_']) %}
+{% set root_path = site_cfg.get('root', settings_cfg.get('default_site_root')) %}
+{% set index_files = site_cfg.get('index', ['index.php', 'index.html']) %}
+{% set access_log = site_cfg.get('access_log', settings_cfg.get('log_dir') + '/' + site_name + '.access.log') %}
+{% set error_log = site_cfg.get('error_log', settings_cfg.get('log_dir') + '/' + site_name + '.error.log') %}
+{% set php_cfg = site_cfg.get('php', {'enabled': True}) %}
+{% set fallback = site_cfg.get('fallback', '/index.php$is_args$args') %}
+
+server {
+{% for entry in listen_blocks %}
+    {% set entry_opts = [] %}
+    {% if entry is mapping %}
+      {% if entry.get('ssl') %}
+        {% set entry_opts = entry_opts + ['ssl'] %}
+      {% endif %}
+      {% if entry.get('http2', entry.get('http_2')) %}
+        {% set entry_opts = entry_opts + ['http2'] %}
+      {% endif %}
+      {% if entry.get('options') %}
+        {% set entry_opts = entry_opts + [entry.get('options')] %}
+      {% endif %}
+      {% set listen_port = entry.get('port', 80) %}
+    {% else %}
+      {% set listen_port = entry %}
+    {% endif %}
+    listen {{ listen_port }}{% if entry_opts %} {{ entry_opts | join(' ') }}{% endif %};
+{% endfor %}
+    server_name {{ server_names | join(' ') }};
+    root {{ root_path }};
+    index {{ index_files | join(' ') }};
+    access_log {{ access_log }};
+    error_log {{ error_log }};
+    client_max_body_size {{ site_cfg.get('client_max_body_size', settings_cfg.get('client_max_body_size')) }};
+
+{% if site_cfg.get('ssl', {}).get('enabled') %}
+    ssl_certificate {{ site_cfg['ssl'].get('cert') }};
+    ssl_certificate_key {{ site_cfg['ssl'].get('key') }};
+    {% if site_cfg['ssl'].get('protocols') %}
+    ssl_protocols {{ site_cfg['ssl'].get('protocols') }};
+    {% endif %}
+    {% if site_cfg['ssl'].get('ciphers') %}
+    ssl_ciphers {{ site_cfg['ssl'].get('ciphers') }};
+    {% endif %}
+    {% if site_cfg['ssl'].get('session_cache') %}
+    ssl_session_cache {{ site_cfg['ssl'].get('session_cache') }};
+    {% endif %}
+    {% if site_cfg['ssl'].get('prefer_server_ciphers') is not none %}
+    ssl_prefer_server_ciphers {{ 'on' if site_cfg['ssl'].get('prefer_server_ciphers') else 'off' }};
+    {% endif %}
+{% endif %}
+
+{% for header, value in site_cfg.get('headers', {}).items() %}
+    add_header {{ header }} '{{ value }}' always;
+{% endfor %}
+
+{% if site_cfg.get('security', {}).get('content_security_policy') %}
+    add_header Content-Security-Policy {{ "'" ~ site_cfg['security']['content_security_policy'] ~ "'" }} always;
+{% endif %}
+
+    location / {
+        {% if site_cfg.get('try_files') %}
+        try_files {{ site_cfg.get('try_files') }};
+        {% else %}
+        try_files $uri $uri/ {{ fallback }};
+        {% endif %}
+    }
+
+{% if php_cfg.get('enabled', True) %}
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass {{ php_cfg.get('fastcgi_pass', 'unix:/run/php/php8.3-fpm.sock') }};
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+{% endif %}
+
+{% for path, block in site_cfg.get('locations', {}).items() %}
+    location {{ path }} {
+{% for directive in block.get('directives', []) %}
+        {{ directive }};
+{% endfor %}
+{% if block.get('raw') %}
+{{ block.get('raw') | indent(8) }}
+{% endif %}
+    }
+{% endfor %}
+
+{% if site_cfg.get('extra_config') %}
+{{ site_cfg.get('extra_config') | indent(4) }}
+{% endif %}
+}

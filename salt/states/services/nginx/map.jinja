@@ -1,0 +1,45 @@
+{% set defaults = {
+  'package': 'nginx',
+  'service': 'nginx',
+  'config_dir': '/etc/nginx',
+  'conf_d_dir': '/etc/nginx/conf.d',
+  'sites_available_dir': '/etc/nginx/sites-available',
+  'sites_enabled_dir': '/etc/nginx/sites-enabled',
+  'log_dir': '/var/log/nginx',
+  'user': 'www-data',
+  'group': 'www-data',
+  'worker_processes': 'auto',
+  'worker_connections': 4096,
+  'keepalive_timeout': 65,
+  'client_max_body_size': '64m',
+  'gzip': True,
+  'pid_file': '/run/nginx.pid',
+  'binary': '/usr/sbin/nginx',
+  'default_site': True,
+  'default_site_root': '/var/www/html',
+  'default_site_index': [
+    'index.html'
+  ],
+  'sites': {}
+} %}
+
+{% set pillar_settings = salt['pillar.get']('nginx', {}) %}
+{% set merged = salt['slsutil.merge'](defaults, pillar_settings, strategy='recurse', merge_lists=True) %}
+
+{% set sites = merged.get('sites', {}) %}
+{% if merged.get('default_site', True) %}
+  {% set default_site = {
+    'enabled': True,
+    'server_name': ['_'],
+    'listen': [{'port': 80}],
+    'root': merged.get('default_site_root'),
+    'index': merged.get('default_site_index'),
+    'php': {'enabled': False},
+    'extra_config': '    location / {\n        try_files $uri $uri/ =404;\n    }\n'
+  } %}
+  {% if 'default' not in sites %}
+    {% set sites = salt['slsutil.merge'](sites, {'default': default_site}, strategy='recurse', merge_lists=True) %}
+  {% endif %}
+{% endif %}
+
+{% set settings = salt['slsutil.merge'](merged, {'sites': sites}, strategy='recurse', merge_lists=True) %}
