@@ -261,7 +261,9 @@ backup_create() {
     salt-call --local file.mkdir "$nginx_backup_dir" >/dev/null 2>&1
     
     # 使用 Salt 文件模块复制配置文件
-    if salt-call --local file.directory_exists "/usr/local/nginx/conf" --out=txt 2>/dev/null | grep -q "True"; then
+    if salt-call --local file.directory_exists "/etc/nginx" --out=txt 2>/dev/null | grep -q "True"; then
+        salt-call --local file.copy "/etc/nginx" "$nginx_backup_dir/etc-nginx" recurse=True >/dev/null 2>&1
+    elif salt-call --local file.directory_exists "/usr/local/nginx/conf" --out=txt 2>/dev/null | grep -q "True"; then
         salt-call --local file.copy "/usr/local/nginx/conf" "$nginx_backup_dir/conf" recurse=True >/dev/null 2>&1
     fi
     if salt-call --local file.directory_exists "/etc/nginx/sites-available" --out=txt 2>/dev/null | grep -q "True"; then
@@ -384,7 +386,9 @@ backup_restore() {
     # 恢复 Nginx 配置
     if [[ -d "$backup_content_dir/nginx" ]]; then
         log_info "恢复 Nginx 配置..."
-        if [[ -d "$backup_content_dir/nginx/conf" ]]; then
+        if [[ -d "$backup_content_dir/nginx/etc-nginx" ]]; then
+            salt-call --local file.copy "$backup_content_dir/nginx/etc-nginx" "/etc/nginx" recurse=True >/dev/null 2>&1
+        elif [[ -d "$backup_content_dir/nginx/conf" ]]; then
             salt-call --local file.copy "$backup_content_dir/nginx/conf" "/usr/local/nginx/conf" recurse=True >/dev/null 2>&1
         fi
         salt-call --local service.reload nginx >/dev/null 2>&1

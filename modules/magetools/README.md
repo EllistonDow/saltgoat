@@ -88,6 +88,23 @@ saltgoat magetools valkey-check bank --expected-owner www-data --expected-perms 
 
 # 兼容旧流程：使用 Shell 脚本重新分配数据库
 saltgoat magetools valkey-renew bank
+
+### RabbitMQ（Salt 原生）
+```bash
+# 使用 Pillar 中的 rabbitmq_password 作为默认
+saltgoat magetools rabbitmq-salt smart bank
+
+# 如需覆盖参数，可显式传参
+saltgoat magetools rabbitmq-salt all bank \
+  --threads 3 \
+  --amqp-host 127.0.0.1 --amqp-port 5672 \
+  --amqp-user bank --amqp-password 'StrongP@ss' --amqp-vhost '/bank' \
+  --service-user www-data --php-memory 2G
+```
+
+默认密码来源：
+- `salt/pillar/saltgoat.sls` 中的 `rabbitmq_password`
+- 通过 `--amqp-password` 显式覆盖
 ```
 
 #### Valkey 配置命令说明
@@ -210,6 +227,6 @@ saltgoat help magetools
 
 ## 版本信息
 
-- **SaltGoat版本**: v0.9.7+
+- **SaltGoat版本**: v0.9.8+
 - **支持Magento**: 1.x, 2.x
 - **PHP要求**: 7.4+

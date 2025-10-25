@@ -4,6 +4,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${SCRIPT_DIR}/lib/logger.sh"
+source "${SCRIPT_DIR}/lib/utils.sh"
 
 # 配置参数
 SITE_NAME="${1:-tank}"
@@ -310,7 +311,9 @@ backup_site() {
     # 创建数据库备份
     log_info "备份数据库..."
     local db_backup="${backup_dir}/${SITE_NAME}_db_$(date +%Y%m%d_%H%M%S).sql"
-    if sudo mysqldump -u root -p"$(grep MYSQL_PASSWORD "${SCRIPT_DIR}/.env" | cut -d"'" -f2)" "$SITE_NAME" > "$db_backup"; then
+    local mysql_password
+    mysql_password=$(get_local_pillar_value mysql_password)
+    if sudo mysqldump -u root ${mysql_password:+-p"$mysql_password"} "$SITE_NAME" > "$db_backup"; then
         log_success "[SUCCESS] 数据库备份完成: $db_backup"
     else
         log_warning "[WARNING] 数据库备份失败"

@@ -58,7 +58,7 @@ configure_phpmyadmin_security:
 # 创建 Nginx phpMyAdmin 配置
 configure_nginx_phpmyadmin:
   file.managed:
-    - name: /usr/local/nginx/conf/sites-available/phpmyadmin
+    - name: /etc/nginx/sites-available/phpmyadmin
     - contents: |
         server {
             listen 80;
@@ -87,15 +87,15 @@ configure_nginx_phpmyadmin:
 # 启用 phpMyAdmin 站点
 enable_phpmyadmin_site:
   file.symlink:
-    - name: /usr/local/nginx/conf/sites-enabled/phpmyadmin
-    - target: /usr/local/nginx/conf/sites-available/phpmyadmin
+    - name: /etc/nginx/sites-enabled/phpmyadmin
+    - target: /etc/nginx/sites-available/phpmyadmin
     - require:
       - file: configure_nginx_phpmyadmin
 
 # 测试 Nginx 配置
 test_nginx_phpmyadmin_config:
   cmd.run:
-    - name: /usr/local/nginx/sbin/nginx -t
+    - name: /usr/sbin/nginx -t -c /etc/nginx/nginx.conf
     - require:
       - file: enable_phpmyadmin_site
 

@@ -53,7 +53,7 @@ test_varnish_connection:
 # 配置 Nginx 反向代理到 Varnish
 configure_nginx_varnish:
   file.managed:
-    - name: /usr/local/nginx/conf/snippets/varnish.conf
+    - name: /etc/nginx/snippets/varnish.conf
     - contents: |
         upstream varnish {
             server 127.0.0.1:6081;

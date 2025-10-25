@@ -15,29 +15,48 @@ warnings.filterwarnings('ignore', message='.*crypt.*')
 warnings.filterwarnings('ignore', message='.*spwd.*')
 " 2>/dev/null || true
 
+# 安装时可选的优化参数
+OPTIMIZE_MAGENTO_ENABLED=false
+OPTIMIZE_MAGENTO_PROFILE=""
+OPTIMIZE_MAGENTO_SITE=""
+
 # 加载安装配置
 load_install_config() {
 	log_info "加载安装配置..."
 
-	# 处理命令行参数覆盖（先解析参数）
-	parse_install_args "$@"
+	# 重置可选项
+	OPTIMIZE_MAGENTO_ENABLED=false
+	OPTIMIZE_MAGENTO_PROFILE=""
+	OPTIMIZE_MAGENTO_SITE=""
 
-	# 检查是否存在 .env 文件
-	if [[ -f "${SCRIPT_DIR}/.env" ]]; then
-		log_info "发现 .env 配置文件，正在加载..."
-		source "${SCRIPT_DIR}/lib/env.sh"
-		load_env_config "${SCRIPT_DIR}/.env"
-		log_success "环境配置加载完成"
-	else
-		log_warning "未发现 .env 配置文件，将使用默认配置"
-		log_info "运行 'saltgoat env create' 创建配置文件"
-	fi
+	# 载入已有 pillar 作为默认值
+	load_pillar_defaults
 
-	# 再次处理命令行参数覆盖（确保命令行参数优先级最高）
+	# 处理命令行参数覆盖（优先级最高）
 	parse_install_args "$@"
 
 	# 验证必要的配置
 	validate_install_config
+}
+
+# 从 pillar 读取已有配置作为默认值
+load_pillar_defaults() {
+	local pillar_file
+	pillar_file="$(get_local_pillar_file)"
+
+	if [[ -f "$pillar_file" ]]; then
+		log_info "从 Pillar 加载默认配置: ${pillar_file#${SCRIPT_DIR}/}"
+		MYSQL_PASSWORD="${MYSQL_PASSWORD:-$(get_local_pillar_value mysql_password)}"
+		VALKEY_PASSWORD="${VALKEY_PASSWORD:-$(get_local_pillar_value valkey_password)}"
+		RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(get_local_pillar_value rabbitmq_password)}"
+		WEBMIN_PASSWORD="${WEBMIN_PASSWORD:-$(get_local_pillar_value webmin_password)}"
+		PHPMYADMIN_PASSWORD="${PHPMYADMIN_PASSWORD:-$(get_local_pillar_value phpmyadmin_password)}"
+		SSL_EMAIL="${SSL_EMAIL:-$(get_local_pillar_value ssl_email)}"
+		TIMEZONE="${TIMEZONE:-$(get_local_pillar_value timezone)}"
+		LANGUAGE="${LANGUAGE:-$(get_local_pillar_value language)}"
+	else
+		log_warning "未找到 Pillar 配置 salt/pillar/saltgoat.sls，将使用内置默认值"
+	fi
 }
 
 # 配置 Salt minion 以读取项目 pillar（需要 root）
@@ -111,6 +130,36 @@ parse_install_args() {
 			log_info "设置语言: $LANGUAGE"
 			shift 2
 			;;
+		--optimize-magento)
+			OPTIMIZE_MAGENTO_ENABLED=true
+			OPTIMIZE_MAGENTO_PROFILE="${OPTIMIZE_MAGENTO_PROFILE:-auto}"
+			shift
+			;;
+		--optimize-magento=*)
+			OPTIMIZE_MAGENTO_ENABLED=true
+			OPTIMIZE_MAGENTO_PROFILE="${1#*=}"
+			shift
+			;;
+		--optimize-magento-profile)
+			OPTIMIZE_MAGENTO_ENABLED=true
+			OPTIMIZE_MAGENTO_PROFILE="$2"
+			shift 2
+			;;
+		--optimize-magento-profile=*)
+			OPTIMIZE_MAGENTO_ENABLED=true
+			OPTIMIZE_MAGENTO_PROFILE="${1#*=}"
+			shift
+			;;
+		--optimize-magento-site)
+			OPTIMIZE_MAGENTO_ENABLED=true
+			OPTIMIZE_MAGENTO_SITE="$2"
+			shift 2
+			;;
+		--optimize-magento-site=*)
+			OPTIMIZE_MAGENTO_ENABLED=true
+			OPTIMIZE_MAGENTO_SITE="${1#*=}"
+			shift
+			;;
 		*)
 			shift
 			;;
@@ -143,9 +192,17 @@ update_pillar_config() {
 	log_info "更新 Salt Pillar 配置..."
 
 	# 创建临时 Pillar 文件
-	local pillar_file="/tmp/saltgoat_pillar.sls"
+	local pillar_dir="${SCRIPT_DIR}/salt/pillar"
+	local target_file="${pillar_dir}/saltgoat.sls"
 
-	cat >"$pillar_file" <<EOF
+	sudo mkdir -p "$pillar_dir"
+	local tmp_file
+	tmp_file=$(mktemp "${pillar_dir}/.saltgoat.XXXXXX") || {
+		log_error "无法创建临时 Pillar 文件"
+		exit 1
+	}
+
+	cat >"$tmp_file" <<EOF
 mysql_password: '$MYSQL_PASSWORD'
 valkey_password: '$VALKEY_PASSWORD'
 rabbitmq_password: '$RABBITMQ_PASSWORD'
@@ -156,11 +213,11 @@ timezone: '$TIMEZONE'
 language: '$LANGUAGE'
 EOF
 
-	# 使用 Salt 原生功能复制到 Pillar 目录
-	salt-call --local file.copy "$pillar_file" "${SCRIPT_DIR}/salt/pillar/saltgoat.sls"
+	sudo mv "$tmp_file" "$target_file"
+	sudo chmod 600 "$target_file"
 
-	# 清理临时文件
-	salt-call --local file.remove "$pillar_file"
+	# 刷新 Pillar，以便后续 state 读取到更新内容
+	sudo salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || true
 
 	log_success "Pillar 配置更新完成"
 }
@@ -191,7 +248,28 @@ install_all() {
 	install_optional
 
 	log_success "SaltGoat 安装完成！"
-	log_info "使用 'saltgoat passwords' 查看配置的密码"
+	log_highlight "SaltGoat 版本信息"
+	show_versions
+
+	log_highlight "服务运行状态"
+	show_status
+
+	log_highlight "服务账户密码"
+	show_passwords
+
+	if [[ "$OPTIMIZE_MAGENTO_ENABLED" == true ]]; then
+		log_highlight "应用 Magento 优化..."
+		local optimize_args=()
+		if [[ -n "$OPTIMIZE_MAGENTO_PROFILE" ]]; then
+			optimize_args+=(--profile "$OPTIMIZE_MAGENTO_PROFILE")
+		fi
+		if [[ -n "$OPTIMIZE_MAGENTO_SITE" ]]; then
+			optimize_args+=(--site "$OPTIMIZE_MAGENTO_SITE")
+		fi
+		optimize_magento "${optimize_args[@]}"
+	else
+		log_info "提示: 可运行 'saltgoat optimize magento' 以应用 Magento 调优"
+	fi
 }
 
 # 安装核心组件

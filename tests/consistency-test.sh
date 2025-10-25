@@ -11,10 +11,10 @@ test_path_detection() {
     echo "----------------------------------------"
     
     # Nginx路径检测
-    if [ -f "/usr/local/nginx/conf/nginx.conf" ]; then
-        echo "  Nginx: /usr/local/nginx/conf/nginx.conf ✅"
-    elif [ -f "/etc/nginx/nginx.conf" ]; then
+    if [ -f "/etc/nginx/nginx.conf" ]; then
         echo "  Nginx: /etc/nginx/nginx.conf ✅"
+    elif [ -f "/usr/local/nginx/conf/nginx.conf" ]; then
+        echo "  Nginx: /usr/local/nginx/conf/nginx.conf ✅"
     else
         echo "  Nginx: 未检测到配置文件 ❌"
     fi
@@ -115,7 +115,7 @@ test_config_consistency() {
     
     # 检查配置文件权限
     local config_files=(
-        "/usr/local/nginx/conf/nginx.conf"
+        "/etc/nginx/nginx.conf"
         "/etc/php/8.3/fpm/php.ini"
         "/etc/mysql/mysql.conf.d/lemp.cnf"
         "/etc/valkey/valkey.conf"

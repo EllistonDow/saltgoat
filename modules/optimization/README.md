@@ -24,11 +24,14 @@ saltgoat <optimization_command> [options]
 
 ### 系统优化
 ```bash
-# Magento2优化
+# Magento2 优化（自动档位）
 saltgoat optimize magento
 
-# 显示优化结果
-saltgoat optimize magento --show-results
+# 指定档位与站点
+saltgoat optimize magento --profile medium --site shop01
+
+# 仅预览变更并输出报告
+saltgoat optimize magento --dry-run --show-results
 ```
 
 ### 自动调优
@@ -65,13 +68,15 @@ saltgoat speedtest --verbose
 
 ## 🔧 优化功能详解
 
-### Magento2优化
-- **Nginx优化**: 工作进程、连接数、缓存配置
-- **PHP优化**: 内存限制、OPcache、进程管理
-- **MySQL优化**: 查询缓存、连接池、索引优化
-- **Valkey优化**: 内存配置、持久化设置
-- **OpenSearch优化**: 索引配置、搜索优化
-- **RabbitMQ优化**: 队列配置、消息处理
+### Magento2 优化
+- **档位映射**: 根据内存自动匹配 `low → enterprise` 或通过 `--profile` 指定
+- **Nginx 优化**: 工作进程、连接数、Gzip 规则（Salt 原生管理）
+- **PHP 优化**: 内存限制、OPcache、FPM 池参数、CLI 配置
+- **MySQL 优化**: InnoDB 缓冲池、日志、连接数等通过 `ini.options_present` 应用
+- **Valkey 优化**: 最大内存、淘汰策略、连接策略块替换
+- **OpenSearch 优化**: 缓冲区、线程池等通过 `file.blockreplace` 保持幂等
+- **RabbitMQ 优化**: 使用 Salt 模板发布 Magento 专用配置
+- **优化报告**: 结果写入 `/var/lib/saltgoat/reports/magento-optimize-summary.txt`，`--show-results` 可随时查看
 
 ### 自动调优
 - **CPU优化**: 基于CPU核心数的进程配置

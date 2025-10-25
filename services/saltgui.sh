@@ -307,9 +307,9 @@ create_saltgui_nginx_config() {
     fi
     
     # 确定 Nginx 配置目录
-    local nginx_conf_dir="/usr/local/nginx/conf"
-    if [[ ! -d "$nginx_conf_dir" ]]; then
-        nginx_conf_dir="/etc/nginx"
+    local nginx_conf_dir="/etc/nginx"
+    if [[ ! -d "$nginx_conf_dir" && -d "/usr/local/nginx/conf" ]]; then
+        nginx_conf_dir="/usr/local/nginx/conf"
     fi
     
     # 创建 SaltGUI Nginx 配置
@@ -345,11 +345,11 @@ EOF
     sudo mkdir -p "$nginx_conf_dir/sites-enabled"
     
     # 启用站点
-    sudo ln -sf "$nginx_conf_dir/sites-available/saltgui" "$nginx_conf_dir/sites-enabled/"
+    sudo ln -sf "$nginx_conf_dir/sites-available/saltgui" "$nginx_conf_dir/sites-enabled/saltgui"
     
     # 测试 Nginx 配置
     if command -v nginx >/dev/null 2>&1; then
-        sudo nginx -t 2>/dev/null && {
+        sudo nginx -t -c /etc/nginx/nginx.conf 2>/dev/null && {
             sudo systemctl reload nginx 2>/dev/null || sudo nginx -s reload 2>/dev/null
             log_success "SaltGUI Nginx 配置已创建并启用"
         } || {

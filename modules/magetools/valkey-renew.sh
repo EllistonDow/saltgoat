@@ -88,7 +88,7 @@ add_valkey_config_for_new_site() {
         ]
     ];
     
-    file_put_contents('app/etc/env.php', '<?php\\nreturn ' . var_export(\$config, true) . ';\\n');
+    file_put_contents('app/etc/env.php', '<?php' . PHP_EOL . 'return ' . var_export(\$config, true) . ';' . PHP_EOL);
     "
     
     log_success "全新站点 Valkey 配置添加完成"

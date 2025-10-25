@@ -17,27 +17,20 @@ diagnose_nginx() {
     
     # 检查Nginx是否运行
     # 检查Nginx服务状态 - 支持源码编译和包管理器安装
-    if command -v nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx 2>/dev/null; then
+    if systemctl is-active --quiet nginx 2>/dev/null; then
         log_success "Nginx: 运行中 (systemd)"
-    elif [[ -f "/usr/local/nginx/sbin/nginx" ]] && pgrep -f "nginx: master process" >/dev/null 2>&1; then
-        log_success "Nginx: 运行中 (手动启动)"
     elif command -v nginx >/dev/null 2>&1 && pgrep -f "nginx: master process" >/dev/null 2>&1; then
         log_success "Nginx: 运行中 (手动启动)"
     else
         issues+=("Nginx服务未运行")
-        fixes+=("sudo systemctl start nginx 或手动启动: /usr/local/nginx/sbin/nginx")
+        fixes+=("sudo systemctl start nginx")
     fi
     
     # 检查Nginx配置
     if command -v nginx >/dev/null 2>&1; then
-        if ! nginx -t 2>/dev/null; then
+        if ! nginx -t -c /etc/nginx/nginx.conf 2>/dev/null; then
             issues+=("Nginx配置文件有语法错误")
             fixes+=("检查 /etc/nginx/nginx.conf 和 sites-enabled/ 目录下的配置文件")
-        fi
-    elif [[ -f "/usr/local/nginx/sbin/nginx" ]]; then
-        if ! /usr/local/nginx/sbin/nginx -t 2>/dev/null; then
-            issues+=("Nginx配置文件有语法错误")
-            fixes+=("检查 /usr/local/nginx/conf/nginx.conf 和 sites-enabled/ 目录下的配置文件")
         fi
     fi
     

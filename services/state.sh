@@ -164,7 +164,7 @@ state_rollback() {
     case "$state_name" in
         "nginx")
             if [[ -f "$latest_backup/nginx.conf" ]]; then
-                sudo cp "$latest_backup/nginx.conf" /usr/local/nginx/conf/nginx.conf
+                sudo cp "$latest_backup/nginx.conf" /etc/nginx/nginx.conf
                 sudo systemctl restart nginx
             fi
             ;;
@@ -224,8 +224,8 @@ state_backup() {
     
     case "$state_name" in
         "nginx")
-            if [[ -f "/usr/local/nginx/conf/nginx.conf" ]]; then
-                cp /usr/local/nginx/conf/nginx.conf "$backup_dir/nginx.conf"
+            if [[ -f "/etc/nginx/nginx.conf" ]]; then
+                cp /etc/nginx/nginx.conf "$backup_dir/nginx.conf"
             fi
             ;;
         "php")
@@ -258,7 +258,7 @@ show_state_status() {
     echo ""
     
     echo "配置文件状态:"
-    echo "  nginx.conf: $([ -f /usr/local/nginx/conf/nginx.conf ] && echo '存在' || echo '不存在')"
+    echo "  nginx.conf: $([ -f /etc/nginx/nginx.conf ] && echo '存在' || echo '不存在')"
     echo "  php.ini: $([ -f /etc/php/8.3/fpm/php.ini ] && echo '存在' || echo '不存在')"
     echo "  mysql.cnf: $([ -f /etc/mysql/mysql.conf.d/lemp.cnf ] && echo '存在' || echo '不存在')"
     echo "  valkey.conf: $([ -f /etc/valkey/valkey.conf ] && echo '存在' || echo '不存在')"

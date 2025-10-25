@@ -53,12 +53,12 @@ else
     echo "   ❌ 密码同步脚本不存在"
 fi
 
-log_info "6. 检查 .env 文件支持..."
-if [[ -f "${SCRIPT_DIR}/.env" ]]; then
-    echo "   ✅ .env 文件存在，支持环境变量配置"
-    echo "   ✅ 命令行参数会覆盖 .env 文件中的值"
+log_info "6. 检查 Pillar 配置文件..."
+if [[ -f "${SCRIPT_DIR}/salt/pillar/saltgoat.sls" ]]; then
+    echo "   ✅ Pillar 文件存在 (salt/pillar/saltgoat.sls)"
+    echo "   ✅ 可以直接编辑该文件覆盖安装密码和配置"
 else
-    echo "   ⚠️  .env 文件不存在，将使用默认配置"
+    echo "   ❌ 未找到 salt/pillar/saltgoat.sls，请先运行 saltgoat install 初始化"
 fi
 
 log_success "git clone 安装一致性测试完成！"
@@ -67,7 +67,7 @@ log_info "  ✅ Salt States 使用 Pillar 变量，支持动态密码"
 log_info "  ✅ 命令行参数正确解析并写入 Pillar"
 log_info "  ✅ 默认安装使用一致的默认密码"
 log_info "  ✅ 密码同步脚本支持密码更新"
-log_info "  ✅ 支持 .env 文件配置"
+log_info "  ✅ Pillar 文件可作为配置来源"
 
 # 清理测试文件
 rm -f /tmp/test_pillar.sls

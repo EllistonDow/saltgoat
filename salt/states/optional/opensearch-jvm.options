@@ -10,7 +10,6 @@
 -XX:G1HeapRegionSize=16m
 -XX:MaxGCPauseMillis=200
 -XX:G1MixedGCCountTarget=8
--XX:G1OldCSetRegionThreshold=10
 
 # 内存监控和处理
 -XX:+HeapDumpOnOutOfMemoryError

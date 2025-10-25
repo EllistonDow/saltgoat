@@ -111,6 +111,20 @@ magetools_handler() {
             # 调用 valkey-renew 脚本
             "${SCRIPT_DIR}/modules/magetools/valkey-renew.sh" "$2" "$3"
             ;;
+        "valkey-setup")
+            # 调用 valkey-setup 脚本 (Salt 原生版本)
+            shift
+            local forwarded=()
+            for arg in "$@"; do
+                [[ -z "$arg" ]] && continue
+                forwarded+=("$arg")
+            done
+            "${SCRIPT_DIR}/modules/magetools/valkey-setup.sh" "${forwarded[@]}"
+            ;;
+        "valkey-check")
+            shift
+            "${SCRIPT_DIR}/modules/magetools/valkey-check.sh" "$@"
+            ;;
         "rabbitmq")
             case "$2" in
                 "all"|"smart")
@@ -127,6 +141,11 @@ magetools_handler() {
                     exit 1
                     ;;
             esac
+            ;;
+        "rabbitmq-salt")
+            # 使用 Salt 原生管理 RabbitMQ/消费者
+            shift
+            "${SCRIPT_DIR}/modules/magetools/rabbitmq-salt.sh" "$@"
             ;;
         "opensearch")
             # 调用 opensearch 认证配置脚本
@@ -165,7 +184,10 @@ magetools_handler() {
             log_info "  permissions reset    - 重置权限"
             log_info "  convert magento2     - 转换为Magento2配置"
             log_info "  convert check        - 检查Magento2兼容性"
-            log_info "  valkey-renew <site>  - Valkey缓存自动续期"
+            log_info "  valkey-renew <site>  - Valkey缓存自动续期 (Shell脚本)"
+            log_info "  valkey-setup <site>  - Valkey缓存配置 (Salt原生)"
+            log_info "  valkey-check <site>  - Valkey配置检测 (Salt原生)"
+            log_info "  rabbitmq-salt <mode> <site> [options] - RabbitMQ与消费者 (Salt原生)"
             log_info "  rabbitmq setup <mode> <site> - RabbitMQ队列管理"
             log_info "  opensearch <user>     - OpenSearch Nginx认证配置"
             log_info "  maintenance <site> <action> - Magento维护管理"
@@ -1204,7 +1226,9 @@ show_magetools_help() {
     echo "  convert check        - 检查Magento2兼容性"
     echo ""
     echo "[INFO] Valkey缓存管理:"
-    echo "  valkey-renew <site>  - Valkey缓存自动续期 (随机分配数据库编号)"
+    echo "  valkey-renew <site>  - Valkey缓存自动续期 (Shell脚本，随机分配数据库编号)"
+    echo "  valkey-setup <site>  - Valkey缓存配置 (Salt原生，推荐使用)"
+    echo "  valkey-check <site>  - Valkey配置检测 (Salt原生检测)"
     echo ""
     echo "[INFO] RabbitMQ队列管理:"
     echo "  rabbitmq all <site> [threads]   - 配置所有消费者（21个）"
@@ -1239,6 +1263,8 @@ show_magetools_help() {
     echo "  saltgoat magetools permissions fix"
     echo "  saltgoat magetools convert magento2 tank"
     echo "  saltgoat magetools valkey-renew tank"
+    echo "  saltgoat magetools valkey-setup tank"
+    echo "  saltgoat magetools valkey-check tank"
     echo "  saltgoat magetools rabbitmq check tank"
     echo "  saltgoat magetools opensearch doge"
     echo "  saltgoat magetools maintenance tank daily"

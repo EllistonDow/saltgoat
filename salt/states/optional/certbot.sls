@@ -48,7 +48,7 @@ create_certbot_renewal_script:
 # 创建 Nginx SSL 配置模板
 create_nginx_ssl_template:
   file.managed:
-    - name: /usr/local/nginx/conf/snippets/ssl.conf
+    - name: /etc/nginx/snippets/ssl.conf
     - contents: |
         # SSL configuration
         ssl_protocols TLSv1.2 TLSv1.3;

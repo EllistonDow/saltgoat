@@ -7,7 +7,7 @@
 # ModSecurity 配置文件
 modsecurity_config:
   file.managed:
-    - name: /etc/nginx/conf/modsecurity.conf
+    - name: /etc/nginx/modsecurity.conf
     - source: salt://templates/modsecurity/modsecurity-level{{ modsecurity_level }}.conf
     - template: jinja
     - context:
