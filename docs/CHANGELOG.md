@@ -3,6 +3,12 @@
 ## [0.9.12] - 2025-10-25
 
 ### Changes
+- 修改 1 个文件: modules/magetools/magetools.sh
+
+
+## [0.9.12] - 2025-10-25
+
+### Changes
 - 修改 2 个文件: docs/CHANGELOG.md, saltgoat
 
 
