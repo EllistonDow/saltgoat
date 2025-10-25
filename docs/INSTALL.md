@@ -28,24 +28,26 @@ sudo git clone https://github.com/EllistonDow/saltgoat.git /opt/saltgoat
 cd /opt/saltgoat
 ```
 
-#### 2. 配置环境变量（可选）
+#### 2. 配置 Pillar（推荐）
 ```bash
-# 复制环境配置模板
-cp env.example .env
+# 生成默认模板（包含随机密码，执行前可确认/覆盖）
+saltgoat pillar init
 
-# 编辑配置文件
-nano .env
+# 注意：模板中的随机密码仅供首次安装使用，请按照安全要求修改并妥善保存。
+
+# 或手动编辑 Pillar 文件
+nano salt/pillar/saltgoat.sls
+
+# 保存后刷新 Pillar（Salt 会在安装过程中自动刷新，此步骤可选）
+saltgoat pillar refresh
 ```
 
-**邮件通知配置**:
-```bash
-# 邮件通知配置
-SMTP_HOST='smtp.gmail.com:587'
-SMTP_USER='your-email@gmail.com'
-SMTP_PASSWORD='your-app-password'
-SMTP_FROM_EMAIL='your-email@gmail.com'
-SMTP_FROM_NAME='SaltGoat Alerts'
-```
+#### Pillar 管理命令
+- `saltgoat pillar init`：生成 `salt/pillar/saltgoat.sls` 模板，自动写入随机密码与默认通知邮箱。
+- `saltgoat pillar show`：以只读方式输出当前 Pillar 内容，便于安装前核对。
+- `saltgoat pillar refresh`：执行 `saltutil.refresh_pillar` 立即刷新缓存，确保后续 `saltgoat install` 使用最新值。
+
+> Pillar 文件默认权限为 `600`（root 所有），请在编辑后保持该权限；如需自定义其他机密信息，可在同目录新增 `*.sls` 并在 `salt/pillar/top.sls` 中引用。
 
 #### 3. 系统安装
 ```bash
@@ -54,13 +56,17 @@ sudo ./saltgoat system install
 
 # 安装所有组件
 sudo saltgoat install all
+
+# 可选：安装完成后自动执行 Magento 优化
+sudo saltgoat install all --optimize-magento
+sudo saltgoat install all --optimize-magento-profile high --optimize-magento-site mystore
 ```
 
 ### 🔧 一致性保证机制
 
 #### 1. 自动路径检测
 SaltGoat 会自动检测以下路径：
-- **Nginx**: `/usr/local/nginx/conf/nginx.conf` 或 `/etc/nginx/nginx.conf`
+- **Nginx**: `/etc/nginx/nginx.conf`
 - **PHP**: 自动检测版本 (8.3, 8.2, 8.1, 8.0, 7.4)
 - **MySQL**: `/etc/mysql/mysql.conf.d/lemp.cnf` 或 `/etc/mysql/my.cnf`
 - **Valkey**: `/etc/valkey/valkey.conf`
@@ -71,9 +77,9 @@ SaltGoat 会自动检测以下路径：
 - **网络配置**: 自动获取服务器IP地址
 
 #### 3. 配置管理
-- **环境变量**: 通过 `.env` 文件管理
-- **默认配置**: 内置安全的默认值
-- **Salt状态**: 使用Salt状态文件确保一致性
+- **Pillar 文件**: 通过 `salt/pillar/*.sls` 管理凭据与区域设置
+- **命令行覆盖**: 安装命令支持 `--mysql-password` 等参数临时覆盖
+- **Salt 状态**: 使用 Salt 状态文件确保一致性
 
 ### 📊 验证安装一致性
 
@@ -92,7 +98,7 @@ SaltGoat 配置一致性测试
 ==========================================
 1. 路径检测测试:
 ----------------------------------------
-  Nginx: /usr/local/nginx/conf/nginx.conf ✅
+  Nginx: /etc/nginx/nginx.conf ✅
   PHP: 8.3 (/etc/php/8.3/fpm/php.ini) ✅
   MySQL: /etc/mysql/mysql.conf.d/lemp.cnf ✅
 
@@ -147,19 +153,27 @@ SaltGoat 配置一致性测试
 
 ### 🔒 安全配置
 
-#### 默认密码
-安装完成后，运行以下命令查看所有密码：
+#### 密码管理
+- `saltgoat passwords`：读取 Pillar 与实际配置，汇总 MySQL、Valkey、RabbitMQ、Webmin、phpMyAdmin 的当前密码。
+- `saltgoat passwords --refresh`：在编辑 Pillar 后刷新缓存并重新应用核心服务状态，确保新密码立即生效。
+- 安装完成的摘要同样会提示 `versions`、`status`、`passwords` 三个常用命令，建议记录初始输出。
+
 ```bash
+# 查看当前凭据
 saltgoat passwords
+
+# 编辑 pillar 后重新渲染密码相关状态
+saltgoat passwords --refresh
 ```
 
 #### 修改密码
 ```bash
-# 修改MySQL密码
+# 修改 MySQL 密码（交互式）
 saltgoat database mysql password
 
-# 修改其他服务密码
-saltgoat passwords change
+# 其他服务推荐在 Pillar 中编辑后执行 --refresh
+nano salt/pillar/saltgoat.sls
+saltgoat passwords --refresh
 ```
 
 ### 🎛️ 管理面板安装

@@ -1,5 +1,29 @@
 # SaltGoat 更新日志
 
+## [0.9.9] - 2025-10-25
+
+### 🖥️ CLI 体验
+- 重写 `saltgoat help` 主菜单与各子菜单，统一使用彩色标题、命令行对齐布局，并补充 Nginx、监控、诊断、面板等详细指令说明，帮助新人快速上手。
+
+### 🛠️ Magento 调优
+- `optional.magento-optimization` State 不再使用易匹配过多的 `file.line`，改用安全的 `file.replace` / `file.managed` 操作，Salt 3000 系列及 dry-run 全部通过测试。
+- `tests/test_magento_optimization.sh` 干跑验证已更新逻辑，确保模板在 CI 与本地均可渲染。
+
+### 📘 文档
+- `docs/INSTALL.md` 增补 Pillar 初始化 / 查看 / 刷新的操作说明，并记录 `saltgoat passwords --refresh` 的最佳实践流程。
+
+## [0.9.8] - 2025-10-25
+
+### ⚙️ 配置管理
+- **Pillar 优先**：移除 `.env` 流程，新增 `saltgoat pillar init/show/refresh`，脚本会安全写入 `salt/pillar/saltgoat.sls` 并自动刷新 Pillar。
+- **快速同步密码**：`saltgoat passwords --refresh` 会刷新 Pillar 并重新应用核心服务状态，`saltgoat install all` 结束后直接输出版本、状态与密码。
+- **文档更新**：README/INSTALL 指南改为 Pillar-first，强调默认密码需立即替换。
+
+### 🧰 Magento 优化
+- **兼容旧版 Salt**：优化 state 不再依赖 `combine/merge` 过滤器，同时保留 overrides 能力并输出结构化报告。
+- **可选执行**：安装流程仅在传入 `--optimize-magento` 时才执行调优，避免自动失败阻塞安装。
+- **CI 保障**：新增 `tests/test_magento_optimization.sh` 并在 GitHub Actions 运行 dry-run，及早发现模板回归。
+
 ## [0.9.7] - 2025-10-24
 
 ### 🛠️ Valkey 稳定性补丁
@@ -457,7 +481,7 @@ saltgoat magetools convert magento2 mysite
 - **TLS安全增强**: 改进SMTP TLS配置，支持Microsoft 365和Gmail等主流邮件服务商
 
 ### 🔧 系统管理改进
-- **环境变量管理**: 支持通过 `.env` 文件管理邮件配置
+- **环境变量管理（已废弃）**: 旧版本支持通过 `.env` 文件管理邮件配置
 - **配置一致性**: 确保Postfix配置与环境变量保持同步
 - **错误处理**: 改进邮件配置错误处理和诊断信息
 
@@ -611,7 +635,7 @@ saltgoat magetools convert magento2 mysite
 - **灵活配置匹配**: 使用正则表达式匹配各种配置值格式，适应不同系统环境
 
 ### 🔧 功能增强
-- **Nginx配置优化**: 自动检测配置文件路径（支持`/usr/local/nginx/conf/nginx.conf`和`/etc/nginx/nginx.conf`）
+- **Nginx配置优化**: 自动检测配置文件路径（支持`/etc/nginx/nginx.conf`）
 - **PHP版本自动检测**: 支持PHP 8.3, 8.2, 8.1, 8.0, 7.4的自动检测和配置
 - **服务名称自动识别**: 自动检测PHP-FPM服务名称和可执行文件路径
 - **错误处理改进**: 提供更清晰的错误信息和调试输出
@@ -760,3 +784,13 @@ saltgoat magetools convert magento2 mysite
 - Salt原生功能
 - 自动化部署
 - 错误处理机制
+# [Unreleased]
+
+### ⚙️ 配置管理
+- 取消 `.env` 流程，统一通过 `salt/pillar/saltgoat.sls` 管理凭据
+- 安装脚本安全写入 Pillar（无 `/tmp` 权限问题），安装总结直接展示版本/状态/密码
+- 新增 `saltgoat pillar` 子命令（init/show/refresh）与 `saltgoat passwords --refresh` 辅助同步
+- 更新维护脚本、RabbitMQ/Valkey 工具及文档以使用 Pillar 默认值
+
+### 🧪 验证
+- 新增 `tests/test_magento_optimization.sh` 并在 CI 执行 Dry-run，确保 Magento 优化 State 可渲染

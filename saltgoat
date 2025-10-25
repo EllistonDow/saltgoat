@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore', message='.*spwd.*')
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_VERSION="0.9.7"
+SCRIPT_VERSION="0.9.9"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -33,13 +33,7 @@ fi
 source "${SCRIPT_DIR}/lib/logger.sh"
 source "${SCRIPT_DIR}/lib/utils.sh"
 source "${SCRIPT_DIR}/lib/config.sh"
-source "${SCRIPT_DIR}/lib/env.sh"
 source "${SCRIPT_DIR}/lib/help.sh"
-
-# 自动加载环境配置
-if [[ -f "${SCRIPT_DIR}/.env" ]]; then
-    load_env_config "${SCRIPT_DIR}/.env" >/dev/null 2>&1
-fi
 
 # 加载核心功能
 source "${SCRIPT_DIR}/core/install.sh"
@@ -94,10 +88,8 @@ show_status() {
     
     # 使用systemctl直接检查服务状态，避免Salt调用
     # 检查Nginx状态 - 支持源码编译和包管理器安装
-    if command -v nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx 2>/dev/null; then
+    if systemctl is-active --quiet nginx 2>/dev/null; then
         echo "Nginx: active (systemd)"
-    elif [[ -f "/usr/local/nginx/sbin/nginx" ]] && pgrep -f "nginx: master process" >/dev/null 2>&1; then
-        echo "Nginx: active (manual)"
     elif command -v nginx >/dev/null 2>&1 && pgrep -f "nginx: master process" >/dev/null 2>&1; then
         echo "Nginx: active (manual)"
     else
@@ -114,7 +106,11 @@ show_versions() {
     log_info "版本信息:"
     echo "SaltGoat: $SCRIPT_VERSION"
     echo "Salt: $(salt-call --version | head -1)"
-    echo "Nginx: $(nginx -v 2>&1 | head -1)"
+    if command -v nginx >/dev/null 2>&1; then
+        echo "Nginx: $(nginx -v 2>&1 | head -1)"
+    else
+        echo "Nginx: 未安装"
+    fi
     echo "MySQL: $(mysql --version)"
     echo "PHP: $(php -v | head -1)"
     echo "Valkey: $(valkey-server --version)"
@@ -148,28 +144,131 @@ show_versions() {
 show_passwords() {
     log_info "实际配置的密码:"
     
-    # MySQL 密码 - 从 .env 文件获取实际使用的密码
-    local mysql_pass=$(grep "MYSQL_PASSWORD=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d"'" -f2)
+    # MySQL 密码 - 来自 Pillar
+    local mysql_pass
+    mysql_pass=$(get_local_pillar_value mysql_password)
     echo "MySQL Root: ${mysql_pass:-未知}"
     
     # Valkey 密码 - 从配置文件获取
     local valkey_pass=$(sudo cat /etc/valkey/valkey.conf 2>/dev/null | grep "requirepass" | awk '{print $2}' | head -1)
     echo "Valkey: ${valkey_pass:-未知}"
     
-    # RabbitMQ 密码 - 从 .env 文件获取实际使用的密码
-    local rabbitmq_pass=$(grep "RABBITMQ_PASSWORD=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d"'" -f2)
+    # RabbitMQ 密码 - 来自 Pillar
+    local rabbitmq_pass
+    rabbitmq_pass=$(get_local_pillar_value rabbitmq_password)
     echo "RabbitMQ Admin: ${rabbitmq_pass:-未知}"
     
-    # Webmin 密码 - 从 .env 文件获取实际使用的密码
-    local webmin_pass=$(grep "WEBMIN_PASSWORD=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d"'" -f2)
+    # Webmin 密码 - 来自 Pillar
+    local webmin_pass
+    webmin_pass=$(get_local_pillar_value webmin_password)
     echo "Webmin: ${webmin_pass:-未知}"
     
-    # phpMyAdmin 密码 - 从 .env 文件获取实际使用的密码
-    local phpmyadmin_pass=$(grep "PHPMYADMIN_PASSWORD=" "${SCRIPT_DIR}/.env" 2>/dev/null | cut -d"'" -f2)
+    # phpMyAdmin 密码 - 来自 Pillar
+    local phpmyadmin_pass
+    phpmyadmin_pass=$(get_local_pillar_value phpmyadmin_password)
     echo "phpMyAdmin: ${phpmyadmin_pass:-未知}"
     
     echo ""
     log_info "注意: 这些是实际服务配置的密码"
+}
+
+
+generate_random_secret() {
+    if command_exists openssl; then
+        openssl rand -base64 18 | tr -d '\n'
+    else
+        python3 - <<'PY'
+import secrets, string
+alphabet = string.ascii_letters + string.digits + '!@#$%^&*'
+print(''.join(secrets.choice(alphabet) for _ in range(20)))
+PY
+    fi
+}
+
+pillar_file_path() {
+    echo "${SCRIPT_DIR}/salt/pillar/saltgoat.sls"
+}
+
+pillar_show() {
+    local pillar_file
+    pillar_file="$(pillar_file_path)"
+    if [[ -f "$pillar_file" ]]; then
+        log_highlight "当前 Pillar 配置 ($pillar_file):"
+        cat "$pillar_file"
+    else
+        log_warning "Pillar 文件不存在: $pillar_file"
+        log_info "可以使用 'saltgoat pillar init' 创建默认模板"
+    fi
+}
+
+pillar_refresh() {
+    log_highlight "刷新 Pillar 缓存..."
+    if sudo salt-call --local saltutil.refresh_pillar >/dev/null; then
+        log_success "Pillar 缓存已刷新"
+    else
+        log_warning "刷新 Pillar 缓存时出现警告"
+    fi
+}
+
+pillar_init() {
+    local pillar_file
+    pillar_file="$(pillar_file_path)"
+
+    if [[ -f "$pillar_file" ]]; then
+        log_warning "Pillar 文件已存在: $pillar_file"
+        read -r -p "是否覆盖现有文件? (y/N): " reply
+        if [[ ! "$reply" =~ ^[Yy]$ ]]; then
+            log_info "已取消 Pillar 初始化"
+            return 0
+        fi
+    fi
+
+    local mysql_pass valkey_pass rabbitmq_pass webmin_pass phpmyadmin_pass
+    mysql_pass=$(generate_random_secret)
+    valkey_pass=$(generate_random_secret)
+    rabbitmq_pass=$(generate_random_secret)
+    webmin_pass=$(generate_random_secret)
+    phpmyadmin_pass=$(generate_random_secret)
+
+    sudo mkdir -p "${SCRIPT_DIR}/salt/pillar"
+    local tmp_file
+    tmp_file=$(mktemp "${SCRIPT_DIR}/salt/pillar/.saltgoat.XXXXXX") || {
+        log_error "无法创建临时 Pillar 文件"
+        return 1
+    }
+
+    cat >"$tmp_file" <<EOF
+mysql_password: '$mysql_pass'
+valkey_password: '$valkey_pass'
+rabbitmq_password: '$rabbitmq_pass'
+webmin_password: '$webmin_pass'
+phpmyadmin_password: '$phpmyadmin_pass'
+ssl_email: 'admin@example.com'
+timezone: 'America/Los_Angeles'
+language: 'en_US.UTF-8'
+smtp_host: ''
+smtp_user: ''
+smtp_password: ''
+smtp_from_email: ''
+smtp_from_name: 'SaltGoat Alerts'
+EOF
+
+    sudo mv "$tmp_file" "$pillar_file"
+    sudo chmod 600 "$pillar_file"
+
+    log_success "Pillar 模板已生成: $pillar_file"
+    pillar_refresh
+    pillar_show
+}
+
+refresh_password_states() {
+    log_highlight "刷新 Pillar 并重新应用密码相关配置..."
+    sudo salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || true
+    sudo salt-call --local state.apply core.mysql >/dev/null 2>&1 || true
+    sudo salt-call --local state.apply optional.valkey >/dev/null 2>&1 || true
+    sudo salt-call --local state.apply optional.rabbitmq >/dev/null 2>&1 || true
+    sudo salt-call --local state.apply optional.webmin >/dev/null 2>&1 || true
+    log_success "密码相关状态已重新应用"
 }
 
 
@@ -232,23 +331,20 @@ case "$1" in
                 ;;
         esac
         ;;
-    "env")
+    "pillar")
         case "$2" in
-            "create")
-                create_env_config "$3"
+            ""|"show")
+                pillar_show
                 ;;
-            "show")
-                show_env_config
+            "init")
+                pillar_init
                 ;;
-            "load")
-                load_env_config "$3"
-                ;;
-            "status")
-                show_env_config
+            "refresh")
+                pillar_refresh
                 ;;
             *)
-                log_error "未知的环境配置选项: $2"
-                log_info "支持: create, show, load, status"
+                log_error "未知的 Pillar 操作: ${2:-<none>}"
+                log_info "支持: show, init, refresh"
                 exit 1
                 ;;
         esac
@@ -267,13 +363,9 @@ case "$1" in
                 log_highlight "检测当前 SSH 端口..."
                 detect_ssh_port
                 ;;
-            "reload-env")
-                log_highlight "重新加载环境变量..."
-                reload_environment
-                ;;
             *)
                 log_error "未知的 System 操作: $2"
-                log_info "支持: install, uninstall, ssh-port, reload-env"
+                log_info "支持: install, uninstall, ssh-port"
                 exit 1
                 ;;
         esac
@@ -573,6 +665,9 @@ case "$1" in
         show_versions
         ;;
     "passwords")
+        if [[ "$2" == "--refresh" || "$2" == "refresh" ]]; then
+            refresh_password_states
+        fi
         log_highlight "查看配置的密码..."
         show_passwords
         ;;
