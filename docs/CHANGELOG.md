@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [0.9.14] - 2025-10-25
+
+### Changes
+- 修改 8 个文件: docs/CHANGELOG.md, lib/help.sh, lib/logger.sh, modules/analyse/analyse.sh, salt/pillar/saltgoat.sls 等
+
+
 ## [0.9.13] - 2025-10-25
 
 ### Changes
@@ -40,7 +46,8 @@
 
 ### 📊 分析平台
 - 新增 `saltgoat analyse install matomo`，通过 Salt 状态一次性安装 Matomo、Nginx 站点与定时任务，支持 Pillar 覆盖安装目录与域名。
-- `optional.matomo` state 提供默认依赖、权限和 Nginx 模板，安装完成后输出访问与后续操作指引。
+- `optional.analyse` state 提供默认依赖、权限和 Nginx 模板，安装完成后输出访问与后续操作指引。
+- Pillar 现在支持 `matomo:db.*` 开关与凭据，State 可自动创建数据库/用户；CLI 增加 `--with-db`、`--db-*`、`--db-provider`、`--db-admin-*` 及 `--init-pillar` 选项，用于引导 Pillar 并传入运行时覆盖，默认会读取 `/etc/salt/mysql_saltuser.cnf` 的 saltuser 账户作为管理凭据。
 
 ### 🔁 Git 发布助手
 - `saltgoat git push [version] [note]` 默认补丁号 +0.0.1，亦可指定自定义版本；自动检测重复版本/tag 后再发布。

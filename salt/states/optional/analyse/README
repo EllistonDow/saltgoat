@@ -3,9 +3,19 @@ Salt optional.analyse
 
 Pillar example::
 
-    matomo:
-      install_dir: /var/www/matomo
-      domain: analytics.example.com
-      php_fpm_socket: /run/php/php8.3-fpm.sock
-      owner: www-data
-      group: www-data
+matomo:
+  install_dir: /var/www/matomo
+  domain: analytics.example.com
+  php_fpm_socket: /run/php/php8.3-fpm.sock
+  owner: www-data
+  group: www-data
+  db:
+    enabled: true
+    provider: existing   # existing | mariadb
+    name: matomo
+    user: matomo
+    password: changeme
+    host: localhost
+    socket: /var/run/mysqld/mysqld.sock
+    admin_user: root
+    admin_password: ''   # 默认读取全局 mysql_password，如保留空值

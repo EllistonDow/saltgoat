@@ -158,18 +158,28 @@ show_analyse_help() {
     help_note "可在 Pillar 的 matomo 节点中覆盖安装目录、域名、PHP-FPM 套接字等参数。"
     echo ""
 
+    help_subtitle "🗄️ 数据库引导"
+    help_command "--with-db"                      "启用数据库自动配置（默认使用 Pillar 中的 matomo:db.* 设置）"
+    help_command "--db-name|--db-user|--db-host|--db-socket" "覆盖数据库名称/用户/主机/套接字"
+    help_command "--db-provider <existing|mariadb>" "选择数据库提供者，existing 复用现有 MySQL/Percona，mariadb 将安装 MariaDB"
+    help_command "--db-password"                  "覆盖数据库密码，未指定时自动生成随机密码"
+    help_command "--db-admin-user|--db-admin-password" "用于创建数据库的管理账号；若系统存在 /etc/salt/mysql_saltuser.cnf 会自动读取 saltuser 凭据"
+    help_command "--init-pillar"                  "若 Pillar 尚无 matomo 配置，自动写入默认块并刷新 Pillar"
+    help_note "首次执行可结合 --init-pillar --with-db，一次性写入 Pillar 并创建数据库/用户。"
+    echo ""
+
     help_subtitle "📋 安装后步骤"
     help_command "1" "浏览 http://<域名>/ 进入 Matomo 安装向导"
-    help_command "2" "使用现有 MySQL 凭据创建数据库并完成配置"
+    help_command "2" "若启用了 --with-db，可直接使用自动创建的数据库/用户信息"
     help_command "3" "如需 HTTPS，可在安装后执行 saltgoat nginx add-ssl"
     echo ""
 
     help_subtitle "🛠 常用命令"
-    help_command "saltgoat analyse install matomo" "部署 Matomo 及其依赖、Nginx 虚拟主机"
-    help_command "sudo salt-call --local state.apply optional.matomo" "在已有部署上重新应用配置"
+    help_command "saltgoat analyse install matomo --with-db --init-pillar" "写入默认 Pillar、创建数据库后部署 Matomo"
+    help_command "sudo salt-call --local state.apply optional.analyse" "在已有部署上重新应用配置"
     echo ""
 
-    help_note "Matomo 安装包含 PHP 依赖、Nginx 虚拟主机和文件权限。数据库创建需在向导中完成。"
+    help_note "Matomo 安装包含 PHP 依赖、Nginx 虚拟主机和文件权限；--with-db 可选地预建数据库及授权。"
 }
 
 # 安装帮助

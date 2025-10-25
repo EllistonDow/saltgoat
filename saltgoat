@@ -34,51 +34,70 @@ source "${SCRIPT_DIR}/lib/logger.sh"
 source "${SCRIPT_DIR}/lib/utils.sh"
 source "${SCRIPT_DIR}/lib/help.sh"
 
+declare -A SALTGOAT_MODULE_FILES=()
+declare -A SALTGOAT_MODULE_LOADED=()
+
+register_module() {
+    local key="$1"
+    local path="$2"
+    SALTGOAT_MODULE_FILES["$key"]="$path"
+}
+
+require_module() {
+    local key="$1"
+    local file="${SALTGOAT_MODULE_FILES[$key]:-}"
+    if [[ -z "$file" ]]; then
+        return 0
+    fi
+    if [[ -n "${SALTGOAT_MODULE_LOADED[$key]:-}" ]]; then
+        return 0
+    fi
+    # shellcheck disable=SC1090
+    source "$file"
+    SALTGOAT_MODULE_LOADED["$key"]=1
+}
+
 # 加载核心功能
 source "${SCRIPT_DIR}/core/install.sh"
 source "${SCRIPT_DIR}/core/system.sh"
 source "${SCRIPT_DIR}/core/optimize.sh"
 
-# 加载服务管理
-source "${SCRIPT_DIR}/services/nginx.sh"
-source "${SCRIPT_DIR}/services/rabbitmq.sh"
-source "${SCRIPT_DIR}/modules/maintenance/backup.sh"
-source "${SCRIPT_DIR}/modules/maintenance/logs.sh"
-source "${SCRIPT_DIR}/modules/security/security.sh"
-source "${SCRIPT_DIR}/services/performance.sh"
-source "${SCRIPT_DIR}/modules/security/ssl.sh"
-source "${SCRIPT_DIR}/modules/maintenance/maintenance.sh"
-source "${SCRIPT_DIR}/modules/automation/reports.sh"
-source "${SCRIPT_DIR}/modules/automation/automation.sh"
-source "${SCRIPT_DIR}/services/saltgui.sh"
-source "${SCRIPT_DIR}/modules/optimization/auto-tune.sh"
-source "${SCRIPT_DIR}/modules/optimization/benchmark.sh"
-source "${SCRIPT_DIR}/modules/optimization/optimize.sh"
-source "${SCRIPT_DIR}/modules/optimization/speedtest.sh"
-source "${SCRIPT_DIR}/monitoring/system.sh"
-source "${SCRIPT_DIR}/services/database.sh"
-source "${SCRIPT_DIR}/services/state.sh"
-source "${SCRIPT_DIR}/modules/monitoring/monitor-integration.sh"
-source "${SCRIPT_DIR}/modules/monitoring/monitoring-levels.sh"
-source "${SCRIPT_DIR}/modules/monitoring/smart-monitoring.sh"
-source "${SCRIPT_DIR}/modules/monitoring/dynamic-monitoring.sh"
-source "${SCRIPT_DIR}/modules/monitoring/cost-optimized-monitoring.sh"
-source "${SCRIPT_DIR}/modules/monitoring/grafana-email.sh"
-source "${SCRIPT_DIR}/modules/diagnose/diagnose.sh"
-source "${SCRIPT_DIR}/modules/version-lock/version-lock.sh"
-source "${SCRIPT_DIR}/modules/profile/performance-analysis.sh"
-source "${SCRIPT_DIR}/modules/magetools/magetools.sh"
-source "${SCRIPT_DIR}/modules/analyse/analyse.sh"
-source "${SCRIPT_DIR}/modules/git/git.sh"
-
-# 加载管理面板模块
-source "${SCRIPT_DIR}/modules/cockpit/cockpit.sh"
-source "${SCRIPT_DIR}/modules/adminer/adminer.sh"
-source "${SCRIPT_DIR}/modules/uptime-kuma/uptime-kuma.sh"
-
-# 加载监控功能
-source "${SCRIPT_DIR}/monitoring/memory.sh"
-source "${SCRIPT_DIR}/monitoring/schedule.sh"
+# 注册按需加载模块
+register_module "nginx" "${SCRIPT_DIR}/services/nginx.sh"
+register_module "rabbitmq" "${SCRIPT_DIR}/services/rabbitmq.sh"
+register_module "backup" "${SCRIPT_DIR}/modules/maintenance/backup.sh"
+register_module "logs" "${SCRIPT_DIR}/modules/maintenance/logs.sh"
+register_module "maintenance" "${SCRIPT_DIR}/modules/maintenance/maintenance.sh"
+register_module "security" "${SCRIPT_DIR}/modules/security/security.sh"
+register_module "ssl" "${SCRIPT_DIR}/modules/security/ssl.sh"
+register_module "performance" "${SCRIPT_DIR}/services/performance.sh"
+register_module "reports" "${SCRIPT_DIR}/modules/automation/reports.sh"
+register_module "automation" "${SCRIPT_DIR}/modules/automation/automation.sh"
+register_module "saltgui" "${SCRIPT_DIR}/services/saltgui.sh"
+register_module "optimize" "${SCRIPT_DIR}/modules/optimization/optimize.sh"
+register_module "auto-tune" "${SCRIPT_DIR}/modules/optimization/auto-tune.sh"
+register_module "benchmark" "${SCRIPT_DIR}/modules/optimization/benchmark.sh"
+register_module "speedtest" "${SCRIPT_DIR}/modules/optimization/speedtest.sh"
+register_module "monitor" "${SCRIPT_DIR}/monitoring/system.sh"
+register_module "monitoring-core" "${SCRIPT_DIR}/modules/monitoring/monitor-integration.sh"
+register_module "monitoring-levels" "${SCRIPT_DIR}/modules/monitoring/monitoring-levels.sh"
+register_module "monitoring-smart" "${SCRIPT_DIR}/modules/monitoring/smart-monitoring.sh"
+register_module "monitoring-dynamic" "${SCRIPT_DIR}/modules/monitoring/dynamic-monitoring.sh"
+register_module "monitoring-cost" "${SCRIPT_DIR}/modules/monitoring/cost-optimized-monitoring.sh"
+register_module "monitoring-grafana" "${SCRIPT_DIR}/modules/monitoring/grafana-email.sh"
+register_module "database" "${SCRIPT_DIR}/services/database.sh"
+register_module "state" "${SCRIPT_DIR}/services/state.sh"
+register_module "diagnose" "${SCRIPT_DIR}/modules/diagnose/diagnose.sh"
+register_module "version-lock" "${SCRIPT_DIR}/modules/version-lock/version-lock.sh"
+register_module "profile" "${SCRIPT_DIR}/modules/profile/performance-analysis.sh"
+register_module "magetools" "${SCRIPT_DIR}/modules/magetools/magetools.sh"
+register_module "analyse" "${SCRIPT_DIR}/modules/analyse/analyse.sh"
+register_module "git" "${SCRIPT_DIR}/modules/git/git.sh"
+register_module "cockpit" "${SCRIPT_DIR}/modules/cockpit/cockpit.sh"
+register_module "adminer" "${SCRIPT_DIR}/modules/adminer/adminer.sh"
+register_module "uptime-kuma" "${SCRIPT_DIR}/modules/uptime-kuma/uptime-kuma.sh"
+register_module "memory" "${SCRIPT_DIR}/monitoring/memory.sh"
+register_module "schedule" "${SCRIPT_DIR}/monitoring/schedule.sh"
 
 # 显示横幅
 show_banner
@@ -273,41 +292,6 @@ refresh_password_states() {
 }
 
 
-# RabbitMQ 处理函数（临时内联）
-rabbitmq_handler() {
-    case "$2" in
-        "create")
-            if [[ -z "$3" || -z "$4" ]]; then
-                log_error "用法: saltgoat rabbitmq create <username> <password>"
-                exit 1
-            fi
-            log_highlight "创建 RabbitMQ 用户: $3"
-            # 这里应该调用实际的创建函数
-            log_success "RabbitMQ 用户创建成功: $3"
-            ;;
-        "list")
-            log_highlight "列出所有 RabbitMQ 用户..."
-            # 这里应该调用实际的列表函数
-            echo "用户列表:"
-            echo "- admin"
-            ;;
-        "delete")
-            if [[ -z "$3" ]]; then
-                log_error "用法: saltgoat rabbitmq delete <username>"
-                exit 1
-            fi
-            log_highlight "删除 RabbitMQ 用户: $3"
-            # 这里应该调用实际的删除函数
-            log_success "RabbitMQ 用户删除成功: $3"
-            ;;
-        *)
-            log_error "未知的 RabbitMQ 操作: $2"
-            log_info "支持: create, list, delete"
-            exit 1
-            ;;
-    esac
-}
-
 # 检查权限
 check_permissions "$@"
 
@@ -372,12 +356,15 @@ case "$1" in
         esac
         ;;
     "nginx")
+        require_module "nginx"
         nginx_handler "$@"
         ;;
     "rabbitmq")
+        require_module "rabbitmq"
         rabbitmq_handler "$@"
         ;;
     "backup")
+        require_module "backup"
         case "$2" in
             "create")
                 backup_create "$3"
@@ -424,6 +411,7 @@ case "$1" in
         esac
         ;;
     "logs")
+        require_module "logs"
         case "$2" in
             "view")
                 log_view "$3" "$4"
@@ -448,6 +436,7 @@ case "$1" in
         esac
         ;;
     "security")
+        require_module "security"
         case "$2" in
             "scan")
                 security_full_scan
@@ -484,12 +473,15 @@ case "$1" in
         esac
         ;;
     "analyse")
+        require_module "analyse"
         analyse_handler "${@:2}"
         ;;
     "git")
+        require_module "git"
         git_handler "${@:2}"
         ;;
         "performance")
+            require_module "performance"
             case "$2" in
                 "cpu")
                     performance_cpu
@@ -529,6 +521,7 @@ case "$1" in
             esac
             ;;
         "ssl")
+            require_module "ssl"
             case "$2" in
                 "generate-self-signed")
                     ssl_generate_self_signed "$3" "$4"
@@ -565,6 +558,7 @@ case "$1" in
             esac
             ;;
         "monitor")
+            require_module "monitor"
             case "$2" in
                 "system")
                     monitor_system_status
@@ -607,15 +601,19 @@ case "$1" in
             esac
             ;;
         "database")
+            require_module "database"
             database_handler "$2" "$3" "$4" "$5" "$6" "$7"
             ;;
     "memory")
+        require_module "memory"
         memory_handler "$@"
         ;;
     "schedule")
+        require_module "schedule"
         schedule_handler "$@"
         ;;
     "optimize")
+        require_module "optimize"
         case "$2" in
             "magento")
                 log_highlight "开始 Magento2 专用优化..."
@@ -630,12 +628,15 @@ case "$1" in
         esac
         ;;
     "auto-tune")
+        require_module "auto-tune"
         auto_tune
         ;;
     "benchmark")
+        require_module "benchmark"
         benchmark
         ;;
     "speedtest")
+        require_module "speedtest"
         case "$2" in
             "quick")
                 speedtest_quick
@@ -652,15 +653,19 @@ case "$1" in
         esac
         ;;
     "maintenance")
+        require_module "maintenance"
         maintenance_handler "$2" "$3" "$4" "$5"
         ;;
     "reports")
+        require_module "reports"
         report_handler "$2" "$3" "$4" "$5"
         ;;
     "automation")
+        require_module "automation"
         automation_handler "$2" "$3" "$4" "$5"
         ;;
     "saltgui")
+        require_module "saltgui"
         saltgui_handler "$2" "$3" "$4" "$5"
         ;;
     "status")
@@ -688,9 +693,11 @@ case "$1" in
         ;;
     "security-scan")
         log_highlight "SaltGoat 安全扫描..."
+        require_module "security"
         security_full_scan
         ;;
     "state")
+        require_module "state"
         case "$2" in
             "list")
                 log_highlight "SaltGoat 状态列表..."
@@ -715,6 +722,7 @@ case "$1" in
         esac
         ;;
     "diagnose")
+        require_module "diagnose"
         if [[ -z "$2" ]]; then
             log_error "用法: saltgoat diagnose <type>"
             log_info "支持的类型:"
@@ -734,6 +742,7 @@ case "$1" in
         diagnose_handler "$2"
         ;;
     "version-lock")
+        require_module "version-lock"
         if [[ -z "$2" ]]; then
             log_error "用法: saltgoat version-lock <command>"
             log_info "支持的命令:"
@@ -748,6 +757,7 @@ case "$1" in
         version_lock_handler "$2"
         ;;
     "profile")
+        require_module "profile"
         if [[ -z "$2" ]]; then
             log_error "用法: saltgoat profile <command>"
             log_info "支持的命令:"
@@ -798,6 +808,12 @@ case "$1" in
         esac
         ;;
     "monitoring")
+        require_module "monitoring-core"
+        require_module "monitoring-levels"
+        require_module "monitoring-smart"
+        require_module "monitoring-dynamic"
+        require_module "monitoring-cost"
+        require_module "monitoring-grafana"
         case "$2" in
             "prometheus")
                 if [[ -n "$3" ]]; then
@@ -878,15 +894,19 @@ case "$1" in
         esac
         ;;
     "magetools")
+        require_module "magetools"
         magetools_handler "$2" "$3" "$4" "$5"
         ;;
     "cockpit")
+        require_module "cockpit"
         cockpit_main "$2" "$3" "$4"
         ;;
     "adminer")
+        require_module "adminer"
         adminer_main "$2" "$3" "$4"
         ;;
     "uptime-kuma")
+        require_module "uptime-kuma"
         uptime_kuma_main "$2" "$3" "$4"
         ;;
     "help"|"--help"|"-h"|"")

@@ -33,6 +33,10 @@ log_highlight() {
     echo -e "${CYAN}[HIGHLIGHT]${NC} $1"
 }
 
+log_note() {
+    echo -e "${YELLOW}[NOTE]${NC} $1"
+}
+
 # 显示横幅
 show_banner() {
     echo "=========================================="
