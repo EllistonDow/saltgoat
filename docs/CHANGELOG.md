@@ -1,12 +1,18 @@
 # SaltGoat 更新日志
 
+## [0.9.12] - 2025-10-25
+
+### Changes
+- 修改 2 个文件: docs/CHANGELOG.md, saltgoat
+
+
 ## [0.9.11] - 2025-10-25
 
 ### Changes
 - 修改 71 个文件: core/install.sh, core/optimize.sh, core/system.sh, docs/CHANGELOG.md, lib/config.sh 等
 
 
-## [0.9.10] - 2025-10-25
+## [0.9.11] - 2025-10-25
 
 ### 🧭 CLI 导航
 - `saltgoat help install|pillar|optimize|speedtest` 全面升级为彩色分组布局，快速区分常用动作、进阶参数与示例流程。
