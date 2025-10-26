@@ -252,7 +252,8 @@ show_nginx_help() {
     help_subtitle "🛠 运行操作"
     help_command "reload"                             "平滑重载 nginx，保持现有连接"
     help_command "test"                               "执行 nginx -t 语法检查"
-    help_command "add-ssl <site> <domains> [email]"   "申请或续期 Let's Encrypt（默认使用 Pillar 邮箱）"
+    help_command "add-ssl <site> [domain] [email] [-dry-on]"   "申请或续期 Let's Encrypt（默认读取 Pillar 邮箱）"
+    help_note "邮箱默认取自 salt/pillar/nginx.sls 的 ssl_email，可在命令后追加覆盖。"
     echo ""
 
     help_subtitle "🛡️ 安全强化"
@@ -710,7 +711,7 @@ show_ssl_help() {
     echo ""
 
     help_subtitle "🔐 Let’s Encrypt 集成"
-    help_command "saltgoat nginx add-ssl <site> <domain> [email]" "结合 Nginx 虚拟主机申请/续期证书"
+    help_command "saltgoat nginx add-ssl <site> [domain] [email] [-dry-on]" "结合 Nginx 虚拟主机申请/续期证书"
     help_command "saltgoat ssl renew <domain> letsencrypt"        "手动触发 certbot 续期流程"
     echo ""
 

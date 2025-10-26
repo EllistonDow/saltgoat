@@ -164,6 +164,11 @@ run_git_release() {
     fi
 
     local tag_name="v${new_version}"
+    log_info "同步远端标签..."
+    (
+        cd "$repo_root" && git fetch origin --tags --force >/dev/null 2>&1 || true
+    )
+
     if remote_tag_exists "$repo_root" "$tag_name"; then
         if [[ "$dry_run" == "true" ]]; then
             log_warning "远程已有标签 ${tag_name}，正式发布前需要选择新的版本号或清理旧标签。"
@@ -232,9 +237,9 @@ run_git_release() {
             exit 1
         fi
 
-        if git push && git push --tags; then
+        if git push origin HEAD && git push origin "v${new_version}"; then
             log_success "已推送 v${new_version} 到远程仓库"
-            log_note "如需撤销本次发布：git tag -d v${new_version}; git reset --hard HEAD~1"
+            log_note "如需撤销本次发布：git push origin :refs/tags/v${new_version}; git reset --hard HEAD~1"
         else
             log_error "git push 失败，请检查网络或凭据"
             log_note "可执行：git tag -d v${new_version}; git reset --hard HEAD~1 回滚版本号与提交"

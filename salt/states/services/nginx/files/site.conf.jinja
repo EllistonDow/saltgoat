@@ -52,6 +52,11 @@ server {
     client_max_body_size {{ site_cfg.get('client_max_body_size', settings_cfg.get('client_max_body_size')) }};
 
 {%- if site_cfg.get('ssl', {}).get('enabled') %}
+{%- if site_cfg.get('ssl', {}).get('redirect', True) %}
+    if ($scheme != "https") {
+        return 301 https://$host$request_uri;
+    }
+{%- endif %}
     ssl_certificate {{ site_cfg['ssl'].get('cert') }};
     ssl_certificate_key {{ site_cfg['ssl'].get('key') }};
     {%- if site_cfg['ssl'].get('protocols') %}

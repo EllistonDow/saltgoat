@@ -21,12 +21,13 @@ create_certbot_config_dir:
       - cmd: add_certbot_repository
 
 # 创建 Certbot 配置
+{% set ssl_email = salt['pillar.get']('nginx:ssl_email', salt['pillar.get']('ssl_email', 'admin@example.com')) %}
 configure_certbot:
   file.managed:
     - name: /etc/letsencrypt/cli.ini
     - contents: |
         # Certbot configuration
-        email = admin@example.com
+        email = {{ ssl_email }}
         agree-tos = true
         non-interactive = true
         expand = true

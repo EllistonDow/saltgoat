@@ -12,6 +12,8 @@ nginx:
       - bank.magento.tattoogoat.com
       listen:
       - port: 80
+      - port: 443
+        ssl: true
       root: /var/www/bank
       index:
       - index.php
@@ -29,6 +31,7 @@ nginx:
         key: /etc/letsencrypt/live/bank.magento.tattoogoat.com/privkey.pem
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
+        redirect: true
   csp:
     enabled: true
     level: 3
@@ -39,4 +42,4 @@ nginx:
     level: 5
     admin_path: /admin_tattoo
     module_path: /usr/lib/nginx/modules/ngx_http_modsecurity_module.so
-  ssl_email: -dry-on
+  ssl_email: ssl@tschenfeng.com

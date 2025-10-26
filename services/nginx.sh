@@ -91,9 +91,11 @@ PY
         local env_path="${root%/}/app/etc/env.php"
         if [[ -f "$env_path" ]]; then
             local front_name
+            # shellcheck disable=SC2016
             if [[ $EUID -ne 0 ]]; then
                 front_name=$(sudo env "MAGENTO_ENV_PATH=$env_path" php -r 'error_reporting(0); $app = @include getenv("MAGENTO_ENV_PATH"); if (is_array($app) && isset($app["backend"]["frontName"])) echo $app["backend"]["frontName"];' 2>/dev/null || true)
             else
+                # shellcheck disable=SC2016
                 front_name=$(MAGENTO_ENV_PATH="$env_path" php -r 'error_reporting(0); $app = @include getenv("MAGENTO_ENV_PATH"); if (is_array($app) && isset($app["backend"]["frontName"])) echo $app["backend"]["frontName"];' 2>/dev/null || true)
             fi
             if [[ -n "$front_name" ]]; then
@@ -141,8 +143,8 @@ EOF
 }
 
 read_pillar_value() {
-    local key="$1"
-    python3 <<'PY' 2>/dev/null
+    local key_path="${KEY_PATH:-$1}"
+    env KEY_PATH="$key_path" PILLAR_FILE="${PILLAR_FILE}" python3 <<'PY' 2>/dev/null
 import os
 import yaml
 from pathlib import Path
@@ -169,6 +171,144 @@ if value is not None:
     import json
     print(json.dumps(value))
 PY
+}
+
+collect_site_info() {
+    local site="$1"
+    SITE="$site" PILLAR_FILE="$PILLAR_FILE" python3 <<'PY'
+import json
+import os
+import yaml
+from pathlib import Path
+
+pillar_path = Path(os.environ.get("PILLAR_FILE", ""))
+site_name = os.environ.get("SITE", "")
+
+data = {}
+if pillar_path.exists():
+    try:
+        data = yaml.safe_load(pillar_path.read_text()) or {}
+    except Exception:
+        data = {}
+
+nginx = data.get("nginx") or {}
+site_cfg = (nginx.get("sites") or {}).get(site_name, {}) if site_name else {}
+
+root = site_cfg.get("root") or nginx.get("default_site_root") or (f"/var/www/{site_name}" if site_name else "/var/www/html")
+domains = site_cfg.get("server_name") or []
+if not domains and site_name:
+    domains = [site_name]
+email = data.get("ssl_email") or nginx.get("ssl_email") or ""
+
+print(json.dumps({
+    "root": root,
+    "domains": domains,
+    "email": email,
+}))
+PY
+}
+
+ensure_ssl_certificate() {
+    local site="$1"
+    local override_domain="${2:-}"
+
+    local info_json
+    if ! info_json=$(collect_site_info "$site"); then
+        log_warning "无法读取站点 ${site} 的配置信息，跳过证书申请。"
+        return 1
+    fi
+
+    if [[ -z "$info_json" ]]; then
+        log_warning "站点 ${site} 配置信息为空，跳过证书申请。"
+        return 1
+    fi
+
+    local root_path
+    local ssl_email
+    local -a domains=()
+
+    root_path=$(python3 - "$info_json" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+print(data.get("root", ""))
+PY
+)
+
+    ssl_email=$(python3 - "$info_json" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+print(data.get("email", ""))
+PY
+)
+
+    mapfile -t domains < <(python3 - "$info_json" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+for item in data.get("domains", []) or []:
+    if item:
+        print(item)
+PY
+)
+
+    if [[ -n "$override_domain" ]]; then
+        domains=("$override_domain" "${domains[@]}")
+    fi
+
+    # 去重，保留顺序
+    local -a unique=()
+    declare -A seen=()
+    local d
+    for d in "${domains[@]}"; do
+        [[ -z "$d" ]] && continue
+        if [[ -z "${seen[$d]:-}" ]]; then
+            unique+=("$d")
+            seen["$d"]=1
+        fi
+    done
+    domains=("${unique[@]}")
+
+    local primary="${domains[0]:-}"
+    if [[ -z "$primary" ]]; then
+        log_warning "未找到可用域名，跳过自动申请证书。"
+        return 0
+    fi
+
+    local cert_path="/etc/letsencrypt/live/${primary}/fullchain.pem"
+    if [[ -f "$cert_path" ]]; then
+        log_info "检测到现有证书: ${cert_path}"
+        return 0
+    fi
+
+    log_highlight "未检测到 ${primary} 的证书，尝试自动申请 Let's Encrypt 证书..."
+
+    if ! run_salt_call state.apply optional.certbot; then
+        log_error "安装/配置 Certbot 失败。"
+        return 1
+    fi
+
+    local -a certbot_cmd=(certbot certonly --webroot -w "$root_path")
+    for d in "${domains[@]}"; do
+        certbot_cmd+=(-d "$d")
+    done
+    if [[ -n "$ssl_email" && "$ssl_email" == *@* && "$ssl_email" != -* ]]; then
+        certbot_cmd+=(--email "$ssl_email")
+    else
+        log_warning "未检测到有效的 SSL 邮箱地址，使用 --register-unsafely-without-email。"
+        certbot_cmd+=(--register-unsafely-without-email)
+    fi
+    certbot_cmd+=(--agree-tos --non-interactive --keep-until-expiring --expand)
+
+    if [[ $EUID -ne 0 ]]; then
+        certbot_cmd=(sudo "${certbot_cmd[@]}")
+    fi
+
+    if "${certbot_cmd[@]}"; then
+        log_success "已成功申请证书: ${primary}"
+        return 0
+    fi
+
+    log_error "自动申请证书失败，请检查域名解析、80 端口及 Certbot 日志后重试。"
+    return 1
 }
 
 python_update() {
@@ -302,6 +442,32 @@ elif mode == "ssl":
             "prefer_server_ciphers": False,
         }
     )
+    listen = sites[site].setdefault("listen", [{"port": 80}])
+    # 标准化条目方便去重
+    normalized = []
+    for entry in listen:
+        if isinstance(entry, dict):
+            port = entry.get("port")
+            opts = {
+                "ssl": entry.get("ssl", False),
+                "options": entry.get("options"),
+            }
+            normalized.append((port, opts))
+            entry.pop("http2", None)
+            entry.pop("http_2", None)
+        else:
+            normalized.append((entry, {"ssl": False, "options": None}))
+
+    has_ssl_port = any(item[0] == 443 and item[1].get("ssl") for item in normalized)
+    if not has_ssl_port:
+        listen.append({"port": 443, "ssl": True})
+
+    # 确保 HTTP 监听存在，若缺失则补充 80
+    if not any(item[0] == 80 for item in normalized):
+        listen.insert(0, {"port": 80})
+
+    # 启用 HTTPS 重定向（可由 Pillar 使用 ssl.redirect=False 关闭）
+    ssl.setdefault("redirect", True)
     if email:
         nginx["ssl_email"] = email
     save()
@@ -559,11 +725,11 @@ cmd_test() {
 
 cmd_create() {
     local site="$1"
-    local domains="$2"
+    local domains_arg="$2"
     local root_path="${3:-}"
     local magento_flag="${4:-0}"
     ensure_pillar_file
-    MAGENTO_FLAG="$magento_flag" python_update create "$site" "$domains" "$root_path"
+    MAGENTO_FLAG="$magento_flag" python_update create "$site" "$domains_arg" "$root_path"
     log_success "站点 ${site} 已写入 pillar。"
     cmd_apply
 }
@@ -598,10 +764,14 @@ cmd_ssl() {
     local dry_run="${4:-0}"
     ensure_pillar_file
     python_update ssl "$site" "" "" "$email" "$domain"
-    log_info "已更新站点 ${site} 的 SSL 信息。请确保证书已存在或执行 salt-call state.apply optional.certbot。"
+    log_info "已更新站点 ${site} 的 SSL 信息。"
     if [[ "$dry_run" == "1" ]]; then
-        log_info "Dry run 模式：已跳过 core.nginx 状态套用，可使用 salt-call state.apply core.nginx 手动验证。"
+        log_info "Dry run 模式：仅写入 Pillar，已跳过证书申请与 core.nginx 状态套用。"
         return 0
+    fi
+    if ! ensure_ssl_certificate "$site" "$domain"; then
+        log_warning "证书申请失败，已跳过 core.nginx 状态套用。"
+        return 1
     fi
     cmd_apply
 }
@@ -615,7 +785,7 @@ nginx_cli_help() {
   saltgoat nginx delete <站点>
   saltgoat nginx enable <站点>
   saltgoat nginx disable <站点>
-  saltgoat nginx add-ssl <站点> [域名] [email]
+  saltgoat nginx add-ssl <站点> [域名] [email] [-dry-on]
   saltgoat nginx csp level <0-5>           # 设置/禁用 CSP 等级
   saltgoat nginx csp status|disable
   saltgoat nginx modsecurity level <0-10> [--admin-path /admin]
@@ -636,8 +806,8 @@ _nginx_dispatch() {
             ;;
         create)
             local site="${2:-}"
-            local domains="${3:-}"
-            if [[ -z "$site" || -z "$domains" ]]; then
+            local domains_arg="${3:-}"
+            if [[ -z "$site" || -z "$domains_arg" ]]; then
                 log_error "用法: saltgoat nginx create <站点> \"<域名 ...>\" [根目录|--root <路径>] [--magento]"
                 exit 1
             fi
@@ -667,7 +837,7 @@ _nginx_dispatch() {
                 esac
                 shift
             done
-            cmd_create "$site" "$domains" "$root" "$magento_flag"
+            cmd_create "$site" "$domains_arg" "$root" "$magento_flag"
             ;;
         delete)
             local site="${2:-}"

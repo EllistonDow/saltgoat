@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.0] - 2025-10-26
+
+### Changes
+- 修改 7 个文件: docs/CHANGELOG.md, lib/help.sh, modules/git/git.sh, salt/pillar/nginx.sls, salt/states/optional/certbot.sls 等
+
+
 ## [0.9.17] - 2025-10-26
 
 ### Changes
@@ -104,6 +110,7 @@
 - **兼容旧配置**：等级 0 自动禁用并移除残留 CSP 片段
 - **ModSecurity 按需装配**：切换等级会自动安装 `libnginx-mod-http-modsecurity` 并写入 `load_module`，失败会回滚 Pillar
 - **后台路径探测**：未显式指定后台路径时，自动从 Magento `app/etc/env.php` 读取 `frontName`，找不到则回退 `/admin_tattoo`
+- **自动证书**：`saltgoat nginx add-ssl <site> [domain] [email] [-dry-on]` 自动申请/续期 Let's Encrypt 证书，并在成功后追加 443 监听与 HTTP→HTTPS 重定向
 
 ### 📋 **可用命令**
 ```bash
