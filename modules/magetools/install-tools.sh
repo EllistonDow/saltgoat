@@ -303,12 +303,14 @@ install_nodejs() {
         return 0
     fi
     
-    # 安装Node.js (使用NodeSource仓库)
-    log_info "添加NodeSource仓库..."
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-    
-    log_info "安装Node.js..."
-    sudo apt install nodejs -y
+    log_info "使用系统软件仓库安装 Node.js..."
+    sudo apt update
+    sudo apt install -y nodejs npm
+
+    if ! command -v node >/dev/null 2>&1; then
+        log_error "Node.js 安装失败，请手动安装 18+ 版本"
+        return 1
+    fi
     
     log_success "Node.js 安装完成"
     log_info "Node.js版本: $(node --version)"

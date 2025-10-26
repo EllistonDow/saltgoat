@@ -10,6 +10,12 @@ source "${SCRIPT_DIR}/lib/logger.sh"
 SITE_NAME="${1:-tank}"
 ACTION="${2:-status}"
 
+sync_salt_modules() {
+    if command -v salt-call >/dev/null 2>&1; then
+        sudo salt-call --local saltutil.sync_modules >/dev/null 2>&1 || true
+    fi
+}
+
 # 显示帮助信息
 show_help() {
     echo "Magento 2 定时维护任务管理"
@@ -53,133 +59,65 @@ check_cron_status() {
     log_info "检查当前定时任务状态..."
     echo ""
     
-    # 检查 Magento cron 任务
-    log_info "1. Magento Cron 任务:"
-    if crontab -u www-data -l 2>/dev/null | grep -q "magento cron:run"; then
-        log_success "[SUCCESS] Magento cron 任务已安装"
-        crontab -u www-data -l | grep "magento cron:run"
-    else
-        log_warning "[WARNING] Magento cron 任务未安装"
-    fi
-    echo ""
+    local schedule_output
+    schedule_output=$(salt-call --local schedule.list --out=yaml 2>/dev/null)
     
-    # 检查维护任务
-    log_info "2. 维护任务:"
-    if crontab -u www-data -l 2>/dev/null | grep -q "magento-maintenance"; then
-        log_success "[SUCCESS] 维护任务已安装"
-        crontab -u www-data -l | grep "magento-maintenance"
+    log_info "Salt Schedule 任务:"
+    if echo "$schedule_output" | grep -q "magento"; then
+        log_success "[SUCCESS] 已检测到 Magento 相关任务"
+        echo "$schedule_output" | grep "magento-" -A3
     else
-        log_warning "[WARNING] 维护任务未安装"
+        log_warning "[WARNING] 未发现 Magento 计划任务"
+        log_info "使用 'saltgoat magetools cron $SITE_NAME install' 安装 Salt Schedule 任务"
     fi
-    echo ""
     
-    # 检查系统 cron 服务
-    log_info "3. Cron 服务状态:"
-    if systemctl is-active --quiet cron; then
-        log_success "[SUCCESS] Cron 服务运行正常"
+    if [[ -f /etc/cron.d/magento-maintenance ]]; then
+        echo ""
+        log_info "检测到系统 Cron 计划 (/etc/cron.d/magento-maintenance):"
+        cat /etc/cron.d/magento-maintenance
+    fi
+    
+    echo ""
+    log_info "salt-minion 服务状态:"
+    if systemctl is-active --quiet salt-minion; then
+        log_success "[SUCCESS] salt-minion 正在运行"
     else
-        log_error "[ERROR] Cron 服务未运行"
+        log_error "[ERROR] salt-minion 未运行，Salt Schedule 将无法执行"
     fi
 }
 
 # 安装定时维护任务
 install_cron_tasks() {
-    log_info "安装定时维护任务..."
+    log_info "通过 Salt Schedule 安装定时维护任务..."
     
-    # 创建临时 crontab 文件
-    local temp_cron="/tmp/magento_cron_${SITE_NAME}_$$"
-    
-    # 获取现有的 crontab
-    crontab -u www-data -l 2>/dev/null > "$temp_cron"
-    
-    # 添加 Magento cron 任务（每5分钟）
-    if ! grep -q "magento cron:run" "$temp_cron"; then
-        echo "# Magento cron 任务 - 每5分钟执行" >> "$temp_cron"
-        echo "*/5 * * * * cd /var/www/$SITE_NAME && sudo -u www-data php bin/magento cron:run" >> "$temp_cron"
-        log_success "[SUCCESS] 添加 Magento cron 任务"
+    sync_salt_modules
+    local install_output
+    install_output=$(sudo salt-call --local saltgoat.magento_schedule_install site="$SITE_NAME" 2>&1)
+    echo "$install_output"
+
+    if echo "$install_output" | grep -q "'mode': 'cron'"; then
+        log_warning "[WARNING] salt-minion 服务不可用，已回退到系统 Cron 计划 (/etc/cron.d/magento-maintenance)"
     else
-        log_info "[INFO] Magento cron 任务已存在"
+        log_success "[SUCCESS] Salt Schedule 已配置 Magento 维护任务"
     fi
-    
-    # 添加每日维护任务（每天凌晨2点）
-    if ! grep -q "magento-maintenance.*daily" "$temp_cron"; then
-        echo "# 每日维护任务 - 每天凌晨2点执行" >> "$temp_cron"
-        echo "0 2 * * * $SCRIPT_DIR/modules/magetools/magento-maintenance.sh $SITE_NAME daily >> /var/log/magento-maintenance.log 2>&1" >> "$temp_cron"
-        log_success "[SUCCESS] 添加每日维护任务"
-    else
-        log_info "[INFO] 每日维护任务已存在"
-    fi
-    
-    # 添加每周维护任务（每周日凌晨3点）
-    if ! grep -q "magento-maintenance.*weekly" "$temp_cron"; then
-        echo "# 每周维护任务 - 每周日凌晨3点执行" >> "$temp_cron"
-        echo "0 3 * * 0 $SCRIPT_DIR/modules/magetools/magento-maintenance.sh $SITE_NAME weekly >> /var/log/magento-maintenance.log 2>&1" >> "$temp_cron"
-        log_success "[SUCCESS] 添加每周维护任务"
-    else
-        log_info "[INFO] 每周维护任务已存在"
-    fi
-    
-    # 添加每月维护任务（每月1日凌晨4点）
-    if ! grep -q "magento-maintenance.*monthly" "$temp_cron"; then
-        echo "# 每月维护任务 - 每月1日凌晨4点执行" >> "$temp_cron"
-        echo "0 4 1 * * $SCRIPT_DIR/modules/magetools/magento-maintenance.sh $SITE_NAME monthly >> /var/log/magento-maintenance.log 2>&1" >> "$temp_cron"
-        log_success "[SUCCESS] 添加每月维护任务"
-    else
-        log_info "[INFO] 每月维护任务已存在"
-    fi
-    
-    # 添加健康检查任务（每小时执行）
-    if ! grep -q "magento-maintenance.*health" "$temp_cron"; then
-        echo "# 健康检查任务 - 每小时执行" >> "$temp_cron"
-        echo "0 * * * * $SCRIPT_DIR/modules/magetools/magento-maintenance.sh $SITE_NAME health >> /var/log/magento-health.log 2>&1" >> "$temp_cron"
-        log_success "[SUCCESS] 添加健康检查任务"
-    else
-        log_info "[INFO] 健康检查任务已存在"
-    fi
-    
-    # 安装 crontab
-    if crontab -u www-data "$temp_cron"; then
-        log_success "[SUCCESS] 定时任务安装完成"
-    else
-        log_error "[ERROR] 定时任务安装失败"
-        rm -f "$temp_cron"
-        return 1
-    fi
-    
-    # 清理临时文件
-    rm -f "$temp_cron"
-    
-    # 创建日志文件
-    sudo touch /var/log/magento-maintenance.log /var/log/magento-health.log
-    sudo chown www-data:www-data /var/log/magento-maintenance.log /var/log/magento-health.log
-    sudo chmod 644 /var/log/magento-maintenance.log /var/log/magento-health.log
-    
-    log_success "[SUCCESS] 定时维护任务安装完成"
+
+    log_info "使用 'saltgoat magetools cron $SITE_NAME status' 查看详情"
 }
 
 # 卸载定时维护任务
 uninstall_cron_tasks() {
-    log_info "卸载定时维护任务..."
-    
-    # 创建临时 crontab 文件
-    local temp_cron="/tmp/magento_cron_${SITE_NAME}_$$"
-    
-    # 获取现有的 crontab，过滤掉 Magento 相关任务
-    crontab -u www-data -l 2>/dev/null | grep -v "magento cron:run" | grep -v "magento-maintenance" > "$temp_cron"
-    
-    # 安装清理后的 crontab
-    if crontab -u www-data "$temp_cron"; then
-        log_success "[SUCCESS] 定时任务卸载完成"
-    else
-        log_error "[ERROR] 定时任务卸载失败"
-        rm -f "$temp_cron"
-        return 1
+    log_info "移除 SaltGoat 定时维护计划..."
+
+    sync_salt_modules
+    local uninstall_output
+    uninstall_output=$(sudo salt-call --local saltgoat.magento_schedule_uninstall site="$SITE_NAME" 2>&1)
+    echo "$uninstall_output"
+
+    if echo "$uninstall_output" | grep -q "cron_removed': True"; then
+        log_info "[INFO] 已删除系统 Cron 计划: /etc/cron.d/magento-maintenance"
     fi
-    
-    # 清理临时文件
-    rm -f "$temp_cron"
-    
-    log_success "[SUCCESS] 定时维护任务卸载完成"
+
+    log_success "[SUCCESS] 定时维护计划已移除"
 }
 
 # 测试定时任务
@@ -187,30 +125,29 @@ test_cron_tasks() {
     log_info "测试定时任务..."
     echo ""
     
-    # 测试 Magento cron
-    log_info "1. 测试 Magento cron 任务:"
-    if cd "/var/www/$SITE_NAME" && sudo -u www-data php bin/magento cron:run; then
-        log_success "[SUCCESS] Magento cron 任务测试通过"
-    else
-        log_error "[ERROR] Magento cron 任务测试失败"
+    if [[ -f /etc/cron.d/magento-maintenance ]]; then
+        log_warning "当前使用系统 Cron 管理维护计划，Salt Schedule 测试跳过"
+        log_info "可手动执行: sudo /usr/local/bin/magento-maintenance-salt $SITE_NAME daily"
+        return 0
     fi
-    echo ""
+
+    sync_salt_modules
+    local test_jobs=("magento-cron" "magento-daily-maintenance")
+    for job in "${test_jobs[@]}"; do
+        log_info "触发 Salt Schedule 任务: $job"
+        if salt-call --local schedule.run_job "$job" >/dev/null 2>&1; then
+            log_success "[SUCCESS] 任务 $job 触发成功"
+        else
+            log_error "[ERROR] 任务 $job 触发失败"
+        fi
+        echo ""
+    done
     
-    # 测试维护任务
-    log_info "2. 测试维护任务:"
-    if "$SCRIPT_DIR/modules/magetools/magento-maintenance.sh" "$SITE_NAME" health; then
-        log_success "[SUCCESS] 维护任务测试通过"
+    log_info "触发健康检查任务:"
+    if salt-call --local schedule.run_job magento-health-check >/dev/null 2>&1; then
+        log_success "[SUCCESS] 健康检查任务触发成功"
     else
-        log_error "[ERROR] 维护任务测试失败"
-    fi
-    echo ""
-    
-    # 测试权限
-    log_info "3. 测试权限:"
-    if sudo -u www-data test -r "/var/www/$SITE_NAME/bin/magento"; then
-        log_success "[SUCCESS] 权限测试通过"
-    else
-        log_error "[ERROR] 权限测试失败"
+        log_error "[ERROR] 健康检查任务触发失败"
     fi
 }
 

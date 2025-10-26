@@ -23,11 +23,21 @@ uptime_kuma_install() {
     
     # 检查 Node.js
     if ! command -v node >/dev/null 2>&1; then
-        log_info "安装 Node.js..."
-        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-        sudo apt-get install -y nodejs
+        log_info "安装 Node.js (使用系统软件仓库)..."
+        sudo apt-get update
+        sudo apt-get install -y nodejs npm
     fi
     
+    if ! command -v node >/dev/null 2>&1; then
+        log_error "Node.js 安装失败，请手动安装 18+ 版本"
+        return 1
+    fi
+
+    if ! command -v npm >/dev/null 2>&1; then
+        log_info "安装 npm..."
+        sudo apt-get install -y npm
+    fi
+
     # 检查 Node.js 版本
     local node_version
     node_version=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)

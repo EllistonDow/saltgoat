@@ -1,96 +1,95 @@
-# SaltGoat Magento 2 定时维护任务
+# SaltGoat Magento 2 定时维护任务（Salt Schedule 优先，自动回退 Cron）
 # salt/states/optional/magento-schedule.sls
 
-# 检测系统内存并设置变量
-detect_system_memory:
-  cmd.run:
-    - name: |
-        TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-        TOTAL_MEMORY_GB=$((TOTAL_MEMORY_KB / 1024 / 1024))
-        
-        # 根据内存大小确定配置级别
-        if [ $TOTAL_MEMORY_GB -ge 256 ]; then
-          echo "enterprise" > /tmp/memory_level
-        elif [ $TOTAL_MEMORY_GB -ge 128 ]; then
-          echo "high" > /tmp/memory_level
-        elif [ $TOTAL_MEMORY_GB -ge 48 ]; then
-          echo "medium" > /tmp/memory_level
-        elif [ $TOTAL_MEMORY_GB -ge 16 ]; then
-          echo "standard" > /tmp/memory_level
-        else
-          echo "minimal" > /tmp/memory_level
-        fi
-    - creates: /tmp/memory_level
+{% set site_name = pillar.get('site_name', 'tank') %}
+{% set maintenance_script = '/usr/local/bin/magento-maintenance-salt' %}
+{% set salt_minion_service = salt['file.file_exists']('/lib/systemd/system/salt-minion.service') or salt['file.file_exists']('/etc/systemd/system/salt-minion.service') %}
 
-# 创建 Magento 维护脚本
-create_magento_maintenance_script:
+/usr/local/bin/magento-maintenance-salt:
   file.managed:
-    - name: /usr/local/bin/magento-maintenance-salt
     - source: salt://scripts/magento-maintenance-salt.sh
+    - user: root
+    - group: root
     - mode: 755
+
+/var/log/magento-cron.log:
+  file.managed:
     - user: root
     - group: root
-    - require:
-      - cmd: detect_system_memory
+    - mode: 644
+    - contents: ''
 
-# 创建定时任务配置文件
-create_cron_config:
+/var/log/magento-maintenance.log:
   file.managed:
-    - name: /etc/cron.d/magento-maintenance
+    - user: root
+    - group: root
+    - mode: 644
+    - contents: ''
+
+/var/log/magento-health.log:
+  file.managed:
+    - user: root
+    - group: root
+    - mode: 644
+    - contents: ''
+
+{% if salt_minion_service %}
+
+/etc/cron.d/magento-maintenance:
+  file.absent
+
+{% for name, command, cron in [
+  ('magento-cron', "cd /var/www/{{ site_name }} && sudo -u www-data php bin/magento cron:run >> /var/log/magento-cron.log 2>&1", '*/5 * * * *'),
+  ('magento-daily-maintenance', "{{ maintenance_script }} {{ site_name }} daily >> /var/log/magento-maintenance.log 2>&1", '0 2 * * *'),
+  ('magento-weekly-maintenance', "{{ maintenance_script }} {{ site_name }} weekly >> /var/log/magento-maintenance.log 2>&1", '0 3 * * 0'),
+  ('magento-monthly-maintenance', "{{ maintenance_script }} {{ site_name }} monthly >> /var/log/magento-maintenance.log 2>&1", '0 4 1 * *'),
+  ('magento-health-check', "{{ maintenance_script }} {{ site_name }} health >> /var/log/magento-health.log 2>&1", '0 * * * *')
+] %}
+magento_schedule_{{ name }}:
+  schedule.present:
+    - name: {{ name }}
+    - function: cmd.run
+    - job_args:
+      - "{{ command }}"
+    - job_kwargs:
+        shell: /bin/bash
+    - cron: '{{ cron }}'
+    - run_on_start: False
+    - persistent: True
+    - maxrunning: 1
+{% endfor %}
+
+{% if salt['service.available']('salt-minion') %}
+salt-minion-schedule-service:
+  service.running:
+    - name: salt-minion
+    - enable: True
+    - watch:
+      - schedule: magento_schedule_magento-cron
+      - schedule: magento_schedule_magento-daily-maintenance
+      - schedule: magento_schedule_magento-weekly-maintenance
+      - schedule: magento_schedule_magento-monthly-maintenance
+      - schedule: magento_schedule_magento-health-check
+{% endif %}
+
+{% else %}
+
+/etc/cron.d/magento-maintenance:
+  file.managed:
+    - user: root
+    - group: root
+    - mode: 644
     - contents: |
-        # Magento 2 定时维护任务
-        # 每5分钟执行 Magento cron
-        */5 * * * * www-data cd /var/www/{{ pillar.get('site_name', 'tank') }} && sudo -u www-data php bin/magento cron:run >> /var/log/magento-cron.log 2>&1
-        
-        # 每日维护任务 - 每天凌晨2点执行
-        0 2 * * * root /usr/local/bin/magento-maintenance-salt {{ pillar.get('site_name', 'tank') }} daily >> /var/log/magento-maintenance.log 2>&1
-        
-        # 每周维护任务 - 每周日凌晨3点执行
-        0 3 * * 0 root /usr/local/bin/magento-maintenance-salt {{ pillar.get('site_name', 'tank') }} weekly >> /var/log/magento-maintenance.log 2>&1
-        
-        # 每月维护任务 - 每月1日凌晨4点执行（完整部署流程）
-        0 4 1 * * root /usr/local/bin/magento-maintenance-salt {{ pillar.get('site_name', 'tank') }} monthly >> /var/log/magento-maintenance.log 2>&1
-        
-        # 健康检查任务 - 每小时执行
-        0 * * * * root /usr/local/bin/magento-maintenance-salt {{ pillar.get('site_name', 'tank') }} health >> /var/log/magento-health.log 2>&1
-    - mode: 644
-    - user: root
-    - group: root
-    - require:
-      - file: create_magento_maintenance_script
+        # Magento 2 定时维护任务（Salt Schedule 不可用，回退系统 Cron）
+        */5 * * * * www-data cd /var/www/{{ site_name }} && sudo -u www-data php bin/magento cron:run >> /var/log/magento-cron.log 2>&1
+        0 2 * * * root {{ maintenance_script }} {{ site_name }} daily >> /var/log/magento-maintenance.log 2>&1
+        0 3 * * 0 root {{ maintenance_script }} {{ site_name }} weekly >> /var/log/magento-maintenance.log 2>&1
+        0 4 1 * * root {{ maintenance_script }} {{ site_name }} monthly >> /var/log/magento-maintenance.log 2>&1
+        0 * * * * root {{ maintenance_script }} {{ site_name }} health >> /var/log/magento-health.log 2>&1
 
-# 创建日志文件
-create_log_files:
-  file.managed:
-    - name: /var/log/magento-cron.log
-    - mode: 644
-    - user: root
-    - group: root
-    - require:
-      - file: create_cron_config
-
-create_maintenance_log:
-  file.managed:
-    - name: /var/log/magento-maintenance.log
-    - mode: 644
-    - user: root
-    - group: root
-    - require:
-      - file: create_cron_config
-
-create_health_log:
-  file.managed:
-    - name: /var/log/magento-health.log
-    - mode: 644
-    - user: root
-    - group: root
-    - require:
-      - file: create_cron_config
-
-# 重启 cron 服务以应用配置
-restart_cron_service:
+cron-service-magento:
   service.running:
     - name: cron
     - enable: True
-    - require:
-      - file: create_cron_config
+
+{% endif %}

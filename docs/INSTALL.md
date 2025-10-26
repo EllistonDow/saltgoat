@@ -62,6 +62,34 @@ sudo saltgoat install all --optimize-magento
 sudo saltgoat install all --optimize-magento-profile high --optimize-magento-site mystore
 ```
 
+#### 4. （可选）启用事件驱动组件
+
+SaltGoat 的 Beacon/Reactor 与 Salt Schedule 功能依赖正在运行的 `salt-minion`（本机）以及可访问的 `salt-master`（可在本机或中心节点部署）。若暂未安装，命令会自动回退到系统 Cron；若想启用事件驱动自动化，可执行：
+
+```bash
+# 安装并启动 salt-minion（Debian/Ubuntu 示例）
+sudo apt update
+sudo apt install -y salt-minion
+sudo systemctl enable --now salt-minion
+
+# （可选）在本机调试 Reactor
+sudo apt install -y salt-master
+sudo systemctl enable --now salt-master
+
+# 应用 Beacon/ Reactor 配置
+saltgoat monitor enable-beacons
+```
+
+> **提示**：部分发行版默认仓库可能缺少最新 Salt，可参考官方文档 <https://repo.saltproject.io/> 添加源后再安装。即便暂未安装 `salt-minion`，SaltGoat 也会自动降级至系统 Cron/脚本方案，不影响基础功能。
+
+### 🛠 自动化脚本与计划任务
+
+- `saltgoat automation script <create|list|edit|run|delete>`：生成带日志模板的 Bash 脚本，默认写入 `/srv/saltgoat/automation/scripts/`。
+- `saltgoat automation job <create|list|enable|disable|run|delete>`：注册计划任务。检测到 `salt-minion` 时使用 Salt Schedule（`salt-call schedule.list` 可验证）；否则自动落地 `/etc/cron.d/saltgoat-automation-<job>` 作为兜底。
+- `saltgoat automation logs <list|view|tail|cleanup>`：查看与维护 `/srv/saltgoat/automation/logs/`。
+
+命令执行前会自动调用 `saltutil.sync_modules`/`saltutil.sync_runners`，确保 `salt/_modules/saltgoat.py` 与 `salt/states/optional/automation/` 的最新逻辑立即生效。需要集中式下发时，可在 Salt Master 上使用 `salt-run saltgoat.automation_job_create tgt='minion-id' ...` 将同样的自动化策略推广到多台主机。
+
 ### 📈 部署 Matomo 分析平台
 
 SaltGoat 自带 `analyse` 模块，用于快速部署 Matomo：
@@ -85,10 +113,17 @@ saltgoat analyse install matomo --with-db \
   --db-admin-user saltuser --db-admin-password 'YourRootPass'
 ```
 
+- 常用参数补充：
+  - `--install-dir /path/to/matomo`：覆盖安装目录（同时写入 Pillar `matomo:install_dir`）。
+  - `--php-socket /run/php/php8.3-fpm.sock`：指定 PHP-FPM 套接字。
+  - `--owner www-data --group www-data`：自定义站点文件属主/属组。
+  - `--db-provider existing|mariadb`：`existing` 复用当前 MySQL/Percona，`mariadb` 将尝试安装 MariaDB（若检测到已有 MySQL/Percona 会直接报错）。
+
 - 若系统存在 `/etc/salt/mysql_saltuser.cnf`，CLI 会自动复用 `saltuser` 凭据。
 - CLI 支持 `--domain`、`--install-dir`、`--with-db`、`--db-provider (existing|mariadb|percona)`、`--db-*` 系列参数，所有值都可以在 Pillar 中覆盖。
 - 需要自定义管理账户时，请补充 `--db-admin-user/--db-admin-password`，并在 `salt/pillar/saltgoat.sls` 中持久化 `matomo:db.*` 配置。
 - 部署完成后访问 `http://<域名>/` 完成 Matomo Web 安装；如需 HTTPS，可执行 `saltgoat nginx add-ssl <域名> <email>`。
+- 若自动生成数据库密码，会写入 `/var/lib/saltgoat/reports/matomo-db-password.txt`，请尽快同步到 Pillar 后删除该文件。
 
 #### Matomo Pillar 示例
 

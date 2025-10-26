@@ -35,126 +35,115 @@ schedule_handler() {
 
 # 启用定时任务
 schedule_enable() {
-    log_info "启用 SaltGoat 定时任务..."
+    log_info "启用 SaltGoat Salt Schedule 定时任务..."
+
+    local saltgoat_bin
+    saltgoat_bin=$(command -v saltgoat || true)
+    if [[ -z "$saltgoat_bin" ]]; then
+        log_error "未找到 saltgoat 可执行文件，请先执行 'saltgoat system install'";
+        return 1
+    fi
     
-    # 创建系统级定时任务
-    echo "# SaltGoat 定时任务配置" | sudo tee /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "# 内存监控 - 每5分钟" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "*/5 * * * * root saltgoat memory monitor" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    salt-call --local schedule.add saltgoat-memory-monitor \
+        function=cmd.run \
+        job_args="['$saltgoat_bin', 'memory', 'monitor']" \
+        job_kwargs='{"shell": "/bin/bash"}' \
+        cron='*/5 * * * *' \
+        maxrunning=1 >/dev/null
+
+    salt-call --local schedule.add saltgoat-update-check \
+        function=cmd.run \
+        job_args="['$saltgoat_bin', 'system', 'update-check']" \
+        job_kwargs='{"shell": "/bin/bash"}' \
+        cron='0 3 * * 0' \
+        maxrunning=1 >/dev/null
+
+    salt-call --local schedule.add saltgoat-log-cleanup \
+        function=cmd.run \
+        job_args='["/bin/bash", "-lc", "find /var/log -name \\\"*.log\\\" -mtime +7 -delete"]' \
+        job_kwargs='{"shell": "/bin/bash"}' \
+        cron='0 1 * * 0' \
+        maxrunning=1 >/dev/null
+
+    salt-call --local schedule.add saltgoat-health-check \
+        function=cmd.run \
+        job_args="['$saltgoat_bin', 'system', 'health-check']" \
+        job_kwargs='{"shell": "/bin/bash"}' \
+        cron='*/10 * * * *' \
+        maxrunning=1 >/dev/null
     
-    echo "# 系统更新检查 - 每周日凌晨3点" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "0 3 * * 0 root saltgoat system update-check" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
+    salt-call --local schedule.save >/dev/null
     
-    echo "# 日志清理 - 每周日凌晨1点" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "0 1 * * 0 root find /var/log -name \"*.log\" -mtime +7 -delete" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    
-    echo "# 服务健康检查 - 每10分钟" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    echo "*/10 * * * * root saltgoat system health-check" | sudo tee -a /etc/cron.d/saltgoat-tasks > /dev/null
-    
-    log_success "SaltGoat 定时任务已启用"
-    log_info "已创建 /etc/cron.d/saltgoat-tasks"
+    log_success "SaltGoat Salt Schedule 定时任务已启用"
 }
 
 # 禁用定时任务
 schedule_disable() {
-    log_info "禁用 SaltGoat 定时任务..."
+    log_info "禁用 SaltGoat Salt Schedule 定时任务..."
     
-    # 删除系统级定时任务文件
-    if [[ -f /etc/cron.d/saltgoat-tasks ]]; then
-        sudo rm /etc/cron.d/saltgoat-tasks
-        log_success "已删除 /etc/cron.d/saltgoat-tasks"
-    else
-        log_info "SaltGoat 定时任务文件不存在"
-    fi
+    local jobs=(
+        "saltgoat-memory-monitor"
+        "saltgoat-update-check"
+        "saltgoat-log-cleanup"
+        "saltgoat-health-check"
+    )
     
-    log_success "SaltGoat 定时任务已禁用"
+    local removed=0
+    for job in "${jobs[@]}"; do
+        if salt-call --local schedule.delete "$job" >/dev/null 2>&1; then
+            log_info "[INFO] 已删除任务: $job"
+            ((removed++))
+        fi
+    done
+    
+    salt-call --local schedule.save >/dev/null
+    log_success "SaltGoat Salt Schedule 定时任务已禁用，移除 $removed 个任务"
 }
 
 # 查看定时任务状态
 schedule_status() {
     log_info "查看定时任务状态..."
     
-    if [[ -f /etc/cron.d/saltgoat-tasks ]]; then
-        echo "SaltGoat 定时任务状态: 已启用"
-        echo "配置文件: /etc/cron.d/saltgoat-tasks"
+    local schedule_output
+    schedule_output=$(salt-call --local schedule.list --out=yaml 2>/dev/null)
+    
+    if echo "$schedule_output" | grep -q "saltgoat-"; then
+        echo "SaltGoat Salt Schedule 状态: 已启用"
         echo ""
-        echo "任务列表:"
-        grep -v "^#" /etc/cron.d/saltgoat-tasks | grep -v "^$" | while IFS= read -r line; do
-            if [[ -n "$line" ]]; then
-                echo "  $line"
-            fi
-        done
+        echo "$schedule_output" | grep "saltgoat-" -A3
     else
-        echo "SaltGoat 定时任务状态: 未启用"
+        echo "SaltGoat Salt Schedule 状态: 未启用"
         echo "运行 'saltgoat schedule enable' 来启用定时任务"
     fi
 }
 
 # 列出所有定时任务
 schedule_list() {
-    log_info "系统定时任务 (crontab):"
+    log_info "Salt Schedule 任务列表:"
     echo "=========================================="
-    
-    # 显示 root 用户的 cron 任务
-    if sudo crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"; then
-        echo "Root 用户定时任务:"
-        sudo crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"
-    else
-        echo "Root 用户无定时任务"
-    fi
-    
-    echo ""
-    echo "当前用户定时任务:"
-    if crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"; then
-        crontab -l 2>/dev/null | grep -v "^#" | grep -v "^$"
-    else
-        echo "当前用户无定时任务"
-    fi
-    
-    echo ""
-    echo "系统级定时任务 (/etc/cron.d/):"
-    if [[ -d /etc/cron.d ]]; then
-        for file in /etc/cron.d/*; do
-            if [[ -f "$file" ]]; then
-                echo "文件: $(basename "$file")"
-                grep -v "^#" "$file" | grep -v "^$" | sed 's/^/  /'
-                echo ""
-            fi
-        done
-    fi
-    
-    echo ""
-    log_info "Salt Schedule 状态:"
-    salt-call --local schedule.list
+    salt-call --local schedule.list --out=yaml 2>/dev/null
 }
 
 # 测试定时任务配置
 schedule_test() {
-    log_info "测试内存监控..."
-    memory_monitor
-    echo
+    log_info "触发 Salt Schedule 任务进行测试..."
     
-    log_info "测试服务状态..."
-    echo "Nginx 状态:"
-    salt-call --local service.status nginx
-    echo "MySQL 状态:"
-    salt-call --local service.status mysql
-    echo "PHP-FPM 状态:"
-    salt-call --local service.status php8.3-fpm
-    echo "Valkey 状态:"
-    salt-call --local service.status valkey
-    echo "OpenSearch 状态:"
-    salt-call --local service.status opensearch
-    echo "RabbitMQ 状态:"
-    salt-call --local service.status rabbitmq
-    echo
+    local jobs=(
+        "saltgoat-memory-monitor"
+        "saltgoat-health-check"
+        "saltgoat-update-check"
+        "saltgoat-log-cleanup"
+    )
     
-    log_info "测试磁盘使用..."
-    salt-call --local disk.usage
-    echo
+    for job in "${jobs[@]}"; do
+        log_info "触发任务: $job"
+        if salt-call --local schedule.run_job "$job" >/dev/null 2>&1; then
+            log_success "[SUCCESS] 任务 $job 触发成功"
+        else
+            log_error "[ERROR] 任务 $job 触发失败"
+        fi
+        echo ""
+    done
     
-    log_success "定时任务配置测试完成"
+    log_success "Salt Schedule 任务测试完成"
 }

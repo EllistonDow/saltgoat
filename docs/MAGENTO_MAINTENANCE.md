@@ -14,7 +14,7 @@ SaltGoat Magento 2 维护系统提供了完整的自动化维护解决方案，�
 - **健康检查** - Magento状态、数据库连接、缓存状态、索引状态
 
 ### ⏰ 定时任务管理
-- **系统 Cron** - 使用系统原生 crontab 管理
+- **系统 Cron（可选）** - 必要时可手动维护传统 cron 任务
 - **Salt Schedule** - 使用 Salt 原生状态管理（推荐）
 - **智能检测** - 自动检测数据库架构更新并执行相应操作
 
@@ -29,8 +29,9 @@ SaltGoat Magento 2 维护系统提供了完整的自动化维护解决方案，�
 ```bash
 saltgoat magetools maintenance <site> <action>
 saltgoat magetools cron <site> <action>
-saltgoat magetools salt-schedule <site> <action>
 ```
+
+> **提示**：若目标主机未安装或未运行 `salt-minion`，上述 `saltgoat magetools cron` 命令会自动改用系统 Cron，在 `/etc/cron.d/magento-maintenance` 写入计划任务；待 `salt-minion` 启用后再次执行 `install` 即可恢复为 Salt Schedule。
 
 ### 维护管理命令
 
@@ -78,24 +79,6 @@ saltgoat magetools maintenance tank deploy
 #### Salt Schedule（推荐）
 ```bash
 # 安装 Salt Schedule 任务
-saltgoat magetools salt-schedule tank install
-
-# 查看状态
-saltgoat magetools salt-schedule tank status
-
-# 测试功能
-saltgoat magetools salt-schedule tank test
-
-# 查看日志
-saltgoat magetools salt-schedule tank logs
-
-# 卸载任务
-saltgoat magetools salt-schedule tank uninstall
-```
-
-#### 系统 Cron（备用方案）
-```bash
-# 安装系统 Cron 任务
 saltgoat magetools cron tank install
 
 # 查看状态
@@ -110,6 +93,8 @@ saltgoat magetools cron tank logs
 # 卸载任务
 saltgoat magetools cron tank uninstall
 ```
+
+> `saltgoat magetools cron` 现在基于 Salt Schedule 管理所有维护计划，无需再手动编辑 crontab。
 
 ## 维护任务详解
 
@@ -163,25 +148,42 @@ saltgoat magetools cron tank uninstall
 ## 定时任务配置
 
 ### Salt Schedule 配置
-Salt Schedule 使用 `/etc/cron.d/magento-maintenance` 配置文件：
+Salt Schedule 通过 Salt Minion 内置计划任务管理维护流程。执行以下命令可以查看当前配置：
 
 ```bash
-# Magento 2 定时维护任务
-# 每5分钟执行 Magento cron
-*/5 * * * * www-data cd /var/www/tank && sudo -u www-data php bin/magento cron:run >> /var/log/magento-cron.log 2>&1
-
-# 每日维护任务 - 每天凌晨2点执行
-0 2 * * * root /usr/local/bin/magento-maintenance-salt tank daily >> /var/log/magento-maintenance.log 2>&1
-
-# 每周维护任务 - 每周日凌晨3点执行
-0 3 * * 0 root /usr/local/bin/magento-maintenance-salt tank weekly >> /var/log/magento-maintenance.log 2>&1
-
-# 每月维护任务 - 每月1日凌晨4点执行（完整部署流程）
-0 4 1 * * root /usr/local/bin/magento-maintenance-salt tank monthly >> /var/log/magento-maintenance.log 2>&1
-
-# 健康检查任务 - 每小时执行
-0 * * * * root /usr/local/bin/magento-maintenance-salt tank health >> /var/log/magento-health.log 2>&1
+salt-call --local schedule.list --out=yaml | grep -A3 'magento-'
 ```
+
+默认会创建以下任务：
+
+- `magento-cron`：每 5 分钟执行一次 `php bin/magento cron:run`
+- `magento-daily-maintenance`：每日凌晨 2 点运行日常维护
+- `magento-weekly-maintenance`：每周日凌晨 3 点运行每周维护
+- `magento-monthly-maintenance`：每月 1 日凌晨 4 点运行完整部署流程
+- `magento-health-check`：每小时进行健康检查
+
+需要调整时间时，可以通过 `salt-call schedule.modify` 修改对应任务的 `cron` 表达式。
+
+```bash
+salt-call --local schedule.modify magento-cron cron '*/10 * * * *'
+```
+
+> 若 `salt-minion` 当前不可用，上述命令会返回空列表；此时 `saltgoat magetools cron <site> install` 将自动生成 `/etc/cron.d/magento-maintenance` 作为临时替代方案。
+
+### Salt Beacons 与 Reactor
+SaltGoat 提供事件驱动的维护能力，推荐通过以下命令启用并检查状态：
+
+```bash
+# 配置服务/资源 Beacon，并启用 Reactor 自动化
+saltgoat monitor enable-beacons
+
+# 查看当前 Beacon 与 Schedule 状态
+saltgoat monitor beacons-status
+```
+
+启用后，Salt 会自动监控关键服务与资源使用率，并在阈值触发时写入 `/var/log/saltgoat/alerts.log`，必要时重启服务或触发权限修复。
+
+> **依赖说明**：Beacon/Reactor 功能需要在本机运行 `salt-minion`，并能访问配置了 Reactor 的 `salt-master`。若命令检测到依赖缺失，会给出警告并保留配置文件，待服务上线后再次执行即可生效。
 
 ### 日志文件
 - `/var/log/magento-cron.log` - Magento cron 任务日志
@@ -209,7 +211,7 @@ Salt Schedule 使用 `/etc/cron.d/magento-maintenance` 配置文件：
 
 ### 1. 定时任务选择
 - **推荐使用 Salt Schedule** - 符合 SaltGoat 设计理念
-- **系统 Cron 作为备用** - 在 Salt Schedule 不可用时使用
+- **如需备用** - 可手动编写 cron 任务，但推荐保持 Salt Schedule 为主
 
 ### 2. 维护频率
 - **每日维护** - 适合高流量站点
@@ -251,13 +253,13 @@ saltgoat magetools maintenance tank cleanup
 #### 4. 定时任务不执行
 ```bash
 # 检查定时任务状态
-saltgoat magetools salt-schedule tank status
+saltgoat magetools cron tank status
 ```
 
 ### 日志分析
 ```bash
 # 查看维护日志
-saltgoat magetools salt-schedule tank logs
+saltgoat magetools cron tank logs
 
 # 查看系统日志
 tail -f /var/log/magento-maintenance.log

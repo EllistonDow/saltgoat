@@ -1,0 +1,56 @@
+# ModSecurity Level {{ level }} Configuration
+SecRuleEngine On
+SecRequestBodyAccess On
+SecResponseBodyAccess On
+SecResponseBodyMimeType text/plain text/html text/xml
+SecResponseBodyLimit 524288
+SecTmpDir /tmp/
+SecDataDir /tmp/
+SecUploadDir /tmp/
+SecUploadKeepFiles Off
+SecCollectionTimeout 600
+
+# Magento backend specific allowances
+SecRule REQUEST_URI "@beginsWith {{ admin_path }}" "id:1001,phase:1,pass,msg:'Admin access allowed'"
+SecRule REQUEST_URI "@beginsWith /setup" "id:1002,phase:1,pass,msg:'Setup access allowed'"
+
+# Enhanced backend protections
+SecRule REQUEST_URI "@beginsWith {{ admin_path }}" "id:1003,phase:2,block,msg:'Admin SQL injection attempt'"
+SecRule REQUEST_URI "@beginsWith {{ admin_path }}" "id:1004,phase:2,block,msg:'Admin XSS attempt'"
+SecRule REQUEST_URI "@beginsWith {{ admin_path }}" "id:1005,phase:2,block,msg:'Admin path traversal attempt'"
+
+# Core protections
+SecRule ARGS "@detectSQLi" "id:2001,phase:2,block,msg:'SQL Injection attempt blocked'"
+SecRule ARGS "@detectXSS" "id:2002,phase:2,block,msg:'XSS attempt blocked'"
+SecRule FILES_NAMES "@rx \.(php|phtml|php3|php4|php5|pl|py|jsp|asp|sh|cgi)$" "id:2003,phase:2,block,msg:'Dangerous file upload blocked'"
+SecRule ARGS "@detectPathTraversal" "id:2004,phase:2,block,msg:'Path traversal attempt blocked'"
+SecRule ARGS "@detectCmdInjection" "id:2005,phase:2,block,msg:'Command injection attempt blocked'"
+SecRule REQUEST_METHOD "!@within GET POST HEAD OPTIONS" "id:2006,phase:1,block,msg:'Unusual request method'"
+{% if level >= 7 %}
+SecRule REQUEST_HEADERS:User-Agent "@rx (bot|crawler|spider|scanner)" "id:2007,phase:1,block,msg:'Bot traffic blocked'"
+{% else %}
+SecRule REQUEST_HEADERS:User-Agent "@rx (bot|crawler|spider|scanner)" "id:2007,phase:1,log,msg:'Bot traffic detected'"
+{% endif %}
+{% if level >= 4 %}
+SecRule REQUEST_HEADERS:Referer "@rx (javascript:|data:|vbscript:)" "id:2008,phase:1,block,msg:'Suspicious referer'"
+{% else %}
+SecRule REQUEST_HEADERS:Referer "@rx (javascript:|data:|vbscript:)" "id:2008,phase:1,log,msg:'Suspicious referer'"
+{% endif %}
+{% if level >= 3 %}
+SecRule REQUEST_HEADERS:Content-Type "!@rx (application/x-www-form-urlencoded|multipart/form-data|text/plain)" "id:2009,phase:1,block,msg:'Unexpected content type'"
+{% else %}
+SecRule REQUEST_HEADERS:Content-Type "!@rx (application/x-www-form-urlencoded|multipart/form-data|text/plain|application/json|application/xml)" "id:2009,phase:1,block,msg:'Unexpected content type'"
+{% endif %}
+{% if level >= 5 %}
+SecRule REQUEST_HEADERS:Content-Length "@gt 5242880" "id:2010,phase:1,block,msg:'Request too large'"
+{% else %}
+SecRule REQUEST_HEADERS:Content-Length "@gt 10485760" "id:2010,phase:1,block,msg:'Request too large'"
+{% endif %}
+{% if level >= 8 %}
+SecRule REQUEST_HEADERS:Connection "@rx (Upgrade|Keep-Alive)" "id:2011,phase:1,block,t:none,msg:'Exotic connection header blocked'"
+{% endif %}
+{% if level >= 9 %}
+SecRule REQUEST_HEADERS:Accept "@rx \*/\*" "id:2012,phase:1,log,msg:'Wildcard accept header detected'"
+SecRule REQUEST_FILENAME "@endsWith .php" "chain,id:2013,phase:2,block,msg:'Direct PHP access blocked'"
+    SecRule REQUEST_URI "!@beginsWith {{ admin_path }}" "t:none"
+{% endif %}

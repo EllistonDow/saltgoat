@@ -10,6 +10,9 @@ source "${MODULE_DIR}/../../lib/utils.sh"
 # 默认 Matomo 配置（可通过 Pillar 覆盖）
 MATOMO_DEFAULT_INSTALL_DIR="/var/www/matomo"
 MATOMO_DEFAULT_DOMAIN="matomo.local"
+MATOMO_DEFAULT_PHP_SOCKET="/run/php/php8.3-fpm.sock"
+MATOMO_DEFAULT_OWNER="www-data"
+MATOMO_DEFAULT_GROUP="www-data"
 MATOMO_DEFAULT_DB_NAME="matomo"
 MATOMO_DEFAULT_DB_USER="matomo"
 MATOMO_DEFAULT_DB_HOST="localhost"
@@ -75,9 +78,12 @@ analyse_install_matomo() {
     log_highlight "准备安装 Matomo 分析平台..."
 
     # 显示当前 Pillar 配置（如存在）
-    local install_dir domain db_enabled db_name db_user db_password db_host db_socket db_provider db_admin_user db_admin_password
+    local install_dir domain php_socket owner group db_enabled db_name db_user db_password db_host db_socket db_provider db_admin_user db_admin_password
     install_dir="$MATOMO_DEFAULT_INSTALL_DIR"
     domain="$MATOMO_DEFAULT_DOMAIN"
+    php_socket="$MATOMO_DEFAULT_PHP_SOCKET"
+    owner="$MATOMO_DEFAULT_OWNER"
+    group="$MATOMO_DEFAULT_GROUP"
     db_enabled="false"
     db_name="$MATOMO_DEFAULT_DB_NAME"
     db_user="$MATOMO_DEFAULT_DB_USER"
@@ -99,12 +105,32 @@ analyse_install_matomo() {
     local override_db_admin_password=""
     local override_db_host=""
     local override_db_socket=""
+    local override_install_dir=""
+    local override_php_socket=""
+    local override_owner=""
+    local override_group=""
 
     local extra_args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --with-db)
                 with_db="true"
+                ;;
+            --install-dir)
+                override_install_dir="${2:-}"
+                shift
+                ;;
+            --php-socket)
+                override_php_socket="${2:-}"
+                shift
+                ;;
+            --owner)
+                override_owner="${2:-}"
+                shift
+                ;;
+            --group)
+                override_group="${2:-}"
+                shift
                 ;;
             --db-name)
                 override_db_name="${2:-}"
@@ -166,6 +192,21 @@ analyse_install_matomo() {
         pillar_value=$(get_pillar_value "matomo:domain")
         if [[ -n "$pillar_value" && "$pillar_value" != "None" ]]; then
             domain="$pillar_value"
+        fi
+
+        pillar_value=$(get_pillar_value "matomo:php_fpm_socket")
+        if [[ -n "$pillar_value" && "$pillar_value" != "None" ]]; then
+            php_socket="$pillar_value"
+        fi
+
+        pillar_value=$(get_pillar_value "matomo:owner")
+        if [[ -n "$pillar_value" && "$pillar_value" != "None" ]]; then
+            owner="$pillar_value"
+        fi
+
+        pillar_value=$(get_pillar_value "matomo:group")
+        if [[ -n "$pillar_value" && "$pillar_value" != "None" ]]; then
+            group="$pillar_value"
         fi
 
         pillar_value=$(get_pillar_value "matomo:db:enabled")
@@ -253,6 +294,22 @@ analyse_install_matomo() {
         with_db="true"
     fi
 
+    if [[ -n "$override_install_dir" ]]; then
+        install_dir="$override_install_dir"
+    fi
+
+    if [[ -n "$override_php_socket" ]]; then
+        php_socket="$override_php_socket"
+    fi
+
+    if [[ -n "$override_owner" ]]; then
+        owner="$override_owner"
+    fi
+
+    if [[ -n "$override_group" ]]; then
+        group="$override_group"
+    fi
+
     if [[ -n "$override_domain" ]]; then
         domain="$override_domain"
     fi
@@ -261,6 +318,23 @@ analyse_install_matomo() {
         db_enabled="true"
         if [[ -z "$db_provider" || "$db_provider" == "None" ]]; then
             db_provider="$MATOMO_DEFAULT_DB_PROVIDER"
+        fi
+    fi
+
+    if [[ "$db_provider" == "mariadb" ]]; then
+        local conflicting_pkg=""
+        if command -v dpkg-query >/dev/null 2>&1; then
+            local candidates=("mysql-server" "mysql-server-core-8.0" "mysql-client" "mysql-client-core-8.0" "percona-server-server" "percona-server-client")
+            for pkg in "${candidates[@]}"; do
+                if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+                    conflicting_pkg="$pkg"
+                    break
+                fi
+            done
+        fi
+        if [[ -n "$conflicting_pkg" ]]; then
+            log_error "检测到系统已安装 ${conflicting_pkg}，无法自动部署 MariaDB。请改用 --db-provider existing 或先卸载冲突组件。"
+            return 1
         fi
     fi
 
@@ -298,6 +372,8 @@ analyse_install_matomo() {
 
     log_info "目标目录: ${install_dir}"
     log_info "访问域名: ${domain}"
+    log_info "PHP-FPM 套接字: ${php_socket}"
+    log_info "运行用户: ${owner}:${group}"
     if [[ "$db_enabled" == "true" ]]; then
         log_info "数据库名称: ${db_name}"
         log_info "数据库用户: ${db_user}"
@@ -323,8 +399,10 @@ analyse_install_matomo() {
     fi
 
     local pillar_override=""
+    local override_needed="false"
 
     if [[ "$db_enabled" == "true" ]]; then
+        override_needed="true"
         if ! command_exists mysql; then
             log_error "未检测到 mysql 客户端，请安装 mysql-client 或 percona-client 后重试。"
             return 1
@@ -347,26 +425,56 @@ analyse_install_matomo() {
         fi
     fi
 
-    if [[ "$db_enabled" == "true" ]]; then
-        pillar_override=$(MATOMO_DB_NAME="$db_name" MATOMO_DB_USER="$db_user" MATOMO_DB_PASSWORD="$db_password" MATOMO_DB_HOST="$db_host" MATOMO_DB_SOCKET="$db_socket" MATOMO_DB_PROVIDER="$db_provider" MATOMO_DB_ADMIN_USER="$db_admin_user" MATOMO_DB_ADMIN_PASSWORD="$db_admin_password" python3 - <<'PY'
+    if [[ -n "$override_install_dir" || -n "$override_php_socket" || -n "$override_owner" || -n "$override_group" || -n "$override_domain" ]]; then
+        override_needed="true"
+    fi
+
+    if [[ "$db_password_source" == "generated" || "$db_password_source" == "override" ]]; then
+        override_needed="true"
+    fi
+
+    if [[ "$override_needed" == "true" ]]; then
+        pillar_override=$(MATOMO_INSTALL_DIR="$install_dir" \
+            MATOMO_DOMAIN="$domain" \
+            MATOMO_PHP_SOCKET="$php_socket" \
+            MATOMO_OWNER="$owner" \
+            MATOMO_GROUP="$group" \
+            MATOMO_DB_ENABLED="$db_enabled" \
+            MATOMO_DB_NAME="$db_name" \
+            MATOMO_DB_USER="$db_user" \
+            MATOMO_DB_PASSWORD="$db_password" \
+            MATOMO_DB_HOST="$db_host" \
+            MATOMO_DB_SOCKET="$db_socket" \
+            MATOMO_DB_PROVIDER="$db_provider" \
+            MATOMO_DB_ADMIN_USER="$db_admin_user" \
+            MATOMO_DB_ADMIN_PASSWORD="$db_admin_password" \
+            python3 - <<'PY'
 import json
 import os
 
 data = {
     "matomo": {
-        "db": {
-            "enabled": True,
-            "name": os.environ.get("MATOMO_DB_NAME", "matomo"),
-            "user": os.environ.get("MATOMO_DB_USER", "matomo"),
-            "password": os.environ.get("MATOMO_DB_PASSWORD", ""),
-            "host": os.environ.get("MATOMO_DB_HOST", "localhost"),
-            "socket": os.environ.get("MATOMO_DB_SOCKET", "/var/run/mysqld/mysqld.sock"),
-            "provider": os.environ.get("MATOMO_DB_PROVIDER", "existing"),
-            "admin_user": os.environ.get("MATOMO_DB_ADMIN_USER", "root"),
-            "admin_password": os.environ.get("MATOMO_DB_ADMIN_PASSWORD", "")
-        }
+        "install_dir": os.environ.get("MATOMO_INSTALL_DIR", "/var/www/matomo"),
+        "domain": os.environ.get("MATOMO_DOMAIN", "matomo.local"),
+        "php_fpm_socket": os.environ.get("MATOMO_PHP_SOCKET", "/run/php/php8.3-fpm.sock"),
+        "owner": os.environ.get("MATOMO_OWNER", "www-data"),
+        "group": os.environ.get("MATOMO_GROUP", "www-data"),
     }
 }
+
+if os.environ.get("MATOMO_DB_ENABLED", "false").lower() == "true":
+    data["matomo"]["db"] = {
+        "enabled": True,
+        "name": os.environ.get("MATOMO_DB_NAME", "matomo"),
+        "user": os.environ.get("MATOMO_DB_USER", "matomo"),
+        "password": os.environ.get("MATOMO_DB_PASSWORD", ""),
+        "host": os.environ.get("MATOMO_DB_HOST", "localhost"),
+        "socket": os.environ.get("MATOMO_DB_SOCKET", "/var/run/mysqld/mysqld.sock"),
+        "provider": os.environ.get("MATOMO_DB_PROVIDER", "existing"),
+        "admin_user": os.environ.get("MATOMO_DB_ADMIN_USER", "root"),
+        "admin_password": os.environ.get("MATOMO_DB_ADMIN_PASSWORD", ""),
+    }
+
 print(json.dumps(data))
 PY
 )

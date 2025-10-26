@@ -472,3 +472,61 @@ monitor_cleanup() {
     
     log_success "监控日志清理完成，删除了 $cleaned_count 个文件"
 }
+
+# 启用 Salt Beacons 与 Reactor
+monitor_enable_events() {
+    log_highlight "配置 Salt Beacons 与 Reactor..."
+
+    sudo salt-call --local saltutil.sync_modules >/dev/null 2>&1 || true
+
+    local result
+    result=$(sudo salt-call --local saltgoat.enable_beacons 2>&1)
+    echo "$result"
+    if echo "$result" | grep -qi "\[ERROR\]"; then
+        log_error "[ERROR] 配置 beacons/reactor 失败"
+        return 1
+    fi
+    
+    log_info "显示当前 Beacon 列表:"
+    local beacon_output
+    beacon_output=$(sudo salt-call --local beacons.list 2>&1 || true)
+    echo "$beacon_output"
+    if echo "$beacon_output" | grep -q "beacons: null"; then
+        log_warning "未检测到激活的 Beacon，salt-minion 服务可能未运行"
+    fi
+    
+    log_info "显示当前 Reactor 配置:"
+    if command -v salt-run >/dev/null 2>&1; then
+        if ! sudo salt-run reactor.list; then
+            log_warning "无法读取 reactor 列表（salt-master 未安装或未运行）"
+        fi
+    else
+        log_warning "未检测到 salt-run 命令，跳过 reactor 配置检查"
+    fi
+}
+
+# 查看 Beacon 状态
+monitor_beacon_status() {
+    log_highlight "Salt Beacon & Schedule 状态..."
+    
+    echo ""
+    log_info "Beacons:"
+    local beacon_status
+    beacon_status=$(sudo salt-call --local beacons.list 2>&1 || true)
+    echo "$beacon_status"
+    if echo "$beacon_status" | grep -q "beacons: null"; then
+        log_warning "未检测到激活的 Beacon，salt-minion 服务可能未运行"
+    fi
+    
+    echo ""
+    log_info "Salt Schedule:"
+    sudo salt-call --local schedule.list --out=yaml
+
+    if command -v salt-run >/dev/null 2>&1; then
+        echo ""
+        log_info "Reactor 列表:"
+        if ! sudo salt-run reactor.list; then
+            log_warning "无法读取 reactor 列表（salt-master 未安装或未运行）"
+        fi
+    fi
+}

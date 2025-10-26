@@ -1,0 +1,3 @@
+{%- set beacon_settings = salt['pillar.get']('saltgoat:beacons', {}) %}
+beacons:
+{{ salt['slsutil.serialize']('yaml', beacon_settings) | indent(2, True) }}

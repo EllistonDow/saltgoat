@@ -68,10 +68,18 @@
   'git',
   'python3-pymysql'
 ] %}
+{%- if db_provider != 'mariadb' %}
+{%- set base_packages = base_packages + ['mysql-client'] %}
+{%- endif %}
 
 matomo-packages:
   pkg.installed:
     - pkgs: {{ base_packages }}
+    - install_recommends: False
+    - refresh: False
+    - retry:
+        attempts: 3
+        interval: 10
 
 matomo-download-archive:
   cmd.run:
@@ -81,13 +89,22 @@ matomo-download-archive:
       - pkg: matomo-packages
 
 {% if db_enabled and db_provider == 'mariadb' %}
+{%- set mysql_variant_installed = salt['pkg.version']('mysql-server') or salt['pkg.version']('mysql-client') or salt['pkg.version']('percona-server-server') or salt['pkg.version']('percona-server-client') %}
+{% if not mysql_variant_installed %}
 matomo-mariadb-packages:
   pkg.installed:
     - pkgs:
       - mariadb-server
       - mariadb-client
+    - install_recommends: False
     - require:
       - pkg: matomo-packages
+{% else %}
+matomo-mariadb-warning:
+  test.fail_without_changes:
+    - name: matomo-mariadb-conflict
+    - comment: "检测到系统已安装 MySQL/Percona 组件，无法自动安装 MariaDB。请将 matomo:db.provider 设置为 existing 或卸载冲突包后重试。"
+{% endif %}
 {% endif %}
 
 matomo-user:
@@ -202,12 +219,13 @@ matomo-db:
       - pkg: matomo-packages
     {% endif %}
 
+{%- set auth_clause = 'IDENTIFIED BY' if db_provider == 'mariadb' else 'IDENTIFIED WITH caching_sha2_password BY' %}
 {%- set escaped_password = db_password.replace("'", "''") %}
 
 matomo-db-user:
   cmd.run:
     - name: |
-        {{ mysql_cli }} -e "CREATE USER IF NOT EXISTS '{{ db_user }}'@'{{ db_host }}' IDENTIFIED BY '{{ escaped_password }}';"
+        {{ mysql_cli }} -e "CREATE USER IF NOT EXISTS '{{ db_user }}'@'{{ db_host }}' {{ auth_clause }} '{{ escaped_password }}';"
     - require:
       - mysql_database: matomo-db
 

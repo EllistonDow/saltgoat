@@ -140,9 +140,8 @@ php bin/magento setup:install
 
 使用SaltGoat工具进行开发:
 ```bash
-saltgoat magetools cache clear
-saltgoat magetools index reindex
 saltgoat magetools performance
+saltgoat magetools maintenance <site> daily
 ```
 
 ## 部署

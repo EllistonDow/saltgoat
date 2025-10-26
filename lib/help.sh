@@ -165,7 +165,11 @@ show_analyse_help() {
     help_command "--db-password"                  "覆盖数据库密码，未指定时自动生成随机密码"
     help_command "--db-admin-user|--db-admin-password" "用于创建数据库的管理账号；若系统存在 /etc/salt/mysql_saltuser.cnf 会自动读取 saltuser 凭据"
     help_command "--init-pillar"                  "若 Pillar 尚无 matomo 配置，自动写入默认块并刷新 Pillar"
+    help_command "--install-dir <path>"            "覆盖安装目录（同时写入 Pillar matomo:install_dir）"
+    help_command "--php-socket <path>"             "覆盖 PHP-FPM 套接字路径"
+    help_command "--owner|--group <name>"          "自定义站点文件属主/属组，默认 www-data"
     help_note "首次执行可结合 --init-pillar --with-db，一次性写入 Pillar 并创建数据库/用户。"
+    help_note "自动生成的数据库密码会写入 /var/lib/saltgoat/reports/matomo-db-password.txt，完成后请同步到 Pillar 并删除该文件。"
     echo ""
 
     help_subtitle "📋 安装后步骤"
@@ -239,7 +243,7 @@ show_nginx_help() {
     echo ""
 
     help_subtitle "🚀 快速建站"
-    help_command "create <site> \"dom1 dom2\" [path]" "创建站点并一次性绑定多域名"
+    help_command "create <site> \"dom1 dom2\" [path] [--magento]" "创建站点，支持多域名；加 --magento 自动套用 Magento 模板"
     help_command "list"                               "列出站点、根目录与证书状态"
     help_command "enable|disable <site>"              "立即切换站点上线/下线"
     help_command "delete <site>"                      "移除站点配置并清理符号链接"
@@ -252,14 +256,14 @@ show_nginx_help() {
     echo ""
 
     help_subtitle "🛡️ 安全强化"
-    help_command "modsecurity level <1-10>"           "调整 WAF 严格度（7 为生产推荐）"
-    help_command "modsecurity status"                 "查看规则版本与命中统计"
-    help_command "csp level <1-5>"                    "设置 Content-Security-Policy 安全档位"
-    help_command "csp enable|disable"                 "启用/禁用 CSP 与 ModSecurity"
+    help_command "modsecurity level <0-10> [--admin-path /admin]" "调整 WAF 严格度（0 禁用，7 为生产推荐）"
+    help_command "modsecurity status"                 "查看 WAF 等级与后台路径"
+    help_command "csp level <0-5>"                    "设置 Content-Security-Policy 安全档位（0 禁用）"
+    help_command "csp status"                         "检查当前 CSP 等级与策略摘要"
     echo ""
 
     help_subtitle "📋 常用示例"
-    help_command "saltgoat nginx create shop \"shop.com www.shop.com\"" "建站 + 多域名指向"
+    help_command "saltgoat nginx create shop \"shop.com www.shop.com\" --magento" "建站 + Magento 配置模板"
     help_command "saltgoat nginx add-ssl shop \"shop.com\""             "申请 Let's Encrypt 证书"
     help_command "saltgoat nginx modsecurity level 7"                  "一键切换至严格 WAF"
     help_command "saltgoat nginx csp status"                           "检查 CSP 是否生效"
@@ -318,13 +322,16 @@ show_monitor_help() {
     help_command "performance"                   "收集扩容建议所需的性能指标"
     help_command "report [daily|weekly]"         "生成 Markdown 报告至 reports/"
     help_command "realtime [seconds]"            "以 watch 模式实时刷新（默认 60s）"
+    help_command "enable-beacons"                "一键启用 Salt Beacons + Reactor"
+    help_command "beacons-status"                "查看 Beacon / Reactor / Schedule 状态"
     echo ""
 
     help_subtitle "📋 示例"
     help_command "saltgoat monitor system"       "例行巡检主机健康"
     help_command "saltgoat monitor report daily" "输出日报并存档"
     help_command "saltgoat monitor realtime 30"  "部署后短期监控瓶颈"
-    help_note "监控日志保存在 /var/log/saltgoat/monitor，可配合 Prometheus/Grafana 集成。"
+    help_command "saltgoat monitor enable-beacons" "启用服务自愈与资源告警"
+    help_note "监控日志保存在 /var/log/saltgoat/monitor，事件告警写入 /var/log/saltgoat/alerts.log，可配合 Prometheus/Grafana 集成。"
 }
 
 # 维护帮助
@@ -539,11 +546,6 @@ show_magetools_help() {
     help_command "permissions check [path]"     "检测文件/目录权限异常"
     help_command "permissions reset [path]"     "重置为官方推荐权限"
     help_note "操作 Magento CLI 时请使用 \`sudo -u www-data php bin/magento\`，详见 docs/MAGENTO_PERMISSIONS.md。"
-    echo ""
-
-    help_subtitle "📦 配置转换"
-    help_command "convert magento2"             "将 Nginx 虚拟主机自动转换为 Magento 模板"
-    help_command "convert check"                "校验站点是否满足 Magento2 要求"
     echo ""
 
     help_subtitle "⚡ 缓存 / 队列"

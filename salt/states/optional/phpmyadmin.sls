@@ -62,7 +62,7 @@ configure_nginx_phpmyadmin:
     - contents: |
         server {
             listen 80;
-            server_name _;
+            server_name {{ salt['pillar.get']('phpmyadmin:server_name', 'phpmyadmin.localhost') }};
             root /usr/share/phpmyadmin;
             index index.php;
 

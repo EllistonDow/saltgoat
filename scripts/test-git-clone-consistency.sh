@@ -61,6 +61,28 @@ else
     echo "   ❌ 未找到 salt/pillar/saltgoat.sls，请先运行 saltgoat install 初始化"
 fi
 
+log_info "7. 运行扩展回归测试..."
+if [[ -x "${SCRIPT_DIR}/tests/test_git_release.sh" ]]; then
+    echo "   -> saltgoat git push --dry-run 回归测试"
+    if ! bash "${SCRIPT_DIR}/tests/test_git_release.sh"; then
+        log_warning "Git 发布 dry-run 测试失败，请查看上方输出。"
+    fi
+fi
+
+if [[ -x "${SCRIPT_DIR}/tests/test_analyse_state.sh" ]]; then
+    echo "   -> optional.analyse 状态 dry-run 验证"
+    if ! bash "${SCRIPT_DIR}/tests/test_analyse_state.sh"; then
+        log_warning "Matomo dry-run 测试失败，请查看上方输出。"
+    fi
+fi
+
+if [[ -x "${SCRIPT_DIR}/tests/test_salt_versions.sh" ]]; then
+    echo "   -> Salt 版本与 lowstate 报告收集"
+    if ! bash "${SCRIPT_DIR}/tests/test_salt_versions.sh"; then
+        log_warning "Salt 版本收集脚本执行失败，请查看上方输出。"
+    fi
+fi
+
 log_success "git clone 安装一致性测试完成！"
 log_info "总结："
 log_info "  ✅ Salt States 使用 Pillar 变量，支持动态密码"

@@ -58,30 +58,10 @@ restart_ssh:
     - require:
       - file: configure_ssh_security
 
-# 安装和配置 ModSecurity
+# 安装 ModSecurity 依赖（由 core.nginx 根据 Pillar 决定是否启用）
 install_modsecurity:
   pkg.installed:
     - names:
       - libmodsecurity3t64
       - libapache2-mod-security2
       - modsecurity-crs
-
-# 配置 ModSecurity
-configure_modsecurity:
-  file.managed:
-    - name: /etc/modsecurity/modsecurity.conf
-    - contents: |
-        SecRuleEngine On
-        SecRequestBodyAccess On
-        SecResponseBodyAccess On
-        SecResponseBodyMimeType text/plain text/html text/xml
-        SecResponseBodyLimit 524288
-        SecTmpDir /tmp/
-        SecDataDir /tmp/
-        SecUploadDir /tmp/
-        SecUploadKeepFiles Off
-        SecCollectionTimeout 600
-        SecDefaultAction "phase:1,log,auditlog,pass"
-        SecDefaultAction "phase:2,log,auditlog,pass"
-    - require:
-      - pkg: install_modsecurity

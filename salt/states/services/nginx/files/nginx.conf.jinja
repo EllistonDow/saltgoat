@@ -5,6 +5,10 @@ pid {{ cfg.pid_file }};
 
 error_log {{ cfg.log_dir }}/error.log;
 
+{% if cfg.get('modules_enabled_dir') %}
+include {{ cfg.modules_enabled_dir }}/*.conf;
+{% endif %}
+
 events {
   worker_connections {{ cfg.worker_connections }};
 }

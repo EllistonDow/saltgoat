@@ -7,11 +7,9 @@
 # 模块化拆分后的辅助脚本列表
 MAGETOOLS_HELPER_FILES=(
     "install-tools.sh"
-    "cache-index.sh"
     "templates.sh"
     "deploy-maintenance.sh"
     "permissions.sh"
-    "convert.sh"
 )
 
 magetools_load_helpers() {
@@ -40,39 +38,6 @@ magetools_handler() {
     case "$1" in
         "install")
             install_magento_tool "$2"
-            ;;
-        "cache")
-            case "$2" in
-                "clear")
-                    clear_magento_cache
-                    ;;
-                "status")
-                    check_cache_status
-                    ;;
-                "warm")
-                    warm_magento_cache
-                    ;;
-                *)
-                    log_error "未知的缓存操作: $2"
-                    log_info "支持: clear, status, warm"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        "index")
-            case "$2" in
-                "reindex")
-                    reindex_magento
-                    ;;
-                "status")
-                    check_index_status
-                    ;;
-                *)
-                    log_error "未知的索引操作: $2"
-                    log_info "支持: reindex, status"
-                    exit 1
-                    ;;
-            esac
             ;;
         "template")
             case "$2" in
@@ -121,21 +86,6 @@ magetools_handler() {
                 *)
                     log_error "未知的权限操作: $2"
                     log_info "支持: fix, check, reset"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        "convert")
-            case "$2" in
-                "magento2")
-                    convert_to_magento2 "$3"
-                    ;;
-                "check")
-                    check_magento2_compatibility "$3"
-                    ;;
-                *)
-                    log_error "未知的转换操作: $2"
-                    log_info "支持: magento2, check"
                     exit 1
                     ;;
             esac

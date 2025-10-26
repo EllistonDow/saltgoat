@@ -2,19 +2,19 @@
 
 ## 🚀 快速开始
 
-### 安装 Salt Schedule（推荐）
+### 快速启用 Salt Schedule
 ```bash
-saltgoat magetools salt-schedule tank install
+saltgoat magetools cron tank install
 ```
 
 ### 检查状态
 ```bash
-saltgoat magetools salt-schedule tank status
+saltgoat magetools cron tank status
 ```
 
 ### 测试功能
 ```bash
-saltgoat magetools salt-schedule tank test
+saltgoat magetools cron tank test
 ```
 
 ## 📋 维护命令速查
@@ -57,25 +57,7 @@ saltgoat magetools maintenance tank deploy
 
 ## ⏰ 定时任务管理
 
-### Salt Schedule（推荐）
-```bash
-# 安装
-saltgoat magetools salt-schedule tank install
-
-# 查看状态
-saltgoat magetools salt-schedule tank status
-
-# 测试
-saltgoat magetools salt-schedule tank test
-
-# 查看日志
-saltgoat magetools salt-schedule tank logs
-
-# 卸载
-saltgoat magetools salt-schedule tank uninstall
-```
-
-### 系统 Cron（备用）
+### Salt Schedule 任务
 ```bash
 # 安装
 saltgoat magetools cron tank install
@@ -92,6 +74,8 @@ saltgoat magetools cron tank logs
 # 卸载
 saltgoat magetools cron tank uninstall
 ```
+
+> 若主机尚未运行 `salt-minion`，上述命令会自动写入 `/etc/cron.d/magento-maintenance` 并使用系统 Cron；启用 `salt-minion` 后重新执行 `install` 即可切换回 Salt Schedule。
 
 ## 📊 定时任务配置
 
@@ -117,7 +101,7 @@ saltgoat magetools permissions fix /var/www/tank
 ### 查看日志
 ```bash
 # 查看维护日志
-saltgoat magetools salt-schedule tank logs
+saltgoat magetools cron tank logs
 
 # 查看系统日志
 tail -f /var/log/magento-maintenance.log

@@ -70,8 +70,15 @@ php:
 # Nginx 配置
 nginx:
   version: '1.29.1'
-  modsecurity: true
   worker_processes: {{ pillar.get('nginx_worker_processes', 'auto') }}
+  modsecurity:
+    enabled: {{ pillar.get('nginx_modsecurity_enabled', False) }}
+    level: {{ pillar.get('nginx_modsecurity_level', 0) }}
+    admin_path: {{ pillar.get('nginx_modsecurity_admin_path', '/admin') }}
+  csp:
+    enabled: {{ pillar.get('nginx_csp_enabled', False) }}
+    level: {{ pillar.get('nginx_csp_level', 0) }}
+    policy: {{ pillar.get('nginx_csp_policy', "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'") }}
 
 # Composer 配置
 composer:

@@ -68,17 +68,8 @@ saltgoat magetools install phpunit
 saltgoat magetools install xdebug
 ```
 
-### 缓存管理
+### Valkey 管理
 ```bash
-# 清理缓存
-saltgoat magetools cache clear
-
-# 检查缓存状态
-saltgoat magetools cache status
-
-# 预热缓存
-saltgoat magetools cache warm
-
 # 使用 Salt 原生流程配置 Valkey
 saltgoat magetools valkey-setup bank
 saltgoat magetools valkey-setup bank --reuse-existing --cache-db 13 --page-db 14 --session-db 15
@@ -88,6 +79,7 @@ saltgoat magetools valkey-check bank --expected-owner www-data --expected-perms 
 
 # 兼容旧流程：使用 Shell 脚本重新分配数据库
 saltgoat magetools valkey-renew bank
+```
 
 ### RabbitMQ（Salt 原生）
 ```bash
@@ -112,15 +104,6 @@ saltgoat magetools rabbitmq-salt all bank \
 - `valkey-check`：验证 env.php、Valkey 连接、权限与密码一致性，可选参数包括 `--site-path`、`--expected-owner`、`--expected-group`、`--expected-perms`、`--valkey-conf`。
 - `valkey-renew`：保留传统 Shell 脚本流程，用于快速重新分配数据库或清理旧缓存。
 
-### 索引管理
-```bash
-# 重建索引
-saltgoat magetools index reindex
-
-# 检查索引状态
-saltgoat magetools index status
-```
-
 ### 维护管理
 ```bash
 # 检查维护状态
@@ -142,21 +125,13 @@ saltgoat magetools maintenance tank cleanup
 saltgoat magetools maintenance tank deploy
 ```
 
-### 定时任务管理
+### 定时任务管理（Salt Schedule）
 ```bash
-# Salt Schedule（推荐）
-saltgoat magetools salt-schedule tank install
-saltgoat magetools salt-schedule tank status
-saltgoat magetools salt-schedule tank test
-saltgoat magetools salt-schedule tank logs
-saltgoat magetools salt-schedule tank uninstall
-
-# 系统 Cron（备用）
-saltgoat magetools cron tank install
-saltgoat magetools cron tank status
-saltgoat magetools cron tank test
-saltgoat magetools cron tank logs
-saltgoat magetools cron tank uninstall
+saltgoat magetools cron tank install      # 安装 Salt Schedule 维护任务
+saltgoat magetools cron tank status       # 查看计划任务与 salt-minion 状态
+saltgoat magetools cron tank test         # 手动触发任务并验证
+saltgoat magetools cron tank logs         # 查看维护/健康检查日志
+saltgoat magetools cron tank uninstall    # 移除 Salt Schedule 任务
 ```
 
 ### 其他功能
