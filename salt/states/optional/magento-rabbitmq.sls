@@ -9,7 +9,8 @@
 {% set amqp_password = pillar.get('amqp_password') %}
 {% set amqp_vhost = pillar.get('amqp_vhost', '/' ~ site_name if site_name else '/magento') %}
 {% set mode = pillar.get('mode', 'smart') %}
-{% set threads = pillar.get('threads', 2) %}
+{% set threads = pillar.get('threads', 1) %}
+{% set threads_int = threads if threads is number else threads|int %}
 {% set service_user = pillar.get('service_user', 'www-data') %}
 {% set php_memory_limit = pillar.get('php_memory_limit', '2G') %}
 {% set cpu_quota = pillar.get('cpu_quota', '50%') %}
@@ -148,6 +149,61 @@ magento_rabbitmq_config_env:
     - require:
       - rabbitmq_user: magento_rabbitmq_user
 
+/usr/local/bin/magento-consumer-runner:
+  file.managed:
+    - mode: '0755'
+    - user: root
+    - group: root
+    - contents: |
+        #!/bin/bash
+        set -euo pipefail
+
+        INSTANCE="${1-}"
+        PHP_MEMORY="${2:-2G}"
+
+        if [[ -z "$INSTANCE" ]]; then
+            echo "[magento-consumer] missing instance identifier" >&2
+            exit 1
+        fi
+
+        INDEX="${INSTANCE##*-}"
+        REST="${INSTANCE%-${INDEX}}"
+        if [[ -z "$REST" || -z "$INDEX" ]]; then
+            echo "[magento-consumer@$INSTANCE] unable to parse instance identifier" >&2
+            exit 1
+        fi
+
+        CONSUMER="${REST##*-}"
+        SITE="${REST%-${CONSUMER}}"
+        SITE="${SITE%-}"
+        if [[ -z "$SITE" || -z "$CONSUMER" ]]; then
+            echo "[magento-consumer@$INSTANCE] missing SITE or CONSUMER" >&2
+            exit 1
+        fi
+
+        SITE_PATH="/var/www/$SITE"
+        if [[ ! -d "$SITE_PATH" ]]; then
+            echo "[magento-consumer@$INSTANCE] site path not found: $SITE_PATH" >&2
+            exit 1
+        fi
+
+        cd "$SITE_PATH"
+
+        FAILS=0
+        while true; do
+            /usr/bin/php -d memory_limit="$PHP_MEMORY" bin/magento queue:consumers:start "$CONSUMER" --single-thread --max-messages=10000
+            RC=$?
+            if [[ $RC -ne 0 ]]; then
+                FAILS=$((FAILS+1))
+                SLEEP=$(( FAILS < 5 ? 5 : 30 ))
+                echo "[magento-consumer@$SITE-$CONSUMER] exit code=$RC, backoff=${SLEEP}s" >&2
+                sleep "$SLEEP"
+            else
+                FAILS=0
+                sleep 2
+            fi
+        done
+
 {# Install systemd template unit #}
 /etc/systemd/system/magento-consumer@.service:
   file.managed:
@@ -165,32 +221,7 @@ magento_rabbitmq_config_env:
         User={{ service_user }}
         Group={{ service_user }}
         WorkingDirectory=/
-        ExecStart=/bin/sh -lc '\
-          INSTANCE="%i"; \
-          INDEX="${INSTANCE##*-}"; \
-          REST="${INSTANCE%-$INDEX}"; \
-          if [ -z "$REST" ] || [ -z "$INDEX" ]; then \
-            echo "[magento-consumer@$INSTANCE] unable to parse instance identifier"; exit 1; \
-          fi; \
-          CONSUMER="${REST##*-}"; \
-          SITE="${REST%-${CONSUMER}}"; \
-          SITE="${SITE%-}"; \
-          if [ -z "$SITE" ] || [ -z "$CONSUMER" ]; then \
-            echo "[magento-consumer@$INSTANCE] missing SITE or CONSUMER"; exit 1; \
-          fi; \
-          cd /var/www/$SITE || exit 1; \
-          FAILS=0; \
-          while true; do \
-            /usr/bin/php -d memory_limit={{ php_memory_limit }} bin/magento queue:consumers:start "$CONSUMER" --single-thread --max-messages=10000; RC=$?; \
-            if [ $RC -ne 0 ]; then \
-              FAILS=$((FAILS+1)); SLEEP=$(( FAILS<5 ? 5 : 30 )); \
-              echo "[magento-consumer@$SITE-$CONSUMER] exit code=$RC, backoff=$SLEEP s"; \
-              sleep $SLEEP; \
-            else \
-              FAILS=0; sleep 2; \
-            fi; \
-          done\
-        '
+        ExecStart=/usr/local/bin/magento-consumer-runner "%i" {{ php_memory_limit }}
         Restart=always
         RestartSec=5
         StandardOutput=journal
@@ -207,11 +238,12 @@ systemd_daemon_reload_for_magento_consumers:
   cmd.run:
     - name: systemctl daemon-reload
     - onchanges:
+      - file: /usr/local/bin/magento-consumer-runner
       - file: /etc/systemd/system/magento-consumer@.service
 
 {# Declare and start units #}
 {% for consumer in consumers %}
-  {% for n in range(1, (threads if threads is number else 2) + 1) %}
+  {% for n in range(1, threads_int + 1) %}
 magento_consumer_unit_{{ consumer | replace('.', '_') }}_{{ n }}_enabled:
   service.enabled:
     - name: magento-consumer@{{ site_name }}-{{ consumer }}-{{ n }}.service
@@ -226,8 +258,47 @@ magento_consumer_unit_{{ consumer | replace('.', '_') }}_{{ n }}_running:
       - service: magento_consumer_unit_{{ consumer | replace('.', '_') }}_{{ n }}_enabled
       - cmd: systemd_daemon_reload_for_magento_consumers
       - cmd: magento_rabbitmq_config_env
+    - watch:
+      - file: /etc/systemd/system/magento-consumer@.service
+      - file: /usr/local/bin/magento-consumer-runner
   {% endfor %}
 {% endfor %}
+
+magento_consumer_trim_unused_units:
+  cmd.run:
+    - name: |
+        bash -euo pipefail <<'SH'
+        SITE="{{ site_name }}"
+        THREADS={{ threads_int }}
+        declare -A desired=(
+        {% for c in consumers %}
+          ["{{ c }}"]=1
+        {% endfor %}
+        )
+        removed=0
+        while read -r unit; do
+          [[ -z "$unit" ]] && continue
+          name="${unit%.service}"
+          rest="${name#magento-consumer@${SITE}-}"
+          [[ "$rest" == "$name" ]] && continue
+          thread="${rest##*-}"
+          consumer="${rest%-${thread}}"
+          [[ "$thread" =~ ^[0-9]+$ ]] || continue
+          if [[ -z "${desired[$consumer]+x}" || "$thread" -gt "$THREADS" ]]; then
+            systemctl stop "$unit" >/dev/null 2>&1 || true
+            systemctl disable "$unit" >/dev/null 2>&1 || true
+            echo "[INFO] 停用多余消费者: $unit"
+            removed=1
+          fi
+        done < <(systemctl list-units --type=service --all --no-legend 2>/dev/null \
+          | awk '{print $1}' \
+          | grep -E "^magento-consumer@${SITE}-.*\.service$" || true)
+        if [[ "$removed" -eq 0 ]]; then
+          echo "[INFO] 未发现需要停用的消费者单元"
+        fi
+        SH
+    - require:
+      - cmd: systemd_daemon_reload_for_magento_consumers
 
 {% endif %}
 {% endif %}

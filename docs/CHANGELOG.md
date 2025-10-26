@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.1] - 2025-10-26
+
+### Changes
+- 修改 9 个文件: bank, modules/magetools/README.md, modules/magetools/rabbitmq-salt.sh, modules/magetools/rabbitmq.sh, salt/states/optional/magento-rabbitmq-check.sls 等
+
+
 ## [1.0.0] - 2025-10-26
 
 ### Changes

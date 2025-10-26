@@ -324,7 +324,7 @@ show_help() {
     echo "  smart   - 智能配置（仅核心消费者）"
     echo ""
     echo "参数:"
-    echo "  threads - 每个消费者的线程数（默认: 2）"
+    echo "  threads - 每个消费者的线程数（默认: 1）"
     echo ""
     echo "示例:"
     echo "  saltgoat magetools rabbitmq all tank"
@@ -617,7 +617,7 @@ main() {
     local mode="$1"
     SITE_NAME="$2"
     # shellcheck disable=SC2034
-    local threads="${3:-2}"
+    local threads="${3:-1}"
     SITE_PATH="/var/www/$SITE_NAME"
     VHOST_NAME="/$SITE_NAME"
     USER_NAME="${SITE_NAME}_user"

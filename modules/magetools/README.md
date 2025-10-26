@@ -92,6 +92,15 @@ saltgoat magetools rabbitmq-salt all bank \
   --amqp-host 127.0.0.1 --amqp-port 5672 \
   --amqp-user bank --amqp-password 'StrongP@ss' --amqp-vhost '/bank' \
   --service-user www-data --php-memory 2G
+
+# 仅检测，不会修改
+saltgoat magetools rabbitmq-salt check bank --mode smart --threads 1
+
+# 输出现有消费者 unit（含旧版/模板）
+saltgoat magetools rabbitmq-salt list bank
+
+# 清理 systemd unit，并从 env.php 中移除 queue 配置
+saltgoat magetools rabbitmq-salt remove bank
 ```
 
 默认密码来源：

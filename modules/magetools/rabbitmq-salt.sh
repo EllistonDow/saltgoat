@@ -13,7 +13,8 @@ source "${SCRIPT_DIR}/lib/utils.sh"
 
 RMQ_MODE="smart"
 SITE_NAME=""
-THREADS=2
+THREADS=1
+THREADS_OVERRIDE=0
 AMQP_HOST="127.0.0.1"
 AMQP_PORT=5672
 AMQP_USER=""
@@ -29,11 +30,13 @@ usage() {
 用法:
   配置: saltgoat magetools rabbitmq-salt <mode> <site> [选项]
   检测: saltgoat magetools rabbitmq-salt check <site> [选项]
+  清理: saltgoat magetools rabbitmq-salt remove <site> [选项]
+  列表: saltgoat magetools rabbitmq-salt list <site|all>
 
 mode: all | smart
 
 选项:
-  --threads N          每个消费者实例数量（默认 2）
+  --threads N          每个消费者实例数量（默认 1）
   --amqp-host HOST     Broker 主机（默认 127.0.0.1）
   --amqp-port PORT     Broker 端口（默认 5672）
   --amqp-user USER     AMQP 用户（默认 <site>）
@@ -56,6 +59,37 @@ load_env_defaults() {
     AMQP_PASSWORD="${AMQP_PASSWORD:-${pillar_password:-$AMQP_PASSWORD}}"
 }
 
+auto_detect_threads() {
+    local max_threads=0 unit
+    while read -r unit; do
+        [[ -z "$unit" ]] && continue
+        if [[ "$unit" =~ ^magento-consumer@${SITE_NAME}-.+-([0-9]+)\.service$ ]]; then
+            local thread="${BASH_REMATCH[1]}"
+            if [[ "$thread" =~ ^[0-9]+$ ]] && (( thread > max_threads )); then
+                max_threads=$thread
+            fi
+        fi
+    done < <(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}')
+
+    if (( max_threads > 0 )); then
+        THREADS="$max_threads"
+        log_info "自动检测到现有消费者线程数: ${THREADS}"
+    else
+        log_info "未检测到现有消费者线程，沿用默认线程数 ${THREADS}"
+    fi
+}
+
+ensure_threads_integer() {
+    if ! [[ "$THREADS" =~ ^[0-9]+$ ]]; then
+        abort "线程数必须为正整数"
+    fi
+    THREADS=$(( THREADS ))
+    if (( THREADS < 1 )); then
+        log_warning "线程数小于 1，已自动调整为 1"
+        THREADS=1
+    fi
+}
+
 ACTION="apply"
 
 parse_args() {
@@ -64,6 +98,17 @@ parse_args() {
         ACTION="check"; shift
         RMQ_MODE="smart"  # 默认 smart，可通过 --mode 覆盖
         SITE_NAME="$1"; shift
+    elif [[ "$1" == "remove" ]]; then
+        ACTION="remove"; shift
+        RMQ_MODE="smart"
+        SITE_NAME="$1"; shift
+    elif [[ "$1" == "list" ]]; then
+        ACTION="list"; shift
+        RMQ_MODE="smart"
+        SITE_NAME="$1"; shift
+        if [[ "$SITE_NAME" == "all" ]]; then
+            SITE_NAME="__ALL__"
+        fi
     else
         RMQ_MODE="$1"; shift
         SITE_NAME="$1"; shift
@@ -75,13 +120,13 @@ parse_args() {
         case "$1" in
             --threads)
                 val="${2-}"; [[ -z "$val" ]] && abort "--threads 需要一个值";
-                THREADS="$val"; shift 2 ;;
+                THREADS="$val"; THREADS_OVERRIDE=1; shift 2 ;;
             --threads=*)
                 val="${1#*=}"; [[ -z "$val" ]] && abort "--threads 需要一个值";
-                THREADS="$val"; shift ;;
+                THREADS="$val"; THREADS_OVERRIDE=1; shift ;;
             -t)
                 val="${2-}"; [[ -z "$val" ]] && abort "-t 需要一个值";
-                THREADS="$val"; shift 2 ;;
+                THREADS="$val"; THREADS_OVERRIDE=1; shift 2 ;;
             --mode)
                 val="${2-}"; [[ -z "$val" ]] && abort "--mode 需要一个值 (all|smart)";
                 RMQ_MODE="$val"; shift 2 ;;
@@ -141,16 +186,20 @@ parse_args() {
     # Load pillar defaults early (flags still override)
     load_env_defaults
 
-    if [[ "$RMQ_MODE" != "all" && "$RMQ_MODE" != "smart" ]]; then
-        abort "mode 仅支持 all 或 smart"
+    if [[ "$SITE_NAME" != "__ALL__" ]]; then
+        if [[ -z "$SITE_NAME" || "$SITE_NAME" =~ [^a-zA-Z0-9_-] ]]; then
+            abort "站点名称非法"
+        fi
     fi
-    if [[ -z "$SITE_NAME" || "$SITE_NAME" =~ [^a-zA-Z0-9_-] ]]; then
-        abort "站点名称非法"
-    fi
-    if [[ -z "$AMQP_USER" ]]; then AMQP_USER="${SITE_NAME}"; fi
-    if [[ -z "$AMQP_VHOST" ]]; then AMQP_VHOST="/${SITE_NAME}"; fi
-    if [[ -z "$AMQP_PASSWORD" ]]; then
-        abort "缺少 AMQP 密码。请在 salt/pillar/saltgoat.sls 中配置 rabbitmq_password 或使用 --amqp-password 传入。"
+    if [[ "$ACTION" != "remove" && "$ACTION" != "list" ]]; then
+        if [[ "$RMQ_MODE" != "all" && "$RMQ_MODE" != "smart" ]]; then
+            abort "mode 仅支持 all 或 smart"
+        fi
+        if [[ -z "$AMQP_USER" ]]; then AMQP_USER="${SITE_NAME}"; fi
+        if [[ -z "$AMQP_VHOST" ]]; then AMQP_VHOST="/${SITE_NAME}"; fi
+        if [[ -z "$AMQP_PASSWORD" ]]; then
+            abort "缺少 AMQP 密码。请在 salt/pillar/saltgoat.sls 中配置 rabbitmq_password 或使用 --amqp-password 传入。"
+        fi
     fi
 }
 
@@ -189,17 +238,67 @@ print(json.dumps(data))
 PY
 }
 
-apply_state() {
-    local pillar_json
-    pillar_json="$(build_pillar_json)"
-    if [[ "$ACTION" == "check" ]]; then
-        log_info "执行 RabbitMQ 检测 ..."
-        salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq-check pillar="$pillar_json"
-    else
-        log_info "应用 Salt 状态 optional.magento-rabbitmq ..."
-        salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq pillar="$pillar_json"
-    fi
+build_remove_pillar_json() {
+    PILLAR_SITE_NAME="$SITE_NAME" \
+    PILLAR_SITE_PATH="/var/www/${SITE_NAME}" \
+    PILLAR_SERVICE_USER="$SERVICE_USER" \
+    python3 - <<'PY'
+import json, os
+data = {
+  "site_name": os.environ["PILLAR_SITE_NAME"],
+  "site_path": os.environ["PILLAR_SITE_PATH"],
+  "service_user": os.environ["PILLAR_SERVICE_USER"],
+}
+print(json.dumps(data))
+PY
 }
 
-main() { parse_args "$@"; apply_state; }
+build_list_pillar_json() {
+    PILLAR_SITE_NAME="$SITE_NAME" \
+    python3 - <<'PY'
+import json, os
+name = os.environ["PILLAR_SITE_NAME"]
+if name == "__ALL__":
+    print(json.dumps({"site_name": None, "list_all": True}))
+else:
+    print(json.dumps({"site_name": name, "list_all": False}))
+PY
+}
+
+apply_state() {
+    local pillar_json
+    case "$ACTION" in
+        check)
+            pillar_json="$(build_pillar_json)"
+            log_info "执行 RabbitMQ 检测 ..."
+            salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq-check pillar="$pillar_json"
+            ;;
+        remove)
+            pillar_json="$(build_remove_pillar_json)"
+            log_info "清理 RabbitMQ 消费者 ..."
+            salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq-remove pillar="$pillar_json"
+            ;;
+        list)
+            pillar_json="$(build_list_pillar_json)"
+            log_info "列出 RabbitMQ 消费者 ..."
+            salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq-list pillar="$pillar_json"
+            ;;
+        *)
+            pillar_json="$(build_pillar_json)"
+            log_info "应用 Salt 状态 optional.magento-rabbitmq ..."
+            salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq pillar="$pillar_json"
+            ;;
+    esac
+}
+
+main() {
+    parse_args "$@"
+    if [[ "$ACTION" == "check" && "$THREADS_OVERRIDE" -eq 0 ]]; then
+        auto_detect_threads
+    fi
+    if [[ "$ACTION" != "remove" && "$ACTION" != "list" ]]; then
+        ensure_threads_integer
+    fi
+    apply_state
+}
 main "$@"

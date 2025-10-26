@@ -26,6 +26,10 @@
 {% set redis_disable_locking = pillar.get('disable_locking', '0') %}
 {% set redis_min_lifetime = pillar.get('min_lifetime', '60') %}
 {% set redis_max_lifetime = pillar.get('max_lifetime', '2592000') %}
+{% set magento_user = pillar.get('magento_user', 'www-data') %}
+{% set magento_user_prefix = 'sudo -u {0} '.format(magento_user) if magento_user else '' %}
+{% set magento_php = magento_user_prefix + 'php' %}
+{% set magento_cli = magento_php + ' bin/magento' %}
 {% set rendered_payload = {
   'site_path': site_path,
   'cache': {
@@ -87,7 +91,7 @@ magento_valkey_env_missing:
 magento_valkey_configure:
   cmd.run:
     - name: |
-        php <<'PHP'
+        {{ magento_php }} <<'PHP'
         <?php
         $payload = json_decode(<<<'JSON'
         {{ rendered_payload | json }}
@@ -166,7 +170,7 @@ magento_valkey_configure:
         PHP
     - cwd: {{ site_path }}
     - unless: |
-        php <<'PHP'
+        {{ magento_php }} <<'PHP'
         <?php
         $payload = json_decode(<<<'JSON'
         {{ rendered_payload | json }}
@@ -225,7 +229,6 @@ magento_valkey_configure:
         exit(0);
         ?>
         PHP
-    - runas: www-data
 
 {% set redis_auth = '-a "$VALKEY_PASSWORD"' if valkey_password else '' %}
 
@@ -242,21 +245,21 @@ magento_valkey_flush_databases:
 
 magento_valkey_cache_clean:
   cmd.wait:
-    - name: sudo -u www-data php bin/magento cache:clean
+    - name: {{ magento_cli }} cache:clean
     - cwd: {{ site_path }}
     - onchanges:
       - cmd: magento_valkey_configure
 
 magento_valkey_cache_flush:
   cmd.wait:
-    - name: sudo -u www-data php bin/magento cache:flush
+    - name: {{ magento_cli }} cache:flush
     - cwd: {{ site_path }}
     - onchanges:
       - cmd: magento_valkey_cache_clean
 
 magento_valkey_session_status:
   cmd.wait:
-    - name: sudo -u www-data php bin/magento cache:status
+    - name: {{ magento_cli }} cache:status
     - cwd: {{ site_path }}
     - onchanges:
       - cmd: magento_valkey_cache_flush

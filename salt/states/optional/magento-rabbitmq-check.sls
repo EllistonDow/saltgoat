@@ -8,7 +8,7 @@
 {% set amqp_password = pillar.get('amqp_password', '') %}
 {% set amqp_vhost = pillar.get('amqp_vhost', '/' ~ site_name if site_name else '/magento') %}
 {% set mode = pillar.get('mode', 'smart') %}
-{% set threads = pillar.get('threads', 2) %}
+{% set threads = pillar.get('threads', 1) %}
 
 {% if not site_name %}
 rabbitmq_check_missing_site:
