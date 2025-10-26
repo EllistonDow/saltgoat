@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [0.9.17] - 2025-10-26
+
+### Changes
+- 修改 2 个文件: salt/pillar/nginx.sls, services/nginx.sh
+
+
 ## [0.9.16] - 2025-10-26
 
 ### Changes

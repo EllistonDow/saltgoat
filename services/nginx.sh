@@ -595,9 +595,14 @@ cmd_ssl() {
     local site="$1"
     local domain="${2:-}"
     local email="${3:-}"
+    local dry_run="${4:-0}"
     ensure_pillar_file
     python_update ssl "$site" "" "" "$email" "$domain"
     log_info "已更新站点 ${site} 的 SSL 信息。请确保证书已存在或执行 salt-call state.apply optional.certbot。"
+    if [[ "$dry_run" == "1" ]]; then
+        log_info "Dry run 模式：已跳过 core.nginx 状态套用，可使用 salt-call state.apply core.nginx 手动验证。"
+        return 0
+    fi
     cmd_apply
 }
 
@@ -683,10 +688,34 @@ _nginx_dispatch() {
         add-ssl)
             local site="${2:-}"
             if [[ -z "$site" ]]; then
-                log_error "用法: saltgoat nginx add-ssl <站点> [域名] [email]"
+                log_error "用法: saltgoat nginx add-ssl <站点> [域名] [email] [-dry-on]"
                 exit 1
             fi
-            cmd_ssl "$site" "${3:-}" "${4:-}"
+            local domain=""
+            local email=""
+            local dry_run=0
+            shift 2
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    -dry-on)
+                        dry_run=1
+                        ;;
+                    -*)
+                        log_warning "忽略未知参数: $1"
+                        ;;
+                    *)
+                        if [[ -z "$domain" ]]; then
+                            domain="$1"
+                        elif [[ -z "$email" ]]; then
+                            email="$1"
+                        else
+                            log_warning "忽略多余参数: $1"
+                        fi
+                        ;;
+                esac
+                shift
+            done
+            cmd_ssl "$site" "$domain" "$email" "$dry_run"
             ;;
         reload)
             cmd_reload

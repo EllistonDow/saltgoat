@@ -23,6 +23,12 @@ nginx:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
       magento: true
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/bank.magento.tattoogoat.com/fullchain.pem
+        key: /etc/letsencrypt/live/bank.magento.tattoogoat.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
   csp:
     enabled: true
     level: 3
@@ -33,3 +39,4 @@ nginx:
     level: 5
     admin_path: /admin_tattoo
     module_path: /usr/lib/nginx/modules/ngx_http_modsecurity_module.so
+  ssl_email: -dry-on
