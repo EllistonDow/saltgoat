@@ -127,7 +127,7 @@ test_cron_tasks() {
     
     if [[ -f /etc/cron.d/magento-maintenance ]]; then
         log_warning "当前使用系统 Cron 管理维护计划，Salt Schedule 测试跳过"
-        log_info "可手动执行: sudo /usr/local/bin/magento-maintenance-salt $SITE_NAME daily"
+        log_info "可手动执行: saltgoat magetools maintenance $SITE_NAME daily"
         return 0
     fi
 

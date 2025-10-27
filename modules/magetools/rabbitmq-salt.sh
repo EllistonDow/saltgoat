@@ -271,22 +271,22 @@ apply_state() {
         check)
             pillar_json="$(build_pillar_json)"
             log_info "执行 RabbitMQ 检测 ..."
-            salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq-check pillar="$pillar_json"
+            sudo salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq-check pillar="$pillar_json"
             ;;
         remove)
             pillar_json="$(build_remove_pillar_json)"
             log_info "清理 RabbitMQ 消费者 ..."
-            salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq-remove pillar="$pillar_json"
+            sudo salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq-remove pillar="$pillar_json"
             ;;
         list)
             pillar_json="$(build_list_pillar_json)"
             log_info "列出 RabbitMQ 消费者 ..."
-            salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq-list pillar="$pillar_json"
+            sudo salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq-list pillar="$pillar_json"
             ;;
         *)
             pillar_json="$(build_pillar_json)"
             log_info "应用 Salt 状态 optional.magento-rabbitmq ..."
-            salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq pillar="$pillar_json"
+            sudo salt-call --local --retcode-passthrough state.apply optional.magento-rabbitmq pillar="$pillar_json"
             ;;
     esac
 }

@@ -66,7 +66,8 @@ ENV_BACKUP_PATH=""
 PILLAR_JSON=""
 
 declare -a ORIGINAL_SELF_DBS=()
-declare -a REDIS_CLI_ARGS=()
+declare -a VALKEY_CLI_ARGS=()
+VALKEY_CLI_BIN="valkey-cli"
 declare -A USED_BY_OTHER=()
 declare -A USED_BY_SELF=()
 declare -i CLEANED_DB_COUNT=0
@@ -202,7 +203,14 @@ ensure_prerequisites() {
     require_command salt-call
     require_command php
     require_command python3
-    require_command redis-cli
+
+    if command -v valkey-cli >/dev/null 2>&1; then
+        VALKEY_CLI_BIN="valkey-cli"
+    elif command -v redis-cli >/dev/null 2>&1; then
+        VALKEY_CLI_BIN="redis-cli"
+    else
+        abort "缺少必要命令: valkey-cli 或 redis-cli"
+    fi
 
     if [[ -n "$CACHE_DB_OVERRIDE" ]]; then
         validate_db_number "$CACHE_DB_OVERRIDE"
@@ -490,22 +498,22 @@ print(value if value is not None else "")' <<<"$output")"
     fi
 }
 
-build_redis_cli_args() {
-    REDIS_CLI_ARGS=(-h "$VALKEY_HOST" -p "$VALKEY_PORT" --no-auth-warning)
+build_valkey_cli_args() {
+    VALKEY_CLI_ARGS=(-h "$VALKEY_HOST" -p "$VALKEY_PORT" --no-auth-warning)
     if [[ -n "$VALKEY_PASSWORD" ]]; then
-        REDIS_CLI_ARGS+=(-a "$VALKEY_PASSWORD")
+        VALKEY_CLI_ARGS+=(-a "$VALKEY_PASSWORD")
     fi
 }
 
 ensure_valkey_connection() {
-    build_redis_cli_args
-    if ! redis-cli "${REDIS_CLI_ARGS[@]}" ping >/dev/null 2>&1; then
+    build_valkey_cli_args
+    if ! "$VALKEY_CLI_BIN" "${VALKEY_CLI_ARGS[@]}" ping >/dev/null 2>&1; then
         abort "无法连接到 Valkey (${VALKEY_HOST}:${VALKEY_PORT})，请确认服务状态和密码"
     fi
 }
 
-redis_cli() {
-    redis-cli "${REDIS_CLI_ARGS[@]}" "$@"
+valkey_cli() {
+    "$VALKEY_CLI_BIN" "${VALKEY_CLI_ARGS[@]}" "$@"
 }
 
 create_env_backup() {
@@ -611,7 +619,7 @@ cleanup_replaced_databases() {
             continue
         fi
         log_info "清理站点 ${SITE_NAME} 之前使用的 Valkey 数据库: DB $db"
-        if redis_cli -n "$db" flushdb >/dev/null 2>&1; then
+        if valkey_cli -n "$db" flushdb >/dev/null 2>&1; then
             ((cleaned++))
         else
             log_warning "清理 DB $db 失败"

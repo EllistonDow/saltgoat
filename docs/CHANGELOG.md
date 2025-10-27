@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.2] - 2025-10-27
+
+### Changes
+- 修改 45 个文件: README.md, bank, docs/BACKUP_RESTIC.md, docs/INSTALL.md, docs/MAGENTO_MAINTENANCE.md 等
+
+
 ## [1.0.1] - 2025-10-26
 
 ### Changes

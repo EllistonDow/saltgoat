@@ -11,9 +11,6 @@ show_help() {
         "nginx")
             show_nginx_help
             ;;
-        "database")
-            show_database_help
-            ;;
         "monitor")
             show_monitor_help
             ;;
@@ -28,6 +25,9 @@ show_help() {
             ;;
         "speedtest")
             show_speedtest_help
+            ;;
+        "xtrabackup")
+            show_xtrabackup_help
             ;;
         "monitoring")
             show_monitoring_help
@@ -100,7 +100,6 @@ show_main_help() {
     help_command "install"                         "安装 LEMP 栈或指定组件"
     help_command "pillar"                          "初始化 / 查看 / 刷新 Pillar 凭据"
     help_command "nginx"                           "站点与负载管理"
-    help_command "database"                        "MySQL、Valkey 运维工具"
     help_command "maintenance"                     "系统维护、更新与清理"
     help_command "optimize"                        "系统 / Magento 优化"
     help_command "monitor"                         "系统与服务监控"
@@ -271,39 +270,6 @@ show_nginx_help() {
     help_note "需要自定义邮箱或 DNS 验证时，可先运行 \`saltgoat pillar show\` 确认 ssl_email。"
 }
 
-# 数据库帮助
-show_database_help() {
-    help_title "数据库与缓存管理"
-    echo -e "用法: ${GREEN}saltgoat database <mysql|valkey> <action> [options]${NC}"
-    echo ""
-
-    help_subtitle "🗄️ MySQL 常用操作"
-    help_command "create <dbname>"                 "按 Pillar 凭据创建库与用户"
-    help_command "list"                            "列出数据库 / 字符集 / 大小"
-    help_command "status"                          "查看版本、连接数、InnoDB 摘要"
-    help_command "delete <dbname>"                 "移除数据库并撤销权限"
-    echo ""
-
-    help_subtitle "💾 备份 & 恢复"
-    help_command "backup <dbname> [name]"          "mysqldump + gzip，默认入 /var/backups/mysql"
-    help_command "restore <dbname> <file>"         "支持 .sql 与 .sql.gz 自动识别"
-    help_command "cleanup-backups [days]"          "清理过期备份并统计空间"
-    echo ""
-
-    help_subtitle "⚡ Valkey (Redis 兼容)"
-    help_command "create <name>"                   "创建命名空间并记录在 Pillar"
-    help_command "list"                            "查看命名空间、DB 映射与内存"
-    help_command "flush <name>"                    "清空指定命名空间数据"
-    help_command "stats"                           "输出命中率、最大内存与策略"
-    echo ""
-
-    help_subtitle "📋 常用场景"
-    help_command "saltgoat database mysql backup magento"  "滚动备份应用数据库"
-    help_command "saltgoat database mysql status"          "上线前确认数据库健康"
-    help_command "saltgoat database valkey stats"          "验证缓存命中情况"
-    help_note "所有敏感凭据来自 Pillar，可通过 \`saltgoat passwords --refresh\` 重新同步。"
-}
-
 # 监控帮助
 show_monitor_help() {
     help_title "运行状态与监控"
@@ -426,8 +392,6 @@ show_complete_help() {
     show_install_help
     echo ""
     show_nginx_help
-    echo ""
-    show_database_help
     echo ""
     show_analyse_help
     echo ""
@@ -552,13 +516,38 @@ show_magetools_help() {
     help_subtitle "⚡ 缓存 / 队列"
     help_command "valkey-renew <site>"          "重新分配 Valkey 数据库并更新 env.php"
     help_command "valkey-check <site>"          "验证 Valkey 连接、密码与权限"
-    help_command "rabbitmq all <site> [threads]"   "部署全部消费者（21 个），可设线程数"
-    help_command "rabbitmq smart <site> [threads]" "只启用核心消费者，低资源模式"
-    help_command "rabbitmq check <site>"           "检查队列堆积与消费者状态"
+    help_command "rabbitmq-salt smart|all <site>" "使用 Salt 状态启用消费者（默认 1 线程）"
+    help_command "rabbitmq-salt check <site>"     "对照 Pillar 检测 AMQP/消费者状态"
+    help_command "rabbitmq-salt list <site|all>"  "列出指定站点或全局的 systemd unit"
+    help_command "rabbitmq-salt remove <site>"    "停用消费者并清理 env.php queue 配置"
+    help_note "旧版 \`rabbitmq all|smart|check\` 仍可用，但推荐迁移至 rabbitmq-salt。"
     help_note "Valkey/RabbitMQ 凭据来自 Pillar，可通过 \`saltgoat passwords\` 查看。"
     echo ""
 
+    help_subtitle "💾 备份"
+    help_command "backup restic install"       "应用 Restic 可选模块（需在 Pillar 配置 backup.restic）"
+    help_command "backup restic run"           "立即触发一次 Restic 备份"
+    help_command "backup restic snapshots"     "列出 Restic 快照（需已启用模块）"
+    help_command "backup restic logs 200"      "查看最近备份日志"
+    help_command "backup restic summary"       "汇总所有站点的快照与服务状态"
+    help_command "backup restic exec <cmd>"    "直接调用 restic（restore/mount/init 等）"
+    help_note "大多数 Restic 命令涉及 /etc/restic，建议加 sudo 执行"
+    help_note "install 支持 --site/--repo/--paths，脚本会自动安装 restic 并写入 Pillar，密码可通过 'saltgoat passwords --show' 查看"
+    help_note "run 支持 --site/--paths/--backup-dir/--tag 等参数，可用于单站点/本地仓库快照"
+    help_note "旧版本地备份可通过 \`saltgoat magetools backup magento\` 执行。"
+    echo ""
+
+    help_subtitle "🗄️ 数据库备份"
+    help_command "xtrabackup mysql install"    "部署 Percona XtraBackup 自动化（需在 Pillar 配置 mysql_backup）"
+    help_command "xtrabackup mysql run"        "即时触发一次数据库热备"
+    help_command "xtrabackup mysql logs 200"   "查看数据库备份日志"
+    help_command "xtrabackup mysql summary"    "汇总备份目录、容量与服务状态"
+    help_note "数据库备份同样推荐使用 sudo，确保能读取 /etc/mysql/mysql-backup.env；旧命令 'backup mysql' 仍可用但已弃用"
+    help_note "备份结果会按日期保存在 Pillar 指定目录，可配合 Restic 继续归档"
+    echo ""
+
     help_subtitle "🩺 站点诊断"
+    help_command "maintenance <site> daily|weekly|..." "通过 Salt 状态执行维护任务"
     help_command "cron status|enable <site>"    "查看或启用 magento cron 计划"
     help_command "migrate-detect <path>"        "检测站点迁移风险与遗留配置"
     help_command "opensearch-auth <site>"       "修复 Magento ↔ OpenSearch 鉴权"
@@ -569,6 +558,41 @@ show_magetools_help() {
     help_command "saltgoat magetools permissions fix /var/www/shop" "快速修复线上站点权限"
     help_command "saltgoat magetools valkey-renew shop"             "为站点重新绑定缓存库"
     help_command "saltgoat magetools rabbitmq smart shop 4"         "按需启用消费者并限制线程数"
+}
+
+# XtraBackup 帮助
+show_xtrabackup_help() {
+    help_title "Percona XtraBackup 自动化"
+    echo -e "用法: ${GREEN}saltgoat magetools xtrabackup mysql <subcommand> [options]${NC}"
+    echo ""
+
+    help_subtitle "🗄️ 核心命令"
+    help_command "install"                     "根据 Pillar 应用 optional.mysql-backup（启用 PXB 8.4 仓库）"
+    help_command "run"                         "立即触发一次热备（systemd service oneshot）"
+    help_command "status"                      "查看 service/timer 状态"
+    help_command "logs [N]"                    "打印最近 N 行备份日志（默认 100）"
+    help_command "summary"                     "汇总备份目录、容量与最近执行时间"
+    echo ""
+
+    help_subtitle "⚙️ 前置要求"
+    help_command "Pillar mysql_backup.*"       "需在 Pillar 中定义账号、目录、定时策略（示例见 docs/MYSQL_BACKUP.md）"
+    help_command "mysql_password"              "root 凭据默认读取 pillar['mysql_password']"
+    help_command "systemd"                     "安装流程会创建 saltgoat-mysql-backup.{service,timer}"
+    help_note "首次执行 install 会自动启用 percona-release pxb-84-lts 仓库，并卸载旧版 PXB 套件。"
+    echo ""
+
+    help_subtitle "🧰 常用选项"
+    help_command "--help"                      "查看 magetools 子命令帮助"
+    help_command "backup mysql ..."            "兼容旧命令，仍会调用 xtrabackup 并给出迁移提示"
+    help_note "所有命令建议加 sudo 运行，以读取 /etc/mysql/mysql-backup.env 与 systemd 资源。"
+    echo ""
+
+    help_subtitle "📋 示例"
+    help_command "sudo saltgoat magetools xtrabackup mysql install" "初始化备份账号、脚本与 systemd timer"
+    help_command "sudo saltgoat magetools xtrabackup mysql run"     "立即执行一次热备并写入时间戳目录"
+    help_command "sudo saltgoat magetools xtrabackup mysql summary" "巡检备份容量与最近执行时间"
+    help_command "sudo saltgoat magetools backup mysql run"         "沿用旧命令，内部转发至 xtrabackup 流程"
+    help_note "详细使用说明、恢复步骤与排错指南请参见 docs/MYSQL_BACKUP.md。"
 }
 
 # 版本锁定帮助

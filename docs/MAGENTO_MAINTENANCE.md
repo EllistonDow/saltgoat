@@ -9,7 +9,7 @@ SaltGoat Magento 2 维护系统提供了完整的自动化维护解决方案，�
 ### 🔧 维护管理
 - **维护模式控制** - 启用/禁用维护模式
 - **日常维护** - 缓存清理、索引重建、会话清理、日志清理
-- **每周维护** - 备份、日志轮换、Redis清空、性能检查
+- **每周维护** - 备份、日志轮换、Valkey 清空（可选）、性能检查
 - **每月维护** - 完整部署流程（维护模式→清理→升级→编译→部署→索引→禁用维护→清理缓存）
 - **健康检查** - Magento状态、数据库连接、缓存状态、索引状态
 
@@ -72,7 +72,33 @@ saltgoat magetools maintenance tank cleanup
 
 # 完整部署流程
 saltgoat magetools maintenance tank deploy
+
+# 示例：每周任务同时刷新 Valkey 并触发 Restic
+saltgoat magetools maintenance tank weekly --allow-valkey-flush --trigger-restic
 ```
+
+常用参数：
+
+| 参数 | 说明 |
+|------|------|
+| `--site-path PATH` | 指定站点根目录（默认 `/var/www/<site>`） |
+| `--magento-user USER` | 执行 Magento CLI 的用户（默认 `www-data`） |
+| `--php-bin PATH` | PHP 可执行文件路径（默认 `php`） |
+| `--composer-bin PATH` | Composer 可执行文件 |
+| `--valkey-cli PATH` | valkey-cli 可执行文件（旧 `--redis-cli` 仍兼容，仅打印弃用提示） |
+| `--allow-valkey-flush` | 允许在 weekly 任务中执行 `valkey-cli FLUSHALL`（旧 `--allow-redis-flush` alias） |
+| `--allow-setup-upgrade` | 允许 monthly/ deploy 执行 `setup:upgrade` |
+| `--backup-dir PATH` | 启用传统归档备份并指定输出目录 |
+| `--mysql-database NAME` | 归档备份使用的数据库名称（默认与站点同名） |
+| `--mysql-user USER` / `--mysql-password PASS` | mysqldump 用户与密码 |
+| `--trigger-restic` | 若已启用 Restic 模块，联动触发一次快照 |
+| `--restic-site NAME` | 触发 Restic 时仅备份指定站点（传递给 `backup restic run --site`） |
+| `--restic-backup-dir PATH` | 覆盖 Restic 仓库（如 `/home/Dropbox/<site>/snapshots`） |
+| `--restic-extra-path PATH` | Restic 额外路径，可多次使用或改用 `--restic-extra-paths "p1,p2"` |
+| `--static-langs \"en_US zh_CN\"` | 静态资源部署语言列表 |
+| `--static-jobs N` | 静态资源部署线程数（默认 4） |
+
+> 提示：`--restic-*` 参数依赖 `optional.backup-restic` 下发的仓库与密码配置（来自 Pillar）。若仅需一次性备份，可直接使用 `saltgoat magetools backup restic run --password-file ...`。
 
 ### 定时任务管理
 
@@ -99,38 +125,42 @@ saltgoat magetools cron tank uninstall
 ## 维护任务详解
 
 ### 每日维护任务
-**执行时间**: 每天凌晨2点
-**包含操作**:
-1. **缓存清理** - `php bin/magento cache:flush`
-2. **索引重建** - `php bin/magento indexer:reindex`
-3. **会话清理** - `php bin/magento session:clean`
-4. **日志清理** - `php bin/magento log:clean`
+**执行时间**: 默认每天凌晨 02:00
 
-**目的**: 保持系统日常运行状态，清理临时数据
+**包含操作**
+1. 缓存刷新 `cache:flush`
+2. 全量索引 `indexer:reindex`
+3. 权限巡检（提示 root 属主文件）
+4. 会话清理 `session:clean`
+5. 日志清理 `log:clean`
+6. 缓存清理 `cache:clean`
+
+> 可通过 `--site-path`、`--php-bin`、`--magento-user` 等参数自定义运行环境。
 
 ### 每周维护任务
-**执行时间**: 每周日凌晨3点
-**包含操作**:
-1. **创建备份** - `php bin/magento setup:backup`
-2. **日志轮换** - 清理大于100MB的日志文件
-3. **Redis清空** - `redis-cli FLUSHALL`
-4. **性能检查** - `n98-magerun2 sys:check`
+**执行时间**: 默认每周日凌晨 03:00
 
-**目的**: 深度清理和性能优化
+**包含操作**
+1. 缓存刷新 `cache:flush`
+2. 日志轮换（>100MB 文件 truncate）
+3. 归档备份（tar + mysqldump，可通过 `--backup-dir`、`--mysql-user/--mysql-password` 等参数启用）
+4. 可选 Restic 快照（`--trigger-restic`，可叠加 `--restic-site/--restic-backup-dir/--restic-extra-path` 将单站点备份写入自定义仓库）
+5. 可选 Valkey 清空（`--allow-valkey-flush`）
+6. 系统检查 `n98-magerun2 sys:check` / `composer outdated --no-dev`
+7. 索引状态 `indexer:status`
 
 ### 每月维护任务（完整部署流程）
-**执行时间**: 每月1日凌晨4点
-**包含操作**:
-1. **启用维护模式** - `php bin/magento maintenance:enable`
-2. **清理缓存和生成文件** - 删除 `var/{cache,page_cache,view_preprocessed,di}/*`、`pub/static/*`、`generated/*`
-3. **数据库升级** - `php bin/magento setup:upgrade`
-4. **编译依赖注入** - `php bin/magento setup:di:compile`
-5. **部署静态内容** - `php bin/magento setup:static-content:deploy -f -j 4`
-6. **重建索引** - `php bin/magento indexer:reindex`
-7. **禁用维护模式** - `php bin/magento maintenance:disable`
-8. **清理缓存** - `php bin/magento cache:clean`
+**执行时间**: 默认每月 1 日凌晨 04:00
 
-**目的**: 完整的系统更新和部署流程
+**包含操作**
+1. 启用维护模式 `maintenance:enable`
+2. 清理缓存/生成文件/静态资源/产品缓存
+3. 可选 `setup:upgrade`（通过 `--allow-setup-upgrade` 启用）
+4. 编译依赖 `setup:di:compile`
+5. 静态部署 `setup:static-content:deploy -f -j N`
+6. 全量索引 `indexer:reindex`
+7. 禁用维护模式并清理缓存
+8. Sitemap 生成、模块状态报告
 
 ### 健康检查任务
 **执行时间**: 每小时
@@ -194,8 +224,8 @@ saltgoat monitor beacons-status
 
 ### Salt States
 维护系统使用以下 Salt States：
-- `salt/states/optional/magento-schedule.sls` - 定时任务配置
-- `salt/states/scripts/magento-maintenance-salt.sh` - 维护脚本
+- `salt/states/optional/magento-schedule.sls` - 定时任务配置（Salt Schedule 优先，自动回退 Cron）
+- `salt/states/optional/magento-maintenance/*.sls` - 维护子任务（daily/weekly/monthly/backup/health 等）
 
 ### 权限管理
 - 使用 `sudo -u www-data` 执行 Magento CLI 命令

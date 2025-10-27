@@ -284,10 +284,7 @@ saltgoat git push 0.10.0 "Release notes"
 
 #### 修改密码
 ```bash
-# 修改 MySQL 密码（交互式）
-saltgoat database mysql password
-
-# 其他服务推荐在 Pillar 中编辑后执行 --refresh
+# 建议通过 Pillar 统一管理密码
 nano salt/pillar/saltgoat.sls
 saltgoat passwords --refresh
 ```

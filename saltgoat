@@ -85,7 +85,6 @@ register_module "monitoring-smart" "${SCRIPT_DIR}/modules/monitoring/smart-monit
 register_module "monitoring-dynamic" "${SCRIPT_DIR}/modules/monitoring/dynamic-monitoring.sh"
 register_module "monitoring-cost" "${SCRIPT_DIR}/modules/monitoring/cost-optimized-monitoring.sh"
 register_module "monitoring-grafana" "${SCRIPT_DIR}/modules/monitoring/grafana-email.sh"
-register_module "database" "${SCRIPT_DIR}/services/database.sh"
 register_module "state" "${SCRIPT_DIR}/services/state.sh"
 register_module "diagnose" "${SCRIPT_DIR}/modules/diagnose/diagnose.sh"
 register_module "version-lock" "${SCRIPT_DIR}/modules/version-lock/version-lock.sh"
@@ -164,16 +163,16 @@ show_versions() {
 mask_secret() {
     local value="$1"
     if [[ -z "$value" || "$value" == "未知" ]]; then
-        echo "${value:-未知}"
+        printf '%s' "${value:-未知}"
         return 0
     fi
 
     local length=${#value}
     if (( length <= 4 )); then
-        printf '****\n'
+        printf '****'
     else
         local tail="${value: -4}"
-        printf '***%s\n' "$tail"
+        printf '***%s' "$tail"
     fi
 }
 
@@ -190,37 +189,88 @@ show_passwords() {
     fi
 
     log_info "SaltGoat 密码信息:"
-    
-    local mysql_pass
-    mysql_pass="$(get_local_pillar_value mysql_password)"
-    
-    local valkey_pass
-    valkey_pass="$(sudo grep -E '^requirepass' /etc/valkey/valkey.conf 2>/dev/null | awk '{print $2}' | head -1)"
-    
-    local rabbitmq_pass
-    rabbitmq_pass="$(get_local_pillar_value rabbitmq_password)"
-    
-    local webmin_pass
-    webmin_pass="$(get_local_pillar_value webmin_password)"
-    
-    local phpmyadmin_pass
-    phpmyadmin_pass="$(get_local_pillar_value phpmyadmin_password)"
+    local entries=()
 
-    if [[ "$reveal" == "1" ]]; then
-        echo "MySQL Root: ${mysql_pass:-未知}"
-        echo "Valkey: ${valkey_pass:-未知}"
-        echo "RabbitMQ Admin: ${rabbitmq_pass:-未知}"
-        echo "Webmin: ${webmin_pass:-未知}"
-        echo "phpMyAdmin: ${phpmyadmin_pass:-未知}"
-    else
-        echo "MySQL Root: $(mask_secret "${mysql_pass:-}")"
-        echo "Valkey: $(mask_secret "${valkey_pass:-}")"
-        echo "RabbitMQ Admin: $(mask_secret "${rabbitmq_pass:-}")"
-        echo "Webmin: $(mask_secret "${webmin_pass:-}")"
-        echo "phpMyAdmin: $(mask_secret "${phpmyadmin_pass:-}")"
+    add_entry() {
+        local service="$1"
+        local account="$2"
+        local password="$3"
+        entries+=("${service}|${account}|${password}")
+    }
+
+    sanitize_value() {
+        local raw="$1"
+        raw="${raw%\"}"
+        raw="${raw#\"}"
+        printf '%s' "$raw"
+    }
+
+    local mysql_pass
+    mysql_pass="$(sanitize_value "$(get_local_pillar_value mysql_password)")"
+    add_entry "MySQL Root" "root@localhost" "${mysql_pass:-未知}"
+
+    if sudo test -f /etc/salt/mysql_saltuser.cnf 2>/dev/null; then
+        local mysql_saltuser mysql_saltpass
+        mysql_saltuser=$(sudo awk -F= '/^user=/{print $2}' /etc/salt/mysql_saltuser.cnf 2>/dev/null | tail -1)
+        mysql_saltpass=$(sudo awk -F= '/^password=/{print $2}' /etc/salt/mysql_saltuser.cnf 2>/dev/null | tail -1)
+        mysql_saltuser="$(sanitize_value "$mysql_saltuser")"
+        mysql_saltpass="$(sanitize_value "$mysql_saltpass")"
+        add_entry "MySQL SaltUser" "${mysql_saltuser:-saltuser}@localhost" "${mysql_saltpass:-未知}"
     fi
-    
+
+    local valkey_pass
+    valkey_pass="$(sudo awk '/^requirepass/{print $2}' /etc/valkey/valkey.conf 2>/dev/null | head -1)"
+    add_entry "Valkey" "(default)" "${valkey_pass:-未知}"
+
+    local rabbitmq_pass
+    rabbitmq_pass="$(sanitize_value "$(get_local_pillar_value rabbitmq_password)")"
+    add_entry "RabbitMQ" "(pillar default)" "${rabbitmq_pass:-未知}"
+
+    local webmin_pass
+    webmin_pass="$(sanitize_value "$(get_local_pillar_value webmin_password)")"
+    add_entry "Webmin" "root" "${webmin_pass:-未知}"
+
+    local phpmyadmin_pass
+    phpmyadmin_pass="$(sanitize_value "$(get_local_pillar_value phpmyadmin_password)")"
+    add_entry "phpMyAdmin" "root" "${phpmyadmin_pass:-未知}"
+
+    local restic_pass=""
+    if sudo test -f /etc/restic/restic.env 2>/dev/null; then
+        restic_pass="$(sudo /bin/bash -c 'set -a; source /etc/restic/restic.env >/dev/null 2>&1; set +a; printf \"%s\" \"${RESTIC_PASSWORD:-}\"')"
+        if [[ -z "$restic_pass" ]]; then
+            local restic_file
+            restic_file="$(sudo /bin/bash -c 'set -a; source /etc/restic/restic.env >/dev/null 2>&1; set +a; printf \"%s\" \"${RESTIC_PASSWORD_FILE:-}\"')"
+            if [[ -n "$restic_file" && -f "$restic_file" ]]; then
+                restic_pass="$(sudo tr -d '\n' < "$restic_file" 2>/dev/null)"
+            fi
+        fi
+        restic_pass="$(sanitize_value "$restic_pass")"
+        restic_pass="${restic_pass//$'\\n'/}"
+        restic_pass="${restic_pass//\"/}"
+    else
+        restic_pass="$(sanitize_value "$(get_local_pillar_value restic_password)")"
+    fi
+    add_entry "Restic Backup" "(env)" "${restic_pass:-未知}"
+
+    printf '%-18s %-22s %s\n' "服务" "账户" "密码"
+    printf '%-18s %-22s %s\n' "------------------" "----------------------" "-------------------------"
+    local entry service account password display
+    for entry in "${entries[@]}"; do
+        IFS='|' read -r service account password <<<"$entry"
+        if [[ -z "$password" || "$password" == "未知" ]]; then
+            display="未知"
+        elif [[ "$reveal" == "1" ]]; then
+            display="$password"
+        else
+            display="$(mask_secret "$password")"
+        fi
+        printf '%-18s %-22s %s\n' "$service" "$account" "$display"
+    done
+
     echo ""
+    if [[ -z "$mysql_pass" ]]; then
+        log_warning "未在 Pillar 中找到 mysql_password，可能需要运行 'saltgoat passwords --refresh'"
+    fi
     if [[ "$reveal" == "1" ]]; then
         log_warning "请妥善处理以上真实密码，避免泄露"
     else
@@ -642,10 +692,6 @@ case "$1" in
                     ;;
             esac
             ;;
-        "database")
-            require_module "database"
-            database_handler "$2" "$3" "$4" "$5" "$6" "$7"
-            ;;
     "memory")
         require_module "memory"
         memory_handler "$@"
@@ -963,7 +1009,7 @@ case "$1" in
         ;;
     "magetools")
         require_module "magetools"
-        magetools_handler "$2" "$3" "$4" "$5"
+        magetools_handler "${@:2}"
         ;;
     "cockpit")
         require_module "cockpit"

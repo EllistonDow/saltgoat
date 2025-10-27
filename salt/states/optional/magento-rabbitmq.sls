@@ -15,6 +15,7 @@
 {% set php_memory_limit = pillar.get('php_memory_limit', '2G') %}
 {% set cpu_quota = pillar.get('cpu_quota', '50%') %}
 {% set nice = pillar.get('nice', '10') %}
+{% set magento_php = 'sudo -u {0} php'.format(service_user) if service_user else 'php' %}
 
 {% if not site_name %}
 magento_rabbitmq_missing_site:
@@ -114,7 +115,7 @@ magento_rabbitmq_permissions:
 magento_rabbitmq_config_env:
   cmd.run:
     - name: |
-        php <<'PHP'
+        {{ magento_php }} <<'PHP'
         <?php
         $envFile = 'app/etc/env.php';
         $cfg = include $envFile;
@@ -132,9 +133,8 @@ magento_rabbitmq_config_env:
         ?>
         PHP
     - cwd: {{ site_path }}
-    - runas: www-data
     - unless: |
-        php <<'PHP'
+        {{ magento_php }} <<'PHP'
         <?php
         $cfg = include 'app/etc/env.php';
         if (!is_array($cfg)) exit(1);

@@ -36,7 +36,7 @@ saltgoat magetools maintenance tank disable
 # 每日维护（缓存清理、索引重建、会话清理、日志清理）
 saltgoat magetools maintenance tank daily
 
-# 每周维护（备份、日志轮换、Redis清空、性能检查）
+# 每周维护（备份、日志轮换、Valkey刷新（可选）、性能检查）
 saltgoat magetools maintenance tank weekly
 
 # 每月维护（完整部署流程）
@@ -54,6 +54,8 @@ saltgoat magetools maintenance tank cleanup
 # 完整部署流程
 saltgoat magetools maintenance tank deploy
 ```
+
+> Restic 单站点备份示例：`saltgoat magetools maintenance tank weekly --trigger-restic --restic-site tank --restic-backup-dir /home/Dropbox/tank/snapshots`，必要时可叠加 `--restic-extra-path`。
 
 ## ⏰ 定时任务管理
 
@@ -110,11 +112,11 @@ tail -f /var/log/magento-health.log
 
 ### 手动执行维护
 ```bash
-# 手动执行健康检查
-/usr/local/bin/magento-maintenance-salt tank health
-
 # 手动执行每日维护
-/usr/local/bin/magento-maintenance-salt tank daily
+saltgoat magetools maintenance tank daily
+
+# 手动执行健康检查
+saltgoat magetools maintenance tank health
 ```
 
 ## 📚 详细文档

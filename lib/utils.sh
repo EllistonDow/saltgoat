@@ -93,10 +93,28 @@ get_local_pillar_value() {
     pillar_file="$(get_local_pillar_file)"
 
     if sudo test -f "$pillar_file" 2>/dev/null; then
-        local line value
-        line=$(sudo grep -E "^${key}:" "$pillar_file" | head -1)
-        if [[ -n "$line" ]]; then
-            value=$(echo "$line" | sed -E "s/^[^']*'([^']*)'.*/\1/")
+        local value
+        value=$(sudo python3 - "$pillar_file" "$key" <<'PY'
+import sys, yaml, pathlib
+file = pathlib.Path(sys.argv[1])
+lookup = sys.argv[2].split(".")
+try:
+    data = yaml.safe_load(file.read_text()) or {}
+except Exception:
+    data = {}
+cur = data
+for part in lookup:
+    if isinstance(cur, dict) and part in cur:
+        cur = cur[part]
+    else:
+        cur = ""
+        break
+if isinstance(cur, (dict, list)):
+    cur = ""
+print("" if cur is None else cur)
+PY
+        )
+        if [[ -n "$value" ]]; then
             echo "$value"
             return 0
         fi

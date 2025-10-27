@@ -146,7 +146,7 @@ run_check() {
     pillar_json="$(build_pillar_json)"
 
     log_info "执行 Magento Valkey 配置检测 ..."
-    if ! salt-call --local --retcode-passthrough state.apply optional.magento-valkey-check pillar="$pillar_json"; then
+    if ! sudo salt-call --local --retcode-passthrough state.apply optional.magento-valkey-check pillar="$pillar_json"; then
         abort "Valkey 检测失败"
     fi
     log_success "Valkey 检测完成"

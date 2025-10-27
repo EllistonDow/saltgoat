@@ -16,6 +16,13 @@
 {% set cache_prefix = pillar.get('cache_prefix', site_name ~ '_cache_' if site_name else None) %}
 {% set session_prefix = pillar.get('session_prefix', site_name ~ '_session_' if site_name else None) %}
 {% set redis_compress = pillar.get('compress_data', '1') %}
+{% set valkey_cli = salt['cmd.which']('valkey-cli') %}
+{% if not valkey_cli %}
+{% set valkey_cli = salt['cmd.which']('redis-cli') %}
+{% endif %}
+{% if not valkey_cli %}
+{% set valkey_cli = 'valkey-cli' %}
+{% endif %}
 {% set redis_timeout = pillar.get('timeout', '2.5') %}
 {% set redis_max_concurrency = pillar.get('max_concurrency', '6') %}
 {% set redis_break_after_frontend = pillar.get('break_after_frontend', '5') %}
@@ -230,14 +237,14 @@ magento_valkey_configure:
         ?>
         PHP
 
-{% set redis_auth = '-a "$VALKEY_PASSWORD"' if valkey_password else '' %}
+{% set valkey_auth = '-a "$VALKEY_PASSWORD"' if valkey_password else '' %}
 
 magento_valkey_flush_databases:
   cmd.wait:
     - name: |
-        redis-cli {{ redis_auth }} -n {{ cache_db }} flushdb
-        redis-cli {{ redis_auth }} -n {{ page_db }} flushdb
-        redis-cli {{ redis_auth }} -n {{ session_db }} flushdb
+        {{ valkey_cli }} {{ valkey_auth }} -n {{ cache_db }} flushdb
+        {{ valkey_cli }} {{ valkey_auth }} -n {{ page_db }} flushdb
+        {{ valkey_cli }} {{ valkey_auth }} -n {{ session_db }} flushdb
     - env:
         VALKEY_PASSWORD: {{ valkey_password }}
     - onchanges:

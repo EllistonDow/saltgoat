@@ -29,6 +29,7 @@ SaltGoat 将 Salt 状态和易用的 CLI 工具结合在一起，用于在 Ubunt
 - **模块化 CLI**：`saltgoat install`, `saltgoat maintenance`, `saltgoat magetools`, `saltgoat monitor` 等命令覆盖安装、巡检、备份、安全、性能调优等日常操作。
 - **事件驱动自动化（可选）**：在启用 Salt Minion/Master 后，`saltgoat monitor enable-beacons` 可下发服务自愈、资源阈值告警、配置变更处理等 Reactor，Salt Schedule 也会自动替代系统 Cron。
 - **自动降级策略**：若主机未运行 `salt-minion`，维护计划与监控调度会自动写入 `/etc/cron.d/`，仍能保持日常任务的执行。
+- **可选备份模块**：提供 Restic + S3/Minio 的加密快照（`optional.backup-restic`）和基于 Percona XtraBackup 的 MySQL 热备（`optional.mysql-backup`），均通过 `saltgoat magetools backup …` 统一触发。
 - **完整文档与测试**：`docs/` 提供安装、维护、故障排除指引；`tests/` 提供一致性验证脚本；`scripts/code-review.sh` 集成 ShellCheck/shfmt。
 
 ---
@@ -70,6 +71,7 @@ saltgoat monitor enable-beacons
    ```bash
    saltgoat pillar init             # 生成 salt/pillar/saltgoat.sls，附带随机凭据
    saltgoat pillar show             # 审核并按需修改
+   # 若要启用 Restic 备份，可复制 salt/pillar/backup-restic.sls 并填入对象存储凭据
    ```
 3. **执行部署**
    ```bash
@@ -117,6 +119,8 @@ saltgoat monitor enable-beacons
 - [`docs/MAGENTO_MAINTENANCE.md`](docs/MAGENTO_MAINTENANCE.md)：维护流程、Salt Schedule/Beacons 说明、故障排查。
 - [`docs/MAGENTO_MAINTENANCE_QUICK_REFERENCE.md`](docs/MAGENTO_MAINTENANCE_QUICK_REFERENCE.md)：常用命令速查表。
 - [`docs/MAGENTO_PERMISSIONS.md`](docs/MAGENTO_PERMISSIONS.md)：Magento 权限策略。
+- [`docs/BACKUP_RESTIC.md`](docs/BACKUP_RESTIC.md)：Restic+S3/Minio 备份模块配置与操作指南。
+- [`docs/MYSQL_BACKUP.md`](docs/MYSQL_BACKUP.md)：Percona XtraBackup 数据库备份部署、巡检与恢复流程。
 - [`docs/CHANGELOG.md`](docs/CHANGELOG.md)：版本更新记录。
 
 ---

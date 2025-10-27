@@ -66,9 +66,16 @@ magento_valkey_check:
         $warnings = [];
         $info = [];
 
-        $redisCli = trim(shell_exec('command -v redis-cli 2>/dev/null') ?? '');
+        $redisCli = '';
+        foreach (['valkey-cli', 'redis-cli'] as $candidate) {
+            $path = trim(shell_exec("command -v {$candidate} 2>/dev/null") ?? '');
+            if ($path !== '') {
+                $redisCli = $path;
+                break;
+            }
+        }
         if ($redisCli === '') {
-            $errors[] = "未找到 redis-cli 命令，无法检测 Valkey 连接。";
+            $errors[] = "未找到 valkey-cli/redis-cli 命令，无法检测 Valkey 连接。";
         }
 
         if (!file_exists($envFile)) {
@@ -88,7 +95,7 @@ magento_valkey_check:
             } else {
                 $cache = $config['cache']['frontend']['default'] ?? [];
                 if (($cache['backend'] ?? '') !== 'Magento\\Framework\\Cache\\Backend\\Redis') {
-                    $errors[] = "默认缓存未启用 Redis 后端。";
+                    $errors[] = "默认缓存未启用 Valkey (Redis backend) 后端。";
                 }
                 $cacheOptions = $cache['backend_options'] ?? [];
                 $cacheHost = isset($cacheOptions['server']) ? (string)$cacheOptions['server'] : '';
@@ -112,7 +119,7 @@ magento_valkey_check:
 
                 $page = $config['cache']['frontend']['page_cache'] ?? [];
                 if (($page['backend'] ?? '') !== 'Magento\\Framework\\Cache\\Backend\\Redis') {
-                    $errors[] = "页面缓存未启用 Redis 后端。";
+                    $errors[] = "页面缓存未启用 Valkey (Redis backend) 后端。";
                 }
                 $pageOptions = $page['backend_options'] ?? [];
                 $pageHost = isset($pageOptions['server']) ? (string)$pageOptions['server'] : '';

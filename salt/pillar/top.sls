@@ -4,3 +4,5 @@ base:
     - nginx
     - magento-optimize
     - salt-beacons
+    - backup-restic
+    - mysql-backup

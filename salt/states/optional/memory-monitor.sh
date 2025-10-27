@@ -61,10 +61,18 @@ clean_system_cache() {
 # 清理 Valkey 内存
 clean_valkey_memory() {
     log_info "清理 Valkey 内存..."
-    
-    # 执行 Valkey 内存清理命令
-    redis-cli --no-auth-warning -a "$(salt-call --local grains.get pillar_valkey_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)" MEMORY PURGE 2>/dev/null || true
-    
+    local cli="valkey-cli"
+    if ! command -v "$cli" >/dev/null 2>&1; then
+        if command -v redis-cli >/dev/null 2>&1; then
+            cli="redis-cli"
+        else
+            log_warning "未找到 valkey-cli/redis-cli，可手动执行 MEMORY PURGE"
+            return
+        fi
+    fi
+    # 执行 Valkey/Redis 内存清理命令
+    "$cli" --no-auth-warning -a "$(salt-call --local grains.get pillar_valkey_password 2>/dev/null | grep -v "local:" | tail -1 | xargs)" MEMORY PURGE 2>/dev/null || true
+
     log_success "Valkey 内存清理完成"
 }
 

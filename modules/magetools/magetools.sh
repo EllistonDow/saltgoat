@@ -58,7 +58,38 @@ magetools_handler() {
             deploy_magento
             ;;
         "backup")
-            backup_magento
+            case "$2" in
+                "mysql")
+                    shift 2
+                    log_warning "命令已更名为 'saltgoat magetools xtrabackup mysql ...'，当前调用将继续执行但建议尽快迁移"
+                    MAGETOOLS_MYSQL_BACKUP_ALIAS=backup "${SCRIPT_DIR}/modules/magetools/mysql-backup.sh" "$@"
+                    ;;
+                "restic")
+                    shift 2
+                    "${SCRIPT_DIR}/modules/magetools/backup-restic.sh" "$@"
+                    ;;
+                ""|"magento")
+                    backup_magento
+                    ;;
+                *)
+                    log_error "未知的备份类型: $2"
+                    log_info "支持: mysql, restic, magento"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "xtrabackup")
+            case "$2" in
+                "mysql")
+                    shift 2
+                    "${SCRIPT_DIR}/modules/magetools/mysql-backup.sh" "$@"
+                    ;;
+                *)
+                    log_error "未知的 xtrabackup 操作: ${2:-<empty>}"
+                    log_info "支持: mysql"
+                    exit 1
+                    ;;
+            esac
             ;;
         "restore")
             restore_magento "$2"
@@ -112,7 +143,7 @@ magetools_handler() {
             case "$2" in
                 "all"|"smart")
                     # 调用 rabbitmq 脚本
-                    sudo "${SCRIPT_DIR}/modules/magetools/rabbitmq.sh" "$2" "$3" "${4:-2}"
+                    sudo "${SCRIPT_DIR}/modules/magetools/rabbitmq.sh" "$2" "$3" "${4:-1}"
                     ;;
                 "check")
                     # 检查 rabbitmq 状态
@@ -135,8 +166,8 @@ magetools_handler() {
             "${SCRIPT_DIR}/modules/magetools/opensearch-auth.sh" "$2"
             ;;
         "maintenance")
-            # 调用 Magento 维护管理脚本
-            "${SCRIPT_DIR}/modules/magetools/magento-maintenance.sh" "$2" "$3"
+            shift
+            "${SCRIPT_DIR}/modules/magetools/maintenance.sh" "$@"
             ;;
         "cron")
             # 调用定时任务管理脚本

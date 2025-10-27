@@ -10,6 +10,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
+VALKEY_CLI_BIN="$(command -v valkey-cli 2>/dev/null || command -v redis-cli 2>/dev/null || true)"
+if [[ -z "$VALKEY_CLI_BIN" ]]; then
+    log_error "未找到 valkey-cli 或 redis-cli，请先安装 Valkey 客户端工具"
+    exit 1
+fi
+
 # 检测站点类型：全新站点 vs 迁移站点
 detect_site_type() {
     if grep -q "'backend' => 'Magento\\\\Framework\\\\Cache\\\\Backend\\\\Redis'" app/etc/env.php; then
@@ -185,14 +191,14 @@ cleanup_current_site_old_databases() {
         
         # 检查数据库是否有数据，并且键名包含当前站点前缀
         local key_count
-        key_count=$(redis-cli -a "$valkey_password" -n "$db_num" dbsize 2>/dev/null || echo "0")
+        key_count=$("$VALKEY_CLI_BIN" -a "$valkey_password" -n "$db_num" dbsize 2>/dev/null || echo "0")
         if [[ "$key_count" -gt 0 ]]; then
             # 检查是否包含当前站点的缓存前缀
             local site_keys
-            site_keys=$(redis-cli -a "$valkey_password" -n "$db_num" keys "*${site_name}_*" 2>/dev/null | wc -l)
+            site_keys=$("$VALKEY_CLI_BIN" -a "$valkey_password" -n "$db_num" keys "*${site_name}_*" 2>/dev/null | wc -l)
             if [[ "$site_keys" -gt 0 ]]; then
                 log_info "清理站点 $site_name 的旧数据库 $db_num (包含 $key_count 个键，其中 $site_keys 个属于当前站点)"
-                redis-cli -a "$valkey_password" -n "$db_num" flushdb >/dev/null 2>&1
+                "$VALKEY_CLI_BIN" -a "$valkey_password" -n "$db_num" flushdb >/dev/null 2>&1
                 ((cleaned_count++))
             fi
         fi
@@ -380,7 +386,7 @@ else
 fi
 
 # 检查Redis/Valkey服务
-if ! redis-cli ping >/dev/null 2>&1; then
+if ! "$VALKEY_CLI_BIN" ping >/dev/null 2>&1; then
     log_error "Redis/Valkey服务未运行"
     exit 1
 fi
@@ -434,15 +440,15 @@ log_warning "清空站点 $SITE_NAME 的Valkey缓存..."
 
 # 清空指定数据库
 if [ -n "$VALKEY_PASSWORD" ]; then
-    if ! redis-cli -a "$VALKEY_PASSWORD" -n "$CACHE_DB" flushdb 2>/dev/null; then
+    if ! "$VALKEY_CLI_BIN" -a "$VALKEY_PASSWORD" -n "$CACHE_DB" flushdb 2>/dev/null; then
         log_warning "清空缓存数据库 $CACHE_DB 失败"
     fi
     
-    if ! redis-cli -a "$VALKEY_PASSWORD" -n "$PAGE_DB" flushdb 2>/dev/null; then
+    if ! "$VALKEY_CLI_BIN" -a "$VALKEY_PASSWORD" -n "$PAGE_DB" flushdb 2>/dev/null; then
         log_warning "清空页面缓存数据库 $PAGE_DB 失败"
     fi
     
-    if ! redis-cli -a "$VALKEY_PASSWORD" -n "$SESSION_DB" flushdb 2>/dev/null; then
+    if ! "$VALKEY_CLI_BIN" -a "$VALKEY_PASSWORD" -n "$SESSION_DB" flushdb 2>/dev/null; then
         log_warning "清空会话数据库 $SESSION_DB 失败"
     fi
 else
@@ -455,7 +461,7 @@ if [ "$RESTART_VALKEY" = true ]; then
     if sudo systemctl restart valkey 2>/dev/null; then
         log_success "Valkey服务已重启"
         sleep 2
-        if redis-cli ping >/dev/null 2>&1; then
+        if "$VALKEY_CLI_BIN" ping >/dev/null 2>&1; then
             log_success "Valkey服务运行正常"
         else
             echo -e "${YELLOW}⚠ Valkey服务可能未正常启动，请检查${NC}"

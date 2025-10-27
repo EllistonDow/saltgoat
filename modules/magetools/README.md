@@ -13,8 +13,8 @@ Magento工具集为SaltGoat提供了专门的Magento开发和维护工具，包�
 
 ### 🔧 维护管理
 - **维护模式控制** - 启用/禁用维护模式
-- **日常维护** - 缓存清理、索引重建、会话清理、日志清理
-- **每周维护** - 备份、日志轮换、Redis清空、性能检查
+- **日常维护** - 缓存清理、索引重建、会话/日志清理
+- **每周维护** - 备份、日志轮换、Valkey 刷新（可选）、性能检查
 - **每月维护** - 完整部署流程（维护模式→清理→升级→编译→部署→索引→禁用维护→清理缓存）
 - **健康检查** - Magento状态、数据库连接、缓存状态、索引状态
 
@@ -84,29 +84,89 @@ saltgoat magetools valkey-renew bank
 ### RabbitMQ（Salt 原生）
 ```bash
 # 使用 Pillar 中的 rabbitmq_password 作为默认
-saltgoat magetools rabbitmq-salt smart bank
+sudo saltgoat magetools rabbitmq-salt smart bank
 
 # 如需覆盖参数，可显式传参
-saltgoat magetools rabbitmq-salt all bank \
+sudo saltgoat magetools rabbitmq-salt all bank \
   --threads 3 \
   --amqp-host 127.0.0.1 --amqp-port 5672 \
   --amqp-user bank --amqp-password 'StrongP@ss' --amqp-vhost '/bank' \
   --service-user www-data --php-memory 2G
 
 # 仅检测，不会修改
-saltgoat magetools rabbitmq-salt check bank --mode smart --threads 1
+sudo saltgoat magetools rabbitmq-salt check bank --mode smart --threads 1
 
-# 输出现有消费者 unit（含旧版/模板）
-saltgoat magetools rabbitmq-salt list bank
+# 列出站点或全局的消费者 unit（含旧版/模板）
+sudo saltgoat magetools rabbitmq-salt list bank
+sudo saltgoat magetools rabbitmq-salt list all
 
 # 清理 systemd unit，并从 env.php 中移除 queue 配置
-saltgoat magetools rabbitmq-salt remove bank
+sudo saltgoat magetools rabbitmq-salt remove bank
+
+# 若误建了 site=tank，可直接清理
+sudo saltgoat magetools rabbitmq-salt remove tank
+
+- `smart` 模式默认生成 10 个核心队列消费者；`all` 模式会部署 Magento 官方 21 个消费者，适合大促或批量导入时使用。
+- 默认线程数为 1，可用 `--threads N` 为每个消费者生成更多实例。
+- `list all` 会列出整台主机上所有 `magento-consumer@*.service`，便于排查残留实例。
+- `remove <site>` 不仅停用 systemd unit，还会将该站点 `app/etc/env.php` 中的 `queue.amqp` 配置清空，方便重新部署。
+- 默认 AMQP 凭据来自 `salt/pillar/saltgoat.sls` 的 `rabbitmq_password`，也可通过 `--amqp-password` 覆盖。
+
+### Restic 备份（可选模块）
+
+```bash
+# 一键初始化（自动安装 restic、生成 Pillar/密码，并默认备份 /var/www/<site>）
+sudo saltgoat magetools backup restic install --site bank --repo /home/Dropbox/bank/snapshots
 ```
 
-默认密码来源：
-- `salt/pillar/saltgoat.sls` 中的 `rabbitmq_password`
-- 通过 `--amqp-password` 显式覆盖
+```bash
+# 先在 salt/pillar/backup-restic.sls 中配置 repo/凭据，并在 top.sls 引入
+
+# 根据 Pillar 配置安装 Restic + systemd timer
+sudo saltgoat magetools backup restic install
+
+# 立即执行一次备份
+sudo saltgoat magetools backup restic run
+
+# 查看 systemd timer/service 状态或日志
+sudo saltgoat magetools backup restic status
+sudo saltgoat magetools backup restic logs 100
+sudo saltgoat magetools backup restic summary      # 汇总各站点的快照与服务状态
+
+# 使用 Restic CLI 列出快照/执行检查/保留策略
+sudo saltgoat magetools backup restic snapshots
+sudo saltgoat magetools backup restic check
+sudo saltgoat magetools backup restic forget --keep-daily 7 --keep-weekly 4
+sudo saltgoat magetools backup restic exec restore latest --target /tmp/restore
+
+# 仅备份单个站点并写入本地主机仓库
+sudo saltgoat magetools backup restic run --site bank --backup-dir /home/Dropbox/bank/snapshots --password-file ~/.config/restic-bank.txt --tag bank-manual
 ```
+
+- Restic 子命令需要读取 `/etc/restic/restic.env`，建议以 sudo 执行；`run` 默认备份 Pillar 中的所有路径，传入 `--site/--paths/--backup-dir(--repo)/--tag/--password(--password-file)` 后会直接执行一次手动备份，适用于单站点或临时仓库。
+- `summary` 会读取 `/etc/restic/sites.d/*.env`，展示每个站点的仓库、最新快照时间、容量与 systemd 服务状态。
+- `saltgoat magetools backup restic install` 会自动安装 restic、写入 `salt/pillar/backup-restic.sls`、在 `saltgoat.sls` 中生成 `restic_password`（可通过 `saltgoat passwords --show` 查看）并下发 systemd service/timer。
+- 若尚未部署 `optional.backup-restic`，可用 `--password` 或 `--password-file` 临时提供凭据，但仍需提前执行 `sudo apt install restic` 并使用 `saltgoat magetools backup restic exec init --repo ...` 初始化仓库。
+- 结合 `saltgoat magetools maintenance <site> weekly --trigger-restic --restic-site <site> --restic-backup-dir /home/Dropbox/<site>/snapshots` 可将单站点备份纳入每周自动任务。
+
+### XtraBackup（Percona MySQL 热备）
+
+```bash
+# 根据 Pillar 配置部署 optional.mysql-backup
+sudo saltgoat magetools xtrabackup mysql install
+
+# 立即触发一次备份 / 查看状态或日志
+sudo saltgoat magetools xtrabackup mysql run
+sudo saltgoat magetools xtrabackup mysql status
+sudo saltgoat magetools xtrabackup mysql logs 200
+
+# 巡检所有站点的备份目录、容量与最后执行时间
+sudo saltgoat magetools xtrabackup mysql summary
+```
+
+- 定时任务由 `saltgoat-mysql-backup.timer` 管理，输出目录默认 `/var/backups/mysql/xtrabackup/<timestamp>`，可在 `salt/pillar/mysql-backup.sls` 中自定义。
+- 备份完成后会自动 `chown -R repo_owner`，便于 Dropbox/Restic 二次归档。
+- 旧命令 `saltgoat magetools backup mysql ...` 仍可用，但会提示迁移至 `xtrabackup`。
 
 #### Valkey 配置命令说明
 - `valkey-setup`：通过 Salt 状态写入 env.php，支持 `--reuse-existing`、`--cache-db`、`--page-db`、`--session-db`、`--cache-prefix`、`--session-prefix`、`--host`、`--port` 等参数。
@@ -132,6 +192,9 @@ saltgoat magetools maintenance tank health
 saltgoat magetools maintenance tank backup
 saltgoat magetools maintenance tank cleanup
 saltgoat magetools maintenance tank deploy
+
+# 示例：允许 weekly 任务刷新 Valkey 并触发 Restic
+saltgoat magetools maintenance tank weekly --allow-valkey-flush --trigger-restic
 ```
 
 ### 定时任务管理（Salt Schedule）
@@ -152,7 +215,8 @@ saltgoat magetools performance
 saltgoat magetools security
 
 # 备份
-saltgoat magetools backup
+saltgoat magetools backup magento        # 旧版本地备份（tar + setup:db:backup）
+saltgoat magetools backup restic run     # 若启用 Restic 模块，执行一次快照
 
 # 部署
 saltgoat magetools deploy
