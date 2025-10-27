@@ -258,8 +258,8 @@ check_version_status() {
     
     echo "=========================================="
     log_info "锁定策略:"
-    log_info "✅ 锁定: Nginx, Percona, PHP, RabbitMQ, OpenSearch, Valkey, Varnish, Composer"
-    log_info "🔄 允许更新: 系统内核、安全补丁、其他工具软件"
+    log_info "[LOCKED] Nginx, Percona, PHP, RabbitMQ, OpenSearch, Valkey, Varnish, Composer"
+    log_info "[ALLOWED] 系统内核、安全补丁、其他工具软件"
 }
 
 # 创建版本锁定配置文件

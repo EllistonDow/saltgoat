@@ -162,10 +162,24 @@ sudo saltgoat magetools xtrabackup mysql logs 200
 
 # 巡检所有站点的备份目录、容量与最后执行时间
 sudo saltgoat magetools xtrabackup mysql summary
+
+# 导出单库 mysqldump（默认压缩到 /var/backups/mysql/dumps）
+sudo saltgoat magetools xtrabackup mysql dump \
+    --database bankmage \
+    --backup-dir /home/doge/Dropbox/bank/databases \
+    --repo-owner doge
+
+# 创建 Magneto 站点数据库与账号（授予 ALL + PROCESS/SUPER）
+sudo saltgoat magetools mysql create \
+    --database tankmage \
+    --user tank \
+    --password 'tank.2010'
 ```
 
 - 定时任务由 `saltgoat-mysql-backup.timer` 管理，输出目录默认 `/var/backups/mysql/xtrabackup/<timestamp>`，可在 `salt/pillar/mysql-backup.sls` 中自定义。
 - 备份完成后会自动 `chown -R repo_owner`，便于 Dropbox/Restic 二次归档。
+- `dump` 会使用 mysqldump 生成 `.sql.gz` 文件，可带 `--backup-dir`、`--repo-owner` 与 `--no-compress` 细化输出。
+- `mysql create` 会读取 Pillar 中的 root 密码，自动建库/建用户并授予默认权限，可用 `--no-super`、`--charset`、`--collation` 等选项调整。
 - 旧命令 `saltgoat magetools backup mysql ...` 仍可用，但会提示迁移至 `xtrabackup`。
 
 #### Valkey 配置命令说明

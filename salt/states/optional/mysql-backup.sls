@@ -246,9 +246,9 @@ mysql_backup_user:
 mysql_backup_grants:
   cmd.run:
     - name: |
-        MYSQL_PWD='{{ mysql_root_password }}' mysql -u{{ mysql_root_user }} -e "GRANT RELOAD, PROCESS, LOCK TABLES, REPLICATION CLIENT, BACKUP_ADMIN ON *.* TO '{{ mysql_user }}'@'{{ mysql_host }}'; GRANT SELECT ON performance_schema.* TO '{{ mysql_user }}'@'{{ mysql_host }}'; FLUSH PRIVILEGES;"
+        MYSQL_PWD='{{ mysql_root_password }}' mysql -u{{ mysql_root_user }} -e "GRANT SELECT, SHOW VIEW, EVENT, TRIGGER, RELOAD, PROCESS, LOCK TABLES, REPLICATION CLIENT, BACKUP_ADMIN ON *.* TO '{{ mysql_user }}'@'{{ mysql_host }}'; GRANT SELECT ON performance_schema.* TO '{{ mysql_user }}'@'{{ mysql_host }}'; FLUSH PRIVILEGES;"
     - unless: |
-        MYSQL_PWD='{{ mysql_root_password }}' mysql -NBe "SHOW GRANTS FOR '{{ mysql_user }}'@'{{ mysql_host }}';" | grep -q 'BACKUP_ADMIN'
+        MYSQL_PWD='{{ mysql_root_password }}' mysql -NBe "SHOW GRANTS FOR '{{ mysql_user }}'@'{{ mysql_host }}';" | grep -q 'SHOW VIEW'
     - require:
       - cmd: mysql_backup_user
 

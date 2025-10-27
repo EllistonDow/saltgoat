@@ -12,6 +12,7 @@ MYSQL_ENV="/etc/mysql/mysql-backup.env"
 METADATA_DIR="/etc/mysql/backup.d"
 SERVICE_NAME="saltgoat-mysql-backup.service"
 TIMER_NAME="saltgoat-mysql-backup.timer"
+DUMP_DEFAULT_DIR="/var/backups/mysql/dumps"
 
 usage() {
     cat <<'EOF'
@@ -21,6 +22,7 @@ usage() {
   saltgoat magetools xtrabackup mysql status      # 查看 systemd service/timer 状态
   saltgoat magetools xtrabackup mysql logs [N]    # 查看备份日志（默认最近 100 行）
   saltgoat magetools xtrabackup mysql summary     # 汇总备份目录、容量与最近运行状态
+  saltgoat magetools xtrabackup mysql dump [参数] # 导出单个数据库的逻辑备份
 
 兼容命令:
   saltgoat magetools backup mysql <subcommand>    # 老版入口，调用时会收到迁移提示
@@ -113,6 +115,170 @@ for file in files:
 PY
 }
 
+resolve_path() {
+    python3 - "$1" <<'PY'
+import os, sys
+path = sys.argv[1]
+print(os.path.abspath(os.path.expanduser(path)))
+PY
+}
+
+dump_database() {
+    ensure_env_exists
+
+    local database=""
+    local backup_dir=""
+    local repo_owner=""
+    local compress=1
+    local opt
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --database|-d)
+                database="${2:-}"
+                if [[ -z "$database" ]]; then
+                    log_error "--database 需要一个数据库名称"
+                    exit 1
+                fi
+                shift 2
+                ;;
+            --backup-dir|-b)
+                backup_dir="${2:-}"
+                if [[ -z "$backup_dir" ]]; then
+                    log_error "--backup-dir 需要一个路径"
+                    exit 1
+                fi
+                shift 2
+                ;;
+            --repo-owner|-o)
+                repo_owner="${2:-}"
+                if [[ -z "$repo_owner" ]]; then
+                    log_error "--repo-owner 需要一个用户名"
+                    exit 1
+                fi
+                shift 2
+                ;;
+            --no-compress)
+                compress=0
+                shift
+                ;;
+            --help|-h)
+                cat <<'EOF'
+用法:
+  saltgoat magetools xtrabackup mysql dump \
+      --database <name> \
+      [--backup-dir <path>] \
+      [--repo-owner <user>] \
+      [--no-compress]
+
+说明:
+  --database     必填，指定要导出的数据库名称
+  --backup-dir   备份输出目录（默认 /var/backups/mysql/dumps）
+  --repo-owner   备份文件最终属主（默认读取 mysql-backup.env 内的 MYSQL_BACKUP_REPO_OWNER）
+  --no-compress  关闭 gzip 压缩，输出 .sql 文件
+EOF
+                return 0
+                ;;
+            *)
+                log_error "未知参数: $1"
+                exit 1
+                ;;
+        esac
+    done
+
+    if [[ -z "$database" ]]; then
+        log_error "请通过 --database 指定要备份的数据库名称"
+        exit 1
+    fi
+
+    # 载入环境
+    # shellcheck disable=SC1091
+    source "$MYSQL_ENV"
+
+    local mysql_user="${MYSQL_BACKUP_USER:-backup}"
+    local mysql_password="${MYSQL_BACKUP_PASSWORD:-}"
+    local mysql_host="${MYSQL_BACKUP_HOST:-localhost}"
+    local mysql_port="${MYSQL_BACKUP_PORT:-3306}"
+    local mysql_socket="${MYSQL_BACKUP_SOCKET:-}"
+    local default_repo_owner="${MYSQL_BACKUP_REPO_OWNER:-${MYSQL_BACKUP_SERVICE_USER:-root}}"
+
+    if [[ -z "$backup_dir" ]]; then
+        backup_dir="$DUMP_DEFAULT_DIR"
+    fi
+    backup_dir="$(resolve_path "$backup_dir")"
+
+    if [[ -z "$repo_owner" ]]; then
+        repo_owner="$default_repo_owner"
+    fi
+
+    if ! command -v mysqldump >/dev/null 2>&1; then
+        log_error "未找到 mysqldump，请先安装 mysql-client 或 percona 客户端工具"
+        exit 1
+    fi
+
+    local timestamp
+    timestamp="$(date +%Y%m%d_%H%M%S)"
+    local filename_base="${database}_${timestamp}.sql"
+    local output_path
+    if [[ $compress -eq 1 ]]; then
+        output_path="${backup_dir}/${filename_base}.gz"
+    else
+        output_path="${backup_dir}/${filename_base}"
+    fi
+
+    log_info "准备导出数据库: $database"
+    log_info "输出文件: $output_path"
+
+    sudo mkdir -p "$backup_dir"
+
+    local connect_args=()
+    if [[ -n "$mysql_socket" && -S "$mysql_socket" ]]; then
+        connect_args=(--socket="$mysql_socket")
+    else
+        connect_args=(--host="$mysql_host" --port="$mysql_port")
+    fi
+
+    local mysqldump_args=(
+        --single-transaction
+        --routines
+        --events
+        --set-gtid-purged=OFF
+        --databases "$database"
+    )
+
+    if [[ -z "$mysql_password" ]]; then
+        log_error "无法从 $MYSQL_ENV 读取 MYSQL_BACKUP_PASSWORD，无法继续"
+        exit 1
+    fi
+
+    local tmp_output
+    tmp_output="$(mktemp "${TMPDIR:-/tmp}/saltgoat-dump.XXXXXX")"
+    if [[ $compress -eq 1 ]]; then
+        if ! (set -o pipefail; MYSQL_PWD="$mysql_password" mysqldump --user="$mysql_user" "${connect_args[@]}" "${mysqldump_args[@]}" | gzip -c >"$tmp_output"); then
+            rm -f "$tmp_output"
+            log_error "mysqldump 失败，请检查数据库名称或备份账号权限"
+            exit 1
+        fi
+    else
+        if ! MYSQL_PWD="$mysql_password" mysqldump --user="$mysql_user" "${connect_args[@]}" "${mysqldump_args[@]}" >"$tmp_output"; then
+            rm -f "$tmp_output"
+            log_error "mysqldump 失败，请检查数据库名称或备份账号权限"
+            exit 1
+        fi
+    fi
+
+    sudo mv "$tmp_output" "$output_path"
+
+    sudo chmod 640 "$output_path"
+    if [[ -n "$repo_owner" ]]; then
+        local repo_group
+        repo_group=$(id -gn "$repo_owner" 2>/dev/null || echo "$repo_owner")
+        sudo chown "$repo_owner":"$repo_group" "$output_path" 2>/dev/null || sudo chown "$repo_owner" "$output_path" || true
+    fi
+
+    log_success "数据库 $database 备份完成: $output_path"
+}
+
 ACTION="${1:-}"
 case "$ACTION" in
     install|apply)
@@ -135,6 +301,10 @@ case "$ACTION" in
         ;;
     summary|status-all|overview)
         summary
+        ;;
+    dump)
+        shift || true
+        dump_database "$@"
         ;;
     ""|-h|--help|help)
         usage

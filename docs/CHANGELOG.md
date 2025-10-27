@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.3] - 2025-10-27
+
+### Changes
+- 修改 16 个文件: docs/MAGENTO_PERMISSIONS.md, docs/MYSQL_BACKUP.md, lib/help.sh, modules/git/help.sh, modules/magetools/README.md 等
+
+
 ## [1.0.2] - 2025-10-27
 
 ### Changes

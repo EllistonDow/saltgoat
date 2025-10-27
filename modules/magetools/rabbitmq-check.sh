@@ -58,18 +58,18 @@ check_rabbitmq_consumers() {
         case "$status" in
             "active")
                 running_services=$((running_services + 1))
-                echo "✅ $service: 运行中"
+                echo "[OK] $service: 运行中"
                 ;;
             "failed")
                 failed_services=$((failed_services + 1))
-                echo "❌ $service: 失败"
+                echo "[FAIL] $service: 失败"
                 ;;
             "activating")
                 restarting_services=$((restarting_services + 1))
-                echo "🔄 $service: 重启中"
+                echo "[RESTART] $service: 重启中"
                 ;;
             *)
-                echo "⚠️  $service: $status"
+                echo "[WARN] $service: $status"
                 ;;
         esac
         

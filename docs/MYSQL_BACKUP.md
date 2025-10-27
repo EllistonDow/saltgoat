@@ -69,7 +69,56 @@ mysql        /var/backups/mysql/xtrabackup    2025-10-27 01:00      2.1G      in
 
 -------------------------------------------------------------------------------
 
-## 3. 备份文件结构与保留策略
+## 3. 单站点逻辑备份（mysqldump）
+
+`xtrabackup mysql dump` 支持对单个业务数据库做逻辑导出，默认压缩为 `.sql.gz` 并放到 `/var/backups/mysql/dumps`。常见用法如下：
+
+```bash
+# 备份 bankmage 数据库到 Dropbox，并指定备份文件属主
+sudo saltgoat magetools xtrabackup mysql dump \
+    --database bankmage \
+    --backup-dir /home/doge/Dropbox/bank/databases \
+    --repo-owner doge
+
+# 导出为未压缩的 .sql（适合临时查看）
+sudo saltgoat magetools xtrabackup mysql dump \
+    --database staging_db \
+    --backup-dir /tmp/mysql-dumps \
+    --no-compress
+```
+
+参数说明：
+
+| 参数 | 作用 |
+|------|------|
+| `--database`（必填） | 要导出的数据库名称 |
+| `--backup-dir`       | 备份输出目录，默认 `/var/backups/mysql/dumps` |
+| `--repo-owner`       | 备份文件的属主，便于 Dropbox/Restic 同步；未指定时沿用 `mysql-backup.env` 的 `MYSQL_BACKUP_REPO_OWNER` |
+| `--no-compress`      | 关闭 gzip 压缩，输出原始 `.sql` |
+
+脚本会自动读取 `/etc/mysql/mysql-backup.env` 中的备份账号信息，使用 `mysqldump --single-transaction --routines --events --set-gtid-purged=OFF` 进行导出。完成后会将文件权限设为 `640` 并执行 `chown`，便于后续同步或归档。
+
+恢复 `.sql.gz` 时，可按以下步骤操作：
+
+1. 如果目标库不存在，可执行：
+   ```bash
+   sudo saltgoat magetools mysql create \n       --database bankmage \n       --user bank \n       --password 'ChangeMe!' \n       --no-super
+   ```
+2. 导入备份：
+   ```bash
+   gunzip -c /path/to/bankmage_YYYYMMDD.sql.gz | sudo mysql bankmage
+   ```
+   若是未压缩 `.sql`，直接 `sudo mysql bankmage < dump.sql`。
+3. 验证数据：
+   ```bash
+   sudo mysql -e "SHOW TABLES FROM bankmage;"
+   ```
+
+如需为新站点准备数据库和账户，可执行 `sudo saltgoat magetools mysql create --database <name> --user <user> --password '<pass>'`，脚本会自动授予 ALL + PROCESS/SUPER 权限（可用 `--no-super` 关闭）并保持幂等。
+
+-------------------------------------------------------------------------------
+
+## 4. 备份文件结构与保留策略
 
 - 备份目录按时间戳创建，例如 `/var/backups/mysql/xtrabackup/20251027_010000`；
 - 当 `retention_days` 设置为 7 时，定时脚本会自动删除 7 天前的目录；
@@ -78,7 +127,7 @@ mysql        /var/backups/mysql/xtrabackup    2025-10-27 01:00      2.1G      in
 
 -------------------------------------------------------------------------------
 
-## 4. 恢复流程
+## 5. 恢复流程
 
 > 以下步骤建议在测试环境反复演练，确认流程熟悉后再用于生产。
 
@@ -89,6 +138,8 @@ mysql        /var/backups/mysql/xtrabackup    2025-10-27 01:00      2.1G      in
    ```
 
 2. **停止 MySQL 并清空 datadir**（恢复前必须停止服务并备份当前数据）：
+如果使用 `dump` 导出的逻辑备份，则无需停机，可直接在目标实例执行 `gunzip -c dump.sql.gz | sudo mysql <dbname>`。物理备份（XtraBackup）适合整库回滚或灾难恢复，迁移单站点时建议使用逻辑备份流程。
+
 
    ```bash
    sudo systemctl stop mysql
@@ -117,7 +168,7 @@ mysql        /var/backups/mysql/xtrabackup    2025-10-27 01:00      2.1G      in
 
 -------------------------------------------------------------------------------
 
-## 5. Pillar 配置参考
+## 6. Pillar 配置参考
 
 ```yaml
 mysql_backup:
@@ -154,7 +205,7 @@ mysql_backup:
 
 -------------------------------------------------------------------------------
 
-## 6. 常见问题（FAQ）
+## 7. 常见问题（FAQ）
 
 | 问题 | 解决方法 |
 |------|----------|

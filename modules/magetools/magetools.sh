@@ -91,6 +91,10 @@ magetools_handler() {
                     ;;
             esac
             ;;
+        "mysql")
+            shift
+            "${SCRIPT_DIR}/modules/magetools/mysql-manage.sh" "$@"
+            ;;
         "restore")
             restore_magento "$2"
             ;;

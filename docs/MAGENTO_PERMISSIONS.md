@@ -1,121 +1,64 @@
-# Magento 2 权限管理最佳实践
+# Magento 2 权限管理指南
 
-## 🎯 **核心原则**
+## 核心原则
 
-### ✅ **推荐做法**
+- 所有站点文件归属应统一到 `www-data:www-data`（或站点专用用户）。
+- Web 端与 CLI 操作文档统一使用 `sudo -u www-data`。
+- 保持目录/文件权限最小化：
+  - `755`: `app`, `bin`, `dev`, `lib`, `phpserver`, `pub`, `setup`, `vendor`
+  - `775`: `var`, `generated`, `pub/media`, `pub/static`, `app/etc`
+  - `660`: `app/etc/env.php`
+
+## SaltGoat 权限命令
+
 ```bash
-# 1. 统一用户权限（官方推荐）
-sudo chown -R www-data:www-data /var/www/site1
+# 修复（实际执行 state）
+sudo saltgoat magetools permissions fix /var/www/site
 
-# 2. 使用 www-data 用户执行 Magento 命令
-sudo -u www-data php bin/magento cache:flush
-sudo -u www-data php bin/magento setup:upgrade
+# 仅检查（test=True 模式）
+sudo saltgoat magetools permissions check /var/www/site
 
-# 3. 确保目录权限正确
-sudo chmod -R 755 /var/www/site1/{app,bin,dev,lib,phpserver,pub,setup,vendor}
-sudo chmod 660 /var/www/site1/app/etc/env.php
+# 重新应用通用 state（会提示确认）
+sudo saltgoat magetools permissions reset /var/www/site
 ```
 
-### ❌ **避免的做法**
-```bash
-# 不要直接使用 sudo php bin/magento
-sudo php bin/magento cache:flush  # ❌ 会导致文件归属 root
+- `fix` / `reset` 会调用 `optional.magento-permissions-smart`（或 `generic`）state，确保站点根目录、核心目录、可写目录及 `env.php` 权限符合基线。
+- `check` 以 `test=True` 模式运行同一 state，仅列出将要执行的操作，不会更改任何文件。
+- 命令会自动验证目录中存在 `bin/magento`，并通过 `pillar={'site_path': <path>}` 将路径传递给 Salt。
 
-# 不要混合使用不同用户
-sudo php bin/magento setup:upgrade  # ❌ 生成 root 文件
-# 然后 Web 服务器无法写入这些文件
+若在使用 `check` 时看到 `would have been executed`，说明实际执行 `fix` 会落地这些改动。执行完成后可再次运行 `check` 验证输出为空。
+
+## 常见故障与解决
+
+| 现象 | 可能原因 | 建议操作 |
+|------|----------|----------|
+| CLI 命令报权限拒绝 | 目录/文件属主为 root | `sudo saltgoat magetools permissions fix /var/www/site` |
+| 前台/后台 500 错误，var/cache 无法写入 | `var/` 或 `generated/` 属主/权限不正确 | 同上 |
+| 需要人工验证 | 想预览权限变更 | `sudo saltgoat magetools permissions check /var/www/site` |
+
+## 手动操作（仅在无法使用 Salt 时）
+
+```bash
+sudo chown -R www-data:www-data /var/www/site
+sudo find /var/www/site -type d -exec chmod 755 {} \;
+sudo find /var/www/site -type f -exec chmod 644 {} \;
+sudo chmod 775 /var/www/site/{var,generated,pub/media,pub/static,app/etc}
+sudo chmod 660 /var/www/site/app/etc/env.php
 ```
 
-## 🔧 **SaltGoat 权限管理**
+## 最佳实践
 
-### **自动权限修复**
-```bash
-# SaltGoat 自动处理权限问题
-saltgoat magetools permissions fix /var/www/site1
-```
+1. 固定使用 `www-data` 运行 `bin/magento` 与 `n98-magerun2`：
+   ```bash
+   sudo -u www-data php bin/magento cache:flush
+   sudo -u www-data n98-magerun2 sys:info
+   ```
+2. 避免直接 `sudo php bin/magento ...`，以免生成 root 文件。
+3. 在部署/迁移后立即运行 `permissions fix`，确保权限基线一致。
+4. 定期使用 `permissions check` 或 `salt-call --local state.apply optional.magento-permissions-smart test=True pillar="{'site_path': ...}"` 检查偏差。
 
-### **权限检查**
-```bash
-# 检查当前权限状态
-saltgoat magetools permissions check /var/www/site1
-```
+文档涵盖的命令与状态位于：
+- CLI：`modules/magetools/permissions.sh`
+- Salt state：`salt/states/optional/magento-permissions-*.sls`
 
-## 📋 **权限问题诊断**
-
-### **常见问题**
-1. **文件归属 root**：`ls -la` 显示文件属于 root
-2. **Web 访问错误**：500 错误，无法写入缓存
-3. **CLI 命令失败**：权限被拒绝
-
-### **解决方案**
-```bash
-# 1. 修复文件归属
-sudo chown -R www-data:www-data /var/www/site1
-
-# 2. 修复目录权限
-sudo find /var/www/site1 -type d -exec chmod 755 {} \;
-sudo find /var/www/site1 -type f -exec chmod 644 {} \;
-
-# 3. 特殊文件权限
-sudo chmod 644 /var/www/site1/app/etc/env.php
-sudo chmod 777 /var/www/site1/var
-sudo chmod 777 /var/www/site1/pub/media
-```
-
-## 🚀 **生产环境建议**
-
-### **1. 用户管理**
-- Web 服务器：`www-data`
-- CLI 操作：`sudo -u www-data`
-- 文件归属：统一 `www-data:www-data`
-
-### **2. 目录权限**
-```bash
-# 可执行目录
-755: app, bin, dev, lib, phpserver, pub, setup, vendor
-
-# 配置文件（可读权限）
-644: app/etc/env.php
-
-# 可写目录
-775: var, generated, pub/media, pub/static, app/etc
-```
-
-### **3. 安全考虑**
-- 避免使用 `sudo php bin/magento`
-- 定期检查文件权限
-- 使用 SaltGoat 的权限管理功能
-
-## 🔍 **故障排除**
-
-### **检查权限**
-```bash
-# 检查文件归属
-ls -la /var/www/site1/var/cache/
-
-# 检查目录权限
-ls -ld /var/www/site1/var/
-
-# 检查 Magento 权限
-saltgoat magetools permissions check /var/www/site1
-```
-
-### **修复权限**
-```bash
-# 一键修复所有权限
-saltgoat magetools permissions fix /var/www/site1
-
-# 手动修复
-sudo chown -R www-data:www-data /var/www/site1
-sudo chmod -R 755 /var/www/site1
-sudo chmod 660 /var/www/site1/app/etc/env.php
-```
-
-## 📚 **总结**
-
-**记住这个原则：**
-- ✅ **统一用户**：Web 和 CLI 都用 `www-data`
-- ✅ **正确权限**：使用 SaltGoat 的权限管理
-- ❌ **避免 sudo**：不要直接 `sudo php bin/magento`
-
-这样就能避免权限混乱，确保 Magento 2 正常运行！
+如需扩展（例如站点自定义用户或多站点场景），可以在 Pillar 中自定义 `site_path`，并扩展对应 state 模块。

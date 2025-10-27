@@ -78,17 +78,17 @@ analyze_nginx() {
         fi
         
         if [[ "$current_workers" != "$optimal_workers" ]]; then
-            echo "  🔧 建议: worker_processes 设置为 $optimal_workers (当前: $current_workers)"
+            echo "  建议: worker_processes 设置为 $optimal_workers (当前: $current_workers)"
         fi
         
         if [[ "$current_connections" != "$optimal_connections" ]]; then
-            echo "  🔧 建议: worker_connections 设置为 $optimal_connections (当前: $current_connections)"
+            echo "  建议: worker_connections 设置为 $optimal_connections (当前: $current_connections)"
         fi
         
         # 检查其他优化项
         check_nginx_optimizations "$nginx_config"
     else
-        echo "  ⚠️  Nginx 配置文件未找到"
+        echo "  WARN: Nginx 配置文件未找到"
     fi
 }
 
@@ -98,17 +98,17 @@ check_nginx_optimizations() {
     
     # 检查 gzip 压缩
     if ! salt-call --local cmd.run "grep -q 'gzip on' $nginx_config" 2>/dev/null; then
-        echo "  🔧 建议: 启用 gzip 压缩以提高传输效率"
+        echo "  建议: 启用 gzip 压缩以提高传输效率"
     fi
     
     # 检查缓存配置
     if ! salt-call --local cmd.run "grep -q 'proxy_cache' $nginx_config" 2>/dev/null; then
-        echo "  🔧 建议: 配置代理缓存以提高性能"
+        echo "  建议: 配置代理缓存以提高性能"
     fi
     
     # 检查 keepalive
     if ! salt-call --local cmd.run "grep -q 'keepalive_timeout' $nginx_config" 2>/dev/null; then
-        echo "  🔧 建议: 配置 keepalive_timeout 以优化连接"
+        echo "  建议: 配置 keepalive_timeout 以优化连接"
     fi
 }
 
@@ -149,17 +149,17 @@ analyze_mysql() {
         fi
         
         if [[ $current_buffer_pool -lt $optimal_buffer_pool ]]; then
-            echo "  🔧 建议: innodb_buffer_pool_size 设置为 ${optimal_buffer_pool}M (当前: $current_buffer_pool)"
+            echo "  建议: innodb_buffer_pool_size 设置为 ${optimal_buffer_pool}M (当前: $current_buffer_pool)"
         fi
         
         if [[ $current_max_connections -lt $optimal_max_connections ]]; then
-            echo "  🔧 建议: max_connections 设置为 $optimal_max_connections (当前: $current_max_connections)"
+            echo "  建议: max_connections 设置为 $optimal_max_connections (当前: $current_max_connections)"
         fi
         
         # 检查其他优化项
         check_mysql_optimizations
     else
-        echo "  ⚠️  MySQL 服务未运行"
+        echo "  WARN: MySQL 服务未运行"
     fi
 }
 
@@ -169,21 +169,21 @@ check_mysql_optimizations() {
     local query_cache
     query_cache=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"query_cache_size\"'" 2>/dev/null | awk 'NR==2 {print $2}')
     if [[ "$query_cache" == "0" ]]; then
-        echo "  🔧 建议: 启用查询缓存以提高查询性能"
+        echo "  建议: 启用查询缓存以提高查询性能"
     fi
     
     # 检查慢查询日志
     local slow_query_log
     slow_query_log=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"slow_query_log\"'" 2>/dev/null | awk 'NR==2 {print $2}')
     if [[ "$slow_query_log" == "OFF" ]]; then
-        echo "  🔧 建议: 启用慢查询日志以识别性能问题"
+        echo "  建议: 启用慢查询日志以识别性能问题"
     fi
     
     # 检查 InnoDB 配置
     local innodb_log_file_size
     innodb_log_file_size=$(salt-call --local cmd.run "mysql -e 'SHOW VARIABLES LIKE \"innodb_log_file_size\"'" 2>/dev/null | awk 'NR==2 {print $2}')
     if [[ $innodb_log_file_size -lt 256 ]]; then
-        echo "  🔧 建议: 增加 innodb_log_file_size 到 256M 或更高"
+        echo "  建议: 增加 innodb_log_file_size 到 256M 或更高"
     fi
 }
 
@@ -222,17 +222,17 @@ analyze_php() {
         fi
         
         if [[ "$current_pm" != "$optimal_pm" ]]; then
-            echo "  🔧 建议: pm 模式设置为 $optimal_pm (当前: $current_pm)"
+            echo "  建议: pm 模式设置为 $optimal_pm (当前: $current_pm)"
         fi
         
         if [[ $current_max_children -lt $optimal_max_children ]]; then
-            echo "  🔧 建议: pm.max_children 设置为 $optimal_max_children (当前: $current_max_children)"
+            echo "  建议: pm.max_children 设置为 $optimal_max_children (当前: $current_max_children)"
         fi
         
         # 检查其他优化项
         check_php_optimizations "$php_config"
     else
-        echo "  ⚠️  PHP-FPM 配置文件未找到"
+        echo "  WARN: PHP-FPM 配置文件未找到"
     fi
 }
 
@@ -244,14 +244,14 @@ check_php_optimizations() {
     local memory_limit
     memory_limit=$(salt-call --local cmd.run "grep 'memory_limit' $php_config" 2>/dev/null | awk '{print $3}')
     if [[ -z "$memory_limit" ]]; then
-        echo "  🔧 建议: 设置合适的 memory_limit"
+        echo "  建议: 设置合适的 memory_limit"
     fi
     
     # 检查执行时间
     local max_execution_time
     max_execution_time=$(salt-call --local cmd.run "grep 'max_execution_time' $php_config" 2>/dev/null | awk '{print $3}')
     if [[ "$max_execution_time" == "0" ]]; then
-        echo "  🔧 建议: 设置合理的 max_execution_time"
+        echo "  建议: 设置合理的 max_execution_time"
     fi
 }
 
@@ -283,17 +283,17 @@ analyze_valkey() {
         local optimal_maxmemory=$((total_memory / 4))
         
         if [[ "$current_maxmemory" == "0" ]]; then
-            echo "  🔧 建议: 设置 maxmemory 为 ${optimal_maxmemory}mb"
+            echo "  建议: 设置 maxmemory 为 ${optimal_maxmemory}mb"
         fi
         
         if [[ "$current_policy" != "allkeys-lru" ]]; then
-            echo "  🔧 建议: 设置 maxmemory-policy 为 allkeys-lru"
+            echo "  建议: 设置 maxmemory-policy 为 allkeys-lru"
         fi
         
         # 检查其他优化项
         check_valkey_optimizations
     else
-        echo "  ⚠️  Valkey 服务未运行"
+        echo "  WARN: Valkey 服务未运行"
     fi
 }
 
@@ -303,14 +303,14 @@ check_valkey_optimizations() {
     local save_config
     save_config=$(salt-call --local cmd.run "valkey-cli config get save" 2>/dev/null | tail -1)
     if [[ "$save_config" == '""' ]]; then
-        echo "  🔧 建议: 配置合适的持久化策略"
+        echo "  建议: 配置合适的持久化策略"
     fi
     
     # 检查 TCP keepalive
     local tcp_keepalive
     tcp_keepalive=$(salt-call --local cmd.run "valkey-cli config get tcp-keepalive" 2>/dev/null | tail -1)
     if [[ "$tcp_keepalive" == "0" ]]; then
-        echo "  🔧 建议: 启用 TCP keepalive"
+        echo "  建议: 启用 TCP keepalive"
     fi
 }
 
@@ -331,30 +331,30 @@ analyze_system() {
     cpu_cores=$(echo "$system_info" | cut -d'|' -f1)
     
     if (( $(echo "$load_avg_num > $cpu_cores" | bc -l) )); then
-        echo "  ⚠️  系统负载较高: $load_avg (CPU核心数: $cpu_cores)"
-        echo "  🔧 建议: 检查是否有资源密集型进程运行"
+        echo "  WARN: 系统负载较高: $load_avg (CPU核心数: $cpu_cores)"
+        echo "  建议: 检查是否有资源密集型进程运行"
     else
-        echo "  ✅ 系统负载正常: $load_avg"
+        echo "  OK: 系统负载正常: $load_avg"
     fi
     
     # 检查磁盘使用率
     local disk_usage
     disk_usage=$(salt-call --local cmd.run "df -h /" 2>/dev/null | awk 'NR==2 {print $5}' | sed 's/%//')
     if [[ $disk_usage -gt 80 ]]; then
-        echo "  ⚠️  磁盘使用率较高: ${disk_usage}%"
-        echo "  🔧 建议: 清理不必要的文件或增加磁盘空间"
+        echo "  WARN: 磁盘使用率较高: ${disk_usage}%"
+        echo "  建议: 清理不必要的文件或增加磁盘空间"
     else
-        echo "  ✅ 磁盘使用率正常: ${disk_usage}%"
+        echo "  OK: 磁盘使用率正常: ${disk_usage}%"
     fi
     
     # 检查内存使用率
     local memory_usage
     memory_usage=$(free | awk 'NR==2{printf "%.0f", $3/$2*100}')
     if [[ $memory_usage -gt 85 ]]; then
-        echo "  ⚠️  内存使用率较高: ${memory_usage}%"
-        echo "  🔧 建议: 检查内存泄漏或增加内存"
+        echo "  WARN: 内存使用率较高: ${memory_usage}%"
+        echo "  建议: 检查内存泄漏或增加内存"
     else
-        echo "  ✅ 内存使用率正常: ${memory_usage}%"
+        echo "  OK: 内存使用率正常: ${memory_usage}%"
     fi
 }
 
@@ -402,28 +402,28 @@ SaltGoat 智能优化建议
 建议使用 'saltgoat auto-tune' 命令自动应用这些优化配置。
 EOF
     
-    echo "  ✅ 优化建议已生成: $recommendations_file"
+    echo "  OK: 优化建议已生成: $recommendations_file"
 }
 
 # 显示优化建议总结
 display_optimization_summary() {
-    echo "📊 优化建议总结:"
+    echo "优化建议总结:"
     echo ""
-    echo "🔧 配置优化:"
+    echo "配置优化:"
     echo "  - 使用 'saltgoat auto-tune' 自动调优配置"
     echo "  - 根据系统资源调整各服务参数"
     echo ""
-    echo "📈 性能优化:"
+    echo "性能优化:"
     echo "  - 启用缓存和压缩功能"
     echo "  - 优化数据库查询和索引"
     echo "  - 调整进程和连接数限制"
     echo ""
-    echo "🔍 监控优化:"
+    echo "监控优化:"
     echo "  - 使用 'saltgoat benchmark' 进行性能测试"
     echo "  - 定期检查系统负载和资源使用"
     echo "  - 监控服务状态和错误日志"
     echo ""
-    echo "💡 建议操作:"
+    echo "建议操作:"
     echo "  1. 运行 'saltgoat auto-tune' 应用自动调优"
     echo "  2. 运行 'saltgoat benchmark' 测试性能"
     echo "  3. 定期运行 'saltgoat optimize' 检查优化状态"

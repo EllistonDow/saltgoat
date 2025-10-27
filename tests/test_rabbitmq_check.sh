@@ -61,19 +61,19 @@ check_rabbitmq_status() {
         
         case "$status" in
             "active")
-                log_success "✅ $service (运行中)"
+                log_success "[OK] $service (运行中)"
                 ((running_services++))
                 ;;
             "failed")
-                log_error "❌ $service (失败)"
+                log_error "[FAIL] $service (失败)"
                 ((failed_services++))
                 ;;
             *)
                 if [[ "$state" == "activating" ]]; then
-                    log_warning "🔄 $service (重启中)"
+                    log_warning "[RESTART] $service (重启中)"
                     ((restarting_services++))
                 else
-                    log_warning "⚠️  $service ($status)"
+                    log_warning "[WARN] $service ($status)"
                 fi
                 ;;
         esac
