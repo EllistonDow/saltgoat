@@ -92,12 +92,20 @@ monitor_service_status() {
         status=$(salt-call --local service.status "$service" 2>/dev/null | grep -o "True\|False")
         if [[ "$status" == "True" ]]; then
             local pid
-            pid=$(pgrep "$service" 2>/dev/null | head -1)
+            pid=$(systemctl show "$service" --property=MainPID --value 2>/dev/null | tr -d ' ')
+            if [[ -z "$pid" || "$pid" == "0" ]]; then
+                pid=$(pgrep -f "$service" 2>/dev/null | head -1)
+            fi
+
             if [[ -n "$pid" ]]; then
-                local memory
-                memory=$(ps -o pid,vsz,rss,comm -p "$pid" 2>/dev/null | tail -n +2)
-                echo "$service (PID: $pid):"
-                echo "$memory"
+                local proc_info
+                proc_info=$(ps -o pid,ppid,%cpu,%mem,cmd -p "$pid" 2>/dev/null | tail -n +2)
+                if [[ -n "$proc_info" ]]; then
+                    echo "$service (PID: $pid):"
+                    echo "$proc_info"
+                else
+                    echo "$service (PID: $pid): 进程信息不可用"
+                fi
             else
                 echo "$service (PID: 未找到):"
             fi

@@ -706,12 +706,14 @@ case "$1" in
             "magento")
                 log_highlight "开始 Magento2 专用优化..."
                 log_info "基于 Magento2 官方建议的完整优化方案"
-                optimize_magento
+                shift 2
+                optimize_magento "$@"
                 ;;
             *)
                 # 如果没有子命令，执行智能优化建议
                 log_highlight "智能优化建议分析..."
-                optimize
+                shift || true
+                optimize "$@"
                 ;;
         esac
         ;;

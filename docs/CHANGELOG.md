@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.4] - 2025-10-27
+
+### Changes
+- 修改 4 个文件: monitoring/system.sh, salt/pillar/magento-optimize.sls, salt/pillar/saltgoat.sls, saltgoat
+
+
 ## [1.0.3] - 2025-10-27
 
 ### Changes
