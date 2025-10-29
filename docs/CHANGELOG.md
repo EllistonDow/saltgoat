@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.1.5] - 2025-10-29
+
+### Changes
+- 修改 1 个文件: todo/telegram_bot_todo.md
+
+
 ## [1.1.4] - 2025-10-29
 
 ### Changes

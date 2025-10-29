@@ -1,0 +1,36 @@
+# Telegram Bot 通知增强 TODO
+
+- [ ] 扩展服务监控类
+  - [ ] systemd 服务失败 / 自动重启结果推送
+  - [ ] CPU / 内存 / 磁盘超过阈值的即时告警（包含 top 进程摘要）
+  - [ ] Valkey / MySQL / RabbitMQ / OpenSearch 等核心服务状态检测
+- [ ] 安全事件
+  - [ ] SSH 登录 / sudo 使用监控，异常时推送
+  - [ ] inotify + 签名文件（env.php、nginx.conf 等）改动提醒
+  - [ ] Fail2ban / WAF 命中日志转发
+- [ ] 部署与维护流程
+  - [ ] `saltgoat install` / `maintenance` / `automation job` 执行进度播报
+  - [ ] `scripts/sync-passwords.sh` 成功 / 失败摘要
+  - [ ] Salt state highstate 掉线或失败时预警
+- [ ] 业务与指标
+  - [ ] Magento 队列 backlog、索引 pending、cron 卡死监控
+  - [ ] 大额订单 / 新会员事件接入（结合 Magento API 或 webhook）
+  - [ ] 备份成功附带备份大小、耗时、仓库信息
+- [ ] 聊天指令 / ChatOps
+  - [ ] 定义 `/saltgoat <cmd>` 解析器，调用 Salt 执行白名单任务
+  - [ ] Telegram bot 触发 `maintenance weekly`、`cache clean` 等常用操作
+  - [ ] 管理员审批流程：敏感指令需二次确认
+- [ ] 日报 & 巡检
+  - [ ] 每日巡检摘要：磁盘剩余、备份结果、证书到期、关键服务状态
+  - [ ] 每周安全摘要：最近登录、失败登录、配置变更
+  - [ ] 触发一键导出 `/var/log/saltgoat/alerts.log` 重点片段
+- [ ] GitOps / CI 集成
+  - [ ] `saltgoat git push` 自动播报版本号、变更模块
+  - [ ] CI/CD pipeline 状态（成功、失败、长耗时）
+  - [ ] 灰度 / 回滚动作提醒
+- [ ] 其它灵感
+  - [ ] Restic 仓库健康（`check`, `unlock` 异常）专项通知
+  - [ ] Restic + XtraBackup 组合完成后追加统计报表
+  - [ ] 支持多 Telegram profile / 分组推送（运维 vs 业务）
+  - [ ] 提供静默模式 / 分时段通知策略
+
