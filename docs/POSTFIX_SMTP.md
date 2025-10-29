@@ -16,29 +16,32 @@ SaltGoat 允许在同一套 Pillar 中维护多组外发 SMTP 凭据，并可通
 ## 2. Pillar 结构示例
 
 ```yaml
+{% set secrets = pillar.get('secrets', {}) %}
+{% set email_accounts = secrets.get('email_accounts', {}) %}
+
 email:
-  default: gmail          # 当前激活的账号
+  default: {{ secrets.get('email_default', 'primary') }}  # 当前激活的账号
   retention_days: 30
   accounts:
-    gmail:
-      host: smtp.gmail.com
-      port: 587
-      user: abbsay@gmail.com
-      password: lqeobfnszpmwjudg
-      from_email: abbsay@gmail.com
-      from_name: SaltGoat Alerts
-    m365:
-      host: smtp.office365.com
-      port: 587
-      user: hello@tschenfeng.com
-      password: Linksys.2010     # 请替换为真实凭据
-      from_email: hello@tschenfeng.com
-      from_name: SaltGoat Alerts
+    primary:
+      host: "{{ email_accounts.get('primary', {}).get('host', 'smtp.example.com') }}"
+      port: {{ email_accounts.get('primary', {}).get('port', 587) }}
+      user: "{{ email_accounts.get('primary', {}).get('user', 'alerts@example.com') }}"
+      password: "{{ email_accounts.get('primary', {}).get('password', 'UseSecretsVault!') }}"
+      from_email: "{{ email_accounts.get('primary', {}).get('from_email', 'alerts@example.com') }}"
+      from_name: "{{ email_accounts.get('primary', {}).get('from_name', 'SaltGoat Alerts') }}"
+    secondary:
+      host: "{{ email_accounts.get('secondary', {}).get('host', 'smtp-backup.example.com') }}"
+      port: {{ email_accounts.get('secondary', {}).get('port', 587) }}
+      user: "{{ email_accounts.get('secondary', {}).get('user', 'alerts-backup@example.com') }}"
+      password: "{{ email_accounts.get('secondary', {}).get('password', 'UseSecretsVaultBackup!') }}"
+      from_email: "{{ email_accounts.get('secondary', {}).get('from_email', 'alerts-backup@example.com') }}"
+      from_name: "{{ email_accounts.get('secondary', {}).get('from_name', 'SaltGoat Alerts Backup') }}"
 
 mail:
   postfix:
-    enabled: false         # 仅写入凭据，不 reload Postfix
-    profile: gmail         # 与 email.default 保持一致
+    enabled: false          # 仅写入凭据，不 reload Postfix
+    profile: {{ secrets.get('postfix_profile', 'primary') }}  # 与 email.default 保持一致
     inet_interfaces:
       - loopback-only
     mynetworks:
@@ -53,7 +56,7 @@ mail:
 ```
 
 - `email.accounts` 可按需扩展更多配置段（如 `ses`, `mailgun` 等）。
-- 将敏感凭据存入未托管的私有 Pillar，更安全。
+- 敏感凭据请放在未提交的私有 Pillar（例如 `salt/pillar/secret/smtp.sls`），并在 `top.sls` 中按需 include。
 
 ## 3. 切换 SMTP 账号
 

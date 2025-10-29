@@ -26,14 +26,14 @@ sudo saltgoat magetools backup restic install \
 
 - 自动安装 `restic` 软件包（如果尚未安装）；
 - 为 `salt/pillar/top.sls` 挂载 `backup-restic`，并写入 `salt/pillar/backup-restic.sls`；
-- 生成 `restic_password` 并保存到 `salt/pillar/saltgoat.sls`，可通过 `saltgoat passwords --show` 查看；
+- 生成 `restic_password` 并写入本地未托管的 secrets Pillar（默认路径 `salt/pillar/secret/restic.sls`，需手动创建），同时在运行时暴露为 `pillar['restic_password']`，可通过 `saltgoat passwords --show`（确认后输出）查看；
 - 默认备份 `/var/www/bank`（可用 `--paths` 附加目录），创建 `/etc/restic/restic.env` 以及 systemd service/timer；
 - 若指定的仓库路径不存在会自动创建，并在必要时执行 `restic init`。
 - 如果仓库位于 `/home/<user>/...`（例如 Dropbox），脚本会自动将 systemd 服务切换为该用户运行，并放宽 `ProtectHome`，避免权限问题。
 - 首次备份完成后会自动将仓库目录 `chown` 给目标用户，确保后续可以直接浏览或同步。
 
 若机器上只有一个 `/var/www/<site>` 目录且检测到 `~/Dropbox`，即使不显式传 `--site/--repo` 也会自动推导为 `~/Dropbox/<site>/snapshots`。
-Restic 仓库密码会保存到 `salt/pillar/saltgoat.sls` 的 `restic_password` 字段，可使用 `saltgoat passwords --show`（先确认再输出）查看明文，便于在其它主机上复用。
+Restic 仓库密码不会提交到仓库，SaltGoat 会从 `salt/pillar/secret/*.sls`（或你配置的 ext_pillar）加载，并在运行期暴露到 `pillar['restic_password']`，便于使用 `saltgoat passwords --show` 或在其它主机复用。
 
 需要自定义 S3/Minio 仓库时，可结合 `--repo s3:https://... --tag bank` 等参数，脚本会将配置写回 Pillar。
 
@@ -50,7 +50,7 @@ Restic 仓库密码会保存到 `salt/pillar/saltgoat.sls` 的 `restic_password`
      restic:
        enabled: true
        repo: "s3:https://minio.example.com/backups/magento"
-       password: "ChangeThisPassword"
+      password: "{{ salt['pillar.get']('secrets.restic.password', 'ChangeMeRestic!') }}"
        aws_access_key_id: "MINIO_ACCESS_KEY"
        aws_secret_access_key: "MINIO_SECRET_KEY"
        aws_region: "us-east-1"

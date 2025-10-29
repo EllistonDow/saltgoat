@@ -85,10 +85,86 @@ get_local_pillar_file() {
     echo "${base_dir}/salt/pillar/saltgoat.sls"
 }
 
-# 从本地 pillar 文件读取配置值（若不存在返回空字符串或默认值）
+# 获取 secrets Pillar 目录
+get_secret_pillar_dir() {
+    local base_dir="${SCRIPT_DIR:-$(pwd)}"
+    echo "${base_dir}/salt/pillar/secret"
+}
+
+get_secret_auto_file() {
+    local dir
+    dir="$(get_secret_pillar_dir)"
+    echo "${dir}/auto.sls"
+}
+
+# 读取 secret Pillar 的值（支持使用点分路径）
+get_local_secret_value() {
+    local key="$1"
+    local secret_dir
+    secret_dir="$(get_secret_pillar_dir)"
+
+    if ! sudo test -d "$secret_dir" 2>/dev/null; then
+        return 1
+    fi
+
+    local value
+    value=$(sudo python3 - "$secret_dir" "$key" <<'PY'
+import sys, yaml, pathlib
+
+secret_dir = pathlib.Path(sys.argv[1])
+lookup = ['secrets'] + sys.argv[2].split('.')
+
+def deep_merge(base, new):
+    for key, val in new.items():
+        if isinstance(val, dict) and isinstance(base.get(key), dict):
+            deep_merge(base[key], val)
+        else:
+            base[key] = val
+    return base
+
+data = {}
+for sls_file in sorted(secret_dir.glob('*.sls')):
+    try:
+        chunk = yaml.safe_load(sls_file.read_text()) or {}
+    except Exception:
+        continue
+    if isinstance(chunk, dict):
+        deep_merge(data, chunk)
+
+cur = data
+for part in lookup:
+    if isinstance(cur, dict) and part in cur:
+        cur = cur[part]
+    else:
+        cur = ""
+        break
+
+if isinstance(cur, (dict, list)):
+    cur = ""
+
+print("" if cur is None else cur)
+PY
+    )
+
+    if [[ -n "$value" ]]; then
+        echo "$value"
+        return 0
+    fi
+
+    return 1
+}
+
+# 从本地 pillar/secret 读取配置值（若不存在则回退到公共 Pillar 文件）
 get_local_pillar_value() {
     local key="$1"
     local default_value="${2:-}"
+
+    local secret_value
+    if secret_value=$(get_local_secret_value "$key" 2>/dev/null); then
+        echo "$secret_value"
+        return 0
+    fi
+
     local pillar_file
     pillar_file="$(get_local_pillar_file)"
 
@@ -97,7 +173,7 @@ get_local_pillar_value() {
         value=$(sudo python3 - "$pillar_file" "$key" <<'PY'
 import sys, yaml, pathlib
 file = pathlib.Path(sys.argv[1])
-lookup = sys.argv[2].split(".")
+lookup = sys.argv[2].split('.')
 try:
     data = yaml.safe_load(file.read_text()) or {}
 except Exception:
@@ -114,7 +190,7 @@ if isinstance(cur, (dict, list)):
 print("" if cur is None else cur)
 PY
         )
-        if [[ -n "$value" ]]; then
+        if [[ -n "$value" && "$value" != "{{"* ]]; then
             echo "$value"
             return 0
         fi
@@ -126,25 +202,39 @@ PY
     return 1
 }
 
-# 将值写入本地 pillar 文件（简单 key:value）
+# 将值写入 secret Pillar（敏感字段）
 set_local_pillar_value() {
     local key="$1"
     local value="$2"
-    local pillar_file
-    pillar_file="$(get_local_pillar_file)"
+    local secret_file
+    secret_file="$(get_secret_auto_file)"
 
-    sudo mkdir -p "$(dirname "$pillar_file")"
+    sudo mkdir -p "$(dirname "$secret_file")"
 
-    local escaped
-    escaped="${value//\'/\'\'}"
+    sudo python3 - "$secret_file" "$key" "$value" <<'PY'
+import sys, yaml, pathlib
 
-    if sudo test -f "$pillar_file" && sudo grep -q "^${key}:" "$pillar_file"; then
-        sudo sed -i "s|^${key}:.*|${key}: '${escaped}'|" "$pillar_file"
-    else
-        if ! sudo test -f "$pillar_file"; then
-            sudo touch "$pillar_file"
-            sudo chmod 600 "$pillar_file"
-        fi
-        printf "%s\n" "${key}: '${escaped}'" | sudo tee -a "$pillar_file" >/dev/null
-    fi
+path = pathlib.Path(sys.argv[1])
+key = sys.argv[2]
+value = sys.argv[3]
+parts = ['secrets'] + key.split('.')
+
+if path.exists():
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        data = {}
+else:
+    data = {}
+
+cur = data
+for part in parts[:-1]:
+    cur = cur.setdefault(part, {})
+cur[parts[-1]] = value
+
+with path.open('w') as fh:
+    yaml.dump(data, fh, allow_unicode=True, sort_keys=False)
+PY
+
+    sudo chmod 600 "$secret_file" >/dev/null 2>&1 || true
 }

@@ -4,6 +4,13 @@
 {% set load_max_15m = (cpu_count * 1.1) %}
 {% set mem_warn_percent = 78 %}
 {% set disk_root_percent = 88 %}
+{% set secrets = pillar.get('secrets', {}) %}
+{% set telegram_cfg = secrets.get('telegram', {}).get('primary', {}) %}
+{% set accept_from = telegram_cfg.get('accept_from', []) %}
+{% if not accept_from %}
+{% set accept_from = [123456789] %}
+{% endif %}
+{% set default_chat_id = telegram_cfg.get('chat_id', accept_from[0]) %}
 
 saltgoat:
   beacons:
@@ -74,10 +81,12 @@ saltgoat:
         - rabbitmq-server
         - opensearch
     telegram_bot_msg:
-      - token: '7769020692:AAHcw3raoMSWMxzhasx9gJ4SLsOL5NoAt7c'
+      - token: "{{ telegram_cfg.get('token', '') }}"
       - accept_from:
-          - 1171267236
-      - chat_id: 1171267236
+{% for chat in accept_from %}
+          - {{ chat }}
+{% endfor %}
+      - chat_id: {{ default_chat_id }}
       - interval: 10
       - name: primary
     watchdog:

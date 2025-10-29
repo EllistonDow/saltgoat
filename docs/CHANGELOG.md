@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.10] - 2025-10-29
+
+### Changes
+- 修改 17 个文件: .gitignore, docs/BACKUP_RESTIC.md, docs/MYSQL_BACKUP.md, docs/POSTFIX_SMTP.md, lib/utils.sh 等
+
+
 ## [1.0.9] - 2025-10-29
 
 ### Changes

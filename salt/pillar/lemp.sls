@@ -1,6 +1,17 @@
 # SaltGoat Pillar Configuration
 # 使用 Salt 原生功能进行配置管理
 
+{% set secrets = pillar.get('secrets', {}) %}
+{% set mysql_password = pillar.get('mysql_password', secrets.get('mysql_password', 'ChangeMeRoot!')) %}
+{% set valkey_secret = pillar.get('valkey_password', secrets.get('valkey_password', 'ChangeMeValkey!')) %}
+{% set rabbitmq_secret = pillar.get('rabbitmq_password', secrets.get('rabbitmq_password', 'ChangeMeRabbit!')) %}
+{% set webmin_secret = pillar.get('webmin_password', secrets.get('webmin_password', 'ChangeMeWebmin!')) %}
+{% set phpmyadmin_secret = pillar.get('phpmyadmin_password', secrets.get('phpmyadmin_password', 'ChangeMePhpMyAdmin!')) %}
+{% set ssl_email = pillar.get('ssl_email', secrets.get('ssl_email', 'ssl@example.com')) %}
+{% set email_accounts = secrets.get('email_accounts', {}) %}
+{% set primary_email = email_accounts.get('primary', {}) %}
+{% set secondary_email = email_accounts.get('secondary', {}) %}
+
 # 系统配置
 system:
   timezone: {{ grains.get('timezone', 'America/Los_Angeles') }}
@@ -9,30 +20,30 @@ system:
 
 # 数据库配置
 mysql:
-  root_password: {{ grains.get('pillar_mysql_root_password', 'SaltGoat2024!') }}
+  root_password: {{ mysql_password }}
   version: '8.4'
 
 # Valkey 配置
 valkey:
-  password: {{ grains.get('pillar_valkey_password', 'Valkey2024!') }}
+  password: {{ valkey_secret }}
   version: '8'
 
 # RabbitMQ 配置
 rabbitmq:
-  admin_password: {{ grains.get('pillar_rabbitmq_admin_password', 'RabbitMQ2024!') }}
+  admin_password: {{ rabbitmq_secret }}
   version: '4.1'
 
 # Webmin 配置
 webmin:
-  password: {{ grains.get('pillar_webmin_password', 'Webmin2024!') }}
+  password: {{ webmin_secret }}
 
 # phpMyAdmin 配置
 phpmyadmin:
-  password: {{ grains.get('pillar_phpmyadmin_password', 'phpMyAdmin2024!') }}
+  password: {{ phpmyadmin_secret }}
 
 # SSL 配置
 ssl:
-  email: {{ grains.get('pillar_ssl_email', 'admin@example.com') }}
+  email: {{ ssl_email }}
 
 # PHP 配置
 php:
@@ -98,29 +109,29 @@ firewall:
 
 # 邮件通知配置（支持多账号切换）
 email:
-  default: gmail
+  default: {{ pillar.get('email_default', secrets.get('email_default', 'primary')) }}
   retention_days: {{ pillar.get('log_retention_days', '30') }}
   accounts:
-    gmail:
-      host: 'smtp.gmail.com'
-      port: 587
-      user: 'abbsay@gmail.com'
-      password: 'lqeobfnszpmwjudg'
-      from_email: 'abbsay@gmail.com'
-      from_name: 'SaltGoat Alerts'
-    m365:
-      host: 'smtp.office365.com'
-      port: 587
-      user: 'hello@tschenfeng.com'
-      password: 'Linksys.2010'
-      from_email: 'notice@tschenfeng.com'
-      from_name: 'SaltGoat Alerts'
+    primary:
+      host: "{{ primary_email.get('host', 'smtp.example.com') }}"
+      port: {{ primary_email.get('port', 587) }}
+      user: "{{ primary_email.get('user', 'alerts@example.com') }}"
+      password: "{{ primary_email.get('password', 'ChangeMeEmail!') }}"
+      from_email: "{{ primary_email.get('from_email', 'alerts@example.com') }}"
+      from_name: "{{ primary_email.get('from_name', 'SaltGoat Alerts') }}"
+    secondary:
+      host: "{{ secondary_email.get('host', 'smtp-backup.example.com') }}"
+      port: {{ secondary_email.get('port', 587) }}
+      user: "{{ secondary_email.get('user', 'alerts-backup@example.com') }}"
+      password: "{{ secondary_email.get('password', 'ChangeMeEmailBackup!') }}"
+      from_email: "{{ secondary_email.get('from_email', 'alerts-backup@example.com') }}"
+      from_name: "{{ secondary_email.get('from_name', 'SaltGoat Alerts Backup') }}"
 
 # 邮件服务配置（Postfix 采用配置文件驱动，可与 email 账号联动）
 mail:
   postfix:
     enabled: False
-    profile: gmail             # 默认联动 email.accounts 中的 gmail，可改为 m365
+    profile: {{ pillar.get('postfix_profile', secrets.get('postfix_profile', 'primary')) }}  # 默认联动 email.accounts 中的 primary
     hostname: {{ grains.get('fqdn') }}
     domain: {{ grains.get('domain') or grains.get('fqdn') }}
     origin: '$mydomain'

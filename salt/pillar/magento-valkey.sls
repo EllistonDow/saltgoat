@@ -1,9 +1,12 @@
 # SaltGoat Magento Valkey Pillar 样例
 # 复制本文件为 `salt/pillar/magento-valkey.sls` 并根据实际站点调整。
 
+{% set secrets = pillar.get('secrets', {}) %}
+{% set site_secret = secrets.get('magento_valkey', {}) %}
+
 # 基础信息
 site_name: default
-valkey_password: "ChangeMe123!"
+valkey_password: "{{ site_secret.get('password', 'ChangeMe123!') }}"
 
 # 可选：指定固定的数据库编号（0-15/0-255 视配置而定）
 # cache_db: 10

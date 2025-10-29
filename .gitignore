@@ -47,6 +47,9 @@ erl_crash.dump
 .env
 .env.local
 .env.production
+salt/pillar/secret/*
+!salt/pillar/secret/README.md
+!salt/pillar/secret/.gitkeep
 
 # 数据库文件
 *.db

@@ -22,14 +22,32 @@ SaltGoat 提供 `optional.mysql-backup` 可选模块，基于 [Percona XtraBacku
      enabled: true
      backup_dir: /var/backups/mysql/xtrabackup
      mysql_user: backup
-     mysql_password: "StrongBackUpP@ss"
+     mysql_password: "{{ salt['pillar.get']('secrets.mysql_backup_password', 'ChangeMeBackup!') }}"
      service_user: root
-     repo_owner: doge           # 备份完成后赋权给哪位用户，常见为 Dropbox 同步用户
+     repo_owner: deploy         # 备份完成后赋权给哪位用户，常见为 Dropbox 同步用户
      timer: daily
      randomized_delay: 20m
      retention_days: 7          # 超过 N 天的目录自动清理
      extra_args: "--parallel=4 --compress"
    ```
+
+   > **自定义备份路径**
+   >
+   > 1. 编辑 `salt/pillar/mysql-backup.sls`（如不存在请新建），写入：
+   >    ```yaml
+   >    mysql_backup:
+   >      enabled: true
+   >      backup_dir: /home/doge/Dropbox/bank/databases
+   >      repo_owner: doge
+   >      service_user: doge
+   >      mysql_user: backup
+   >      mysql_password: "{{ salt['pillar.get']('mysql_backup_password') }}"
+   >      connection_password: "{{ salt['pillar.get']('mysql_password') }}"
+   >    ```
+   >    `mysql_backup_password` 建议单独写在 `salt/pillar/secret/mysql-backup.sls` 之类的私有 Pillar 文件，再在 `top.sls` 中按需 include，避免把真实密码提交到仓库。若目录位于 Dropbox 等用户空间，请确保 `service_user`/`repo_owner` 与该目录的属主一致，使 systemd 任务和备份文件都拥有写权限。
+   > 2. 执行 `saltgoat pillar refresh` 同步最新 Pillar。
+   > 3. 重新运行 `sudo saltgoat magetools xtrabackup mysql install`，Salt 状态会依照新的路径创建目录、刷新 `/etc/mysql/mysql-backup.env` 并重启定时器。
+   > 4. 之后无论是定时器还是 `saltgoat magetools xtrabackup mysql run` 都会使用新的 `backup_dir`。如需让逻辑导出 (`xtrabackup mysql dump`) 保存到其他位置，可在命令里追加 `--backup-dir /path/to/dir`。
 
 3. 执行安装（需 root 权限，仅需运行一次即可创建账号、脚本与 timer）：
 
@@ -175,11 +193,11 @@ mysql_backup:
   enabled: true
   backup_dir: /var/backups/mysql/xtrabackup
   mysql_user: backup
-  mysql_password: "StrongBackUpP@ss"
+  mysql_password: "{{ salt['pillar.get']('secrets.mysql_backup_password', 'ChangeMeBackup!') }}"
   connection_user: root
-  connection_password: "{{ pillar['mysql_password'] }}"
+  connection_password: "{{ salt['pillar.get']('secrets.mysql_password', 'ChangeMeRoot!') }}"
   service_user: root
-  repo_owner: doge
+  repo_owner: deploy
   timer: daily
   randomized_delay: 20m
   retention_days: 7
