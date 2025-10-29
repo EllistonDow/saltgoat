@@ -46,6 +46,38 @@ magento_maintenance_health_indexer_status:
     - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento indexer:status
     - cwd: {{ site_path }}
 
+magento_maintenance_health_queue_consumers:
+  cmd.run:
+    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento queue:consumers:list
+    - cwd: {{ site_path }}
+
+magento_maintenance_health_cron_check:
+  cmd.run:
+    - name: |
+        bash -euo pipefail <<'SH'
+        for candidate in "{{ site_path }}/var/log/magento.cron.log" "{{ site_path }}/var/log/cron.log"; do
+          if [ -f "$candidate" ]; then
+            ts=$(date -r "$candidate" '+%F %T')
+            echo "[INFO] Cron 日志存在: $candidate (最近更新时间 $ts)"
+            tail -n 5 "$candidate" || true
+            exit 0
+          fi
+        done
+        echo "[WARNING] 未找到 Magento cron 日志，请确认 cron/schedule 是否正常运行。"
+        SH
+    - runas: root
+
+magento_maintenance_health_fpc_mode:
+  cmd.run:
+    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento config:show system/full_page_cache/caching_application
+    - cwd: {{ site_path }}
+
+magento_maintenance_health_n98_syscheck:
+  cmd.run:
+    - name: sudo -u {{ magento_user }} n98-magerun2 sys:check
+    - cwd: {{ site_path }}
+    - onlyif: command -v n98-magerun2 >/dev/null 2>&1
+
 magento_maintenance_health_disk_usage:
   cmd.run:
     - name: df -h {{ site_path }}

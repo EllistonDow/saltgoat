@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.7] - 2025-10-29
+
+### Changes
+- 修改 9 个文件: README.md, docs/MAGENTO_MAINTENANCE.md, docs/MAGENTO_MAINTENANCE_QUICK_REFERENCE.md, modules/magetools/magento-cron.sh, salt/states/optional/magento-maintenance/daily.sls 等
+
+
 ## [1.0.6] - 2025-10-29
 
 ### Changes

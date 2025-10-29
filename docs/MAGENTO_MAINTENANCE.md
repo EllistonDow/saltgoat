@@ -4,6 +4,21 @@
 
 SaltGoat Magento 2 维护系统提供了完整的自动化维护解决方案，包括日常维护、定时任务管理、健康检查等功能。系统采用 Salt 原生实现，完全符合 SaltGoat 的设计理念。
 
+## 快速开始
+
+```bash
+# 安装 / 更新 Salt Schedule
+saltgoat magetools cron <site> install
+
+# 检查计划任务与 Salt Minion 状态
+saltgoat magetools cron <site> status
+
+# 立即触发一次例行维护，用于验证
+saltgoat magetools cron <site> test
+```
+
+> 如果目标主机尚未运行 `salt-minion`，`install` 会自动写入 `/etc/cron.d/magento-maintenance` 作为临时替代；待 Minion 就绪后再次执行即可切换回 Salt Schedule。
+
 ## 功能特性
 
 ### 🔧 维护管理
@@ -128,12 +143,12 @@ saltgoat magetools cron tank uninstall
 **执行时间**: 默认每天凌晨 02:00
 
 **包含操作**
-1. 缓存刷新 `cache:flush`
-2. 全量索引 `indexer:reindex`
-3. 权限巡检（提示 root 属主文件）
-4. 会话清理 `session:clean`
-5. 日志清理 `log:clean`
-6. 缓存清理 `cache:clean`
+1. 缓存清理 `cache:clean`
+2. 索引状态巡检 `indexer:status`
+3. 仅在索引异常时自动重建 `indexer:reindex`
+4. 权限巡检（提示 root 属主文件）
+5. 会话清理 `session:clean`
+6. 日志清理 `log:clean`
 
 > 可通过 `--site-path`、`--php-bin`、`--magento-user` 等参数自定义运行环境。
 
@@ -142,12 +157,13 @@ saltgoat magetools cron tank uninstall
 
 **包含操作**
 1. 缓存刷新 `cache:flush`
-2. 日志轮换（>100MB 文件 truncate）
-3. 归档备份（tar + mysqldump，可通过 `--backup-dir`、`--mysql-user/--mysql-password` 等参数启用）
-4. 可选 Restic 快照（`--trigger-restic`，可叠加 `--restic-site/--restic-backup-dir/--restic-extra-path` 将单站点备份写入自定义仓库）
-5. 可选 Valkey 清空（`--allow-valkey-flush`）
-6. 系统检查 `n98-magerun2 sys:check` / `composer outdated --no-dev`
-7. 索引状态 `indexer:status`
+2. 索引状态巡检 + 全量重建（保障一周一次的干净基线）
+3. 日志轮换（>100MB 文件 truncate）
+4. 队列消费者列表、cron 可用性、FPC 模式等运行时检查
+5. 归档备份（仅在提供 `--backup-dir` 时启用；推荐以 Restic/XtraBackup 为主）  
+6. 可选 Restic 快照（`--trigger-restic`，可叠加 `--restic-site/--restic-backup-dir/--restic-extra-path`）
+7. 可选 Valkey 清空（`--allow-valkey-flush`）
+8. 依赖巡检 `n98-magerun2 sys:check` / `composer outdated --no-dev`
 
 ### 每月维护任务（完整部署流程）
 **执行时间**: 默认每月 1 日凌晨 04:00
@@ -165,15 +181,41 @@ saltgoat magetools cron tank uninstall
 ### 健康检查任务
 **执行时间**: 每小时
 **检查项目**:
-1. **Magento状态** - 检查CLI是否正常工作
-2. **数据库连接** - 检查数据库连接和架构状态
-3. **缓存状态** - 检查缓存系统状态
-4. **索引状态** - 检查索引系统状态
+1. **Magento CLI 基础命令**（版本、DB 状态、缓存/索引状态）
+2. **队列消费者列表** - 观察队列绑定是否完整
+3. **Cron 日志校验** - 检查 Magento cron 日志是否持续更新
+4. **FPC 模式确认** - 输出当前缓存引擎配置
+5. **n98-magerun2 sys:check**（若已安装）
+6. **站点磁盘使用情况**
 
 **智能功能**:
-- 自动检测数据库架构更新需求
-- 自动执行 `setup:upgrade` 和 `cache:clean`
-- 提供详细的状态报告
+- 自动检测并输出索引/缓存异常
+- 触发 Magento Cron，便于确认脚本能够被执行
+- 通过 Telegram / `/var/log/saltgoat/alerts.log` 输出健康检查上下文
+
+### 备份策略建议
+- **推荐组合**：使用 Restic（`saltgoat-restic-backup` 或 `saltgoat magetools backup restic run`）搭配 XtraBackup 物理备份，满足长期和快速恢复需求。
+- **单库导出**：`saltgoat magetools xtrabackup mysql dump` 面向站点迁移/调试场景，命令会输出备份文件大小，通过 Salt event 与 Telegram 双管齐下记录结果。
+- **归档备份**：只有在传入 `--backup-dir` 时才会生成 tar/mysqldump，若已启用 Restic/XtraBackup，可视情况关闭以避免重复占用存储。
+- **可观测性**：所有备份事件都会写入 `/var/log/saltgoat/alerts.log`；配置了 Telegram 的主机还能收到 `profile_summary/send_ok` 日志，用于审计。
+
+#### 按数据库定制 Salt Schedule（示例 Pillar）
+```yaml
+magento_schedule:
+  mysql_dump_jobs:
+    - name: tankmage-dump-hourly
+      cron: '0 * * * *'
+      database: tankmage
+      backup_dir: /home/doge/Dropbox/tank/databases
+      repo_owner: doge
+    - name: bankmage-dump-every-2h
+      cron: '0 */2 * * *'
+      database: bankmage
+      backup_dir: /home/doge/Dropbox/bank/databases
+      repo_owner: doge
+      no_compress: true
+```
+执行 `saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule；若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。
 
 ## 定时任务配置
 

@@ -26,17 +26,35 @@ magento_maintenance_daily_magento_absent:
     - comment: "未找到 {{ site_path }}/bin/magento，确认 Magento 是否已安装。"
 {% else %}
 
-magento_maintenance_daily_cache_flush:
+magento_maintenance_daily_cache_clean:
   cmd.run:
-    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento cache:flush
+    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento cache:clean
     - cwd: {{ site_path }}
 
-magento_maintenance_daily_indexer_reindex:
+magento_maintenance_daily_indexer_status:
   cmd.run:
-    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento indexer:reindex
+    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento indexer:status
     - cwd: {{ site_path }}
     - require:
-      - cmd: magento_maintenance_daily_cache_flush
+      - cmd: magento_maintenance_daily_cache_clean
+
+magento_maintenance_daily_indexer_reindex_if_needed:
+  cmd.run:
+    - name: |
+        bash -euo pipefail <<'SH'
+        set -o pipefail
+        output=$(sudo -u {{ magento_user }} {{ php_bin }} bin/magento indexer:status)
+        echo "$output"
+        if echo "$output" | grep -q 'Reindex Required'; then
+          echo "[INFO] 发现索引需要重建，正在执行 indexer:reindex"
+          sudo -u {{ magento_user }} {{ php_bin }} bin/magento indexer:reindex
+        else
+          echo "[INFO] 索引状态正常，跳过 reindex"
+        fi
+        SH
+    - cwd: {{ site_path }}
+    - require:
+      - cmd: magento_maintenance_daily_indexer_status
 
 magento_maintenance_daily_permission_check:
   cmd.run:
@@ -60,11 +78,6 @@ magento_maintenance_daily_session_clean:
 magento_maintenance_daily_log_clean:
   cmd.run:
     - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento log:clean
-    - cwd: {{ site_path }}
-
-magento_maintenance_daily_cache_clean:
-  cmd.run:
-    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento cache:clean
     - cwd: {{ site_path }}
 
 {% endif %}

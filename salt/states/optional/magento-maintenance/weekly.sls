@@ -45,6 +45,20 @@ magento_maintenance_weekly_cache_flush:
     - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento cache:flush
     - cwd: {{ site_path }}
 
+magento_maintenance_weekly_indexer_status:
+  cmd.run:
+    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento indexer:status
+    - cwd: {{ site_path }}
+    - require:
+      - cmd: magento_maintenance_weekly_cache_flush
+
+magento_maintenance_weekly_indexer_reindex:
+  cmd.run:
+    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento indexer:reindex
+    - cwd: {{ site_path }}
+    - require:
+      - cmd: magento_maintenance_weekly_indexer_status
+
 magento_maintenance_weekly_log_rotate:
   cmd.run:
     - name: |
@@ -175,9 +189,30 @@ magento_maintenance_weekly_composer_outdated:
     - cwd: {{ site_path }}
     - onlyif: command -v {{ composer_bin }} >/dev/null 2>&1
 
-magento_maintenance_weekly_indexer_status:
+magento_maintenance_weekly_queue_consumers:
   cmd.run:
-    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento indexer:status
+    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento queue:consumers:list
+    - cwd: {{ site_path }}
+
+magento_maintenance_weekly_cron_check:
+  cmd.run:
+    - name: |
+        bash -euo pipefail <<'SH'
+        for candidate in "{{ site_path }}/var/log/magento.cron.log" "{{ site_path }}/var/log/cron.log"; do
+          if [ -f "$candidate" ]; then
+            ts=$(date -r "$candidate" '+%F %T')
+            echo "[INFO] Cron 日志存在: $candidate (最近更新时间 $ts)"
+            tail -n 5 "$candidate" || true
+            exit 0
+          fi
+        done
+        echo "[WARNING] 未找到 Magento cron 日志，请确认 cron/schedule 是否正常运行。"
+        SH
+    - runas: root
+
+magento_maintenance_weekly_fpc_mode:
+  cmd.run:
+    - name: sudo -u {{ magento_user }} {{ php_bin }} bin/magento config:show system/full_page_cache/caching_application
     - cwd: {{ site_path }}
 
 {% endif %}

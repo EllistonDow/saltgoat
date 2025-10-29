@@ -93,7 +93,11 @@ backup_event_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.', '
             log("skip", {"reason": "no_profiles"})
             raise SystemExit()
 
-        reactor_common.broadcast_telegram(message, profiles, log)
+        try:
+            reactor_common.broadcast_telegram(message, profiles, log)
+        except Exception as exc:  # pylint: disable=broad-except
+            log("error", {"message": str(exc)})
+            raise
         PY
     - python_shell: True
     - require:

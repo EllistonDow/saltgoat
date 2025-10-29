@@ -8,6 +8,8 @@
 {% set weekly_args = pillar.get('magento_schedule', {}).get('weekly_args', '') %}
 {% set monthly_args = pillar.get('magento_schedule', {}).get('monthly_args', '') %}
 {% set health_args = pillar.get('magento_schedule', {}).get('health_args', '') %}
+{% set mysql_dump_jobs = pillar.get('magento_schedule', {}).get('mysql_dump_jobs', []) %}
+{% macro shquote(val) -%}'{{ val | replace("'", "'\\''") }}'{%- endmacro %}
 {% set salt_minion_service = salt['file.file_exists']('/lib/systemd/system/salt-minion.service') or salt['file.file_exists']('/etc/systemd/system/salt-minion.service') %}
 
 /usr/local/bin/magento-maintenance-salt:
@@ -55,6 +57,35 @@ magento_schedule_{{ name }}:
     - job_kwargs:
         shell: /bin/bash
     - cron: '{{ cron }}'
+    - run_on_start: False
+    - persistent: True
+    - maxrunning: 1
+{% endfor %}
+
+{% for dump_job in mysql_dump_jobs %}
+{% set dump_cmd = "saltgoat magetools xtrabackup mysql dump" %}
+{% if dump_job.get('database') %}
+  {% set dump_cmd = dump_cmd ~ " --database " ~ shquote(dump_job.database) %}
+{% endif %}
+{% if dump_job.get('backup_dir') %}
+  {% set dump_cmd = dump_cmd ~ " --backup-dir " ~ shquote(dump_job.backup_dir) %}
+{% endif %}
+{% if dump_job.get('repo_owner') %}
+  {% set dump_cmd = dump_cmd ~ " --repo-owner " ~ shquote(dump_job.repo_owner) %}
+{% endif %}
+{% if dump_job.get('no_compress', False) %}
+  {% set dump_cmd = dump_cmd ~ " --no-compress" %}
+{% endif %}
+
+magento_schedule_mysql_dump_{{ dump_job.name }}:
+  schedule.present:
+    - name: {{ dump_job.name }}
+    - function: cmd.run
+    - job_args:
+      - "{{ dump_cmd }}"
+    - job_kwargs:
+        shell: /bin/bash
+    - cron: '{{ dump_job.cron }}'
     - run_on_start: False
     - persistent: True
     - maxrunning: 1

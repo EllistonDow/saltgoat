@@ -60,12 +60,48 @@ check_cron_status() {
     echo ""
     
     local schedule_output
-    schedule_output=$(salt-call --local schedule.list --out=yaml 2>/dev/null)
-    
+    schedule_output="$(PYTHONWARNINGS=ignore sudo salt-call --local schedule.list --out=json 2>/dev/null || true)"
+
     log_info "Salt Schedule 任务:"
-    if echo "$schedule_output" | grep -q "magento"; then
+    if echo "$schedule_output" | grep -q "magento-"; then
         log_success "[SUCCESS] 已检测到 Magento 相关任务"
-        echo "$schedule_output" | grep "magento-" -A3
+        SCHEDULE_PAYLOAD="$schedule_output" python3 - <<'PY'
+import json
+import os
+
+try:
+    from yaml import safe_load as yaml_safe_load  # type: ignore
+except Exception:
+    yaml_safe_load = None
+
+payload_raw = os.environ.get("SCHEDULE_PAYLOAD", "")
+try:
+    outer = json.loads(payload_raw)
+    schedule_blob = outer.get("local", "")
+except Exception:
+    schedule_blob = ""
+
+if not schedule_blob:
+    sys.exit(0)
+
+parsed = None
+if yaml_safe_load is not None:
+    try:
+        parsed = yaml_safe_load(schedule_blob)
+    except Exception:
+        parsed = None
+
+if isinstance(parsed, dict):
+    for entry_name, entry_data in (parsed.get("schedule") or {}).items():
+        if not isinstance(entry_data, dict):
+            continue
+        cron = entry_data.get("cron", "n/a")
+        args = entry_data.get("args") or []
+        command = args[0] if args else ""
+        print(f"  - {entry_name}: {cron} -> {command}")
+else:
+    print(schedule_blob)
+PY
     else
         log_warning "[WARNING] 未发现 Magento 计划任务"
         log_info "使用 'saltgoat magetools cron $SITE_NAME install' 安装 Salt Schedule 任务"
