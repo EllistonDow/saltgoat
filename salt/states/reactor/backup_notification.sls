@@ -49,6 +49,8 @@ backup_event_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.', '
             summary.append(f"Archive: {payload['file']} ({payload['size']})")
         elif payload.get("file"):
             summary.append(f"Archive: {payload['file']}")
+        if payload.get("database"):
+            summary.append(f"Database: {payload['database']}")
         if payload.get("timestamp"):
             summary.append(f"Timestamp: {payload['timestamp']}")
         if payload.get("reason"):

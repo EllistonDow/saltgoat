@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.6] - 2025-10-29
+
+### Changes
+- 修改 3 个文件: modules/magetools/README.md, modules/magetools/mysql-backup.sh, salt/states/reactor/backup_notification.sls
+
+
 ## [1.0.5] - 2025-10-29
 
 ### Changes

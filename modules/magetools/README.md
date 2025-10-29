@@ -289,6 +289,6 @@ saltgoat help magetools
 
 ## 版本信息
 
-- **SaltGoat版本**: v0.9.8+
-- **支持Magento**: 1.x, 2.x
-- **PHP要求**: 7.4+
+- **SaltGoat版本**: v1.0.5+
+- **支持Magento**: 2.4.8+
+- **PHP要求**: 8.3

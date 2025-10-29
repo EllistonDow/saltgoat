@@ -8,11 +8,108 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
+HOST_ID="$(hostname -f 2>/dev/null || hostname)"
 MYSQL_ENV="/etc/mysql/mysql-backup.env"
 METADATA_DIR="/etc/mysql/backup.d"
 SERVICE_NAME="saltgoat-mysql-backup.service"
 TIMER_NAME="saltgoat-mysql-backup.timer"
 DUMP_DEFAULT_DIR="/var/backups/mysql/dumps"
+
+emit_dump_event() {
+    local tag="$1"
+    shift || true
+
+    local payload
+    payload="$(python3 - "$@" <<'PY'
+import json
+import sys
+
+data = {}
+for arg in sys.argv[1:]:
+    if '=' not in arg:
+        continue
+    key, value = arg.split('=', 1)
+    data[key] = value
+print(json.dumps(data, ensure_ascii=False))
+PY
+)"
+    if [[ -z "$payload" ]]; then
+        return 0
+    fi
+
+    if command -v salt-call >/dev/null 2>&1; then
+        salt-call event.send "$tag" "$payload" >/dev/null 2>&1 || true
+    fi
+}
+
+notify_dump_telegram() {
+    local status="$1"
+    local database="$2"
+    local path="$3"
+    local size="$4"
+    local reason="${5:-}"
+    local return_code="${6:-0}"
+    local compressed="${7:-1}"
+
+    python3 - "$status" "$database" "$path" "$size" "$reason" "$return_code" "$compressed" "$HOST_ID" <<'PY'
+import json
+import subprocess
+import sys
+
+status, database, path, size, reason, return_code, compressed, host = sys.argv[1:9]
+
+sys.path.insert(0, "/opt/saltgoat-reactor")
+try:
+    import reactor_common  # pylint: disable=import-error
+except Exception as exc:  # pylint: disable=broad-except
+    sys.stderr.write(f"Failed to import reactor_common: {exc}\n")
+    raise SystemExit(0)
+
+log_path = "/var/log/saltgoat/alerts.log"
+tag = f"saltgoat/backup/mysql_dump/{status}"
+
+lines = [
+    f"[SaltGoat] {status.upper()} backup mysql_dump",
+    f"Host: {host}",
+    f"Repository/File: {path or 'n/a'}",
+]
+if path:
+    lines.append(f"Log: {path}")
+if path and size and size.lower() != "unknown":
+    lines.append(f"Archive: {path} ({size})")
+if database:
+    lines.append(f"Database: {database}")
+if reason:
+    lines.append(f"Reason: {reason}")
+lines.append(f"Return code: {return_code}")
+message = "\n".join(lines)
+
+def log(kind, payload_obj):
+    try:
+        subprocess.run(
+            [
+                "python3",
+                "/opt/saltgoat-reactor/logger.py",
+                "TELEGRAM",
+                log_path,
+                f"{tag} {kind}",
+                json.dumps(payload_obj, ensure_ascii=False),
+            ],
+            check=False,
+            timeout=5,
+        )
+    except Exception:  # pylint: disable=broad-except
+        pass
+
+profiles = reactor_common.load_telegram_profiles("/etc/saltgoat/telegram.json", log)
+if not profiles:
+    log("skip", {"reason": "no_profiles"})
+    raise SystemExit(0)
+
+log("context", {"database": database, "status": status, "size": size, "compressed": compressed})
+reactor_common.broadcast_telegram(message, profiles, log)
+PY
+}
 
 usage() {
     cat <<'EOF'
@@ -212,6 +309,15 @@ EOF
     fi
 
     if ! command -v mysqldump >/dev/null 2>&1; then
+        emit_dump_event "saltgoat/backup/mysql_dump/failure" \
+            "id=${HOST_ID}" \
+            "host=${HOST_ID}" \
+            "status=failure" \
+            "origin=dump" \
+            "database=${database}" \
+            "reason=missing_mysqldump" \
+            "return_code=1"
+        notify_dump_telegram "failure" "$database" "" "unknown" "missing_mysqldump" "1" "$compress" || true
         log_error "未找到 mysqldump，请先安装 mysql-client 或 percona 客户端工具"
         exit 1
     fi
@@ -247,24 +353,49 @@ EOF
     )
 
     if [[ -z "$mysql_password" ]]; then
+        emit_dump_event "saltgoat/backup/mysql_dump/failure" \
+            "id=${HOST_ID}" \
+            "host=${HOST_ID}" \
+            "status=failure" \
+            "origin=dump" \
+            "database=${database}" \
+            "reason=missing_password" \
+            "return_code=1"
+        notify_dump_telegram "failure" "$database" "" "unknown" "missing_password" "1" "$compress" || true
         log_error "无法从 $MYSQL_ENV 读取 MYSQL_BACKUP_PASSWORD，无法继续"
         exit 1
     fi
 
     local tmp_output
     tmp_output="$(mktemp "${TMPDIR:-/tmp}/saltgoat-dump.XXXXXX")"
+    local dump_rc=0
     if [[ $compress -eq 1 ]]; then
-        if ! (set -o pipefail; MYSQL_PWD="$mysql_password" mysqldump --user="$mysql_user" "${connect_args[@]}" "${mysqldump_args[@]}" | gzip -c >"$tmp_output"); then
-            rm -f "$tmp_output"
-            log_error "mysqldump 失败，请检查数据库名称或备份账号权限"
-            exit 1
-        fi
+        set +e
+        (set -o pipefail; MYSQL_PWD="$mysql_password" mysqldump --user="$mysql_user" "${connect_args[@]}" "${mysqldump_args[@]}" | gzip -c >"$tmp_output")
+        dump_rc=$?
+        set -e
     else
-        if ! MYSQL_PWD="$mysql_password" mysqldump --user="$mysql_user" "${connect_args[@]}" "${mysqldump_args[@]}" >"$tmp_output"; then
-            rm -f "$tmp_output"
-            log_error "mysqldump 失败，请检查数据库名称或备份账号权限"
-            exit 1
-        fi
+        set +e
+        MYSQL_PWD="$mysql_password" mysqldump --user="$mysql_user" "${connect_args[@]}" "${mysqldump_args[@]}" >"$tmp_output"
+        dump_rc=$?
+        set -e
+    fi
+
+    if [[ $dump_rc -ne 0 ]]; then
+        rm -f "$tmp_output"
+        emit_dump_event "saltgoat/backup/mysql_dump/failure" \
+            "id=${HOST_ID}" \
+            "host=${HOST_ID}" \
+            "status=failure" \
+            "origin=dump" \
+            "database=${database}" \
+            "reason=mysqldump_exit_${dump_rc}" \
+            "return_code=${dump_rc}" \
+            "file=${output_path}" \
+            "path=${output_path}"
+        notify_dump_telegram "failure" "$database" "$output_path" "unknown" "mysqldump_exit_${dump_rc}" "${dump_rc}" "$compress" || true
+        log_error "mysqldump 失败，请检查数据库名称或备份账号权限"
+        exit "$dump_rc"
     fi
 
     sudo mv "$tmp_output" "$output_path"
@@ -276,7 +407,32 @@ EOF
         sudo chown "$repo_owner":"$repo_group" "$output_path" 2>/dev/null || sudo chown "$repo_owner" "$output_path" || true
     fi
 
+    local size="unknown"
+    if size="$(sudo du -h "$output_path" 2>/dev/null | awk '{print $1}')"; then
+        :
+    else
+        size="unknown"
+    fi
     log_success "数据库 $database 备份完成: $output_path"
+    if [[ "$size" != "unknown" ]]; then
+        log_info "备份文件大小: $size"
+    fi
+    local ts
+    ts="$(date '+%Y-%m-%d_%H:%M:%S')"
+
+    emit_dump_event "saltgoat/backup/mysql_dump/success" \
+        "id=${HOST_ID}" \
+        "host=${HOST_ID}" \
+        "status=success" \
+        "origin=dump" \
+        "database=${database}" \
+        "file=${output_path}" \
+        "path=${output_path}" \
+        "size=${size:-unknown}" \
+        "return_code=0" \
+        "timestamp=${ts}" \
+        "compressed=${compress}"
+    notify_dump_telegram "success" "$database" "$output_path" "$size" "" "0" "$compress" || true
 }
 
 ACTION="${1:-}"
