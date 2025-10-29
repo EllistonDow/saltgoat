@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.1.1] - 2025-10-29
+
+### Changes
+- 修改 15 个文件: README.md, docs/MAGENTO_MAINTENANCE.md, docs/MYSQL_BACKUP.md, salt/pillar/backup-restic.sls, salt/pillar/backup-restic.sls.sample 等
+
+
 ## [1.1.0] - 2025-10-29
 
 ### Changes

@@ -1,0 +1,18 @@
+# MySQL XtraBackup Pillar 示例
+# 复制为 `salt/pillar/mysql-backup.sls` 并根据环境调整
+
+mysql_backup:
+  enabled: true
+  backup_dir: /var/backups/mysql/xtrabackup
+  mysql_user: backup
+  mysql_password: "{{ salt['pillar.get']('secrets.mysql_backup_password', 'ChangeMeBackup!') }}"
+  connection_user: root
+  connection_password: "{{ salt['pillar.get']('secrets.mysql_password', 'ChangeMeRoot!') }}"
+  service_user: root
+  repo_owner: backup
+  timer: daily
+  randomized_delay: 20m
+  retention_days: 7
+  prepare_backup: false
+  compress: true
+  extra_args: "--parallel=4"

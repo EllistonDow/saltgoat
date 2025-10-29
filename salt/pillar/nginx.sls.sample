@@ -1,0 +1,35 @@
+# Nginx Pillar 配置示例
+# 复制为 `salt/pillar/nginx.sls` 并按站点修改
+
+nginx:
+  package: nginx
+  service: nginx
+  default_site: false
+  client_max_body_size: 64m
+  sites:
+    site1:
+      enabled: true
+      server_name:
+        - site1.example.com
+      listen:
+        - port: 80
+        - port: 443
+          ssl: true
+      root: /var/www/site1
+      index:
+        - index.php
+        - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/site1.example.com/fullchain.pem
+        key: /etc/letsencrypt/live/site1.example.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true

@@ -70,7 +70,11 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    ```bash
    saltgoat pillar init               # 生成 salt/pillar/saltgoat.sls（附带随机密码）
    saltgoat pillar show               # 审核并按需修改
-   # Restic 备份：复制 salt/pillar/backup-restic.sls，并填写仓库/访问密钥
+   # 参考 *.sample 文件快速复制模板
+   cp salt/pillar/magento-optimize.sls.sample salt/pillar/magento-optimize.sls
+   cp salt/pillar/magento-schedule.sls.sample salt/pillar/magento-schedule.sls
+   cp salt/pillar/nginx.sls.sample salt/pillar/nginx.sls
+   # 其它 Pillar 也提供 *.sample 文件，可按需复制后修改
    ```
 3. **执行安装**
    ```bash

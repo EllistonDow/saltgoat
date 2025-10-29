@@ -217,7 +217,7 @@ magento_schedule:
       no_compress: true
       site: bank
 ```
-建议将此配置写入 `salt/pillar/magento-schedule.sls`；执行 `saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule（若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`）。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。
+建议复制 `salt/pillar/magento-schedule.sls.sample` 为实际文件后再写入上述配置；执行 `saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule（若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`）。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。
 
 > 提示：在 mysqldump 任务中加入 `site` 或 `sites` 字段，SaltGoat 才能在多站点场景下仅为指定站点安装/卸载该计划任务。
 

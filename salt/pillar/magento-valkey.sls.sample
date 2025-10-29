@@ -1,0 +1,24 @@
+# Magento Valkey Pillar 示例
+# 复制为 `salt/pillar/magento-valkey.sls` 并根据站点填写
+
+site_name: site1
+valkey_password: "{{ salt['pillar.get']('secrets.magento_valkey.password', 'ChangeMe123!') }}"
+cache_db: 10
+page_db: 11
+session_db: 12
+valkey_host: 127.0.0.1
+valkey_port: 6379
+site_path: /var/www/site1
+cache_prefix: site1_cache_
+session_prefix: site1_session_
+compress_data: '1'
+timeout: '2.5'
+max_concurrency: '6'
+break_after_frontend: '5'
+break_after_adminhtml: '30'
+first_lifetime: '600'
+bot_first_lifetime: '60'
+bot_lifetime: '7200'
+disable_locking: '0'
+min_lifetime: '60'
+max_lifetime: '2592000'
