@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.9] - 2025-10-29
+
+### Changes
+- 修改 5 个文件: modules/git/git.sh, saltgoat, scripts/release.sh, tests/consistency-test.sh, tests/test_git_release.sh
+
+
 ## [1.0.8] - 2025-10-29
 
 ### Changes

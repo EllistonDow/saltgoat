@@ -10,7 +10,7 @@ source "${MODULE_DIR}/../../lib/utils.sh"
 source "${MODULE_DIR}/help.sh"
 
 get_current_version() {
-    grep -E '^SCRIPT_VERSION' "${MODULE_DIR}/../../saltgoat" | sed -E 's/.*"([0-9.]+)".*/\1/'
+    grep -E '^SCRIPT_STATIC_VERSION' "${MODULE_DIR}/../../saltgoat" | sed -E 's/.*"([^"]+)".*/\1/'
 }
 
 bump_patch_version() {
@@ -22,7 +22,7 @@ bump_patch_version() {
 
 update_version_file() {
     local current="$1" new="$2"
-    perl -0pi -e "s/(SCRIPT_VERSION=\")${current}(\";)/\1${new}\2/" "${MODULE_DIR}/../../saltgoat"
+    perl -0pi -e "s/(SCRIPT_STATIC_VERSION=\")${current}(\";)/\1${new}\2/" "${MODULE_DIR}/../../saltgoat"
 }
 
 is_semver() {

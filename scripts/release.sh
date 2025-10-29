@@ -12,7 +12,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # 获取版本号
-VERSION=$(grep 'SCRIPT_VERSION=' saltgoat | cut -d'"' -f2)
+VERSION=$(grep 'SCRIPT_STATIC_VERSION=' saltgoat | cut -d'"' -f2)
 
 echo -e "${BLUE}==========================================${NC}"
 echo -e "${BLUE}    SaltGoat Release Script${NC}"

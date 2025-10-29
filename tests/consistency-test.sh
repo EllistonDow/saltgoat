@@ -110,7 +110,7 @@ test_config_consistency() {
     local saltgoat_path
     saltgoat_path=$(which saltgoat 2>/dev/null || find /usr/local/bin /home -name "saltgoat" 2>/dev/null | head -1)
     if [ -n "$saltgoat_path" ] && [ -f "$saltgoat_path" ]; then
-        SCRIPT_VERSION=$(grep "SCRIPT_VERSION=" "$saltgoat_path" | cut -d'"' -f2)
+        SCRIPT_VERSION=$(grep "SCRIPT_STATIC_VERSION=" "$saltgoat_path" | cut -d'"' -f2)
         echo "  SaltGoat版本: $SCRIPT_VERSION ✅"
     fi
     
