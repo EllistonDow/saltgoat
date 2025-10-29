@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.1.4] - 2025-10-29
+
+### Changes
+- 修改 1 个文件: docs/BACKUP_RESTIC.md
+
+
 ## [1.1.3] - 2025-10-29
 
 ### Changes

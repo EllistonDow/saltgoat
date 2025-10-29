@@ -144,6 +144,17 @@ sudo saltgoat magetools backup restic install \
   亦可使用完整的 `OnCalendar` 语法，例如 `--timer 'Mon..Sun 03:00'`。
 - 若想临时取消排程，可运行 `sudo systemctl disable --now saltgoat-restic-<site>.timer`，稍后再通过 `install` 恢复。
 
+### 3.2 通知与事件
+
+- 无论是 systemd timer 还是手动 `run`，都会发送 `saltgoat/backup/restic/(success|failure)` 事件；配合默认的 `reactor/backup_notification.sls` 会在 `/var/log/saltgoat/alerts.log` 中追加 `[BACKUP]` 记录。
+- 为了即时推送，CLI 与定时服务还会检查 `/etc/saltgoat/telegram.json`，使用 `/opt/saltgoat-reactor/reactor_common.py` 直接广播 Telegram 消息（同时保留 Salt 事件，便于其它自动化继续消费）。
+- 快速自检：
+  ```bash
+  sudo tail -n 20 /var/log/saltgoat/alerts.log    # 确认出现 [BACKUP] 与 [TELEGRAM] 行
+  sudo journalctl -u saltgoat-restic-<site>.service -n 50
+  ```
+- 如果日志里看到 `TELEGRAM ... send_failed`，通常与网络、token 或 chat_id 有关；`config_missing/config_empty` 则表示 `/etc/saltgoat/telegram.json` 尚未配置，按模板补齐即可。
+
 ---
 
 ## 4. 日常巡检
