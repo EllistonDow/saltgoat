@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.1.3] - 2025-10-29
+
+### Changes
+- 修改 2 个文件: modules/magetools/backup-restic.sh, salt/states/templates/restic-backup.sh.jinja
+
+
 ## [1.1.2] - 2025-10-29
 
 ### Changes

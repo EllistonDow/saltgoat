@@ -221,6 +221,108 @@ except Exception:
 PY
 }
 
+send_direct_notification() {
+    local status="$1"
+    local repo="$2"
+    local site="$3"
+    local log_file="$4"
+    local paths="$5"
+    local tags="$6"
+    local rc="$7"
+    local origin="$8"
+    local host="$9"
+    local config="/etc/saltgoat/telegram.json"
+    local logger="/opt/saltgoat-reactor/logger.py"
+    local helpers="/opt/saltgoat-reactor/reactor_common.py"
+    local log_path="/var/log/saltgoat/alerts.log"
+
+    [[ -f "$config" ]] || return 0
+    [[ -f "$logger" ]] || return 0
+    [[ -f "$helpers" ]] || helpers=""
+
+    python3 - "$status" "$repo" "$site" "$log_file" "$paths" "$tags" "$rc" "$origin" "$host" "$config" "$logger" "$log_path" <<'PY'
+import json
+import pathlib
+import subprocess
+import sys
+from typing import Dict, Any
+
+status, repo, site, log_file, paths, tags, rc, origin, host_hint, config_path, logger_path, log_path = sys.argv[1:]
+
+rc = int(rc or 0)
+paths_list = [item for item in (paths or "").split(",") if item]
+tags_list = [item for item in (tags or "").split(",") if item]
+
+helpers = pathlib.Path("/opt/saltgoat-reactor/reactor_common.py")
+if not helpers.exists():
+    sys.exit(0)
+
+sys.path.insert(0, str(helpers.parent))
+import reactor_common  # pylint: disable=import-error
+
+payload: Dict[str, Any] = {
+    "host": host_hint or "",
+    "repo": repo or "n/a",
+    "site": site or "",
+    "log_file": log_file or "n/a",
+    "paths": ", ".join(paths_list),
+    "tags": ", ".join(tags_list),
+    "return_code": rc,
+    "origin": origin or "manual",
+}
+
+if not site:
+    payload.pop("site")
+if not payload["paths"]:
+    payload.pop("paths")
+if not payload["tags"]:
+    payload.pop("tags")
+
+severity = "SUCCESS" if status == "success" else "FAILURE"
+lines = [
+    f"[SaltGoat] {severity} backup restic",
+    f"Host: {payload.get('host') or 'ns510140'}",
+    f"Repository/File: {repo or 'n/a'}",
+]
+if log_file:
+    lines.append(f"Log: {log_file}")
+if site:
+    lines.append(f"Site: {site}")
+if payload.get("paths"):
+    lines.append(f"Paths: {payload['paths']}")
+if payload.get("tags"):
+    lines.append(f"Tags: {payload['tags']}")
+lines.append(f"Return code: {rc}")
+message = "\n".join(lines)
+
+def log(label, data):
+    subprocess.run(
+        [
+            "python3",
+            logger_path,
+            "TELEGRAM",
+            log_path,
+            f"saltgoat/backup/restic/{status} {label}",
+            json.dumps(data, ensure_ascii=False),
+        ],
+        check=False,
+        timeout=5,
+    )
+
+profiles = reactor_common.load_telegram_profiles(config_path, log)
+if not profiles:
+    log("skip", {"reason": "no_profiles"})
+    sys.exit(0)
+
+try:
+    log("profile_summary", {"count": len(profiles)})
+    reactor_common.broadcast_telegram(message, profiles, log)
+except Exception as exc:  # pylint: disable=broad-except
+    log("error", {"message": str(exc)})
+    sys.exit(1)
+PY
+}
+
 usage() {
     cat <<EOF
 用法:
@@ -578,6 +680,7 @@ RESTIC_BACKUP_ARGS='--one-file-system'
 RESTIC_CHECK_AFTER_BACKUP='1'
 RESTIC_FORGET_ARGS='--keep-last 7 --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune'
 RESTIC_REPO_OWNER='$(quote_for_env "$INSTALL_REPO_OWNER")'
+RESTIC_SITE='$(quote_for_env "$SITE_NAME")'
 EOF"
     sudo chown "$INSTALL_SERVICE_USER":"$INSTALL_SERVICE_USER" "$RESTIC_ENV"
     sudo chmod 600 "$RESTIC_ENV"
@@ -1025,6 +1128,16 @@ EOF
         "paths=$joined_paths" \
         "tags=$joined_tags" \
         "return_code=$rc"
+    send_direct_notification \
+        "$event_suffix" \
+        "${effective_repo:-unknown}" \
+        "${RUN_SITE:-}" \
+        "" \
+        "$joined_paths" \
+        "$joined_tags" \
+        "$rc" \
+        "manual" \
+        "$HOST_ID"
     for f in "${cleanup[@]}"; do
         [[ -n "$f" ]] && rm -f "$f"
     done

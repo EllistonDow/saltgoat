@@ -192,3 +192,74 @@ else
     EVENT_STATUS="failure"
     echo "[restic] manual backup failed with rc=$cleanup_rc" >&2
 fi
+
+if [[ -f /etc/saltgoat/telegram.json && -f /opt/saltgoat-reactor/reactor_common.py ]]; then
+    python3 - <<'PY'
+import json
+import os
+import subprocess
+import sys
+sys.path.insert(0, "/opt/saltgoat-reactor")
+import reactor_common  # pylint: disable=import-error
+
+status = os.environ.get("EVENT_STATUS", "success")
+repo = os.environ.get("RESTIC_REPOSITORY", "n/a")
+site = os.environ.get("RESTIC_SITE", "")
+log_file = os.environ.get("LOG_FILE", "")
+tags = os.environ.get("RESTIC_TAGS", "")
+rc = int(os.environ.get("EVENT_RC", "0") or 0)
+host = os.environ.get("HOST_ID", "")
+paths = []
+include_file = os.environ.get("RESTIC_INCLUDE_FILE")
+if include_file and os.path.isfile(include_file):
+    with open(include_file, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                paths.append(line)
+
+message_lines = [
+    f"[SaltGoat] {'SUCCESS' if status == 'success' else 'FAILURE'} backup restic",
+    f"Host: {host or 'ns510140'}",
+    f"Repository/File: {repo or 'n/a'}",
+]
+if log_file:
+    message_lines.append(f"Log: {log_file}")
+if site:
+    message_lines.append(f"Site: {site}")
+if paths:
+    message_lines.append(f"Paths: {', '.join(paths)}")
+if tags:
+    message_lines.append(f"Tags: {tags}")
+message_lines.append(f"Return code: {rc}")
+message = "\n".join(message_lines)
+
+LOG_PATH = "/var/log/saltgoat/alerts.log"
+TAG = f"saltgoat/backup/restic/{status}"
+
+def log(label, payload):
+    subprocess.run(
+        [
+            "python3",
+            "/opt/saltgoat-reactor/logger.py",
+            "TELEGRAM",
+            LOG_PATH,
+            f"{TAG} {label}",
+            json.dumps(payload, ensure_ascii=False),
+        ],
+        check=False,
+        timeout=5,
+    )
+
+profiles = reactor_common.load_telegram_profiles("/etc/saltgoat/telegram.json", log)
+if not profiles:
+    log("skip", {"reason": "no_profiles"})
+    sys.exit(0)
+
+try:
+    log("profile_summary", {"count": len(profiles)})
+    reactor_common.broadcast_telegram(message, profiles, log)
+except Exception as exc:  # pylint: disable=broad-except
+    log("error", {"message": str(exc)})
+PY
+fi
