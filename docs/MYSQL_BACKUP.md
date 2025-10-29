@@ -237,7 +237,38 @@ mysql_backup:
 
 -------------------------------------------------------------------------------
 
-## 7. 常见问题（FAQ）
+## 8. 为站点数据库配置 Salt Schedule
+
+如果你希望按照每站点 / 每小时等频率执行逻辑导出（mysqldump），可以在 Magento 维护 Pillar 中定义 `magento_schedule.mysql_dump_jobs`，示例：
+
+```yaml
+magento_schedule:
+  mysql_dump_jobs:
+    - name: tankmage-dump-hourly
+      cron: '0 * * * *'
+      database: tankmage
+      backup_dir: /home/doge/Dropbox/tank/databases
+      repo_owner: tankuser
+    - name: bankmage-dump-every-2h
+      cron: '0 */2 * * *'
+      database: bankmage
+      backup_dir: /home/doge/Dropbox/bank/databases
+      repo_owner: bankuser
+      no_compress: true
+```
+
+使用指南：
+
+1. 将上述配置写入与你的站点关联的 Pillar（例如 `salt/pillar/magento-optimize.sls`）。
+2. 执行 `saltgoat pillar refresh`。
+3. 对每个站点运行 `saltgoat magetools cron <site> install`。命令会为该站点的 Salt Schedule（或降级的 `/etc/cron.d/magento-maintenance`）生成 mysqldump 计划。
+4. 后续可通过 `saltgoat magetools cron <site> status` 查看条目。输出会包含中文注释（如“每 5 分钟 / 每小时整点 / 每周日 03:00”）帮助识别频率。
+
+> 若宿主缺少 `salt-minion`，`install` 会自动回退写入系统 Cron，但仍使用同样的站点配置。
+
+-------------------------------------------------------------------------------
+
+## 9. 常见问题（FAQ）
 
 | 问题 | 解决方法 |
 |------|----------|

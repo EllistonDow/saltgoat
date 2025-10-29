@@ -74,6 +74,8 @@ try:
 except Exception:
     yaml_safe_load = None
 
+import sys
+
 payload_raw = os.environ.get("SCHEDULE_PAYLOAD", "")
 try:
     outer = json.loads(payload_raw)
@@ -83,6 +85,39 @@ except Exception:
 
 if not schedule_blob:
     sys.exit(0)
+
+def describe_cron(expr: str) -> str:
+    parts = expr.split()
+    if len(parts) != 5:
+        return f"计划: {expr}"
+    minute, hour, dom, month, dow = parts
+
+    if minute.startswith("*/") and all(field == "*" for field in (hour, dom, month, dow)):
+        return f"每 {minute[2:]} 分钟"
+
+    if minute == "0" and hour == "*" and dom == "*" and month == "*" and dow == "*":
+        return "每小时整点"
+
+    if minute == "0" and hour != "*" and dom == "*" and month == "*" and dow == "*":
+        return f"每天 {hour.zfill(2)}:{minute.zfill(2)}"
+
+    if minute == "0" and hour != "*" and dom.isdigit() and month == "*" and dow == "*":
+        return f"每月 {dom} 日 {hour.zfill(2)}:{minute.zfill(2)}"
+
+    day_map = {
+        "0": "周日",
+        "1": "周一",
+        "2": "周二",
+        "3": "周三",
+        "4": "周四",
+        "5": "周五",
+        "6": "周六",
+    }
+
+    if minute == "0" and hour != "*" and dom == "*" and month == "*" and dow in day_map:
+        return f"每{day_map[dow]} {hour.zfill(2)}:{minute.zfill(2)}"
+
+    return f"计划: {expr}"
 
 parsed = None
 if yaml_safe_load is not None:
@@ -98,7 +133,8 @@ if isinstance(parsed, dict):
         cron = entry_data.get("cron", "n/a")
         args = entry_data.get("args") or []
         command = args[0] if args else ""
-        print(f"  - {entry_name}: {cron} -> {command}")
+        description = describe_cron(str(cron))
+        print(f"  - {entry_name}: {cron} -> {command}  # {description}")
 else:
     print(schedule_blob)
 PY

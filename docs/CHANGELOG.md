@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.12] - 2025-10-29
+
+### Changes
+- 修改 4 个文件: docs/MYSQL_BACKUP.md, modules/magetools/magento-cron.sh, salt/pillar/magento-optimize.sls, salt/pillar/top.sls
+
+
 ## [1.0.11] - 2025-10-29
 
 ### Changes
