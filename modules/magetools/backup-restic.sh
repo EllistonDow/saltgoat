@@ -7,12 +7,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../../lib/logger.sh
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
+# shellcheck source=../../lib/utils.sh
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/utils.sh"
 
-RESTIC_ENV="/etc/restic/restic.env"
+RESTIC_BASE_DIR="/etc/restic"
+RESTIC_ENV="${RESTIC_BASE_DIR}/restic.env"
+RESTIC_INCLUDE_FILE="${RESTIC_BASE_DIR}/include.txt"
+RESTIC_EXCLUDE_FILE="${RESTIC_BASE_DIR}/exclude.txt"
 RESTIC_SERVICE="saltgoat-restic-backup.service"
 RESTIC_TIMER="saltgoat-restic-backup.timer"
-BACKUP_SCRIPT="/usr/local/bin/saltgoat-restic-backup"
+RESTIC_LOG_DIR="/var/log/restic"
+RESTIC_CACHE_DIR="/var/cache/restic"
 HOST_ID="$(hostname -f 2>/dev/null || hostname)"
+SITE_NAME=""
+SITE_TOKEN=""
+SITE_SECRET_REPO=""
+SITE_SECRET_SERVICE_USER=""
+SITE_SECRET_REPO_OWNER=""
+SITE_SECRET_PATHS=()
+SITE_SECRET_TAGS=()
 
 declare -a RUN_PATHS=()
 declare -A RUN_PATHS_SEEN=()
@@ -30,10 +44,147 @@ INSTALL_SITE=""
 INSTALL_REPO=""
 INSTALL_TIMER="daily"
 INSTALL_RANDOM_DELAY="15m"
-INSTALL_PATHS_DEFAULTED=0
 INSTALL_SERVICE_USER=""
 INSTALL_REPO_OWNER=""
 SITE_METADATA_DIR="/etc/restic/sites.d"
+
+sanitize_site_token() {
+    local raw="$1"
+    echo "$raw" \
+        | tr '[:upper:]' '[:lower:]' \
+        | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+}
+
+select_site() {
+    local site="$1"
+    if [[ -z "$site" ]]; then
+        log_error "请使用 --site 指定站点"
+        exit 1
+    fi
+    SITE_NAME="$site"
+    SITE_TOKEN="$(sanitize_site_token "$site")"
+    if [[ -z "$SITE_TOKEN" ]]; then
+        log_error "站点名称无效: $site"
+        exit 1
+    fi
+    RESTIC_ENV="${RESTIC_BASE_DIR}/${SITE_TOKEN}.env"
+    RESTIC_INCLUDE_FILE="${RESTIC_BASE_DIR}/${SITE_TOKEN}.include"
+    RESTIC_EXCLUDE_FILE="${RESTIC_BASE_DIR}/${SITE_TOKEN}.exclude"
+    RESTIC_SERVICE="saltgoat-restic-${SITE_TOKEN}.service"
+    RESTIC_TIMER="saltgoat-restic-${SITE_TOKEN}.timer"
+    RESTIC_LOG_DIR="/var/log/restic/${SITE_TOKEN}"
+    RESTIC_CACHE_DIR="/var/cache/restic/${SITE_TOKEN}"
+    load_site_defaults
+}
+
+load_site_defaults() {
+    SITE_SECRET_REPO=""
+    SITE_SECRET_SERVICE_USER=""
+    SITE_SECRET_REPO_OWNER=""
+    SITE_SECRET_PATHS=()
+    SITE_SECRET_TAGS=()
+
+    local secret_dir
+    secret_dir="$(get_secret_pillar_dir)"
+    if ! sudo test -d "$secret_dir" 2>/dev/null; then
+        return
+    fi
+
+    local output
+    output="$(sudo python3 - "$secret_dir" "$SITE_TOKEN" <<'PY'
+import sys, yaml, pathlib, json, base64
+
+secret_dir = pathlib.Path(sys.argv[1])
+site = sys.argv[2]
+
+def deep_merge(base, new):
+    for key, val in new.items():
+        if isinstance(val, dict) and isinstance(base.get(key), dict):
+            deep_merge(base[key], val)
+        else:
+            base[key] = val
+    return base
+
+data = {}
+for sls_file in sorted(secret_dir.glob('*.sls')):
+    try:
+        chunk = yaml.safe_load(sls_file.read_text()) or {}
+    except Exception:
+        continue
+    if isinstance(chunk, dict):
+        deep_merge(data, chunk)
+
+site_cfg = (
+    data.get('secrets', {})
+        .get('restic_sites', {})
+        .get(site)
+)
+
+if not isinstance(site_cfg, dict):
+    raise SystemExit(0)
+
+for key, value in site_cfg.items():
+    if isinstance(value, (list, dict)):
+        encoded = base64.b64encode(json.dumps(value).encode()).decode()
+        print(f"{key}__b64={encoded}")
+    else:
+        print(f"{key}={value}")
+PY
+)" || return
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        case "$line" in
+            repo=*)
+                SITE_SECRET_REPO="${line#repo=}"
+                ;;
+            service_user=*)
+                SITE_SECRET_SERVICE_USER="${line#service_user=}"
+                ;;
+            repo_owner=*)
+                SITE_SECRET_REPO_OWNER="${line#repo_owner=}"
+                ;;
+            paths__b64=*)
+                local encoded="${line#paths__b64=}"
+                mapfile -t SITE_SECRET_PATHS < <(python3 - "$encoded" <<'PY'
+import sys, json, base64
+encoded = sys.argv[1]
+if not encoded:
+    raise SystemExit(0)
+try:
+    data = json.loads(base64.b64decode(encoded).decode())
+except Exception:
+    raise SystemExit(0)
+if isinstance(data, (list, tuple)):
+    for item in data:
+        print(item)
+elif isinstance(data, str):
+    print(data)
+PY
+)
+                ;;
+            tags__b64=*)
+                local encoded="${line#tags__b64=}"
+                mapfile -t SITE_SECRET_TAGS < <(python3 - "$encoded" <<'PY'
+import sys, json, base64
+encoded = sys.argv[1]
+if not encoded:
+    raise SystemExit(0)
+try:
+    data = json.loads(base64.b64decode(encoded).decode())
+except Exception:
+    raise SystemExit(0)
+if isinstance(data, (list, tuple)):
+    for item in data:
+        print(item)
+elif isinstance(data, str):
+    print(data)
+PY
+)
+                ;;
+        esac
+    done <<<"$output"
+}
 
 emit_salt_event() {
     local tag="$1"
@@ -73,35 +224,36 @@ PY
 usage() {
     cat <<EOF
 用法:
-  saltgoat magetools backup restic install              # 根据 Pillar 应用 optional.backup-restic
-  saltgoat magetools backup restic run [选项]           # 立即执行一次备份（可限制到单站点）
-  saltgoat magetools backup restic status               # 查看 systemd service/timer 状态
-  saltgoat magetools backup restic logs [lines]         # 查看最近日志 (journalctl)
-  saltgoat magetools backup restic snapshots            # 列出 Restic 快照
-  saltgoat magetools backup restic check                # restic check
-  saltgoat magetools backup restic forget [args]        # 手工执行 restic forget ...
-  saltgoat magetools backup restic exec <cmd...>        # 直接调用 restic（如 restore/mount）
+  saltgoat magetools backup restic install --site <name> [选项]   # 为单个站点创建 Restic 定时任务
+  saltgoat magetools backup restic run [--site <name>] [选项]      # 立即执行一次备份
+  saltgoat magetools backup restic status [--site <name>]         # 查看站点或全部的备份状态
+  saltgoat magetools backup restic logs --site <name> [--lines N] # 查看指定站点的 systemd 日志
+  saltgoat magetools backup restic snapshots --site <name>        # 列出站点快照
+  saltgoat magetools backup restic check --site <name>            # restic check（指定站点）
+  saltgoat magetools backup restic forget --site <name> [args]    # 针对站点执行 restic forget
+  saltgoat magetools backup restic exec --site <name> <cmd...>    # 直接调用 restic 子命令
+  saltgoat magetools backup restic summary                        # 查看当前所有站点的概览
 
-run 可选参数（任一出现即不再调用 systemd service，而是执行一次手动备份）:
-  --site <name>              仅备份 /var/www/<name>
-  --site-path <path>         指定自定义站点路径，可多次传入
-  --paths "p1,p2"            追加多个路径，逗号或空格分隔
-  --backup-dir <repo>        覆盖 Restic 仓库（如 /home/Dropbox/site1/snapshots）
-  --repo <repo>              同 --backup-dir
-  --tag <name>               为本次快照追加 tag，可重复
-  --password <value>         临时提供 Restic 仓库密码（仅本次使用）
-  --password-file <path>     使用密码文件（优先于 --password）
-  --restic-bin <path|name>   指定 Restic 可执行文件（默认 /usr/bin/restic 或 PATH 中的 restic）
-
-install 额外选项:
-  --site <name>              自动将 /var/www/<name> 作为主要备份路径
-  --repo <path>              覆盖 Restic 仓库目录，默认 /var/backups/restic/<site|default>；若检测到 ~/Dropbox 会优先使用
-  --paths "p1,p2"            追加任意目录，可多次传入
-  --tag <name>               自定义 tag，可多次指定（默认包含站点名和 magento）
-  --service-user <user>      运行 restic 的系统用户（默认 root）
-  --repo-owner <user>        备份完成后仓库赋权的用户（默认自动推断）
-  --timer <cron>             systemd timer 日程（默认 daily，可使用 hourly/weekly 等）
+install 选项:
+  --site <name>              站点名称（必填）
+  --repo <path>              Restic 仓库目录，默认 ~/Dropbox/<site>/restic-backups 或 /var/backups/restic/<site>
+  --paths "p1,p2"            追加备份路径，可多次传入（默认 /var/www/<site>）
+  --tag <name>               附加 tag，可多次指定（默认包含 <site> 与 magento）
+  --service-user <user>      执行备份的系统用户（默认 root）
+  --repo-owner <user>        备份完成后为仓库赋权的用户（默认自动推断）
+  --timer <cron>             systemd OnCalendar 表达式（默认 daily）
   --random-delay <dur>       systemd RandomizedDelaySec（默认 15m）
+
+run 额外选项（覆盖配置文件，执行一次手动备份）:
+  --site <name>              使用对应站点的配置；若未安装，可配合 --repo/--paths 使用
+  --site-path <path>         追加站点目录，可多次传入
+  --paths "p1,p2"            指定任意路径集合，逗号或空格分隔
+  --backup-dir <repo>        临时指定 Restic 仓库
+  --repo <repo>              同 --backup-dir
+  --tag <name>               为本次快照追加 tag，可多次传入
+  --password <value>         临时提供仓库密码
+  --password-file <path>     使用密码文件（优先于 --password）
+  --restic-bin <path|name>   指定 Restic 可执行文件
 EOF
 }
 
@@ -192,7 +344,6 @@ parse_run_overrides() {
             --site)
                 RUN_SITE="${2:-}"
                 [[ -z "$RUN_SITE" ]] && { log_error "--site 需要一个站点名称"; exit 1; }
-                add_run_path "/var/www/${RUN_SITE}"
                 shift 2 ;;
             --site-path)
                 arg="${2:-}"
@@ -310,148 +461,65 @@ parse_install_args() {
     done
 }
 
-detect_default_site() {
-    [[ -n "$INSTALL_SITE" ]] && return
-    local candidates=()
-    if [[ -d /var/www ]]; then
-        while IFS= read -r -d '' dir; do
-            candidates+=("$(basename "$dir")")
-        done < <(find /var/www -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
-    fi
-    if (( ${#candidates[@]} == 1 )); then
-        INSTALL_SITE="${candidates[0]}"
-    fi
-}
-
 ensure_install_defaults() {
-    detect_default_site
     if (( ${#INSTALL_PATHS[@]} == 0 )); then
-        INSTALL_PATHS_DEFAULTED=1
-        if [[ -n "$INSTALL_SITE" ]]; then
-            add_install_path "/var/www/${INSTALL_SITE}"
+        if (( ${#SITE_SECRET_PATHS[@]} )); then
+            for path in "${SITE_SECRET_PATHS[@]}"; do
+                [[ -z "$path" ]] && continue
+                add_install_path "$(normalize_path "$path")"
+            done
         else
-            add_install_path "/var/www"
+            add_install_path "/var/www/${INSTALL_SITE}"
         fi
     fi
     if [[ -z "$INSTALL_REPO" ]]; then
-        if [[ -n "$INSTALL_SITE" && -d "$HOME/Dropbox" ]]; then
-            INSTALL_REPO="$HOME/Dropbox/${INSTALL_SITE}/snapshots"
+        if [[ -n "$SITE_SECRET_REPO" ]]; then
+            INSTALL_REPO="$SITE_SECRET_REPO"
+        elif [[ -d "$HOME/Dropbox" ]]; then
+            INSTALL_REPO="$HOME/Dropbox/${INSTALL_SITE}/restic-backups"
         else
-            local suffix="${INSTALL_SITE:-default}"
-            INSTALL_REPO="/var/backups/restic/${suffix}"
+            INSTALL_REPO="/var/backups/restic/${INSTALL_SITE}"
         fi
     fi
     INSTALL_REPO="$(normalize_path "$INSTALL_REPO")"
     if [[ -z "$INSTALL_SERVICE_USER" ]]; then
-        INSTALL_SERVICE_USER="root"
+        if [[ -n "$SITE_SECRET_SERVICE_USER" ]]; then
+            INSTALL_SERVICE_USER="$SITE_SECRET_SERVICE_USER"
+        else
+            INSTALL_SERVICE_USER="root"
+        fi
     fi
     if [[ -z "$INSTALL_REPO_OWNER" ]]; then
-        if [[ "$INSTALL_REPO" =~ ^/home/([^/]+)/ ]]; then
+        if [[ -n "$SITE_SECRET_REPO_OWNER" ]]; then
+            INSTALL_REPO_OWNER="$SITE_SECRET_REPO_OWNER"
+        elif [[ "$INSTALL_REPO" =~ ^/home/([^/]+)/ ]]; then
             INSTALL_REPO_OWNER="${BASH_REMATCH[1]}"
         else
             INSTALL_REPO_OWNER="$INSTALL_SERVICE_USER"
         fi
     fi
     if (( ${#INSTALL_TAGS[@]} == 0 )); then
-        [[ -n "$INSTALL_SITE" ]] && add_install_tag "$INSTALL_SITE"
-        add_install_tag "magento"
-    fi
-}
-
-ensure_pillar_top_entry() {
-    local top_file="${SCRIPT_DIR}/salt/pillar/top.sls"
-    if ! grep -q 'backup-restic' "$top_file" 2>/dev/null; then
-        log_info "在 pillar/top.sls 中加入 backup-restic"
-        local tmp
-        tmp="$(mktemp)"
-        awk '
-            { print $0 }
-            /- salt-beacons/ && !added { print "    - backup-restic"; added=1 }
-            END { if (!added) print "    - backup-restic" }
-        ' "$top_file" > "$tmp"
-        mv "$tmp" "$top_file"
-    fi
-}
-
-ensure_restic_password_entry() {
-    local pillar_file="${SCRIPT_DIR}/salt/pillar/saltgoat.sls"
-    RESTIC_PASSWORD="$(python3 - "$pillar_file" <<'PY'
-import sys, pathlib, yaml, secrets, string
-path = pathlib.Path(sys.argv[1])
-if path.exists():
-    try:
-        data = yaml.safe_load(path.read_text()) or {}
-    except Exception:
-        data = {}
-else:
-    data = {}
-password = data.get("restic_password")
-if not password:
-    alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
-    password = "".join(secrets.choice(alphabet) for _ in range(24))
-    data["restic_password"] = password
-    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
-print(password)
-PY
-)"
-}
-
-serialize_list() {
-    local -n ref=$1
-    local result=""
-    for item in "${ref[@]}"; do
-        [[ -z "$item" ]] && continue
-        if [[ -z "$result" ]]; then
-            result="$item"
+        if (( ${#SITE_SECRET_TAGS[@]} )); then
+            for tag in "${SITE_SECRET_TAGS[@]}"; do
+                add_install_tag "$tag"
+            done
         else
-            result+=";$item"
+            [[ -n "$INSTALL_SITE" ]] && add_install_tag "$INSTALL_SITE"
+            add_install_tag "magento"
         fi
-    done
-    echo "$result"
+    fi
 }
 
-write_restic_pillar_file() {
-    local pillar_file="${SCRIPT_DIR}/salt/pillar/backup-restic.sls"
-    local paths_serial tags_serial
-    paths_serial=$(serialize_list INSTALL_PATHS)
-    tags_serial=$(serialize_list INSTALL_TAGS)
-    INSTALL_PATHS_SERIAL="$paths_serial" \
-    INSTALL_TAGS_SERIAL="$tags_serial" \
-    INSTALL_REPO_VALUE="$INSTALL_REPO" \
-    INSTALL_TIMER_VALUE="$INSTALL_TIMER" \
-    INSTALL_RANDOM_DELAY_VALUE="$INSTALL_RANDOM_DELAY" \
-    INSTALL_SERVICE_USER_VALUE="$INSTALL_SERVICE_USER" \
-    INSTALL_REPO_OWNER_VALUE="$INSTALL_REPO_OWNER" \
-    RESTIC_PASSWORD_VALUE="$RESTIC_PASSWORD" \
-    python3 - "$pillar_file" <<'PY'
-import os, yaml, pathlib, sys
-file = pathlib.Path(sys.argv[1])
-paths = [p for p in os.environ.get("INSTALL_PATHS_SERIAL","").split(";") if p]
-tags = [t for t in os.environ.get("INSTALL_TAGS_SERIAL","").split(";") if t]
-config = {
-    "enabled": True,
-    "repo": os.environ["INSTALL_REPO_VALUE"],
-    "password": os.environ["RESTIC_PASSWORD_VALUE"],
-    "paths": paths or ["/var/www"],
-    "excludes": ["*.log", "var/cache", "var/page_cache", "generated/code", "generated/metadata"],
-    "tags": tags,
-    "extra_backup_args": "--one-file-system",
-    "check_after_backup": True,
-    "timer": os.environ["INSTALL_TIMER_VALUE"],
-    "randomized_delay": os.environ["INSTALL_RANDOM_DELAY_VALUE"],
-    "service_user": os.environ["INSTALL_SERVICE_USER_VALUE"],
-    "repo_owner": os.environ["INSTALL_REPO_OWNER_VALUE"],
-    "retention": {
-        "keep_last": 7,
-        "keep_daily": 7,
-        "keep_weekly": 4,
-        "keep_monthly": 6,
-        "prune": True,
-    },
-}
-data = {"backup": {"restic": config}}
-file.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
-PY
+ensure_site_password() {
+    local key="secrets.restic_sites.${SITE_TOKEN}.password"
+    local password
+    password="$(get_local_pillar_value "$key" "" 2>/dev/null || true)"
+    if [[ -z "$password" ]]; then
+        password="$(generate_random_secret)"
+        set_local_pillar_value "$key" "$password"
+        log_info "已为站点 ${SITE_NAME} 写入 Restic 密码 (secrets.restic_sites.${SITE_TOKEN}.password)"
+    fi
+    RESTIC_PASSWORD="$password"
 }
 
 ensure_restic_package_installed() {
@@ -474,21 +542,159 @@ ensure_dir_ownerships() {
     done
 }
 
+create_include_file() {
+    sudo mkdir -p "$RESTIC_BASE_DIR"
+    sudo bash -c "printf '' > '$RESTIC_INCLUDE_FILE'"
+    for path in "${INSTALL_PATHS[@]}"; do
+        sudo bash -c "printf '%s\\n' '$path' >> '$RESTIC_INCLUDE_FILE'"
+    done
+    sudo chown "$INSTALL_SERVICE_USER":"$INSTALL_SERVICE_USER" "$RESTIC_INCLUDE_FILE"
+    sudo chmod 600 "$RESTIC_INCLUDE_FILE"
+}
+
+create_exclude_file() {
+    sudo mkdir -p "$RESTIC_BASE_DIR"
+    sudo bash -c "printf '*.log\\nvar/cache\\nvar/page_cache\\ngenerated/code\\ngenerated/metadata\\n' > '$RESTIC_EXCLUDE_FILE'"
+    sudo chown "$INSTALL_SERVICE_USER":"$INSTALL_SERVICE_USER" "$RESTIC_EXCLUDE_FILE"
+    sudo chmod 600 "$RESTIC_EXCLUDE_FILE"
+}
+
+create_env_file() {
+    sudo mkdir -p "$RESTIC_BASE_DIR"
+    sudo mkdir -p "$RESTIC_LOG_DIR" "$RESTIC_CACHE_DIR"
+    sudo chown "$INSTALL_SERVICE_USER":"$INSTALL_SERVICE_USER" "$RESTIC_LOG_DIR" "$RESTIC_CACHE_DIR"
+    sudo chmod 750 "$RESTIC_LOG_DIR" "$RESTIC_CACHE_DIR"
+    local tags_csv
+    tags_csv="$(IFS=','; echo "${INSTALL_TAGS[*]}")"
+    sudo bash -c "cat > '$RESTIC_ENV' <<EOF
+RESTIC_REPOSITORY='$(quote_for_env "$INSTALL_REPO")'
+RESTIC_PASSWORD='$(quote_for_env "$RESTIC_PASSWORD")'
+RESTIC_CACHE_DIR='$RESTIC_CACHE_DIR'
+RESTIC_LOG_DIR='$RESTIC_LOG_DIR'
+RESTIC_INCLUDE_FILE='$RESTIC_INCLUDE_FILE'
+RESTIC_EXCLUDE_FILE='$RESTIC_EXCLUDE_FILE'
+RESTIC_TAGS='$tags_csv'
+RESTIC_BACKUP_ARGS='--one-file-system'
+RESTIC_CHECK_AFTER_BACKUP='1'
+RESTIC_FORGET_ARGS='--keep-last 7 --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune'
+RESTIC_REPO_OWNER='$(quote_for_env "$INSTALL_REPO_OWNER")'
+EOF"
+    sudo chown "$INSTALL_SERVICE_USER":"$INSTALL_SERVICE_USER" "$RESTIC_ENV"
+    sudo chmod 600 "$RESTIC_ENV"
+}
+
+ensure_repo_initialized() {
+    local restic_bin
+    restic_bin="$(command -v restic || echo "/usr/bin/restic")"
+    if [[ ! -x "$restic_bin" ]]; then
+        log_error "未找到 restic 可执行文件，无法初始化仓库。"
+        return 1
+    fi
+
+    if sudo -u "$INSTALL_SERVICE_USER" RESTIC_ENV_FILE="$RESTIC_ENV" RESTIC_BIN_PATH="$restic_bin" /bin/bash <<'EOF'
+set -euo pipefail
+set -a
+source "$RESTIC_ENV_FILE"
+set +a
+if [[ -z "${RESTIC_REPOSITORY:-}" ]]; then
+    exit 0
+fi
+if "$RESTIC_BIN_PATH" cat config >/dev/null 2>&1; then
+    exit 0
+fi
+exit 1
+EOF
+    then
+        return 0
+    fi
+
+    log_info "初始化 Restic 仓库: ${INSTALL_REPO}"
+    sudo -u "$INSTALL_SERVICE_USER" RESTIC_ENV_FILE="$RESTIC_ENV" RESTIC_BIN_PATH="$restic_bin" /bin/bash <<'EOF'
+set -euo pipefail
+set -a
+source "$RESTIC_ENV_FILE"
+set +a
+"$RESTIC_BIN_PATH" init
+EOF
+    log_success "Restic 仓库已初始化: ${INSTALL_REPO}"
+}
+
+create_systemd_units() {
+    local readwrite_paths=("$RESTIC_LOG_DIR" "$RESTIC_CACHE_DIR")
+    if [[ "$INSTALL_REPO" == /* ]]; then
+        readwrite_paths+=("$INSTALL_REPO")
+    fi
+    readwrite_paths+=("$RESTIC_BASE_DIR")
+    local protect_home="read-only"
+    if [[ "$INSTALL_REPO" == /home/* ]]; then
+        protect_home="no"
+    fi
+    local rw_line=""
+    if (( ${#readwrite_paths[@]} )); then
+        local joined_paths
+        joined_paths="$(printf '%s ' "${readwrite_paths[@]}")"
+        joined_paths="${joined_paths% }"
+        rw_line="ReadWritePaths=${joined_paths}"
+    fi
+    sudo bash -c "cat > '/etc/systemd/system/$RESTIC_SERVICE' <<EOF
+[Unit]
+Description=SaltGoat Restic Backup (${SITE_NAME})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=RESTIC_ENV_FILE=$RESTIC_ENV
+User=$INSTALL_SERVICE_USER
+Group=$INSTALL_SERVICE_USER
+ExecStart=/usr/local/bin/saltgoat-restic-backup
+Nice=10
+IOSchedulingClass=2
+IOSchedulingPriority=7
+ProtectSystem=full
+ProtectHome=$protect_home
+$rw_line
+EOF"
+    sudo bash -c "cat > '/etc/systemd/system/$RESTIC_TIMER' <<EOF
+[Unit]
+Description=SaltGoat Restic Backup Timer (${SITE_NAME})
+
+[Timer]
+OnCalendar=$INSTALL_TIMER
+RandomizedDelaySec=$INSTALL_RANDOM_DELAY
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF"
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$RESTIC_TIMER" >/dev/null 2>&1
+}
+
 write_site_metadata() {
-    local site="${INSTALL_SITE:-default}"
+    local site="$SITE_NAME"
     sudo mkdir -p "$SITE_METADATA_DIR"
-    local meta_file="$SITE_METADATA_DIR/${site}.env"
-    sudo bash -c "cat > '$meta_file' <<'EOF'
+    local meta_file="$SITE_METADATA_DIR/${SITE_TOKEN}.env"
+    local paths_csv tags_csv
+    paths_csv="$(IFS=','; echo "${INSTALL_PATHS[*]}")"
+    tags_csv="$(IFS=','; echo "${INSTALL_TAGS[*]}")"
+    sudo bash -c "cat > '$meta_file' <<EOF
 SITE=$site
+TOKEN=$SITE_TOKEN
 REPO=$INSTALL_REPO
-ENV_FILE=/etc/restic/restic.env
+ENV_FILE=$RESTIC_ENV
+INCLUDE_FILE=$RESTIC_INCLUDE_FILE
+EXCLUDE_FILE=$RESTIC_EXCLUDE_FILE
+LOG_DIR=$RESTIC_LOG_DIR
+CACHE_DIR=$RESTIC_CACHE_DIR
 SERVICE_USER=$INSTALL_SERVICE_USER
 REPO_OWNER=$INSTALL_REPO_OWNER
-SERVICE_NAME=saltgoat-restic-backup.service
-TIMER_NAME=saltgoat-restic-backup.timer
+SERVICE_NAME=$RESTIC_SERVICE
+TIMER_NAME=$RESTIC_TIMER
+TAGS=$tags_csv
+PATHS=$paths_csv
 UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-EOF
-"
+EOF"
     sudo chmod 0640 "$meta_file"
 }
 
@@ -632,7 +838,7 @@ run_manual_backup() {
     if sudo test -f "$RESTIC_ENV"; then
         tmp_env="$(mktemp)"
         cleanup+=("$tmp_env")
-        if ! sudo cat "$RESTIC_ENV" >"$tmp_env"; then
+        if ! sudo cat "$RESTIC_ENV" | tee "$tmp_env" >/dev/null; then
             log_error "无法读取 Restic 环境文件: $RESTIC_ENV"
             return 1
         fi
@@ -830,62 +1036,51 @@ case "$ACTION" in
     install|apply)
         shift || true
         parse_install_args "$@"
+        if [[ -z "$INSTALL_SITE" ]]; then
+            log_error "请使用 --site 指定站点"
+            exit 1
+        fi
+        select_site "$INSTALL_SITE"
         ensure_install_defaults
-        ensure_pillar_top_entry
-        ensure_restic_password_entry
-        write_restic_pillar_file
         ensure_restic_package_installed
-        if [[ -n "$INSTALL_REPO" ]]; then
+        ensure_site_password
+        if [[ "$INSTALL_REPO" == /* ]]; then
             sudo mkdir -p "$INSTALL_REPO"
             if [[ -n "$INSTALL_REPO_OWNER" ]]; then
                 sudo chown -R "$INSTALL_REPO_OWNER":"$INSTALL_REPO_OWNER" "$INSTALL_REPO"
             fi
         fi
-        ensure_dir_ownerships "$INSTALL_SERVICE_USER" /etc/restic /var/cache/restic /var/log/restic
-        log_info "刷新 Pillar ..."
-        sudo "${SCRIPT_DIR}/saltgoat" pillar refresh >/dev/null 2>&1 || true
-        log_info "应用 optional.backup-restic 状态 ..."
-        sudo salt-call --local --retcode-passthrough state.apply optional.backup-restic
-        log_info "检查 Restic 仓库状态 ..."
-        if run_restic_cli snapshots >/dev/null 2>&1; then
-            log_info "Restic 仓库已存在，跳过 init"
-        else
-            log_info "初始化 Restic 仓库（若尚未创建）..."
-            if run_restic_cli init >/dev/null 2>&1; then
-                log_success "Restic 仓库初始化完成"
-            else
-                log_warning "自动执行 restic init 失败，请手动运行 'saltgoat magetools backup restic exec init'"
-            fi
-        fi
-        if [[ -x "$BACKUP_SCRIPT" ]]; then
-            log_info "执行首次备份 ..."
-            if [[ "$INSTALL_SERVICE_USER" == "root" ]]; then
-                if sudo "$BACKUP_SCRIPT" >/dev/null 2>&1; then
-                    log_success "首次备份完成"
-                else
-                    log_warning "首次备份执行失败，请手动运行 'saltgoat magetools backup restic run'"
-                fi
-            else
-                if sudo -u "$INSTALL_SERVICE_USER" "$BACKUP_SCRIPT" >/dev/null 2>&1; then
-                    log_success "首次备份完成"
-                else
-                    log_warning "首次备份执行失败，请使用 'sudo -u $INSTALL_SERVICE_USER $BACKUP_SCRIPT' 检查原因"
-                fi
-            fi
-            if [[ -n "$INSTALL_REPO_OWNER" ]]; then
-                sudo chown -R "$INSTALL_REPO_OWNER":"$INSTALL_REPO_OWNER" "$INSTALL_REPO"
-            fi
-        fi
+        create_include_file
+        create_exclude_file
+        create_env_file
+        ensure_repo_initialized
+        create_systemd_units
         write_site_metadata
+        sudo systemctl restart "$RESTIC_TIMER" >/dev/null 2>&1 || true
+        if sudo systemctl start "$RESTIC_SERVICE" >/dev/null 2>&1; then
+            log_success "已触发站点 ${SITE_NAME} 的首次 Restic 备份"
+        else
+            log_warning "首次备份触发失败，请使用 'saltgoat magetools backup restic run --site ${SITE_NAME}' 检查原因"
+        fi
+        if [[ "$INSTALL_REPO" == /* && -n "$INSTALL_REPO_OWNER" ]]; then
+            sudo chown -R "$INSTALL_REPO_OWNER":"$INSTALL_REPO_OWNER" "$INSTALL_REPO"
+        fi
         ;;
     run)
         shift || true
         parse_run_overrides "$@"
+        if [[ -n "$RUN_SITE" ]]; then
+            select_site "$RUN_SITE"
+        fi
         if [[ -n "$RUN_REPO" || -n "$RUN_SITE" || ${#RUN_PATHS[@]} -gt 0 || ${#RUN_TAGS[@]} -gt 0 ]]; then
             log_info "执行一次手动 Restic 备份 ..."
             run_manual_backup
         else
-            log_info "触发 Restic 备份服务 ..."
+            if [[ -z "$RUN_SITE" ]]; then
+                log_error "请使用 --site 指定要触发的站点，或提供 --paths/--repo 进行临时备份"
+                exit 1
+            fi
+            log_info "触发 Restic 备份服务 (${RUN_SITE})..."
             sudo systemctl start "$RESTIC_SERVICE"
         fi
         ;;
@@ -893,23 +1088,109 @@ case "$ACTION" in
         summarize_sites
         ;;
     status)
-        sudo systemctl status "$RESTIC_SERVICE" "$RESTIC_TIMER"
+        shift || true
+        SITE_ARG=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --site)
+                    SITE_ARG="${2:-}"
+                    shift 2 ;;
+                --)
+                    shift; break ;;
+                *)
+                    log_error "未知参数: $1"
+                    usage
+                    exit 1 ;;
+            esac
+        done
+        if [[ -z "$SITE_ARG" ]]; then
+            summarize_sites
+        else
+            select_site "$SITE_ARG"
+            sudo systemctl status "$RESTIC_SERVICE" "$RESTIC_TIMER"
+        fi
         ;;
     logs)
         shift || true
-        LINES="${1:-100}"
+        SITE_ARG=""
+        LINES=100
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --site)
+                    SITE_ARG="${2:-}"
+                    shift 2 ;;
+                --lines)
+                    LINES="${2:-100}"
+                    shift 2 ;;
+                --)
+                    shift; break ;;
+                *)
+                    LINES="$1"
+                    shift ;;
+            esac
+        done
+        if [[ -z "$SITE_ARG" ]]; then
+            log_error "请使用 --site 指定站点"
+            exit 1
+        fi
+        select_site "$SITE_ARG"
         sudo journalctl -u "$RESTIC_SERVICE" -u "$RESTIC_TIMER" -n "$LINES" --no-pager
         ;;
     snapshots)
         shift || true
+        SITE_ARG=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --site)
+                    SITE_ARG="${2:-}"
+                    shift 2 ;;
+                --)
+                    shift; break ;;
+                *)
+                    break ;;
+            esac
+        done
+        if [[ -n "$SITE_ARG" ]]; then
+            select_site "$SITE_ARG"
+        fi
         run_restic_cli snapshots "$@"
         ;;
     check)
         shift || true
+        SITE_ARG=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --site)
+                    SITE_ARG="${2:-}"
+                    shift 2 ;;
+                --)
+                    shift; break ;;
+                *)
+                    break ;;
+            esac
+        done
+        if [[ -n "$SITE_ARG" ]]; then
+            select_site "$SITE_ARG"
+        fi
         run_restic_cli check "$@"
         ;;
     forget)
         shift || true
+        SITE_ARG=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --site)
+                    SITE_ARG="${2:-}"
+                    shift 2 ;;
+                --)
+                    shift; break ;;
+                *)
+                    break ;;
+            esac
+        done
+        if [[ -n "$SITE_ARG" ]]; then
+            select_site "$SITE_ARG"
+        fi
         if [[ $# -eq 0 ]]; then
             log_info "未传入额外参数，将使用 Pillar 中的保留策略 (--keep-*)"
         fi
@@ -917,6 +1198,21 @@ case "$ACTION" in
         ;;
     exec|run-restic|restic)
         shift || true
+        SITE_ARG=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --site)
+                    SITE_ARG="${2:-}"
+                    shift 2 ;;
+                --)
+                    shift; break ;;
+                *)
+                    break ;;
+            esac
+        done
+        if [[ -n "$SITE_ARG" ]]; then
+            select_site "$SITE_ARG"
+        fi
         if [[ $# -eq 0 ]]; then
             log_error "请在 exec 之后指定 Restic 子命令，例如 'restore latest --target /tmp/restore'"
             exit 1

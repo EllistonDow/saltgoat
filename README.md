@@ -74,6 +74,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    cp salt/pillar/magento-optimize.sls.sample salt/pillar/magento-optimize.sls
    cp salt/pillar/magento-schedule.sls.sample salt/pillar/magento-schedule.sls
    cp salt/pillar/nginx.sls.sample salt/pillar/nginx.sls
+   # 秘钥模板位于 salt/pillar/secret/*.sls.example，复制后填入真实密码
    # 其它 Pillar 也提供 *.sample 文件，可按需复制后修改
    ```
 3. **执行安装**
@@ -123,7 +124,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - `saltgoat automation logs <list|view|tail|cleanup>`：统一管理任务日志。
 
 ### 备份策略
-- Restic 快照：`sudo saltgoat magetools backup restic run` 或安装 `optional.backup-restic` 后由 SaltGoat 自动调度。
+- Restic 快照：`sudo saltgoat magetools backup restic install --site <name> [--repo <path>]` 为单站点创建 systemd 定时器；`run/summary/logs` 子命令可手动触发与巡检。
 - Percona XtraBackup：`sudo saltgoat magetools xtrabackup mysql run`；配置详见 [`docs/MYSQL_BACKUP.md`](docs/MYSQL_BACKUP.md)。
 - 单库导出：`saltgoat magetools xtrabackup mysql dump --database <db> --backup-dir <path>` 会输出体积、写 Salt event，并发 Telegram。
 - 所有备份事件都会写入 `/var/log/saltgoat/alerts.log`，便于审计。

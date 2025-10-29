@@ -106,14 +106,14 @@ saltgoat magetools maintenance tank weekly --allow-valkey-flush --trigger-restic
 | `--backup-dir PATH` | 启用传统归档备份并指定输出目录 |
 | `--mysql-database NAME` | 归档备份使用的数据库名称（默认与站点同名） |
 | `--mysql-user USER` / `--mysql-password PASS` | mysqldump 用户与密码 |
-| `--trigger-restic` | 若已启用 Restic 模块，联动触发一次快照 |
+| `--trigger-restic` | 若已为站点配置 Restic，联动触发一次快照 |
 | `--restic-site NAME` | 触发 Restic 时仅备份指定站点（传递给 `backup restic run --site`） |
 | `--restic-backup-dir PATH` | 覆盖 Restic 仓库（如 `/home/Dropbox/<site>/snapshots`） |
 | `--restic-extra-path PATH` | Restic 额外路径，可多次使用或改用 `--restic-extra-paths "p1,p2"` |
 | `--static-langs \"en_US zh_CN\"` | 静态资源部署语言列表 |
 | `--static-jobs N` | 静态资源部署线程数（默认 4） |
 
-> 提示：`--restic-*` 参数依赖 `optional.backup-restic` 下发的仓库与密码配置（来自 Pillar）。若仅需一次性备份，可直接使用 `saltgoat magetools backup restic run --password-file ...`。
+> 提示：`--restic-*` 参数会透传给 `saltgoat magetools backup restic run`。请先使用 `saltgoat magetools backup restic install --site <name>` 为目标站点生成配置；若只需一次性备份，可在维护任务外单独运行 `saltgoat magetools backup restic run --paths ...` 搭配 `--backup-dir` 等参数。
 
 ### 定时任务管理
 
@@ -194,7 +194,7 @@ saltgoat magetools cron tank uninstall
 - 通过 Telegram / `/var/log/saltgoat/alerts.log` 输出健康检查上下文
 
 ### 备份策略建议
-- **推荐组合**：使用 Restic（`saltgoat-restic-backup` 或 `saltgoat magetools backup restic run`）搭配 XtraBackup 物理备份，满足长期和快速恢复需求。
+- **推荐组合**：使用 Restic（`saltgoat magetools backup restic install/run`）搭配 XtraBackup 物理备份，满足长期和快速恢复需求。
 - **单库导出**：`saltgoat magetools xtrabackup mysql dump` 面向站点迁移/调试场景，命令会输出备份文件大小，通过 Salt event 与 Telegram 双管齐下记录结果。
 - **归档备份**：只有在传入 `--backup-dir` 时才会生成 tar/mysqldump，若已启用 Restic/XtraBackup，可视情况关闭以避免重复占用存储。
 - **可观测性**：所有备份事件都会写入 `/var/log/saltgoat/alerts.log`；配置了 Telegram 的主机还能收到 `profile_summary/send_ok` 日志，用于审计。

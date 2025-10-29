@@ -1,292 +1,248 @@
 # Restic 备份模块使用手册
 
-SaltGoat 提供 `optional.backup-restic` 作为可选模块，用于在主机上自动部署 [Restic](https://restic.net/) 增量备份，并将快照发送至 S3/Minio/本地路径（如 Dropbox）。该模块负责：
-
-- 安装 `restic` 软件包；
-- 生成包含仓库 URL、凭据、备份路径、排除列表等信息的环境文件；
-- 创建 `/usr/local/bin/saltgoat-restic-backup` 备份脚本；
-- 注册 `saltgoat-restic-backup.service` / `.timer`，定时执行快照；
-- 提供 `saltgoat magetools backup restic ...` 命令统一触发备份、查看日志、运行 `restic snapshots/check/forget` 等操作。
-
-本文说明如何启用、运行与恢复 Restic 备份。
+SaltGoat 使用 [Restic](https://restic.net/) 构建文件级快照，支持本地目录、Dropbox 挂载以及 S3/Minio 等远端仓库。`saltgoat magetools backup restic` 模块提供站点级的安装、巡检与恢复命令，同时保留 Salt 状态 `optional.backup-restic` 作为集中化部署的选项。
 
 ---
 
-## 0. 快速安装（推荐）
+## 0. 功能概览
 
-执行下面的命令即可自动完成：
+- **按站点独立管理**：`install --site <name>` 会为站点生成独立的 env/include/exclude 文件、systemd service/timer 以及 `/etc/restic/sites.d/<site>.env` 元数据。
+- **自动管理密钥**：若未提供密码，CLI 会生成随机密码并写入 `salt/pillar/secret/auto.sls` 下的 `secrets.restic_sites.<site>.password`，不会进入版本库。
+- **默认权限处理**：根据仓库路径自动选择 `ProtectHome`、`RepoOwner` 与 `service_user`，确保 `/home/<user>/Dropbox/...` 等路径可写。
+- **事件通知**：手动备份成功/失败会发送 Salt 事件 `saltgoat/backup/restic/(success|failure)`，配合现有 Telegram Reactor 可收到告警。
+- **Salt Schedule 兼容**：若机器未安装 `salt-minion`，systemd timer 会继续生效；如需集中管理，可改用 Salt 状态。
+
+---
+
+## 1. 前置准备
+
+### 1.1 Pillar/Secret 目录
+
+1. 复制并填写密钥模板（不会加入版本控制）：
+   ```bash
+   cp salt/pillar/secret/restic.sls.example salt/pillar/secret/restic.sls   # 可选：集中管理共享仓库
+   cp salt/pillar/secret/auth.sls.example   salt/pillar/secret/auth.sls     # 其它密钥同理
+   ```
+   - 若只使用 CLI 自动生成密码，可跳过 `restic.sls`，脚本会写入 `salt/pillar/secret/auto.sls`。
+   - 建议在填写后执行一次 `saltgoat pillar refresh` 验证语法。
+   - 多站点示例（复制自 `.example`）：
+     ```yaml
+     secrets:
+       restic:
+         repo: "/var/backups/restic/repos/default"
+         password: "ChangeMeRestic!"
+         service_user: "root"
+         repo_owner: "root"
+         paths:
+           - /var/www/example
+         tags:
+           - example
+           - magento
+       restic_sites:
+         bank:
+           repo: "/home/doge/Dropbox/bank/restic-backups"
+           password: "ChangeMeBank!"
+           repo_owner: "doge"
+           paths:
+             - /var/www/bank
+             - /var/log/nginx/bank
+           tags:
+             - bank
+             - magento
+         tank:
+           repo: "/home/doge/Dropbox/tank/restic-backups"
+           password: "ChangeMeTank!"
+           repo_owner: "doge"
+           paths:
+             - /var/www/tank
+           tags:
+             - tank
+             - magento
+     ```
+
+2. （可选）复制 Pillar 示例便于批量管理：
+   ```bash
+   cp salt/pillar/backup-restic.sls.sample salt/pillar/backup-restic.sls
+   ```
+   该文件支持从 `pillar['secrets']` 读取仓库地址/凭据，适合统一配置所有主机。
+
+### 1.2 检查 Restic 软件包
+
+`install` 子命令会自动安装 `restic`。如果机器无法访问仓库，可提前执行：
+```bash
+sudo apt update
+sudo apt install -y restic
+```
+
+---
+
+## 2. 快速安装（每个站点执行一次）
 
 ```bash
 sudo saltgoat magetools backup restic install \
-    --site bank \
-    --repo /home/doge/Dropbox/bank/backups
+  --site bank \
+  --repo /home/doge/Dropbox/bank/restic-backups \
+  --paths "/var/www/bank var/log/nginx/bank" \
+  --repo-owner doge
 ```
 
-此命令会：
+该命令会：
 
-- 自动安装 `restic` 软件包（如果尚未安装）；
-- 为 `salt/pillar/top.sls` 挂载 `backup-restic`，并写入 `salt/pillar/backup-restic.sls`；
-- 生成 `restic_password` 并写入本地未托管的 secrets Pillar（默认路径 `salt/pillar/secret/restic.sls`，需手动创建），同时在运行时暴露为 `pillar['restic_password']`，可通过 `saltgoat passwords --show`（确认后输出）查看；
-- 默认备份 `/var/www/bank`（可用 `--paths` 附加目录），创建 `/etc/restic/restic.env` 以及 systemd service/timer；
-- 若指定的仓库路径不存在会自动创建，并在必要时执行 `restic init`。
-- 如果仓库位于 `/home/<user>/...`（例如 Dropbox），脚本会自动将 systemd 服务切换为该用户运行，并放宽 `ProtectHome`，避免权限问题。
-- 首次备份完成后会自动将仓库目录 `chown` 给目标用户，确保后续可以直接浏览或同步。
+1. 安装 `restic`（如未安装）。
+2. 推导站点代号 `bank` → `bank`，并在 `/etc/restic/` 下生成：
+   - `bank.env`：仓库地址、密码、标签、保留策略；
+   - `bank.include` / `bank.exclude`：待备份路径与排除规则；
+   - `sites.d/bank.env`：供 `summary` 命令读取的元数据。
+3. 如果 Pillar/secret 中不存在密码，会生成随机密码写入 `secrets.restic_sites.bank.password`。
+4. 创建 systemd unit：
+   - `saltgoat-restic-bank.service`
+   - `saltgoat-restic-bank.timer`（默认 `OnCalendar=daily`，可通过 `--timer` 与 `--random-delay` 调整）。
+5. 根据仓库路径自动选择属主与 `ProtectHome` 策略，确保 Dropbox 等路径具备写权限。
+6. 首次执行一次备份；如失败会提示使用 `run --site bank` 手动调试。
 
-若机器上只有一个 `/var/www/<site>` 目录且检测到 `~/Dropbox`，即使不显式传 `--site/--repo` 也会自动推导为 `~/Dropbox/<site>/snapshots`。
-Restic 仓库密码不会提交到仓库，SaltGoat 会从 `salt/pillar/secret/*.sls`（或你配置的 ext_pillar）加载，并在运行期暴露到 `pillar['restic_password']`，便于使用 `saltgoat passwords --show` 或在其它主机复用。
+不带 `--repo` 时遵循以下默认：
+- 存在 `~/Dropbox` → `/home/<user>/Dropbox/<site>/restic-backups`
+- 否则 → `/var/backups/restic/<site>`
 
-需要自定义 S3/Minio 仓库时，可结合 `--repo s3:https://... --tag bank` 等参数，脚本会将配置写回 Pillar。
+常用可选项：
+- `--paths` 多次传入或使用空格/逗号分隔；
+- `--tag` 附加 Restic 标签；
+- `--service-user` 指定执行备份的系统用户（默认 root）；
+- `--repo-owner` 设置仓库属主，备份完成后会自动 `chown`。
 
 ---
 
-## 1. 准备 Pillar 配置
+## 3. CLI 快速参考
 
-> 若已通过 `saltgoat magetools backup restic install` 配置，则该文件已经自动生成，本节可作为手工调优参考。
+| 命令 | 说明 |
+|------|------|
+| `install --site <name> [...]` | 创建/更新站点配置，生成 env/include/exclude，注册 systemd timer；再次运行可调整参数。 |
+| `run [--site <name>] [--paths ...] [--repo ...]` | 手动执行备份。仅传 `--site` 时复用站点配置；追加 `--paths/--repo/--password-file` 可执行一次性备份。 |
+| `status [--site <name>]` | 查看指定站点或所有站点的 systemd 状态。 |
+| `summary` | 读取 `/etc/restic/sites.d/*.env`，输出快照数量、最后备份时间、容量与服务状态。 |
+| `logs --site <name> [--lines N]` | 查看 systemd 日志。 |
+| `snapshots --site <name>` | 调用 Restic 列出快照。 |
+| `check --site <name>` | `restic check --read-data-subset=1/5`。 |
+| `forget --site <name> [restic args]` | 手动执行 `restic forget`（默认追加 `--prune`）。 |
+| `exec --site <name> <subcommand>` | 直接传递任意 Restic 子命令，例如 `restore`、`stats`、`mount`。 |
 
-1. 将示例 [`salt/pillar/backup-restic.sls`](../salt/pillar/backup-restic.sls) 复制到实际 Pillar（或直接编辑该文件），根据环境填写：
+### 3.1 定时器与增量备份
 
+- `install` 会自动启用 `saltgoat-restic-<site>.timer`（默认 `OnCalendar=daily`），因此**无需额外写 cron**。Restic 的快照天然支持增量存储，后续运行只会上传变化的块。
+- 查看排程：
+  ```bash
+  sudo systemctl list-timers 'saltgoat-restic-*'
+  sudo saltgoat magetools backup restic status --site bank   # 查看单站点
+  ```
+- 调整频率只需重新执行安装命令并传入新的表达式：
+  ```bash
+  sudo saltgoat magetools backup restic install \
+    --site bank \
+    --timer 'hourly' \
+    --random-delay 5m
+  ```
+  亦可使用完整的 `OnCalendar` 语法，例如 `--timer 'Mon..Sun 03:00'`。
+- 若想临时取消排程，可运行 `sudo systemctl disable --now saltgoat-restic-<site>.timer`，稍后再通过 `install` 恢复。
+
+---
+
+## 4. 日常巡检
+
+```bash
+# 汇总所有站点
+sudo saltgoat magetools backup restic summary
+
+# 查看单个站点状态
+sudo saltgoat magetools backup restic status --site bank
+
+# 查看最近 200 行日志
+sudo saltgoat magetools backup restic logs --site bank --lines 200
+
+# 手动执行一次备份并追加标签
+sudo saltgoat magetools backup restic run --site bank --tag manual-test
+```
+
+`summary` 输出示例：
+```
+站点         快照数 最后备份           容量     服务状态             最后执行           
+--------------------------------------------------------------------------------------
+bank         12     2024-10-29 05:47  1.2G     active/finished(0)   2024-10-29 05:47:12
+```
+
+- `快照数` / `最后备份` / `容量` 来自 `restic snapshots` 与 `restic stats --json latest`；
+- `服务状态` 组合了 `systemctl show` 的 `ActiveState/SubState` 与 `ExecMainStatus`；
+- `最后执行` 读取 `journalctl` 的时间戳。
+
+若 `summary` 报错，先确认 `/etc/restic/sites.d` 下是否存在 `.env`，或该站点是否已成功安装。
+
+---
+
+## 5. 结合 Pillar / Salt 状态
+
+虽然 CLI 能独立管理站点，仍可通过 Pillar 与 Salt 状态批量部署：
+
+1. 编辑 `salt/pillar/backup-restic.sls`（示例来自 `.sample`）：
    ```yaml
+   {% set secrets = pillar.get('secrets', {}) %}
+   {% set restic = secrets.get('restic', {}) %}
+
    backup:
      restic:
        enabled: true
-       repo: "s3:https://minio.example.com/backups/magento"
-      password: "{{ salt['pillar.get']('secrets.restic.password', 'ChangeMeRestic!') }}"
-       aws_access_key_id: "MINIO_ACCESS_KEY"
-       aws_secret_access_key: "MINIO_SECRET_KEY"
-       aws_region: "us-east-1"
+       repo: "{{ restic.get('repo', '/var/backups/restic/repos/default') }}"
+       password: "{{ restic.get('password', 'ChangeMeRestic!') }}"
        paths:
-         - /var/www/bank
-         - /etc/nginx
-       excludes:
-         - "*.log"
-         - "var/cache"
+         - /var/www/example
        tags:
+         - example
          - magento
-         - bank
-       extra_backup_args: "--one-file-system"
-       check_after_backup: true
-       timer: "daily"
-       randomized_delay: "15m"
-       retention:
-         keep_last: 7
-         keep_daily: 7
-         keep_weekly: 4
-         keep_monthly: 6
-         prune: true
+       timer: daily
+       randomized_delay: 15m
+       service_user: "{{ restic.get('service_user', 'root') }}"
+       repo_owner: "{{ restic.get('repo_owner', 'root') }}"
    ```
+2. 在 `salt/pillar/top.sls` include `backup-restic`，执行 `saltgoat pillar refresh`。
+3. 运行 `sudo salt-call state.apply optional.backup-restic`（或通过 `saltgoat install optional --include backup-restic`）即可生成同名 systemd 单元。该方案适合希望统一管理所有主机、且无需站点维度拆分的场景。
 
-   - `paths`：需要备份的目录，可同时包含多个站点或系统配置；
-   - `excludes`：排除的文件/目录模式；
-   - `repo`、`password`：Restic 仓库地址及密码，可指向 S3/Minio、Backblaze、Wasabi 等；
-   - `aws_*`：S3/Minio 的访问密钥（若使用本地 Minio，可设置为对应账号）；
-   - `timer` / `randomized_delay`：systemd 定时器的触发规则（默认 `daily`）；
-   - `retention`：快照保留策略（对应 `restic forget` 参数）。
+> 如需切换到 CLI 管理，可保留 Pillar 作为默认模板，再对特定站点运行 `install --site` 覆盖。
 
-> **更新 Restic 凭据时的额外步骤**
-> 1. 在 `salt/pillar/secret/restic.sls`（或你自定义的 secret 文件）填写新密码/仓库信息，示例见 [`docs/SECRET_MANAGEMENT.md`](docs/SECRET_MANAGEMENT.md)。
-> 2. 执行 `saltgoat pillar refresh`。
-> 3. 运行 `sudo saltgoat magetools backup restic install`，重新生成 `/etc/restic/restic.env`、刷新 systemd service/timer，并校正目录属主。
-> 4. 使用 `sudo saltgoat magetools backup restic run` 或 `saltgoat magetools backup restic summary` 验证备份是否通过新凭据执行；必要时结合 `saltgoat passwords --show` 检查 CLI 读取的新值。
->
-> 仅刷新 Pillar 不会自动更改系统配置，务必执行步骤 3。
+---
 
-2. 将 Pillar 文件加入 `salt/pillar/top.sls`（自动安装流程已帮您完成此步骤）：
+## 6. 恢复与演练
 
-   ```yaml
-   base:
-    '*':
-      - saltgoat
-      - nginx
-      - magento-optimize
-      - magento-schedule
-      - salt-beacons
-      - backup-restic      # 新增
-   ```
-
-3. 刷新 Pillar（可选）：
-
+1. 列出快照：
    ```bash
-   saltgoat pillar refresh
+   sudo saltgoat magetools backup restic snapshots --site bank
    ```
-
----
-
-## 2. 部署 Restic 备份模块
-
-执行以下命令下发状态并生成 systemd service/timer：
-
-```bash
-sudo saltgoat magetools backup restic install
-```
-
-若 Pillar 中 `backup.restic.enabled` 为 `false` 或未配置，状态会给出提示并保持禁用。
-
----
-
-## 3. 常用命令
-
-模块安装后提供以下 CLI 操作：
-
-```bash
-# 现有站点（bank）的初始部署
-saltgoat magetools backup restic install \
-  --site bank \
-  --repo /home/doge/Dropbox/bank/snapshots \
-  --service-user root \
-  --repo-owner doge
-
-# 新增站点（tank）时再次运行
-saltgoat magetools backup restic install \
-  --site tank \
-  --repo /home/doge/Dropbox/tank/snapshots \
-  --service-user root \
-  --repo-owner doge
-
-
-# 常用运维命令（建议加 sudo，确保能读取 /etc/restic/restic.env）
-sudo saltgoat magetools backup restic run         # 立即执行一次备份（按照 Pillar 路径）
-sudo saltgoat magetools backup restic status      # 查看 systemd service/timer 运行状态
-sudo saltgoat magetools backup restic logs 200    # 查看最近 200 行日记
-sudo saltgoat magetools backup restic summary     # 汇总所有站点的快照/容量与最后运行时间
-sudo saltgoat magetools backup restic snapshots   # restic snapshots
-sudo saltgoat magetools backup restic check       # restic check（默认 --read-data-subset=1/5）
-sudo saltgoat magetools backup restic forget --keep-daily 7 --keep-weekly 4 --prune
-
-# 手动备份到自定义仓库（例如 Dropbox），仅覆盖本次运行参数
-sudo saltgoat magetools backup restic run \
-  --site bank \
-  --backup-dir /home/doge/Dropbox/bank/snapshots \
-  --password-file /home/doge/.config/restic-bank.txt \
-  --tag bank-manual
-```
-
-- `run` 默认调用 `/usr/local/bin/saltgoat-restic-backup`，按 Pillar 的 `paths` 列表备份；传入 `--site/--paths/--backup-dir(--repo)` 等参数时会生成临时 env 文件并直接调用 Restic，实现一次性的定向快照。
-- `logs` 查看 `saltgoat-restic-backup.service`/`.timer` 的 `journalctl` 输出。
-- `snapshots` / `check` / `forget` / `exec` 是对 Restic CLI 的封装，自动带上 `RESTIC_REPOSITORY`、`RESTIC_PASSWORD(_FILE)` 等变量。
-- `--paths` 可在站点目录之外追加配置，如 `/etc/nginx/sites-enabled/bank.conf` 或数据库备份目录。
-- 还未启用 `optional.backup-restic` 时，可搭配 `--repo` 与 `--password(--password-file)` 临时运行，但应注意命令历史会记录明文，推荐使用密码文件。
-- `summary` 会遍历 `/etc/restic/sites.d/*.env`，汇总站点名称、快照数量、最新一次备份时间/容量以及 systemd 状态，方便巡检。
-- 所有操作均读取 `/etc/restic/restic.env`，因此不会在进程列表或命令行中暴露凭据。
-
-### 手动验证备份
-
-1. 触发一次备份：
+2. 恢复最新快照到临时目录：
    ```bash
-   sudo saltgoat magetools backup restic run
+   sudo saltgoat magetools backup restic exec --site bank restore latest --target /tmp/restic-restore
    ```
-2. 检查日志与快照：
+3. 指定时间点恢复：
    ```bash
-   sudo saltgoat magetools backup restic logs 100
-   sudo saltgoat magetools backup restic snapshots
+   sudo saltgoat magetools backup restic exec --site bank restore 2024-10-27T05:00:00 --target /srv/restore-bank
    ```
-3. 如需针对某个目录恢复，可使用 Restic 自带的 `restore` 或 `mount`：
+   - 只恢复部分目录/文件时，可追加 `--include /var/www/bank/app/etc` 或 `--exclude` 参数。
+   - 恢复到不同机器时，只需拷贝 `/etc/restic/<site>.env` 与仓库密码，随后照此命令在目标主机执行。
+4. 挂载快照用于浏览：
    ```bash
-   # 在 /tmp/restore 下恢复最新快照
-   sudo saltgoat magetools backup restic exec restore latest --target /tmp/restore
+   sudo saltgoat magetools backup restic exec --site bank mount /mnt/restic-bank
    ```
-   （可使用 `saltgoat magetools backup restic snapshots` 找到具体快照 ID）
+   完成后使用 `fusermount -u /mnt/restic-bank` 卸载。
+
+定期演练建议：
+- 每季度抽样恢复一个站点到临时目录，确认文件完整；
+- 结合 `restic check --read-data-subset=1/5` 检查仓库一致性；
+- 若仓库位于 Dropbox/外接盘，确保定期同步/挂载状态良好。
 
 ---
 
-## 4. 恢复快照
+## 7. 常见问题
 
-- 查看快照列表：
-  ```bash
-  sudo bash -lc 'set -a; source /etc/restic/restic.env; set +a; /usr/bin/restic snapshots'
-  ```
-  输出中包含快照 ID、时间、标签，可用来选择要恢复的版本。
+- **提示未找到环境文件**：尚未执行 `install --site` 或站点名称拼写错误。使用 `summary` 查看已配置的站点代号。
+- **备份失败，日志显示权限被拒绝**：确认仓库路径属主、`--repo-owner` 与 systemd 服务用户一致；必要时重新运行安装命令。
+- **多站点备份到同一仓库**：分别运行 `install --site`，将 `--repo` 指向同一目录并使用不同 `--tag` 区分。
+- **需要与 mysqldump/XtraBackup 联动**：在 `salt/pillar/magento-schedule.sls` 定义 `mysql_dump_jobs`，结合 Telegram Reactor 可获得通知，详见 [`docs/MYSQL_BACKUP.md`](MYSQL_BACKUP.md#salt-schedule-逻辑导出)。
+- **恢复到其它路径**：`restore` 命令的 `--target` 可以指定任意空目录；若目标目录不为空，可先使用 `--path` 或 `--include` 过滤出需要的文件，再手动迁移。
 
-- 恢复最新快照到临时目录：
-  ```bash
-  sudo saltgoat magetools backup restic exec restore latest \
-      --target /tmp/restore-$(date +%Y%m%d)
-  ```
-  **注意**：目标目录必须存在或其父目录存在，Restic 会把快照中的完整目录结构还原进去。
-
-- 恢复指定快照（例如 2025-10-10）：
-  ```bash
-  SNAP_ID=4276f001               # 来自 `restic snapshots`
-  TARGET=/home/doge/Dropbox/bank/backups/2025-10-10
-  mkdir -p "$TARGET"
-  sudo saltgoat magetools backup restic exec restore "$SNAP_ID" --target "$TARGET"
-  ```
-  该示例将快照解包到 Dropbox，便于团队共享或比对。建议按日期命名目录（如 `backups/2025-10-10/`），方便后续整理。
-
-- 仅恢复某个文件/目录，可结合 `--include` / `--exclude`：
-  ```bash
-  sudo saltgoat magetools backup restic exec restore latest \
-      --include var/config/local.xml \
-      --target /tmp/restore-config
-  ```
-
-- 要寻找快照中的文件路径，可先运行：
-  ```bash
-  sudo bash -lc 'set -a; source /etc/restic/restic.env; set +a; /usr/bin/restic ls <snapshot-id>'
-  ```
-
-- 恢复完成后如无需保留临时目录，可自行清理，例如 `rm -rf /tmp/restore-*`。
-
----
-
-## 5. 多站点与高级用法
-
-- 如果一台主机包含多个站点，可在 `paths` 中列出多个目录，或通过 `tags` 区分；`saltgoat-restic-backup` 会一次备份全部配置路径。
-- 若新增站点（如 `tank`），直接运行 `sudo saltgoat magetools backup restic install --site tank --repo /home/doge/Dropbox/tank/snapshots`，脚本会自动附加站点路径并刷新 Pillar。
-- 若希望不同站点独立备份，可在 Pillar 中为每个站点创建单独配置（修改 `script_path`、service/timer 名称），例如：
-
-  ```yaml
-  backup:
-    restic:
-      site: bank
-      script_path: /usr/local/bin/saltgoat-restic-bank
-      service_name: saltgoat-restic-bank.service
-      timer_name: saltgoat-restic-bank.timer
-      paths:
-        - /var/www/bank
-    restic_media:
-      ...
-  ```
-
-  目前默认状态未提供自动拆分，请根据需要复制 `optional.backup-restic` 并自定义。
-
-- 若仅需每周备份一次，可在 Pillar 中把 `timer` 改为 `weekly`（或写成 `Mon *-*-* 01:30:00`）并重新执行 `install`。
-- `extra_env` 可注入额外环境变量（例如自定义 CA 证书、代理等）。
-- 对单站点临时备份，可直接运行：
-
-  ```bash
-  saltgoat magetools backup restic run \
-      --site bank \
-      --backup-dir /home/Dropbox/bank/snapshots \
-      --password-file /home/doge/.config/restic-bank.txt \
-      --tag bank-manual
-  ```
-
-  该命令会临时覆盖 Restic 仓库到本地 Dropbox 目录，只备份 `/var/www/bank`，并附带 `bank-manual` tag。首次使用需准备密码文件并手动初始化仓库：
-
-  ```bash
-  echo 'SuperSecretPassword' > ~/.config/restic-bank.txt
-  chmod 600 ~/.config/restic-bank.txt
-  saltgoat magetools backup restic exec init \
-      --repo /home/Dropbox/bank/snapshots \
-      --password-file ~/.config/restic-bank.txt
-  ```
-
-  请确保系统已安装 Restic：`sudo apt install restic`。
-
-- 若计划将单站点备份纳入自动化，可结合 `saltgoat magetools maintenance <site> weekly --trigger-restic --restic-site <site> --restic-backup-dir /home/Dropbox/<site>/snapshots`，Salt 每周任务会调用同样的命令。
-
----
-
-## 6. 常见问题
-
-| 问题 | 解决方法 |
-|------|----------|
-| 状态提示 “Restic 备份模块保持禁用状态” | 未在 Pillar 中启用或配置 `backup.restic`，填好后重新执行 `install`。 |
-| 执行 `run` 提示凭据错误 | 检查 `/etc/restic/restic.env` 中的 `RESTIC_REPOSITORY`、`AWS_*`、`RESTIC_PASSWORD` 等是否正确。 |
-| 备份失败 `repository does not exist` | 首次使用时需要手动初始化仓库：`restic init --repo <repo>`（可通过 CLI：`saltgoat magetools backup restic exec init --repo ...`）。 |
-| 快照太多或占用空间大 | 调整 Pillar 中的 `retention`，或手动执行 `sudo saltgoat magetools backup restic forget --keep-daily 7 --keep-weekly 4 --prune`。 |
-| 仓库目录看起来很小 | Restic 采用内容寻址与去重，第一次之后的快照只是元数据更新，因此可能只有几十 KB；可使用 `sudo saltgoat magetools backup restic summary` 与 `snapshots` 查看真实占用。 |
-
----
-
-如需进一步定制（例如 Borg、Restic mount、自动恢复演练），可以在自定义模块中复用本状态生成的 env/script 文件，或在 `modules/magetools/backup-restic.sh` 增加新的子命令。欢迎在实际环境验证后完善文档。
+如需进一步的密钥/密码管理流程，请参考 [`docs/SECRET_MANAGEMENT.md`](SECRET_MANAGEMENT.md)。

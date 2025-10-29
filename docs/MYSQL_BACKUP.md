@@ -268,6 +268,7 @@ magento_schedule:
 
 > 若宿主缺少 `salt-minion`，`install` 会自动回退写入系统 Cron，但仍使用同样的站点配置。
 > 建议在每个任务中填写 `site` 或 `sites` 字段，SaltGoat 会据此只在对应站点的 `install` 命令中安装/卸载任务。
+> 如果需要让 Restic 抓取这些逻辑导出，可在 `saltgoat magetools backup restic install --site <name>` 时通过 `--paths` 将备份目录加入 include 列表，或使用 `saltgoat magetools backup restic run --paths <dir>` 临时触发。
 
 -------------------------------------------------------------------------------
 

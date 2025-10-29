@@ -8,12 +8,14 @@ magento_schedule:
       database: site1_db
       backup_dir: /var/backups/mysql/site1
       repo_owner: site1user
+      # 使用单个站点字段时，只有匹配 pillar.site_name 的主机会安装
       site: site1
     - name: site2-dump-every-2h
       cron: '0 */2 * * *'
       database: site2_db
       backup_dir: /var/backups/mysql/site2
       repo_owner: site2user
+      # 可选：通过 sites 列表同时匹配多个站点（如生产 + Staging）
       sites:
         - site2
         - site2-staging
