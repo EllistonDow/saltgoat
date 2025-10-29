@@ -56,7 +56,16 @@ mail:
 ```
 
 - `email.accounts` 可按需扩展更多配置段（如 `ses`, `mailgun` 等）。
-- 敏感凭据请放在未提交的私有 Pillar（例如 `salt/pillar/secret/smtp.sls`），并在 `top.sls` 中按需 include。
+- 敏感凭据请放在未提交的私有 Pillar（例如 `salt/pillar/secret/smtp.sls`），并在 `top.sls` 中按需 include。模板示例与详细说明见 [`docs/SECRET_MANAGEMENT.md`](docs/SECRET_MANAGEMENT.md)。
+
+### 更新 SMTP / Postfix 凭据
+
+1. 在 `salt/pillar/secret/smtp.sls`（或其它 secret 文件）修改 `secrets.email_accounts` 与 `secrets.postfix_profile`。
+2. `saltgoat pillar refresh` 刷新 Pillar。
+3. `saltgoat postfix --smtp <profile>`（按需附加 `--enable` / `--disable`），该命令会写入 `/etc/postfix/sasl_passwd` 并重新加载 Postfix。
+4. 通过 `saltgoat passwords --show`、`saltgoat monitor enable-beacons` 或发送测试邮件确认生效。
+
+> 仅执行 `saltgoat pillar refresh` 不会自动更新系统配置，请务必完成步骤 3。
 
 ## 3. 切换 SMTP 账号
 

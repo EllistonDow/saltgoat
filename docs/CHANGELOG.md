@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.11] - 2025-10-29
+
+### Changes
+- 修改 6 个文件: README.md, docs/BACKUP_RESTIC.md, docs/MYSQL_BACKUP.md, docs/POSTFIX_SMTP.md, docs/SECRET_MANAGEMENT.md 等
+
+
 ## [1.0.10] - 2025-10-29
 
 ### Changes

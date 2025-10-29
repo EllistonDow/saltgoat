@@ -82,6 +82,14 @@ Restic 仓库密码不会提交到仓库，SaltGoat 会从 `salt/pillar/secret/*
    - `timer` / `randomized_delay`：systemd 定时器的触发规则（默认 `daily`）；
    - `retention`：快照保留策略（对应 `restic forget` 参数）。
 
+> **更新 Restic 凭据时的额外步骤**
+> 1. 在 `salt/pillar/secret/restic.sls`（或你自定义的 secret 文件）填写新密码/仓库信息，示例见 [`docs/SECRET_MANAGEMENT.md`](docs/SECRET_MANAGEMENT.md)。
+> 2. 执行 `saltgoat pillar refresh`。
+> 3. 运行 `sudo saltgoat magetools backup restic install`，重新生成 `/etc/restic/restic.env`、刷新 systemd service/timer，并校正目录属主。
+> 4. 使用 `sudo saltgoat magetools backup restic run` 或 `saltgoat magetools backup restic summary` 验证备份是否通过新凭据执行；必要时结合 `saltgoat passwords --show` 检查 CLI 读取的新值。
+>
+> 仅刷新 Pillar 不会自动更改系统配置，务必执行步骤 3。
+
 2. 将 Pillar 文件加入 `salt/pillar/top.sls`（自动安装流程已帮您完成此步骤）：
 
    ```yaml

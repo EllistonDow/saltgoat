@@ -133,6 +133,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - [`docs/MAGENTO_PERMISSIONS.md`](docs/MAGENTO_PERMISSIONS.md)：站点权限策略、修复脚本。
 - [`docs/BACKUP_RESTIC.md`](docs/BACKUP_RESTIC.md)：Restic 仓库配置与恢复流程。
 - [`docs/MYSQL_BACKUP.md`](docs/MYSQL_BACKUP.md)：Percona XtraBackup 安装、巡检与恢复。
+- [`docs/SECRET_MANAGEMENT.md`](docs/SECRET_MANAGEMENT.md)：密钥模板、Pillar Secret 工作流与密码更新步骤。
 - [`docs/CHANGELOG.md`](docs/CHANGELOG.md)：版本更新。
 
 ---

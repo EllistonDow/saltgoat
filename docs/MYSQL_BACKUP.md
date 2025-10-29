@@ -218,6 +218,20 @@ mysql_backup:
 | `timer` / `randomized_delay` | systemd 定时计划，可填写 `hourly` / `weekly` 或 Cron 表达式 |
 | `retention_days` | 清理旧备份的天数；设为 `0` 表示不自动删除 |
 | `prepare_backup` | 是否在备份完成后立即执行 `xtrabackup --prepare` |
+
+---
+
+## 7. 更新运行中环境的备份密码
+
+当你在 `salt/pillar/secret/auth.sls` 或 `salt/pillar/secret/mysql-backup.sls` 中调整密码时，请按照以下步骤让系统同步到新值：
+
+1. 参照 [`docs/SECRET_MANAGEMENT.md`](docs/SECRET_MANAGEMENT.md) 修改或复制对应的 secret 模板。
+2. 执行 `saltgoat pillar refresh` 刷新 Pillar 缓存。
+3. 运行 `bash scripts/sync-passwords.sh`（会同时写入 MySQL/Valkey/RabbitMQ/Webmin/phpMyAdmin 密码），或单独执行：
+   ```bash
+   sudo saltgoat magetools xtrabackup mysql install   # 重新渲染 /etc/mysql/mysql-backup.env 并更新 systemd
+   ```
+4. 用 `saltgoat magetools xtrabackup mysql run` 或 `saltgoat magetools xtrabackup mysql summary` 验证备份流程，必要时结合 `saltgoat passwords --show` 检查 CLI 读取的新值。
 | `compress` | 是否启用 XtraBackup 内置压缩 |
 | `extra_args` | 传递给 `xtrabackup` 的附加参数，如 `--parallel=4` |
 
