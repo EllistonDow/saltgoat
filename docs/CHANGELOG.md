@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.1.0] - 2025-10-29
+
+### Changes
+- 修改 5 个文件: docs/MAGENTO_MAINTENANCE.md, docs/MYSQL_BACKUP.md, salt/_modules/saltgoat.py, salt/pillar/magento-schedule.sls, salt/states/optional/magento-schedule.sls
+
+
 ## [1.0.13] - 2025-10-29
 
 ### Changes

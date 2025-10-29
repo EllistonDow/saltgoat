@@ -65,6 +65,17 @@ def magento_schedule_uninstall(site: str = "tank") -> Dict[str, Any]:
     """
     Remove Magento maintenance schedule / cron entries.
     """
+    token = site.strip().lower().replace(" ", "_").replace("-", "_") or site
+    cron_file = f"/etc/cron.d/magento-maintenance-{token}"
+    legacy_cron_file = "/etc/cron.d/magento-maintenance"
+    base_jobs = [
+        f"magento_{token}_cron",
+        f"magento_{token}_daily",
+        f"magento_{token}_weekly",
+        f"magento_{token}_monthly",
+        f"magento_{token}_health",
+    ]
+
     ret: Dict[str, Any] = {
         "site": site,
         "mode": "schedule" if _has_schedule() else "cron",
@@ -73,25 +84,42 @@ def magento_schedule_uninstall(site: str = "tank") -> Dict[str, Any]:
         "comment": "",
     }
 
-    schedule_jobs = [
-        "magento-cron",
-        "magento-daily-maintenance",
-        "magento-weekly-maintenance",
-        "magento-monthly-maintenance",
-        "magento-health-check",
-    ]
-
-    for job in schedule_jobs:
+    for job in base_jobs:
         try:
             res = __salt__["schedule.delete"](job)
             ret["changes"]["schedule"][job] = res  # type: ignore[index]
         except Exception:  # noqa: BLE001
             ret["changes"]["schedule"][job] = False  # type: ignore[index]
 
-    cron_file = "/etc/cron.d/magento-maintenance"
+    dump_jobs = __salt__["pillar.get"]("magento_schedule:mysql_dump_jobs", [])  # type: ignore[assignment]
+    if isinstance(dump_jobs, list):
+        for job in dump_jobs:
+            if not isinstance(job, dict):
+                continue
+            name = job.get("name")
+            if not name:
+                continue
+            job_site = job.get("site")
+            job_sites = job.get("sites")
+            if job_site and job_site != site:
+                continue
+            if job_sites and site not in job_sites:
+                continue
+            try:
+                res = __salt__["schedule.delete"](name)
+                ret["changes"]["schedule"][name] = res  # type: ignore[index]
+            except Exception:  # noqa: BLE001
+                ret["changes"]["schedule"][name] = False  # type: ignore[index]
+
+    removed = False
     if __salt__["file.file_exists"](cron_file):
         __salt__["file.remove"](cron_file)
-        ret["changes"]["cron_removed"] = True  # type: ignore[index]
+        removed = True
+    if __salt__["file.file_exists"](legacy_cron_file):
+        __salt__["file.remove"](legacy_cron_file)
+        removed = True
+
+    ret["changes"]["cron_removed"] = removed  # type: ignore[index]
 
     return ret
 

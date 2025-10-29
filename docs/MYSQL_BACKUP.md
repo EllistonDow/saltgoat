@@ -249,12 +249,14 @@ magento_schedule:
       database: tankmage
       backup_dir: /home/doge/Dropbox/tank/databases
       repo_owner: tankuser
+      site: tank
     - name: bankmage-dump-every-2h
       cron: '0 */2 * * *'
       database: bankmage
       backup_dir: /home/doge/Dropbox/bank/databases
       repo_owner: bankuser
       no_compress: true
+      site: bank
 ```
 
 使用指南：
@@ -262,9 +264,10 @@ magento_schedule:
 1. 将上述配置写入与你的站点关联的 Pillar（推荐放在 `salt/pillar/magento-schedule.sls`）。
 2. 执行 `saltgoat pillar refresh`。
 3. 对每个站点运行 `saltgoat magetools cron <site> install`。命令会为该站点的 Salt Schedule（或降级的 `/etc/cron.d/magento-maintenance`）生成 mysqldump 计划。
-4. 后续可通过 `saltgoat magetools cron <site> status` 查看条目。输出会包含中文注释（如“每 5 分钟 / 每小时整点 / 每周日 03:00”）帮助识别频率。
+4. 后续可通过 `saltgoat magetools cron <site> status` 查看条目。输出会包含中文注释（如“每分钟 / 每小时整点 / 每周日 03:00”）帮助识别频率。
 
 > 若宿主缺少 `salt-minion`，`install` 会自动回退写入系统 Cron，但仍使用同样的站点配置。
+> 建议在每个任务中填写 `site` 或 `sites` 字段，SaltGoat 会据此只在对应站点的 `install` 命令中安装/卸载任务。
 
 -------------------------------------------------------------------------------
 

@@ -208,14 +208,18 @@ magento_schedule:
       database: tankmage
       backup_dir: /home/doge/Dropbox/tank/databases
       repo_owner: doge
+      site: tank
     - name: bankmage-dump-every-2h
       cron: '0 */2 * * *'
       database: bankmage
       backup_dir: /home/doge/Dropbox/bank/databases
       repo_owner: doge
       no_compress: true
+      site: bank
 ```
 建议将此配置写入 `salt/pillar/magento-schedule.sls`；执行 `saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule（若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`）。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。
+
+> 提示：在 mysqldump 任务中加入 `site` 或 `sites` 字段，SaltGoat 才能在多站点场景下仅为指定站点安装/卸载该计划任务。
 
 ## 定时任务配置
 
@@ -228,7 +232,7 @@ salt-call --local schedule.list --out=yaml | grep -A3 'magento-'
 
 默认会创建以下任务：
 
-- `magento-cron`：每 5 分钟执行一次 `php bin/magento cron:run`
+- `magento-cron`：每分钟执行一次 `php bin/magento cron:run`
 - `magento-daily-maintenance`：每日凌晨 2 点运行日常维护
 - `magento-weekly-maintenance`：每周日凌晨 3 点运行每周维护
 - `magento-monthly-maintenance`：每月 1 日凌晨 4 点运行完整部署流程
