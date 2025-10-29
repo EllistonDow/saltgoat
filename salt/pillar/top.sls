@@ -24,6 +24,7 @@ base:
     - saltgoat
     - nginx
     - magento-optimize
+    - magento-schedule
     - salt-beacons
     - backup-restic
     - mysql-backup

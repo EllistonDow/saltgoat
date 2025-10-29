@@ -259,7 +259,7 @@ magento_schedule:
 
 使用指南：
 
-1. 将上述配置写入与你的站点关联的 Pillar（例如 `salt/pillar/magento-optimize.sls`）。
+1. 将上述配置写入与你的站点关联的 Pillar（推荐放在 `salt/pillar/magento-schedule.sls`）。
 2. 执行 `saltgoat pillar refresh`。
 3. 对每个站点运行 `saltgoat magetools cron <site> install`。命令会为该站点的 Salt Schedule（或降级的 `/etc/cron.d/magento-maintenance`）生成 mysqldump 计划。
 4. 后续可通过 `saltgoat magetools cron <site> status` 查看条目。输出会包含中文注释（如“每 5 分钟 / 每小时整点 / 每周日 03:00”）帮助识别频率。

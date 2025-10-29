@@ -215,7 +215,7 @@ magento_schedule:
       repo_owner: doge
       no_compress: true
 ```
-执行 `saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule；若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。
+建议将此配置写入 `salt/pillar/magento-schedule.sls`；执行 `saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule（若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`）。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。
 
 ## 定时任务配置
 

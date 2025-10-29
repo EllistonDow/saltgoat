@@ -94,12 +94,13 @@ Restic 仓库密码不会提交到仓库，SaltGoat 会从 `salt/pillar/secret/*
 
    ```yaml
    base:
-     '*':
-       - saltgoat
-       - nginx
-       - magento-optimize
-       - salt-beacons
-       - backup-restic      # 新增
+    '*':
+      - saltgoat
+      - nginx
+      - magento-optimize
+      - magento-schedule
+      - salt-beacons
+      - backup-restic      # 新增
    ```
 
 3. 刷新 Pillar（可选）：
