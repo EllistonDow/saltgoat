@@ -67,9 +67,9 @@ php:
     - zip
     - zlib
 
-# Nginx 配置
+# Nginx 配置（使用 apt 安装官方包）
 nginx:
-  version: '1.29.1'
+  version: '1.28.0-1~noble'
   worker_processes: {{ pillar.get('nginx_worker_processes', 'auto') }}
   modsecurity:
     enabled: {{ pillar.get('nginx_modsecurity_enabled', False) }}
@@ -96,11 +96,45 @@ varnish:
 firewall:
   allowed_ports: {{ pillar.get('firewall_allowed_ports', '22,80,443,3306,6379,5672,15672,10000').split(',') }}
 
-# 邮件通知配置
+# 邮件通知配置（支持多账号切换）
 email:
-  smtp_host: {{ grains.get('pillar_smtp_host', 'smtp.gmail.com:587') }}
-  smtp_user: {{ grains.get('pillar_smtp_user', 'your-email@gmail.com') }}
-  smtp_password: {{ grains.get('pillar_smtp_password', 'your-app-password') }}
-  from_email: {{ grains.get('pillar_smtp_from_email', 'your-email@gmail.com') }}
-  from_name: {{ grains.get('pillar_smtp_from_name', 'SaltGoat Alerts') }}
+  default: gmail
   retention_days: {{ pillar.get('log_retention_days', '30') }}
+  accounts:
+    gmail:
+      host: 'smtp.gmail.com'
+      port: 587
+      user: 'abbsay@gmail.com'
+      password: 'lqeobfnszpmwjudg'
+      from_email: 'abbsay@gmail.com'
+      from_name: 'SaltGoat Alerts'
+    m365:
+      host: 'smtp.office365.com'
+      port: 587
+      user: 'hello@tschenfeng.com'
+      password: 'Linksys.2010'
+      from_email: 'notice@tschenfeng.com'
+      from_name: 'SaltGoat Alerts'
+
+# 邮件服务配置（Postfix 采用配置文件驱动，可与 email 账号联动）
+mail:
+  postfix:
+    enabled: False
+    profile: gmail             # 默认联动 email.accounts 中的 gmail，可改为 m365
+    hostname: {{ grains.get('fqdn') }}
+    domain: {{ grains.get('domain') or grains.get('fqdn') }}
+    origin: '$mydomain'
+    inet_interfaces:
+      - 'loopback-only'
+    mynetworks:
+      - '127.0.0.0/8'
+    relay:
+      tls_security_level: 'encrypt'
+    tls:
+      smtp_security_level: 'may'
+      smtpd_security_level: 'may'
+      cert_file: '/etc/ssl/certs/ssl-cert-snakeoil.pem'
+      key_file: '/etc/ssl/private/ssl-cert-snakeoil.key'
+    auth:
+      mechanism: 'login'
+    aliases: []

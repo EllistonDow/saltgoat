@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Send a Telegram notification using SaltGoat reactor helpers."""
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/saltgoat-reactor")
+
+try:
+    import reactor_common  # pylint: disable=import-error
+except Exception as exc:  # pylint: disable=broad-except
+    sys.stderr.write(f"Failed to import reactor_common: {exc}\n")
+    sys.exit(2)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="SaltGoat Telegram dispatcher")
+    parser.add_argument("--config", required=True, help="Path to telegram.json")
+    parser.add_argument("--log-path", required=True, help="Path for alerts log")
+    parser.add_argument("--tag", required=True, help="Log tag prefix")
+    parser.add_argument("--message", required=True, help="JSON encoded message string")
+    parser.add_argument("--payload", default="{}", help="JSON encoded payload for diagnostics")
+    args = parser.parse_args()
+
+    log_path = Path(args.log_path)
+    tag = args.tag
+
+    try:
+        message = json.loads(args.message)
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"Invalid message JSON: {exc}\n")
+        return 3
+
+    try:
+        payload_obj = json.loads(args.payload)
+    except json.JSONDecodeError:
+        payload_obj = args.payload
+
+    def log(kind: str, payload: dict) -> None:
+        try:
+            subprocess.run(
+                [
+                    "python3",
+                    "/opt/saltgoat-reactor/logger.py",
+                    "TELEGRAM",
+                    str(log_path),
+                    f"{tag} {kind}",
+                    json.dumps(payload, ensure_ascii=False),
+                ],
+                check=False,
+                timeout=5,
+            )
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    profiles = reactor_common.load_telegram_profiles(args.config, log)
+    if not profiles:
+        log("skip", {"reason": "no_profiles"})
+        return 0
+
+    log("context", {"payload": payload_obj})
+    reactor_common.broadcast_telegram(message, profiles, log)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

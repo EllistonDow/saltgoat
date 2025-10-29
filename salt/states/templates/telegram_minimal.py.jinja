@@ -1,0 +1,88 @@
+"""Minimal Telegram Bot client for Salt beacons.
+
+This implementation intentionally avoids external dependencies to ensure the
+`telegram_bot_msg` beacon can load on hosts without the official
+`python-telegram-bot` package. The interface covers the subset required by the
+beacon (polling updates).
+"""
+
+import json
+import urllib.request
+import urllib.parse
+from urllib.error import HTTPError
+
+
+class TelegramAPIError(Exception):
+    """Raised when the Telegram Bot API returns an error."""
+
+
+class TelegramChat:
+    def __init__(self, data):
+        self._data = data or {}
+        self.username = self._data.get("username")
+
+    def to_dict(self):
+        return dict(self._data)
+
+
+class TelegramMessage:
+    def __init__(self, data):
+        self._data = data or {}
+        self.chat = TelegramChat(self._data.get("chat") or {})
+
+    def to_dict(self):
+        return dict(self._data)
+
+
+class Update:
+    def __init__(self, data):
+        self._data = data or {}
+        self.update_id = self._data.get("update_id", 0)
+        self.message = TelegramMessage(self._data.get("message") or {})
+
+    def to_dict(self):
+        return dict(self._data)
+
+
+class Bot:
+    def __init__(self, token):
+        if not token:
+            raise ValueError("Telegram bot token is required")
+        self.token = token
+        self.base_url = f"https://api.telegram.org/bot{token}/"
+
+    def _request(self, method, params=None):
+        url = self.base_url + method
+        if params:
+            query = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
+            url = url + ("?" + query)
+        try:
+            with urllib.request.urlopen(url, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            if method == "getUpdates" and exc.code == 409:
+                return {"ok": True, "result": []}
+            raise TelegramAPIError(str(exc)) from exc
+        if not payload.get("ok", False):
+            raise TelegramAPIError(payload.get("description", "Unknown error"))
+        return payload
+
+    def get_updates(self, limit=100, timeout=0, offset=None):
+        payload = self._request(
+            "getUpdates",
+            {
+                "limit": limit,
+                "timeout": timeout,
+                "offset": offset,
+            },
+        )
+        return [Update(item) for item in payload.get("result", [])]
+
+
+__all__ = [
+    "Bot",
+    "TelegramAPIError",
+    "Update",
+    "TelegramMessage",
+    "TelegramChat",
+]

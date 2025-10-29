@@ -29,6 +29,22 @@ is_semver() {
     [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
 
+get_highest_remote_version() {
+    local repo_root="$1"
+    local remote="${2:-origin}"
+
+    if ! git -C "$repo_root" remote | grep -qx "$remote"; then
+        return 1
+    fi
+
+    git -C "$repo_root" ls-remote --tags "$remote" 'refs/tags/v*' \
+        | awk '{print $2}' \
+        | sed -E 's#.*/v##' \
+        | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+        | sort -V \
+        | tail -n1
+}
+
 generate_auto_summary() {
     local repo_root="$1"
     local -a files=()
@@ -123,7 +139,7 @@ run_git_release() {
 
     local repo_root="${MODULE_DIR}/../.."
     local requested_version="" user_message="" release_note=""
-    local current_version new_version
+    local script_version current_version new_version release_base remote_latest
 
     if [[ $# -gt 0 ]]; then
         if is_semver "$1"; then
@@ -138,11 +154,14 @@ run_git_release() {
     user_message="${user_message//[$'\r\n']/ }"
     user_message="$(echo "$user_message" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
-    current_version=$(get_current_version)
-    if [[ -z "$current_version" ]]; then
+    script_version=$(get_current_version)
+    if [[ -z "$script_version" ]]; then
         log_error "无法确定当前版本号"
         return 1
     fi
+
+    current_version="$script_version"
+    release_base="$current_version"
 
     if [[ -n "$requested_version" ]]; then
         if [[ "$requested_version" == "$current_version" ]]; then
@@ -159,23 +178,46 @@ run_git_release() {
             log_warning "指定版本 ${requested_version} 低于或等于当前版本 ${current_version}，请确认这是否符合预期。"
         fi
         new_version="$requested_version"
+        release_base="$current_version"
     else
-        new_version=$(bump_patch_version "$current_version")
+        (
+            cd "$repo_root" && git fetch origin --tags --force >/dev/null 2>&1 || true
+        )
+        remote_latest=$(get_highest_remote_version "$repo_root" "origin" || true)
+        if [[ -n "$remote_latest" ]]; then
+            local highest_remote
+            highest_remote=$(printf '%s\n%s\n' "$remote_latest" "$release_base" | sort -V | tail -n1)
+            if [[ "$highest_remote" != "$release_base" ]]; then
+                log_note "检测到远端最新版本 ${remote_latest}，将基于该版本递增。"
+                release_base="$highest_remote"
+            fi
+        fi
+
+        new_version=$(bump_patch_version "$release_base")
+
+        while remote_tag_exists "$repo_root" "v${new_version}" "origin"; do
+            log_warning "远端已存在 v${new_version}，自动递增补丁版本..."
+            release_base="$new_version"
+            new_version=$(bump_patch_version "$release_base")
+        done
     fi
 
     local tag_name="v${new_version}"
-    log_info "同步远端标签..."
-    (
-        cd "$repo_root" && git fetch origin --tags --force >/dev/null 2>&1 || true
-    )
-
-    if remote_tag_exists "$repo_root" "$tag_name"; then
-        if [[ "$dry_run" == "true" ]]; then
-            log_warning "远程已有标签 ${tag_name}，正式发布前需要选择新的版本号或清理旧标签。"
-        else
-            log_error "远程已存在 tag ${tag_name}，请指定更高版本或先删除远端标签。"
-            return 1
+    if [[ -n "$requested_version" ]]; then
+        log_info "同步远端标签..."
+        (
+            cd "$repo_root" && git fetch origin --tags --force >/dev/null 2>&1 || true
+        )
+        if remote_tag_exists "$repo_root" "$tag_name"; then
+            if [[ "$dry_run" == "true" ]]; then
+                log_warning "远程已有标签 ${tag_name}，正式发布前需要选择新的版本号或清理旧标签。"
+            else
+                log_error "远程已存在 tag ${tag_name}，请指定更高版本或先删除远端标签。"
+                return 1
+            fi
         fi
+    else
+        log_info "自动计算版本号: ${new_version}"
     fi
 
     if [[ -n "$user_message" ]]; then
@@ -194,7 +236,7 @@ run_git_release() {
     fi
 
     if [[ "$dry_run" == "true" ]]; then
-        log_highlight "Release 预览 (dry-run): ${current_version} -> ${new_version}"
+        log_highlight "Release 预览 (dry-run): ${release_base} -> ${new_version}"
         log_info "提交信息: ${commit_msg}"
         log_info "将更新文件: saltgoat, docs/CHANGELOG.md"
         local status_output
@@ -209,9 +251,9 @@ run_git_release() {
         return 0
     fi
 
-    log_highlight "版本: ${current_version} -> ${new_version}"
+    log_highlight "版本: ${release_base} -> ${new_version}"
 
-    update_version_file "$current_version" "$new_version"
+    update_version_file "$script_version" "$new_version"
     update_changelog "$new_version" "$release_note"
 
     (

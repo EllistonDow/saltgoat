@@ -1,0 +1,38 @@
+# Reactor logging helper
+import datetime
+import json
+import pathlib
+import sys
+
+
+def main():
+    if len(sys.argv) != 5:
+        sys.stderr.write("Usage: reactor_logger.py <label> <log_path> <tag> <payload_json>\n")
+        return 1
+
+    label, log_path_str, tag, payload_json = sys.argv[1:]
+
+    try:
+        payload = json.loads(payload_json)
+    except json.JSONDecodeError as err:
+        sys.stderr.write(f"Failed to decode payload JSON: {err}\n")
+        return 2
+
+    log_path = pathlib.Path(log_path_str)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.datetime.now().strftime("%F %T")
+    line = f"{timestamp} [{label}] tag={tag} payload={json.dumps(payload, ensure_ascii=False)}\n"
+
+    try:
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(line)
+    except Exception as err:  # pylint: disable=broad-except
+        sys.stderr.write(f"Failed to append to {log_path}: {err}\n")
+        return 3
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

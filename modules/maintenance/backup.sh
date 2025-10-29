@@ -5,6 +5,66 @@
 # 备份目录配置
 BACKUP_BASE_DIR="$HOME/saltgoat_backups"
 BACKUP_RETENTION_DAYS=30
+HOST_ID="$(hostname -f 2>/dev/null || hostname)"
+
+emit_salt_event() {
+    local tag="$1"
+    shift || true
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if python3 - "$tag" "$@" <<'PY'
+import sys
+try:
+    from salt.client import Caller
+except Exception:
+    sys.exit(1)
+
+tag = sys.argv[1]
+data = {}
+for arg in sys.argv[2:]:
+    if '=' not in arg:
+        continue
+    key, value = arg.split('=', 1)
+    data[key] = value
+
+try:
+    caller = Caller()
+except Exception:
+    sys.exit(1)
+
+try:
+    caller.cmd('event.send', tag, data)
+except Exception:
+    sys.exit(1)
+else:
+    sys.exit(0)
+PY
+    then
+        return 0
+    fi
+
+    if command -v salt-call >/dev/null 2>&1; then
+        local payload
+        payload="$(python3 - "$tag" "$@" <<'PY'
+import json
+import sys
+
+tag = sys.argv[1]
+data = {}
+for arg in sys.argv[2:]:
+    if '=' not in arg:
+        continue
+    key, value = arg.split('=', 1)
+    data[key] = value
+print(json.dumps(data, ensure_ascii=False))
+PY
+)"
+        salt-call --local event.send "$tag" "$payload" >/dev/null 2>&1 || true
+    fi
+}
 
 # 确保备份目录存在
 ensure_backup_dir() {
@@ -37,6 +97,13 @@ backup_create_site() {
     if [[ ! -d "$site_path" ]]; then
         log_error "站点目录不存在: $site_path"
         log_info "请确保站点已创建: saltgoat nginx create $site_name domain.com"
+        emit_salt_event "saltgoat/backup/site/failure" \
+            "id=$HOST_ID" \
+            "host=$HOST_ID" \
+            "site=$site_name" \
+            "project=$project_name" \
+            "reason=missing_site_path" \
+            "path=$site_path"
         exit 1
     fi
     
@@ -85,9 +152,24 @@ backup_create_site() {
 备份内容: 完整站点文件"
         
         salt-call --local file.write "${backup_file%.tar.gz}_info.txt" contents="$backup_info" >/dev/null 2>&1
-        
+        emit_salt_event "saltgoat/backup/site/success" \
+            "id=$HOST_ID" \
+            "host=$HOST_ID" \
+            "site=$site_name" \
+            "project=$project_name" \
+            "file=$backup_file" \
+            "size=${backup_size:-unknown}" \
+            "timestamp=$(date +%F_%T)"
+
     else
         log_error "站点备份失败"
+        emit_salt_event "saltgoat/backup/site/failure" \
+            "id=$HOST_ID" \
+            "host=$HOST_ID" \
+            "site=$site_name" \
+            "project=$project_name" \
+            "reason=archive_failed" \
+            "path=$backup_file"
         exit 1
     fi
 }
@@ -321,11 +403,27 @@ SaltGoat 版本: $SCRIPT_VERSION
     
     # 创建压缩包 - 使用 Salt 命令模块
     log_info "创建备份压缩包..."
-    salt-call --local cmd.run "tar -czf $BACKUP_BASE_DIR/${backup_name}_${timestamp}.tar.gz -C $BACKUP_BASE_DIR ${backup_name}_${timestamp}" >/dev/null 2>&1
-    salt-call --local file.remove "$backup_dir" recurse=True >/dev/null 2>&1
-    
-    log_success "备份创建完成: ${backup_name}_${timestamp}.tar.gz"
-    log_info "备份位置: $BACKUP_BASE_DIR/${backup_name}_${timestamp}.tar.gz"
+    local archive_file="$BACKUP_BASE_DIR/${backup_name}_${timestamp}.tar.gz"
+    if salt-call --local cmd.run "tar -czf '$archive_file' -C '$BACKUP_BASE_DIR' '${backup_name}_${timestamp}'" >/dev/null 2>&1; then
+        salt-call --local file.remove "$backup_dir" recurse=True >/dev/null 2>&1
+        log_success "备份创建完成: ${backup_name}_${timestamp}.tar.gz"
+        log_info "备份位置: $archive_file"
+        emit_salt_event "saltgoat/backup/system/success" \
+            "id=$HOST_ID" \
+            "host=$HOST_ID" \
+            "name=$backup_name" \
+            "file=$archive_file" \
+            "timestamp=$(date +%F_%T)"
+    else
+        salt-call --local file.remove "$backup_dir" recurse=True >/dev/null 2>&1
+        log_error "系统备份压缩失败"
+        emit_salt_event "saltgoat/backup/system/failure" \
+            "id=$HOST_ID" \
+            "host=$HOST_ID" \
+            "name=$backup_name" \
+            "reason=archive_failed"
+        exit 1
+    fi
 }
 
 # 列出所有备份

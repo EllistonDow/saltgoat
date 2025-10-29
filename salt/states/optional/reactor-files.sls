@@ -25,3 +25,10 @@
     - user: root
     - group: root
     - mode: 640
+
+/srv/salt/reactor/backup_notification.sls:
+  file.managed:
+    - source: salt://reactor/backup_notification.sls
+    - user: root
+    - group: root
+    - mode: 640

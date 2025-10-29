@@ -1,0 +1,86 @@
+{# Postfix configuration map #}
+{% set defaults = {
+    'enabled': False,
+    'packages': ['postfix', 'bsd-mailx'],
+    'extra_packages': [],
+    'service': 'postfix',
+    'hostname': salt['grains.get']('fqdn'),
+    'domain': salt['grains.get']('domain') or salt['grains.get']('fqdn'),
+    'origin': '$mydomain',
+    'inet_interfaces': ['loopback-only'],
+    'mynetworks': ['127.0.0.0/8'],
+    'relay': {
+        'host': '',
+        'port': 587,
+        'tls_security_level': 'encrypt'
+    },
+    'tls': {
+        'smtp_security_level': 'may',
+        'smtpd_security_level': 'may',
+        'cert_file': '/etc/ssl/certs/ssl-cert-snakeoil.pem',
+        'key_file': '/etc/ssl/private/ssl-cert-snakeoil.key'
+    },
+    'auth': {
+        'username': '',
+        'password': '',
+        'mechanism': 'login'
+    },
+    'aliases': [],
+    'extra_main_cf': [],
+    'sasl_password_file': '/etc/postfix/sasl_passwd'
+} %}
+
+{% set pillar_settings = salt['pillar.get']('mail:postfix', {}) %}
+{% set email_cfg = salt['pillar.get']('email', {}) %}
+{% set email_accounts = email_cfg.get('accounts', {}) %}
+{% set selected_profile = pillar_settings.get('profile') or email_cfg.get('default') %}
+
+{% set cfg = salt['slsutil.merge'](defaults, pillar_settings, strategy='recurse', merge_lists=True) %}
+
+{% if selected_profile %}
+  {% set email_account = email_accounts.get(selected_profile, {}) %}
+  {% if email_account %}
+    {% if email_account.get('host') %}
+      {% do cfg.relay.update({'host': email_account.get('host')}) %}
+    {% endif %}
+    {% if email_account.get('port') %}
+      {% do cfg.relay.update({'port': email_account.get('port')}) %}
+    {% endif %}
+    {% if email_account.get('user') %}
+      {% do cfg.auth.update({'username': email_account.get('user')}) %}
+    {% endif %}
+    {% if email_account.get('password') %}
+      {% do cfg.auth.update({'password': email_account.get('password')}) %}
+    {% endif %}
+    {% set from_email = email_account.get('from_email') %}
+    {% if from_email and '@' in from_email %}
+      {% set origin_domain = from_email.split('@')[-1] %}
+      {% if origin_domain %}
+        {% do cfg.update({'origin': origin_domain}) %}
+      {% endif %}
+    {% endif %}
+    {% do cfg.update({'profile': selected_profile}) %}
+  {% endif %}
+{% endif %}
+{% if selected_profile and 'profile' not in cfg %}
+  {% do cfg.update({'profile': selected_profile}) %}
+{% endif %}
+
+{% if cfg.auth.get('username') and cfg.auth.get('password') %}
+  {% if 'libsasl2-modules' not in cfg.packages %}
+    {% do cfg.packages.append('libsasl2-modules') %}
+  {% endif %}
+  {% if 'ca-certificates' not in cfg.packages %}
+    {% do cfg.packages.append('ca-certificates') %}
+  {% endif %}
+{% endif %}
+
+{% if cfg.extra_packages %}
+  {% for pkg in cfg.extra_packages %}
+    {% if pkg not in cfg.packages %}
+      {% do cfg.packages.append(pkg) %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+{% set serialized_cfg = salt['slsutil.serialize']('json', cfg) %}

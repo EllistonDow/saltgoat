@@ -1,0 +1,194 @@
+#!/bin/bash
+set -euo pipefail
+
+HOST_ID="$(hostname -f 2>/dev/null || hostname)"
+EVENT_STATUS="success"
+EVENT_RC=0
+LOG_FILE=""
+
+emit_salt_event() {
+    local tag="$1"
+    shift || true
+
+    local PYTHON_BIN="/opt/saltstack/salt/bin/python3"
+    if [[ ! -x "$PYTHON_BIN" ]]; then
+        PYTHON_BIN="python3"
+    fi
+
+    if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if "$PYTHON_BIN" - "$tag" "$@" <<'PY'
+import sys
+try:
+    from salt.client import Caller
+except Exception:
+    sys.exit(1)
+
+tag = sys.argv[1]
+data = {}
+for arg in sys.argv[2:]:
+    if '=' not in arg:
+        continue
+    key, value = arg.split('=', 1)
+    data[key] = value
+
+try:
+    caller = Caller()
+except Exception:
+    sys.exit(1)
+
+try:
+    caller.cmd('event.send', tag, data)
+except Exception:
+    sys.exit(1)
+else:
+    sys.exit(0)
+PY
+    then
+        return 0
+    fi
+
+    if command -v salt-call >/dev/null 2>&1; then
+        salt-call event.send "$tag" "$@" >/dev/null 2>&1 || true
+    fi
+}
+
+emit_restic_event() {
+    local status="$EVENT_STATUS"
+    local suffix="success"
+    if [[ "$status" != "success" ]]; then
+        suffix="failure"
+    fi
+
+    emit_salt_event "saltgoat/backup/restic/${suffix}" \
+        "id=$HOST_ID" \
+        "host=$HOST_ID" \
+        "origin=timer" \
+        "repo=${RESTIC_REPOSITORY:-unknown}" \
+        "log_file=${LOG_FILE:-}" \
+        "return_code=$EVENT_RC"
+}
+
+on_error() {
+    EVENT_RC=$?
+    EVENT_STATUS="failure"
+}
+
+trap on_error ERR
+trap emit_restic_event EXIT
+
+ENV_FILE="{{ env_file }}"
+if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+else
+    echo "[restic] env file not found: $ENV_FILE" >&2
+    exit 1
+fi
+
+RESTIC_BIN="${RESTIC_BIN:-restic}"
+INCLUDE_FILE="${RESTIC_INCLUDE_FILE:-{{ include_file }}}"
+EXCLUDE_FILE="${RESTIC_EXCLUDE_FILE:-{{ exclude_file }}}"
+LOG_DIR="${RESTIC_LOG_DIR:-{{ log_dir }}}"
+mkdir -p "$LOG_DIR"
+TS="$(date +%Y%m%d_%H%M%S)"
+LOG_FILE="$LOG_DIR/backup-${TS}.log"
+
+exec >> >(tee -a "$LOG_FILE") 2>&1
+
+echo "[restic] manual backup started at ${TS}"
+
+TMP_ENV="$(mktemp)"
+cat >"$TMP_ENV" <<EOF
+#!/bin/bash
+set -euo pipefail
+export RESTIC_PASSWORD="${RESTIC_PASSWORD:-}"
+export RESTIC_PASSWORD_FILE="${RESTIC_PASSWORD_FILE:-}"
+export RESTIC_BIN="$RESTIC_BIN"
+export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-}"
+export RESTIC_CACHE_DIR="${RESTIC_CACHE_DIR:-}"
+export RESTIC_TAGS="${RESTIC_TAGS:-}"
+export RESTIC_BACKUP_ARGS="${RESTIC_BACKUP_ARGS:-}"
+export RESTIC_FORGET_ARGS="${RESTIC_FORGET_ARGS:-}"
+export RESTIC_CHECK_AFTER_BACKUP="${RESTIC_CHECK_AFTER_BACKUP:-0}"
+export RESTIC_INCLUDE_FILE="$INCLUDE_FILE"
+export RESTIC_EXCLUDE_FILE="$EXCLUDE_FILE"
+EOF
+
+for key in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION; do
+    eval "value=\"\${$key:-}\""
+    if [[ -n "$value" ]]; then
+        printf 'export %s=%q\n' "$key" "$value" >>"$TMP_ENV"
+    fi
+done
+
+chmod 600 "$TMP_ENV"
+
+cleanup=("$TMP_ENV")
+if [[ -n "${RESTIC_PASSWORD:-}" ]]; then
+    unset RESTIC_PASSWORD
+fi
+
+if [[ -n "${RESTIC_PASSWORD_FILE:-}" && -f "${RESTIC_PASSWORD_FILE}" ]]; then
+    chmod 600 "${RESTIC_PASSWORD_FILE}"
+fi
+
+if [[ -n "$RESTIC_REPO_OWNER" ]]; then
+    chown -R "$RESTIC_REPO_OWNER":"$RESTIC_REPO_OWNER" "${RESTIC_REPOSITORY%:*}" 2>/dev/null || true
+fi
+
+/bin/bash "$TMP_ENV" <<'EOS'
+set -euo pipefail
+source "$1"
+
+RESTIC_ARGS=("--files-from=$RESTIC_INCLUDE_FILE")
+if [[ -s "$RESTIC_EXCLUDE_FILE" ]]; then
+    RESTIC_ARGS+=("--exclude-file=$RESTIC_EXCLUDE_FILE")
+fi
+if [[ -n "$RESTIC_BACKUP_ARGS" ]]; then
+    # shellcheck disable=SC2206
+    EXTRA_ARGS=( $RESTIC_BACKUP_ARGS )
+    RESTIC_ARGS+=("${EXTRA_ARGS[@]}")
+fi
+
+RESTIC_BIN="${RESTIC_BIN:-restic}"
+
+restic_backup() {
+    "$RESTIC_BIN" backup "${RESTIC_ARGS[@]}"
+}
+
+restic_forget() {
+    if [[ -n "$RESTIC_FORGET_ARGS" ]]; then
+        "$RESTIC_BIN" forget $RESTIC_FORGET_ARGS
+    fi
+}
+
+restic_check() {
+    if [[ "${RESTIC_CHECK_AFTER_BACKUP:-0}" == "1" ]]; then
+        "$RESTIC_BIN" check --read-data-subset=1/5
+    fi
+}
+
+restic_backup
+restic_forget
+restic_check
+EOS
+
+cleanup_rc=$?
+
+for f in "${cleanup[@]}"; do
+    [[ -n "$f" ]] && rm -f "$f"
+done
+
+EVENT_RC=$cleanup_rc
+if [[ $cleanup_rc -eq 0 ]]; then
+    EVENT_STATUS="success"
+    echo "[restic] manual backup completed at $(date +%Y%m%d_%H%M%S)"
+else
+    EVENT_STATUS="failure"
+    echo "[restic] manual backup failed with rc=$cleanup_rc" >&2
+fi

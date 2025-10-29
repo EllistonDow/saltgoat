@@ -12,6 +12,7 @@ RESTIC_ENV="/etc/restic/restic.env"
 RESTIC_SERVICE="saltgoat-restic-backup.service"
 RESTIC_TIMER="saltgoat-restic-backup.timer"
 BACKUP_SCRIPT="/usr/local/bin/saltgoat-restic-backup"
+HOST_ID="$(hostname -f 2>/dev/null || hostname)"
 
 declare -a RUN_PATHS=()
 declare -A RUN_PATHS_SEEN=()
@@ -33,6 +34,41 @@ INSTALL_PATHS_DEFAULTED=0
 INSTALL_SERVICE_USER=""
 INSTALL_REPO_OWNER=""
 SITE_METADATA_DIR="/etc/restic/sites.d"
+
+emit_salt_event() {
+    local tag="$1"
+    shift || true
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        return 0
+    fi
+
+    python3 - "$tag" "$@" <<'PY'
+import sys
+try:
+    from salt.client import Caller
+except Exception:
+    sys.exit(0)
+
+tag = sys.argv[1]
+data = {}
+for arg in sys.argv[2:]:
+    if '=' not in arg:
+        continue
+    key, value = arg.split('=', 1)
+    data[key] = value
+
+try:
+    caller = Caller()
+except Exception:
+    sys.exit(0)
+
+try:
+    caller.cmd('event.send', tag, data)
+except Exception:
+    pass
+PY
+}
 
 usage() {
     cat <<EOF
@@ -592,6 +628,7 @@ PY
 run_manual_backup() {
     local tmp_env tmp_include cleanup=()
     local env_exists=0
+    local effective_repo="$RUN_REPO"
     if sudo test -f "$RESTIC_ENV"; then
         tmp_env="$(mktemp)"
         cleanup+=("$tmp_env")
@@ -750,6 +787,38 @@ EOF
         echo "[restic] manual backup completed at $(date +%Y%m%d_%H%M%S)"
     ' bash "$tmp_env"
     local rc=$?
+    if [[ -z "$effective_repo" && -f "$tmp_env" ]]; then
+        local repo_line
+        repo_line="$(grep -E '^RESTIC_REPOSITORY=' "$tmp_env" | tail -n1 || true)"
+        if [[ -n "$repo_line" ]]; then
+            effective_repo="${repo_line#*=}"
+            effective_repo="${effective_repo%\"}"
+            effective_repo="${effective_repo#\"}"
+        fi
+    fi
+    local joined_paths=""
+    if (( ${#RUN_PATHS[@]} )); then
+        joined_paths="$(IFS=','; echo "${RUN_PATHS[*]}")"
+    fi
+    local joined_tags=""
+    if (( ${#RUN_TAGS[@]} )); then
+        joined_tags="$(IFS=','; echo "${RUN_TAGS[*]}")"
+    fi
+    local event_suffix
+    if [[ $rc -eq 0 ]]; then
+        event_suffix="success"
+    else
+        event_suffix="failure"
+    fi
+    emit_salt_event "saltgoat/backup/restic/${event_suffix}" \
+        "id=$HOST_ID" \
+        "host=$HOST_ID" \
+        "origin=manual" \
+        "repo=${effective_repo:-unknown}" \
+        "site=${RUN_SITE:-}" \
+        "paths=$joined_paths" \
+        "tags=$joined_tags" \
+        "return_code=$rc"
     for f in "${cleanup[@]}"; do
         [[ -n "$f" ]] && rm -f "$f"
     done

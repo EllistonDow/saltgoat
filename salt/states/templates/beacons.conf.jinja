@@ -1,3 +1,23 @@
-{%- set beacon_settings = salt['pillar.get']('saltgoat:beacons', {}) %}
+{%- set raw_beacons = salt['pillar.get']('saltgoat:beacons', {}) %}
+{%- set normalized = {} %}
+{%- for name, cfg in raw_beacons.items() %}
+  {%- set entries = [] %}
+  {%- if cfg is mapping %}
+    {%- do entries.append(cfg) %}
+  {%- elif cfg is sequence and (cfg is not string) %}
+    {%- for item in cfg %}
+      {%- do entries.append(item) %}
+    {%- endfor %}
+  {%- else %}
+    {%- do entries.append(cfg) %}
+  {%- endif %}
+  {%- do normalized.update({name: entries}) %}
+{%- endfor %}
 beacons:
-{{ salt['slsutil.serialize']('yaml', beacon_settings) | indent(2, True) }}
+{{ salt['slsutil.serialize']('yaml', normalized, default_flow_style=False) | indent(2, True) }}
+{%- set blacklist = salt['pillar.get']('saltgoat:beacons_blacklist', []) %}
+{%- if blacklist %}
+
+beacons_blacklist:
+{{ salt['slsutil.serialize']('yaml', blacklist, default_flow_style=False) | indent(2, True) }}
+{%- endif %}

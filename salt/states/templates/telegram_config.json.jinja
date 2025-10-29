@@ -1,0 +1,68 @@
+{#-
+  Render Telegram configuration for reactor helpers.
+-#}
+{% set raw_entries = salt['pillar.get']('saltgoat:beacons:telegram_bot_msg', []) %}
+{% set ns = namespace(current={}, records=[]) %}
+{% for entry in raw_entries if entry is mapping %}
+  {% if entry.get('token') and ns.current %}
+    {% do ns.records.append(ns.current) %}
+    {% set ns.current = {} %}
+  {% endif %}
+  {% do ns.current.update(entry) %}
+{% endfor %}
+{% if ns.current %}
+  {% do ns.records.append(ns.current) %}
+{% endif %}
+{% set normalized = [] %}
+{% for record in ns.records %}
+  {% set token = record.get('token') %}
+  {% if not token %}
+    {% continue %}
+  {% endif %}
+  {% set targets = [] %}
+  {% set accept_val = record.get('accept_from') %}
+  {% if accept_val %}
+    {% if accept_val is sequence and accept_val is not string %}
+      {% for chat in accept_val %}
+        {% if chat not in targets %}
+          {% do targets.append(chat) %}
+        {% endif %}
+      {% endfor %}
+    {% else %}
+      {% if accept_val not in targets %}
+        {% do targets.append(accept_val) %}
+      {% endif %}
+    {% endif %}
+  {% endif %}
+  {% if record.get('chat_id') and record.get('chat_id') not in targets %}
+    {% do targets.append(record.get('chat_id')) %}
+  {% endif %}
+  {% set extra_targets = record.get('targets') %}
+  {% if extra_targets %}
+    {% if extra_targets is sequence and extra_targets is not string %}
+      {% for chat in extra_targets %}
+        {% if chat not in targets %}
+          {% do targets.append(chat) %}
+        {% endif %}
+      {% endfor %}
+    {% else %}
+      {% if extra_targets not in targets %}
+        {% do targets.append(extra_targets) %}
+      {% endif %}
+    {% endif %}
+  {% endif %}
+  {% set normalized_entry = {
+    "name": record.get('name') or 'profile_' ~ loop.index,
+    "enabled": record.get('enabled', True),
+    "token": token,
+    "targets": targets,
+    "interval": record.get('interval')
+  } %}
+  {% do normalized.append(normalized_entry) %}
+{% endfor %}
+{% set payload = {
+  "entries": normalized,
+  "generated_on": salt['grains.get']('host', ''),
+  "generated_at": salt['grains.get']('datetime', {}).get('iso8601', '')
+} %}
+{{ payload | json }}

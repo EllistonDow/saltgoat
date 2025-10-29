@@ -6,40 +6,86 @@
 reload_environment() {
     log_info "重新加载邮件相关配置（来自 Pillar）..."
 
-    local smtp_host smtp_user smtp_password smtp_from_email smtp_from_name
-    smtp_host=$(get_local_pillar_value smtp_host)
-    smtp_user=$(get_local_pillar_value smtp_user)
-    smtp_password=$(get_local_pillar_value smtp_password)
-    smtp_from_email=$(get_local_pillar_value smtp_from_email)
-    smtp_from_name=$(get_local_pillar_value smtp_from_name)
+    local default_account profile smtp_host smtp_port smtp_user smtp_password smtp_from_email smtp_from_name
+    default_account=$(get_local_pillar_value "email.default")
+    profile=$(get_local_pillar_value "mail.postfix.profile")
+    if [[ -z "$profile" ]]; then
+        profile="$default_account"
+    fi
 
-    log_info "当前 Pillar 邮件配置:"
-    log_info "  smtp_host: ${smtp_host:-未设置}"
-    log_info "  smtp_user: ${smtp_user:-未设置}"
-    log_info "  smtp_from_email: ${smtp_from_email:-未设置}"
-    log_info "  smtp_from_name: ${smtp_from_name:-未设置}"
+    if [[ -z "$profile" ]]; then
+        log_warning "未检测到 email.default 或 mail.postfix.profile，跳过 Postfix 更新"
+        return 1
+    fi
+
+    smtp_host=$(get_local_pillar_value "email.accounts.${profile}.host")
+    smtp_port=$(get_local_pillar_value "email.accounts.${profile}.port")
+    smtp_user=$(get_local_pillar_value "email.accounts.${profile}.user")
+    smtp_password=$(get_local_pillar_value "email.accounts.${profile}.password")
+    smtp_from_email=$(get_local_pillar_value "email.accounts.${profile}.from_email")
+    smtp_from_name=$(get_local_pillar_value "email.accounts.${profile}.from_name")
+
+    log_info "当前激活的邮件账号: ${profile}"
+    log_info "  host: ${smtp_host:-未设置}"
+    log_info "  port: ${smtp_port:-未设置}"
+    log_info "  user: ${smtp_user:-未设置}"
+    log_info "  from_email: ${smtp_from_email:-未设置}"
+    log_info "  from_name: ${smtp_from_name:-未设置}"
 
     if [[ -n "$smtp_host" && -n "$smtp_user" && -n "$smtp_password" ]]; then
+        local relay_host myorigin_value
+        if [[ -n "$smtp_port" ]]; then
+            relay_host="[$smtp_host]:$smtp_port"
+        else
+            relay_host="[$smtp_host]"
+        fi
+
+        if [[ -n "$smtp_from_email" && "$smtp_from_email" == *"@"* ]]; then
+            myorigin_value="${smtp_from_email##*@}"
+        else
+            myorigin_value="$smtp_from_email"
+        fi
+
         log_info "更新 Postfix 配置..."
 
-        sudo postconf -e "relayhost = $smtp_host"
-        if [[ -n "$smtp_from_email" ]]; then
-            sudo postconf -e "myorigin = $smtp_from_email"
+
+        if command_exists postconf; then
+            sudo postconf -e "relayhost = $relay_host"
+            if [[ -n "$myorigin_value" ]]; then
+                sudo postconf -e "myorigin = $myorigin_value"
+            fi
+        else
+            log_warning "postconf 命令不存在，可能未安装 Postfix，已跳过 relay 配置写入"
         fi
-        sudo postconf -e "myhostname = localhost"
-        sudo postconf -e "mydomain = localhost"
+
+        if [[ -d /etc/postfix ]]; then
+            sudo mkdir -p /etc/postfix
+        fi
 
         sudo tee /etc/postfix/sasl_passwd > /dev/null <<EOF
-[$smtp_host] $smtp_user:$smtp_password
+$relay_host $smtp_user:$smtp_password
 EOF
-        sudo postmap /etc/postfix/sasl_passwd
+        if command_exists postmap; then
+            sudo postmap /etc/postfix/sasl_passwd
+        else
+            log_warning "postmap 命令不存在，无法生成 sasl_passwd.db"
+        fi
         sudo chmod 600 /etc/postfix/sasl_passwd
 
-        sudo systemctl reload postfix
-
-        log_success "Postfix 配置已更新"
+        local postfix_enabled
+        postfix_enabled=$(get_local_pillar_value "mail.postfix.enabled")
+        if [[ "$postfix_enabled" =~ ^([Tt]rue|1|[Yy]es|on)$ ]]; then
+            if command_exists systemctl && systemctl list-unit-files | grep -q '^postfix\.service'; then
+                sudo systemctl reload postfix
+                log_success "Postfix 配置已更新并重新加载"
+            else
+                log_warning "检测到 mail.postfix.enabled=True 但系统未安装 postfix 服务"
+            fi
+        else
+            log_warning "mail.postfix.enabled 为 False，仅更新了凭据文件，未重新加载 Postfix"
+        fi
     else
-        log_warning "Pillar 中未配置完整的 SMTP 信息，跳过 Postfix 更新"
+        log_warning "Pillar 中未配置完整的 SMTP 信息（host/user/password），跳过 Postfix 更新"
     fi
 }
 

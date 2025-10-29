@@ -110,52 +110,9 @@ mysql_backup_pkg_cleanup:
     - group: {{ service_user }}
     - require:
       - file: /etc/mysql/mysql-backup.env
-    - contents: |
-        #!/bin/bash
-        set -euo pipefail
+    - source: salt://templates/mysql-backup.sh.jinja
+    - template: jinja
 
-        ENV_FILE="/etc/mysql/mysql-backup.env"
-        if [[ ! -f "$ENV_FILE" ]]; then
-            echo "[mysql-backup] env file not found: $ENV_FILE" >&2
-            exit 1
-        fi
-
-        # shellcheck disable=SC1091
-        source "$ENV_FILE"
-
-        TS="$(date +%Y%m%d_%H%M%S)"
-        TARGET_DIR="${MYSQL_BACKUP_DIR}/${TS}"
-        mkdir -p "$TARGET_DIR"
-
-        ARGS=("--backup" "--target-dir=${TARGET_DIR}" "--user=${MYSQL_BACKUP_USER}" "--password=${MYSQL_BACKUP_PASSWORD}")
-        if [[ -n "${MYSQL_BACKUP_SOCKET:-}" && -S "${MYSQL_BACKUP_SOCKET}" ]]; then
-            ARGS+=("--socket=${MYSQL_BACKUP_SOCKET}")
-        else
-            ARGS+=("--host=${MYSQL_BACKUP_HOST}" "--port=${MYSQL_BACKUP_PORT}")
-        fi
-        if [[ -n "${MYSQL_BACKUP_EXTRA_ARGS:-}" ]]; then
-            # shellcheck disable=SC2206
-            EXTRA_ARGS=( ${MYSQL_BACKUP_EXTRA_ARGS} )
-            ARGS+=("${EXTRA_ARGS[@]}")
-        fi
-
-        echo "[mysql-backup] running: /usr/bin/xtrabackup ${ARGS[*]}"
-        /usr/bin/xtrabackup "${ARGS[@]}"
-
-        if [[ "${MYSQL_BACKUP_PREPARE:-0}" == "1" ]]; then
-            /usr/bin/xtrabackup --prepare --target-dir="$TARGET_DIR"
-        fi
-
-        if [[ -n "${MYSQL_BACKUP_RETENTION_DAYS:-}" ]]; then
-            find "${MYSQL_BACKUP_DIR}" -mindepth 1 -maxdepth 1 -type d -name '20*' -mtime +"${MYSQL_BACKUP_RETENTION_DAYS}" -print -exec rm -rf {} +
-        fi
-
-        if [[ -n "${MYSQL_BACKUP_REPO_OWNER:-}" ]]; then
-            chown -R "${MYSQL_BACKUP_REPO_OWNER}:${MYSQL_BACKUP_REPO_OWNER}" "${MYSQL_BACKUP_DIR}"
-        fi
-
-        printf '[mysql-backup] completed at %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
-        printf '[mysql-backup] target=%s\n' "${TARGET_DIR}"
 
 /etc/systemd/system/saltgoat-mysql-backup.service:
   file.managed:

@@ -1,0 +1,57 @@
+{%- set cfg = salt['slsutil.deserialize']('json', cfg_serialized) %}
+# Managed by Salt (SaltGoat Postfix redesign)
+#
+# Source template: services/postfix/main.cf.jinja
+
+myhostname = {{ cfg.hostname }}
+mydomain = {{ cfg.domain }}
+myorigin = {{ cfg.origin }}
+
+inet_interfaces = {% if cfg.inet_interfaces is iterable and cfg.inet_interfaces is not string %}{{ ' '.join(cfg.inet_interfaces) }}{% else %}{{ cfg.inet_interfaces }}{% endif %}
+mynetworks = {% if cfg.mynetworks is iterable and cfg.mynetworks is not string %}{{ ', '.join(cfg.mynetworks) }}{% else %}{{ cfg.mynetworks }}{% endif %}
+inet_protocols = ipv4
+
+{% set relay_host = cfg.relay.get('host') %}
+{% if relay_host %}
+relayhost = [{{ relay_host }}]:{{ cfg.relay.get('port', 587) }}
+{% else %}
+relayhost =
+{% endif %}
+
+smtpd_banner = $myhostname ESMTP $mail_name
+disable_vrfy_command = yes
+smtpd_helo_required = yes
+smtpd_helo_restrictions = permit_mynetworks,reject_invalid_helo_hostname,permit
+smtpd_recipient_restrictions = permit_mynetworks,reject_unauth_destination,permit
+
+# TLS
+smtp_tls_security_level = {{ cfg.tls.get('smtp_security_level', 'may') }}
+smtpd_tls_security_level = {{ cfg.tls.get('smtpd_security_level', 'may') }}
+smtpd_tls_cert_file = {{ cfg.tls.get('cert_file') }}
+smtpd_tls_key_file = {{ cfg.tls.get('key_file') }}
+smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache
+smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+smtp_tls_note_starttls_offer = yes
+
+# Queue and limits
+mailbox_size_limit = 0
+recipient_delimiter = +
+
+{% if cfg.auth.get('username') and cfg.auth.get('password') %}
+# SASL authentication
+smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = hash:{{ cfg.sasl_password_file }}
+smtp_sasl_security_options = noanonymous
+smtp_sasl_mechanism_filter = {{ cfg.auth.get('mechanism', 'login') }}
+smtp_sasl_tls_security_options = noanonymous
+smtp_use_tls = yes
+{% endif %}
+
+{% if cfg.aliases %}
+alias_maps = hash:/etc/postfix/aliases
+alias_database = hash:/etc/postfix/aliases
+{% endif %}
+
+{% for line in cfg.extra_main_cf %}
+{{ line }}
+{% endfor %}

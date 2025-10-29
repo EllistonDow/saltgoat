@@ -278,6 +278,83 @@ show_passwords() {
     fi
 }
 
+switch_smtp_profile() {
+    local profile="$1"
+    local toggle="${2:-}"
+
+    if [[ -z "$profile" ]]; then
+        log_error "缺少 SMTP 配置名称，示例: saltgoat postfix --smtp gmail"
+        exit 1
+    fi
+
+    local toggle_mode=""
+    case "$toggle" in
+        "")
+            ;;
+        --enable)
+            toggle_mode="enable"
+            ;;
+        --disable)
+            toggle_mode="disable"
+            ;;
+        *)
+            log_error "未知的选项: $toggle"
+            log_info "支持附加参数: --enable 或 --disable"
+            exit 1
+            ;;
+    esac
+
+    log_highlight "切换 SMTP 配置为: $profile"
+    local pillar_file
+    pillar_file="$(pillar_file_path)"
+
+    if [[ ! -f "$pillar_file" ]]; then
+        log_error "未找到 Pillar 文件: $pillar_file"
+        log_info "请先运行 'saltgoat pillar init' 或手动创建 pillar"
+        exit 1
+    fi
+
+    if ! sudo python3 - "$pillar_file" "$profile" "$toggle_mode" <<'PY'
+import sys, yaml
+path = sys.argv[1]
+profile = sys.argv[2]
+toggle = sys.argv[3] if len(sys.argv) > 3 else ""
+with open(path) as fh:
+    data = yaml.safe_load(fh) or {}
+email_cfg = data.setdefault('email', {})
+accounts = email_cfg.get('accounts', {})
+if profile not in accounts:
+    raise SystemExit(f"Pillar 中未定义 SMTP 配置 {profile!r}")
+email_cfg['default'] = profile
+mail_cfg = data.setdefault('mail', {}).setdefault('postfix', {})
+mail_cfg['profile'] = profile
+if toggle == "enable":
+    mail_cfg['enabled'] = True
+elif toggle == "disable":
+    mail_cfg['enabled'] = False
+with open(path, 'w') as fh:
+    yaml.dump(data, fh, allow_unicode=True, sort_keys=False)
+PY
+    then
+        log_error "写入 Pillar 失败，请检查 YAML 格式或配置名称"
+        exit 1
+    fi
+
+    log_info "刷新 Pillar 缓存..."
+    sudo salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || log_warning "Pillar 刷新时出现警告"
+
+    log_info "同步 Postfix 配置..."
+    sudo salt-call --local state.apply optional.postfix >/dev/null 2>&1 || log_warning "Postfix 状态执行返回非零，请检查日志"
+
+    reload_environment
+
+    local postfix_state
+    postfix_state=$(get_local_pillar_value "mail.postfix.enabled" "未知")
+    log_success "SMTP 配置已切换为: $profile"
+    log_info "当前 email.default: $(get_local_pillar_value 'email.default' '未知')"
+    log_info "当前 mail.postfix.enabled: ${postfix_state:-未知}"
+}
+
 
 generate_random_secret() {
     if command_exists openssl; then
@@ -352,11 +429,39 @@ phpmyadmin_password: '$phpmyadmin_pass'
 ssl_email: 'admin@example.com'
 timezone: 'America/Los_Angeles'
 language: 'en_US.UTF-8'
-smtp_host: ''
-smtp_user: ''
-smtp_password: ''
-smtp_from_email: ''
-smtp_from_name: 'SaltGoat Alerts'
+email:
+  default: primary
+  retention_days: 30
+  accounts:
+    primary:
+      host: 'smtp.gmail.com'
+      port: 587
+      user: 'your-email@example.com'
+      password: 'app-password'
+      from_email: 'your-email@example.com'
+      from_name: 'SaltGoat Alerts'
+    secondary:
+      host: 'smtp.office365.com'
+      port: 587
+      user: 'your-user@company.com'
+      password: ''
+      from_email: 'your-user@company.com'
+      from_name: 'SaltGoat Alerts'
+mail:
+  postfix:
+    enabled: false
+    profile: primary
+    inet_interfaces:
+      - 'loopback-only'
+    mynetworks:
+      - '127.0.0.0/8'
+    relay:
+      tls_security_level: 'encrypt'
+    tls:
+      smtp_security_level: 'may'
+      smtpd_security_level: 'may'
+      cert_file: '/etc/ssl/certs/ssl-cert-snakeoil.pem'
+      key_file: '/etc/ssl/private/ssl-cert-snakeoil.key'
 EOF
 
     sudo mv "$tmp_file" "$pillar_file"
@@ -437,6 +542,22 @@ case "$1" in
             *)
                 log_error "未知的 System 操作: $2"
                 log_info "支持: install, uninstall, ssh-port"
+                exit 1
+                ;;
+        esac
+        ;;
+    "postfix")
+        case "$2" in
+            "--smtp")
+                if [[ -z "$3" ]]; then
+                    log_error "缺少 SMTP 配置名称，示例: saltgoat postfix --smtp gmail"
+                    exit 1
+                fi
+                switch_smtp_profile "$3" "$4"
+                ;;
+            *)
+                log_error "未知的 Postfix 操作: ${2:-<none>}"
+                log_info "支持: saltgoat postfix --smtp <profile> [--enable|--disable]"
                 exit 1
                 ;;
         esac
@@ -646,6 +767,15 @@ case "$1" in
         "monitor")
             require_module "monitor"
             case "$2" in
+                "install")
+                    monitor_install_stack
+                    ;;
+                "install-master")
+                    monitor_install_master
+                    ;;
+                "verify-master")
+                    monitor_verify_master
+                    ;;
                 "system")
                     monitor_system_status
                     ;;
@@ -687,7 +817,7 @@ case "$1" in
                     ;;
                 *)
                     log_error "未知的监控操作: $2"
-                    log_info "支持: system, services, resources, network, logs, security, performance, report, realtime, enable-beacons, beacons-status, config, cleanup"
+                    log_info "支持: install, install-master, verify-master, system, services, resources, network, logs, security, performance, report, realtime, enable-beacons, beacons-status, config, cleanup"
                     exit 1
                     ;;
             esac

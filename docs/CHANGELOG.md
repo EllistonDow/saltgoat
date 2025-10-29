@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.0.5] - 2025-10-29
+
+### Changes
+- 修改 36 个文件: core/system.sh, docs/POSTFIX_SMTP.md, lib/help.sh, modules/git/git.sh, modules/magetools/backup-restic.sh 等
+
+
 ## [1.0.4] - 2025-10-27
 
 ### Changes

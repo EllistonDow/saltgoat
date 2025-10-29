@@ -1,0 +1,161 @@
+#!/bin/bash
+set -euo pipefail
+
+ENV_FILE="/etc/mysql/mysql-backup.env"
+LOG_DIR="/var/log/saltgoat"
+LOG_FILE="${LOG_DIR}/mysql-backup.log"
+HOST_ID="$(hostname -f 2>/dev/null || hostname)"
+
+mkdir -p "${LOG_DIR}"
+exec >> >(tee -a "${LOG_FILE}") 2>&1
+
+emit_event() {
+    local tag="$1"
+    shift || true
+    local PYTHON_BIN="/opt/saltstack/salt/bin/python3"
+    if [[ ! -x "$PYTHON_BIN" ]]; then
+        PYTHON_BIN="python3"
+    fi
+    if "${PYTHON_BIN:-python3}" - "$tag" "$@" <<'PY'
+import sys
+try:
+    from salt.client import Caller
+except Exception:
+    sys.exit(1)
+
+tag = sys.argv[1]
+data = {}
+for arg in sys.argv[2:]:
+    if '=' not in arg:
+        continue
+    key, value = arg.split('=', 1)
+    data[key] = value
+
+try:
+    caller = Caller()
+except Exception:
+    sys.exit(1)
+
+try:
+    caller.cmd('event.send', tag, data)
+except Exception:
+    sys.exit(1)
+else:
+    sys.exit(0)
+PY
+    then
+        return 0
+    fi
+
+    if command -v salt-call >/dev/null 2>&1; then
+        local payload
+        payload="$("${PYTHON_BIN:-python3}" - "$tag" "$@" <<'PY'
+import json
+import sys
+
+tag = sys.argv[1]
+data = {}
+for arg in sys.argv[2:]:
+    if '=' not in arg:
+        continue
+    key, value = arg.split('=', 1)
+    data[key] = value
+print(json.dumps(data, ensure_ascii=False))
+PY
+)"
+        salt-call event.send "$tag" "$payload" >/dev/null 2>&1 || true
+    fi
+}
+
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo "[mysql-backup] env file not found: $ENV_FILE" >&2
+    emit_event "saltgoat/backup/mysql/failure" \
+        "id=${HOST_ID}" \
+        "host=${HOST_ID}" \
+        "reason=missing_env" \
+        "path=${ENV_FILE}" \
+        "log_file=${LOG_FILE}" \
+        "status=failure"
+    exit 1
+fi
+
+# shellcheck disable=SC1091
+source "$ENV_FILE"
+
+TS="$(date +%Y%m%d_%H%M%S)"
+TARGET_DIR="${MYSQL_BACKUP_DIR}/${TS}"
+mkdir -p "$TARGET_DIR"
+
+ARGS=("--backup" "--target-dir=${TARGET_DIR}" "--user=${MYSQL_BACKUP_USER}" "--password=${MYSQL_BACKUP_PASSWORD}")
+if [[ -n "${MYSQL_BACKUP_SOCKET:-}" && -S "${MYSQL_BACKUP_SOCKET}" ]]; then
+    ARGS+=("--socket=${MYSQL_BACKUP_SOCKET}")
+else
+    ARGS+=("--host=${MYSQL_BACKUP_HOST}" "--port=${MYSQL_BACKUP_PORT}")
+fi
+if [[ -n "${MYSQL_BACKUP_EXTRA_ARGS:-}" ]]; then
+    # shellcheck disable=SC2206
+    EXTRA_ARGS=( ${MYSQL_BACKUP_EXTRA_ARGS} )
+    ARGS+=("${EXTRA_ARGS[@]}")
+fi
+
+echo "[mysql-backup] running: /usr/bin/xtrabackup ${ARGS[*]}"
+
+set +e
+/usr/bin/xtrabackup "${ARGS[@]}"
+BACKUP_RC=$?
+set -e
+
+if [[ $BACKUP_RC -ne 0 ]]; then
+    echo "[mysql-backup] xtrabackup failed with rc=${BACKUP_RC}" >&2
+    emit_event "saltgoat/backup/mysql/failure" \
+        "id=${HOST_ID}" \
+        "host=${HOST_ID}" \
+        "path=${TARGET_DIR}" \
+        "status=failure" \
+        "reason=xtrabackup_exit_${BACKUP_RC}" \
+        "log_file=${LOG_FILE}"
+    exit $BACKUP_RC
+fi
+
+if [[ "${MYSQL_BACKUP_PREPARE:-0}" == "1" ]]; then
+    set +e
+    /usr/bin/xtrabackup --prepare --target-dir="$TARGET_DIR"
+    PREPARE_RC=$?
+    set -e
+    if [[ $PREPARE_RC -ne 0 ]]; then
+        echo "[mysql-backup] xtrabackup --prepare failed with rc=${PREPARE_RC}" >&2
+        emit_event "saltgoat/backup/mysql/failure" \
+            "id=${HOST_ID}" \
+            "host=${HOST_ID}" \
+            "path=${TARGET_DIR}" \
+            "status=failure" \
+            "reason=prepare_exit_${PREPARE_RC}" \
+            "log_file=${LOG_FILE}"
+        exit $PREPARE_RC
+    fi
+fi
+
+if [[ -n "${MYSQL_BACKUP_RETENTION_DAYS:-}" ]]; then
+    find "${MYSQL_BACKUP_DIR}" -mindepth 1 -maxdepth 1 -type d -name '20*' -mtime +"${MYSQL_BACKUP_RETENTION_DAYS}" -print -exec rm -rf {} +
+fi
+
+if [[ -n "${MYSQL_BACKUP_REPO_OWNER:-}" ]]; then
+    chown -R "${MYSQL_BACKUP_REPO_OWNER}:${MYSQL_BACKUP_REPO_OWNER}" "${MYSQL_BACKUP_DIR}"
+fi
+
+SIZE="$(du -sh "${TARGET_DIR}" 2>/dev/null | awk '{print $1}')"
+FINISH_TS="$(date '+%Y-%m-%d %H:%M:%S')"
+
+printf '[mysql-backup] completed at %s\n' "${FINISH_TS}"
+printf '[mysql-backup] target=%s\n' "${TARGET_DIR}"
+[[ -n "${SIZE}" ]] && printf '[mysql-backup] size=%s\n' "${SIZE}"
+
+emit_event "saltgoat/backup/mysql/success" \
+    "id=${HOST_ID}" \
+    "host=${HOST_ID}" \
+    "status=success" \
+    "path=${TARGET_DIR}" \
+    "file=${TARGET_DIR}" \
+    "size=${SIZE:-unknown}" \
+    "timestamp=${FINISH_TS// /_}" \
+    "log_file=${LOG_FILE}"

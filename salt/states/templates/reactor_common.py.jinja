@@ -1,0 +1,102 @@
+# Common helpers for SaltGoat reactor Python snippets.
+import json
+import pathlib
+import urllib.parse
+import urllib.request
+from typing import Iterable, List, Dict, Any
+
+
+def _ensure_list(value: Any) -> List[str]:
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value if item not in (None, "")]
+    if value not in (None, ""):
+        return [str(value)]
+    return []
+
+
+def load_telegram_profiles(config_path: str, log=None) -> List[Dict[str, Any]]:
+    path = pathlib.Path(config_path)
+    if not path.exists():
+        if log:
+            log("config_missing", {"path": config_path})
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # pylint: disable=broad-except
+        if log:
+            log("config_error", {"path": config_path, "error": str(exc)})
+        return []
+
+    if isinstance(data, dict):
+        entries: Iterable[Any] = data.get("entries") or []
+    else:
+        entries = data
+
+    profiles = []
+    for idx, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            continue
+        if not entry.get("enabled", True):
+            continue
+        token = entry.get("token")
+        if not token:
+            continue
+        ordered_targets = []
+        for key in ("targets", "chat_ids", "accept_from"):
+            for item in _ensure_list(entry.get(key)):
+                if item not in ordered_targets:
+                    ordered_targets.append(item)
+        for item in _ensure_list(entry.get("chat_id")):
+            if item not in ordered_targets:
+                ordered_targets.append(item)
+        if not ordered_targets:
+            continue
+        profiles.append(
+            {
+                "name": entry.get("name") or f"profile{idx + 1}",
+                "token": token,
+                "targets": ordered_targets,
+            }
+        )
+
+    if not profiles and log:
+        log("config_empty", {"path": config_path})
+    return profiles
+
+
+def broadcast_telegram(message: str, profiles: List[Dict[str, Any]], log=None) -> None:
+    if not message or not profiles:
+        if log and not message:
+            log("skip", {"reason": "empty_message"})
+        return
+    if log:
+        log("profile_summary", {"count": len(profiles)})
+
+    for profile in profiles:
+        token = profile.get("token")
+        targets = profile.get("targets") or []
+        name = profile.get("name", "profile")
+        if not token or not targets:
+            if log:
+                log("skip", {"reason": "profile_missing", "profile": name})
+            continue
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        for chat in targets:
+            params = {
+                "chat_id": str(chat),
+                "text": message,
+                "disable_web_page_preview": True,
+            }
+            data = urllib.parse.urlencode(params).encode()
+            req = urllib.request.Request(url, data=data)
+            if log:
+                log("send_attempt", {"profile": name, "chat": chat})
+            try:
+                with urllib.request.urlopen(req, timeout=15):
+                    pass
+            except Exception as exc:  # pylint: disable=broad-except
+                if log:
+                    log("send_failed", {"profile": name, "chat": chat, "error": str(exc)})
+            else:
+                if log:
+                    log("send_ok", {"profile": name, "chat": chat})

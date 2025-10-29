@@ -143,68 +143,13 @@ restic_env_file:
     - mode: '0755'
     - user: root
     - group: root
-    - contents: |
-        #!/bin/bash
-        set -euo pipefail
-
-        ENV_FILE="{{ env_file }}"
-        if [[ -f "$ENV_FILE" ]]; then
-            set -a
-            # shellcheck disable=SC1090
-            source "$ENV_FILE"
-            set +a
-        else
-            echo "[restic] env file not found: $ENV_FILE" >&2
-            exit 1
-        fi
-
-        RESTIC_BIN="${RESTIC_BIN:-restic}"
-        INCLUDE_FILE="${RESTIC_INCLUDE_FILE:-{{ include_file }}}"
-        EXCLUDE_FILE="${RESTIC_EXCLUDE_FILE:-{{ exclude_file }}}"
-        LOG_DIR="${RESTIC_LOG_DIR:-{{ log_dir }}}"
-        mkdir -p "$LOG_DIR"
-        TS="$(date +%Y%m%d_%H%M%S)"
-        LOG_FILE="$LOG_DIR/backup-${TS}.log"
-
-        exec >> >(tee -a "$LOG_FILE") 2>&1
-        echo "[restic] backup started at ${TS}"
-
-        ARGS=(backup --files-from "$INCLUDE_FILE")
-        if [[ -s "$EXCLUDE_FILE" ]]; then
-            ARGS+=(--exclude-file "$EXCLUDE_FILE")
-        fi
-
-        if [[ -n "${RESTIC_TAGS:-}" ]]; then
-            IFS=',' read -ra TAG_ARR <<< "$RESTIC_TAGS"
-            for tag in "${TAG_ARR[@]}"; do
-                [[ -z "$tag" ]] && continue
-                ARGS+=(--tag "$tag")
-            done
-        fi
-
-        if [[ -n "${RESTIC_BACKUP_ARGS:-}" ]]; then
-            # shellcheck disable=SC2086
-            ARGS+=(${RESTIC_BACKUP_ARGS})
-        fi
-
-        "$RESTIC_BIN" "${ARGS[@]}"
-
-        if [[ -n "${RESTIC_FORGET_ARGS:-}" ]]; then
-            echo "[restic] applying retention policy: ${RESTIC_FORGET_ARGS}"
-            # shellcheck disable=SC2086
-            "$RESTIC_BIN" forget ${RESTIC_FORGET_ARGS}
-        fi
-
-        if [[ "${RESTIC_CHECK_AFTER_BACKUP:-0}" == "1" ]]; then
-            echo "[restic] running restic check ..."
-            "$RESTIC_BIN" check --read-data-subset=1/5
-        fi
-
-        if [[ -n "${RESTIC_REPO_OWNER:-}" ]]; then
-            chown -R "${RESTIC_REPO_OWNER}:${RESTIC_REPO_OWNER}" "${RESTIC_REPOSITORY}"
-        fi
-
-        echo "[restic] backup completed at $(date +%Y%m%d_%H%M%S)"
+    - source: salt://templates/restic-backup.sh.jinja
+    - template: jinja
+    - context:
+        env_file: {{ env_file | tojson }}
+        include_file: {{ include_file | tojson }}
+        exclude_file: {{ exclude_file | tojson }}
+        log_dir: {{ log_dir | tojson }}
     - require:
       - pkg: restic_package
       - file: restic_env_file

@@ -15,18 +15,24 @@
     - mode: 640
     - contents: |
         reactor:
-          - 'salt/beacon/*/service/':
+          - 'salt/beacon/*/service/*':
             - salt://reactor/service_autoheal.sls
           - 'salt/beacon/*/load/*':
             - salt://reactor/resource_alert.sls
           - 'salt/beacon/*/mem/*':
             - salt://reactor/resource_alert.sls
+          - 'salt/beacon/*/memusage/*':
+            - salt://reactor/resource_alert.sls
           - 'salt/beacon/*/diskusage/*':
             - salt://reactor/resource_alert.sls
           - 'salt/beacon/*/inotify/*':
             - salt://reactor/config_change.sls
+          - 'salt/beacon/*/watchdog/*':
+            - salt://reactor/config_change.sls
           - 'salt/beacon/*/pkg/*':
             - salt://reactor/package_update.sls
+          - 'saltgoat/backup/*':
+            - salt://reactor/backup_notification.sls
     - require:
       - file: /etc/salt/master.d
 
