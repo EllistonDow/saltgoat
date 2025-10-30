@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.1.10] - 2025-10-30
+
+### Changes
+- 修改 3 个文件: docs/CHANGELOG.md, modules/monitoring/resource_alert.py, monitoring/README.md
+
+
 ## [1.1.9] - 2025-10-30
 
 ### Changes
@@ -11,6 +17,7 @@
 ### Changes
 - 修改 27 个文件: AGENTS.md, README.md, docs/BACKUP_RESTIC.md, docs/CHANGELOG.md, docs/INSTALL.md 等
 - `magento_schedule.stats_jobs` 支持为每站点定时运行 `saltgoat magetools stats`，自动生成每日/每周/每月业务汇总。
+- `saltgoat monitor alert resources` 告警信息新增“Triggered: Load/Memory/Disk”等字段，并输出命中阈值详情；可通过 Pillar `saltgoat:monitor:thresholds` 自定义阈值。
 
 
 > **权限说明（自 v1.0.9 起）**：除 `help`/`git`/`lint`/`format` 等只读命令外，SaltGoat CLI 默认需使用 `sudo saltgoat ...` 执行以读取 Pillar、`/etc` 及 Salt 组件。以下历史记录保留当时的命令写法，如需照搬请按照新版策略补上 `sudo`。

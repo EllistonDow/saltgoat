@@ -41,6 +41,29 @@ sudo saltgoat monitor config         # 输出当前阈值、目录与已启用�
 
 如需在定时任务中生成报告，可在 systemd timer 或 cron 内调用 `sudo saltgoat monitor report <name>`，并将结果发送到集中日志或备份目录。
 
+### 自定义资源告警阈值
+`sudo saltgoat monitor alert resources` 默认在以下阈值触发：
+- Load：警告 1m≈1.25×CPU 核心、5m≈1.1×核心、15m≈1.0×核心；致命 1m≈1.5×核心等
+- Memory：78% Notice、85% Warning、92% Critical
+- Disk：80% Notice、90% Warning、95% Critical
+
+可在 Pillar 中覆盖这些值（支持 `saltgoat:monitor:thresholds` 或旧版 `monitor_thresholds` 路径）：
+```yaml
+saltgoat:
+  monitor:
+    thresholds:
+      load:
+        warn_1m: 8
+        crit_1m: 12
+      memory:
+        warning: 82
+        critical: 90
+      disk:
+        warning: 88
+        critical: 94
+```
+重新执行 `sudo saltgoat monitor alert resources` 即可生效。告警消息会包含 `Triggered: Load/Memory/Disk` 以及命中阈值的说明。
+
 ## 4. 启用事件驱动监控（Beacons + Reactor）
 
 1. **准备 Pillar**
