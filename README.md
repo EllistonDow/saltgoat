@@ -110,6 +110,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
           repo_owner: doge
     ```
     每次执行都会写入 `/var/log/saltgoat/alerts.log` 并推送 Telegram。
+  - `magento_schedule.api_watchers` 可轮询 Magento REST API，将新订单/新用户同步到 Telegram（首次运行仅建立基线，不推送历史数据）。
 - 维护流程、权限修复、故障排查详见 [`docs/MAGENTO_MAINTENANCE.md`](docs/MAGENTO_MAINTENANCE.md)。
 
 ### 监控与巡检

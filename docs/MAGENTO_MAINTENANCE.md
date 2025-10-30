@@ -219,6 +219,41 @@ magento_schedule:
 ```
 建议复制 `salt/pillar/magento-schedule.sls.sample` 为实际文件后再写入上述配置；执行 `saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule（若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`）。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。
 
+### 业务事件通知（API Watchers）
+SaltGoat 现在可以轮询 Magento REST API，将“新订单 / 新用户”推送到 Telegram。
+
+1. **配置凭据**：在 `salt/pillar/secret/magento_api.sls` 填写各站点的 API 基础信息（示例见 `.example` 文件）：
+   ```yaml
+   secrets:
+     magento_api:
+       bank:
+         base_url: "https://bank.example.com"
+         token: "<admin_access_token>"
+   ```
+   > 建议使用 Integration 生成的 Access Token（Bearer），凭据不会进入版本库。
+
+2. **启用 Salt Schedule**：在 `magento_schedule.api_watchers` 中声明需要轮询的站点与频率：
+   ```yaml
+   magento_schedule:
+     api_watchers:
+       - name: bank-api-orders
+         cron: '*/5 * * * *'
+         site: bank
+         kinds:
+           - orders
+           - customers
+   ```
+   执行 `saltgoat magetools cron bank install` 后，Salt Schedule 会创建 `saltgoat magetools api watch --site bank --kinds orders,customers` 任务。
+
+3. **首次运行**：若无历史记录，脚本会将最新 `entity_id` 作为基线（不推送历史订单/用户）。后续只要发现新的 ID，就会：
+   - 发送 `saltgoat/business/order` 或 `saltgoat/business/customer` 事件；
+   - 写入 `/var/log/saltgoat/alerts.log`；
+   - 通过 `/opt/saltgoat-reactor` 直接广播 Telegram（默认发送到所有启用的 profile）。
+
+4. **手动触发**：可用 `saltgoat magetools api watch --site bank --kinds orders` 验证。首次运行若想立即收到通知，可先删除状态文件 `/var/lib/saltgoat/magento-watcher/bank/*`。
+
+> 如需更细颗粒控制，可将 `kinds` 限制为 `orders` 或 `customers`，并复制多条 watcher 分别推送到不同 Telegram profile。
+
 > 提示：在 mysqldump 任务中加入 `site` 或 `sites` 字段，SaltGoat 才能在多站点场景下仅为指定站点安装/卸载该计划任务。
 
 ## 定时任务配置

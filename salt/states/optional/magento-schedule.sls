@@ -26,6 +26,24 @@
   {% do dump_jobs.items.append(dump_job) %}
 {% endfor %}
 {% set mysql_dump_jobs = dump_jobs.items %}
+
+{% set all_api_watchers = pillar.get('magento_schedule', {}).get('api_watchers', []) %}
+{% set api_watchers_ns = namespace(items=[]) %}
+{% for watcher in all_api_watchers %}
+  {% if not watcher.get('name') %}
+    {% continue %}
+  {% endif %}
+  {% set job_site = watcher.get('site') %}
+  {% set job_sites = watcher.get('sites') %}
+  {% if job_site and job_site != site_name %}
+    {% continue %}
+  {% endif %}
+  {% if job_sites and site_name not in job_sites %}
+    {% continue %}
+  {% endif %}
+  {% do api_watchers_ns.items.append(watcher) %}
+{% endfor %}
+{% set api_watchers = api_watchers_ns.items %}
 {% macro shquote(val) -%}'{{ val | replace("'", "'\\''") }}'{%- endmacro %}
 {% macro build_dump_cmd(job) -%}
 saltgoat magetools xtrabackup mysql dump{% if job.get('database') %} --database {{ shquote(job.database) }}{% endif %}{% if job.get('backup_dir') %} --backup-dir {{ shquote(job.backup_dir) }}{% endif %}{% if job.get('repo_owner') %} --repo-owner {{ shquote(job.repo_owner) }}{% endif %}{% if job.get('no_compress', False) %} --no-compress{% endif %}
@@ -134,6 +152,22 @@ magento_schedule_mysql_dump_{{ dump_job.name }}:
     - maxrunning: 1
 {% endfor %}
 
+{% for watcher in api_watchers %}
+{% set watcher_kinds = watcher.get('kinds', ['orders', 'customers']) %}
+magento_schedule_api_watch_{{ watcher.name }}:
+  schedule.present:
+    - name: {{ watcher.name }}
+    - function: cmd.run
+    - job_args:
+      - saltgoat magetools api watch --site {{ site_name }}{% if watcher_kinds %} --kinds {{ watcher_kinds|join(',') }}{% endif %}
+    - job_kwargs:
+        shell: /bin/bash
+    - cron: '{{ watcher.cron }}'
+    - run_on_start: False
+    - persistent: True
+    - maxrunning: 1
+{% endfor %}
+
 {% if salt['service.available']('salt-minion') %}
 salt-minion-schedule-service:
   service.running:
@@ -145,6 +179,9 @@ salt-minion-schedule-service:
 {% endfor %}
 {% for dump_job in mysql_dump_jobs %}
       - schedule: magento_schedule_mysql_dump_{{ dump_job.name }}
+{% endfor %}
+{% for watcher in api_watchers %}
+      - schedule: magento_schedule_api_watch_{{ watcher.name }}
 {% endfor %}
 {% endif %}
 
@@ -165,6 +202,9 @@ salt-minion-schedule-service:
 {% endfor %}
 {% for dump_job in mysql_dump_jobs %}
         {{ dump_job.cron }} root {{ build_dump_cmd(dump_job).strip() }}
+{% endfor %}
+{% for watcher in api_watchers %}
+        {{ watcher.cron }} root saltgoat magetools api watch --site {{ site_name }}{% if watcher.get('kinds') %} --kinds {{ watcher.kinds|join(',') }}{% endif %}
 {% endfor %}
 
 cron-service-magento:

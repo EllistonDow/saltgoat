@@ -15,6 +15,16 @@
 {%     break %}
 {%   endif %}
 {% endfor %}
+{% set extra_secret_files = ['magento_api', 'restic', 'smtp'] %}
+{% for name in extra_secret_files %}
+{%   for root in base_roots %}
+{%     set extra_path = root ~ '/secret/' ~ name ~ '.sls' %}
+{%     if salt['file.file_exists'](extra_path) %}
+{%       set secret_includes = secret_includes + ['secret.' ~ name] %}
+{%       break %}
+{%     endif %}
+{%   endfor %}
+{% endfor %}
 
 base:
   '*':

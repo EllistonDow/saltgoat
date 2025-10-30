@@ -14,3 +14,9 @@ magento_schedule:
       backup_dir: /home/doge/Dropbox/tank/databases
       repo_owner: doge
       site: tank
+  api_watchers:
+    - name: bank-api-orders
+      cron: '*/5 * * * *'
+      site: bank
+      kinds:
+        - orders

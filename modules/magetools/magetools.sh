@@ -165,6 +165,19 @@ magetools_handler() {
             shift
             "${SCRIPT_DIR}/modules/magetools/rabbitmq-salt.sh" "$@"
             ;;
+        "api")
+            case "$2" in
+                "watch")
+                    shift 2
+                    "${SCRIPT_DIR}/modules/magetools/magento_api_watch.py" "$@"
+                    ;;
+                *)
+                    log_error "未知的 API 操作: ${2:-<empty>}"
+                    log_info "支持: api watch --site <name> [--kinds orders,customers]"
+                    exit 1
+                    ;;
+            esac
+            ;;
         "opensearch")
             # 调用 opensearch 认证配置脚本
             "${SCRIPT_DIR}/modules/magetools/opensearch-auth.sh" "$2"

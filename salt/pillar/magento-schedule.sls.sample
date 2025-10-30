@@ -19,3 +19,10 @@ magento_schedule:
       sites:
         - site2
         - site2-staging
+  api_watchers:
+    - name: site1-orders
+      cron: '*/5 * * * *'
+      site: site1
+      kinds:
+        - orders
+        - customers
