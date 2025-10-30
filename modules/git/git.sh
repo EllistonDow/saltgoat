@@ -10,7 +10,31 @@ source "${MODULE_DIR}/../../lib/utils.sh"
 source "${MODULE_DIR}/help.sh"
 
 get_current_version() {
-    grep -E '^SCRIPT_STATIC_VERSION' "${MODULE_DIR}/../../saltgoat" | sed -E 's/.*"([^"]+)".*/\1/'
+    local repo_root tag_version static_version
+    repo_root="$(cd "${MODULE_DIR}/../.." && pwd)"
+
+    if git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        tag_version="$(git -C "$repo_root" describe --tags --abbrev=0 2>/dev/null || true)"
+        if [[ -z "$tag_version" ]]; then
+            tag_version="$(git -C "$repo_root" tag --sort=-v:refname 2>/dev/null | head -n1 || true)"
+        fi
+        tag_version="${tag_version#v}"
+    fi
+
+    static_version="$(grep -E '^SCRIPT_STATIC_VERSION' "${MODULE_DIR}/../../saltgoat" | sed -E 's/.*"([^"]+)".*/\1/')"
+
+    if [[ -n "$tag_version" ]]; then
+        if [[ -z "$static_version" ]]; then
+            echo "$tag_version"
+            return
+        fi
+        local highest
+        highest=$(printf '%s\n%s\n' "$tag_version" "$static_version" | sort -V | tail -n1)
+        echo "$highest"
+        return
+    fi
+
+    echo "$static_version"
 }
 
 bump_patch_version() {

@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.2.1] - 2025-10-30
+
+### Changes
+- 修改 2 个文件: modules/git/git.sh, saltgoat
+
+
 ## [1.1.12] - 2025-10-30
 
 ### Changes
