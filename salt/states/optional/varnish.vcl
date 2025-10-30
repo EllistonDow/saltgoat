@@ -14,26 +14,27 @@ backend default {
 sub vcl_recv {
     # Remove port from Host header
     set req.http.Host = regsub(req.http.Host, ":[0-9]+", "");
-    
-    # Remove tracking parameters
-    set req.url = regsuball(req.url, "\?[^?]*$", "");
-    
-    # Cache static files
-    if (req.url ~ "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$") {
-        unset req.http.Cookie;
-        return (hash);
-    }
-    
-    # Don't cache POST requests
-    if (req.method == "POST") {
+
+    if (req.method != "GET" && req.method != "HEAD") {
         return (pass);
     }
-    
-    # Don't cache requests with cookies (except static files)
+
+    if (req.url ~ "^/(admin|customer|rest|graphql|page_cache|checkout|static|media|index.php)") {
+        return (pass);
+    }
+
+    if (req.http.Authorization) {
+        return (pass);
+    }
+
     if (req.http.Cookie) {
         return (pass);
     }
-    
+
+    if (req.url ~ "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$") {
+        unset req.http.Cookie;
+    }
+
     return (hash);
 }
 

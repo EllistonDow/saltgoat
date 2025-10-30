@@ -112,6 +112,23 @@ sudo saltgoat magetools rabbitmq-salt remove tank
 - `remove <site>` 不仅停用 systemd unit，还会将该站点 `app/etc/env.php` 中的 `queue.amqp` 配置清空，方便重新部署。
 - 默认 AMQP 凭据来自 `salt/pillar/saltgoat.sls` 的 `rabbitmq_password`，也可通过 `--amqp-password` 覆盖。
 
+### Varnish 一键切换
+```bash
+# 将 bank 站点切换为 Nginx(TLS) → Varnish → backend Nginx/PHP
+sudo saltgoat magetools varnish enable bank
+
+# 停用并恢复原配置
+sudo saltgoat magetools varnish disable bank
+```
+
+- 启用后会：
+  - 备份 `/etc/nginx/sites-available/<site>` 原配置，并生成 `varnish-frontend-<site>.conf`/`<site>-backend`；
+  - 让前端 Nginx（443）反向代理到 `127.0.0.1:6081`，后端 Nginx 监听 `127.0.0.1:8080`；
+  - 应用 `optional.varnish` Salt state、重启 Varnish；
+  - 更新 Magento FPC 为 Varnish 并刷新缓存。
+- 停用命令会恢复备份文件、删除临时配置、将 Magento 缓存改回 Built-in，并停止 Varnish 服务。
+- HTTPS/TLS 与 Certbot 流程保持由 Nginx 承担，`.well-known/acme-challenge` 会自动直通。
+
 ### Restic 备份（可选模块）
 
 ```bash

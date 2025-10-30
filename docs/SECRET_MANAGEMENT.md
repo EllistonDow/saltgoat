@@ -11,6 +11,7 @@ salt/pillar/secret/
 ├── README.md           # 本目录说明
 ├── .gitkeep            # 保持目录存在
 ├── auth.sls.example    # 数据库/服务密码示例
+├── magento_api.sls.example  # Magento API Token / OAuth1 示例
 ├── restic.sls.example  # Restic 仓库信息示例
 └── smtp.sls.example    # SMTP/Postfix 凭据示例
 
@@ -27,6 +28,7 @@ salt/pillar/secret/
 
    ```bash
    cp salt/pillar/secret/auth.sls.example  salt/pillar/secret/auth.sls
+   cp salt/pillar/secret/magento_api.sls.example salt/pillar/secret/magento_api.sls
    cp salt/pillar/secret/restic.sls.example salt/pillar/secret/restic.sls
    cp salt/pillar/secret/smtp.sls.example   salt/pillar/secret/smtp.sls
    cp salt/pillar/secret/telegram.sls.example salt/pillar/secret/telegram.sls
@@ -43,6 +45,20 @@ salt/pillar/secret/
      rabbitmq_password: 'Queue123!'
      webmin_password: 'WebminStrong!'
      phpmyadmin_password: 'PhpMyAdmin123!'
+
+   # salt/pillar/secret/magento_api.sls
+   secrets:
+     magento_api:
+       bank:
+         base_url: "https://bank.example.com"
+         token: "<integration_token>"          # 默认 Bearer
+       tank:
+         base_url: "https://tank.example.com"
+         auth_mode: oauth1
+         consumer_key: "<oauth_consumer_key>"
+         consumer_secret: "<oauth_consumer_secret>"
+         access_token: "<oauth_access_token>"
+         access_token_secret: "<oauth_access_token_secret>"
    ```
 
 2. **刷新 Pillar**

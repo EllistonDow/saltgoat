@@ -230,9 +230,16 @@ SaltGoat 现在可以轮询 Magento REST API，将“新订单 / 新用户”推
      magento_api:
        bank:
          base_url: "https://bank.example.com"
-         token: "<admin_access_token>"
+         token: "<integration_token>"          # 默认 Bearer，推荐使用 Integration Access Token
+        tank:
+          base_url: "https://tank.example.com"
+          auth_mode: oauth1
+          consumer_key: "<oauth_consumer_key>"
+          consumer_secret: "<oauth_consumer_secret>"
+          access_token: "<oauth_access_token>"
+          access_token_secret: "<oauth_access_token_secret>"
    ```
-   > 建议使用 Integration 生成的 Access Token（Bearer），凭据不会进入版本库。
+   > `auth_mode` 默认为 `bearer`。如果需要兼容历史 OAuth1 凭据（Magento Admin → System → Integrations → Activate），可按上例提供 `consumer_*` 与 `access_token*` 字段；脚本会自动检测并按需签名。模板文件 `magento_api.sls.example` 已更新为上述格式。
 
 2. **启用 Salt Schedule**：在 `magento_schedule.api_watchers` 中声明需要轮询的站点与频率：
    ```yaml
@@ -252,7 +259,7 @@ SaltGoat 现在可以轮询 Magento REST API，将“新订单 / 新用户”推
    - 写入 `/var/log/saltgoat/alerts.log`；
    - 通过 `/opt/saltgoat-reactor` 直接广播 Telegram（默认发送到所有启用的 profile）。
 
-4. **手动触发**：可用 `sudo saltgoat magetools api watch --site bank --kinds orders` 验证。首次运行若想立即收到通知，可先删除状态文件 `/var/lib/saltgoat/magento-watcher/bank/*`。
+4. **手动触发**：可用 `sudo saltgoat magetools api watch --site bank --kinds orders` 验证。首次运行若想立即收到通知，可先删除状态文件 `/var/lib/saltgoat/magento-watcher/bank/*`。如需强制指定认证方式，可追加 `--auth-mode bearer|oauth1`。
 
 > 如需更细颗粒控制，可将 `kinds` 限制为 `orders` 或 `customers`，并复制多条 watcher 分别推送到不同 Telegram profile。
 

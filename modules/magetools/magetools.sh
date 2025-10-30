@@ -173,7 +173,7 @@ magetools_handler() {
                     ;;
                 *)
                     log_error "未知的 API 操作: ${2:-<empty>}"
-                    log_info "支持: api watch --site <name> [--kinds orders,customers]"
+                    log_info "支持: api watch --site <name> [--kinds orders,customers] [--auth-mode auto|bearer|oauth1]"
                     exit 1
                     ;;
             esac
@@ -197,6 +197,10 @@ magetools_handler() {
         "salt-schedule")
             # 调用 Salt Schedule 管理脚本
             "${SCRIPT_DIR}/modules/magetools/magento-salt-schedule.sh" "$2" "$3"
+            ;;
+        "varnish")
+            shift
+            "${SCRIPT_DIR}/modules/magetools/varnish.sh" "$@"
             ;;
         "migrate")
             local site_path="$2"

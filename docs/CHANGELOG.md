@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.1.11] - 2025-10-30
+
+### Changes
+- 修改 11 个文件: docs/CHANGELOG.md, docs/MAGENTO_MAINTENANCE.md, docs/SECRET_MANAGEMENT.md, lib/help.sh, modules/magetools/README.md 等
+
+
 ## [1.1.10] - 2025-10-30
 
 ### Changes
@@ -18,6 +24,7 @@
 - 修改 27 个文件: AGENTS.md, README.md, docs/BACKUP_RESTIC.md, docs/CHANGELOG.md, docs/INSTALL.md 等
 - `magento_schedule.stats_jobs` 支持为每站点定时运行 `saltgoat magetools stats`，自动生成每日/每周/每月业务汇总。
 - `saltgoat monitor alert resources` 告警信息新增“Triggered: Load/Memory/Disk”等字段，并输出命中阈值详情；可通过 Pillar `saltgoat:monitor:thresholds` 自定义阈值。
+- 新增 `saltgoat magetools varnish enable|disable <site>`，一键切换 Nginx(TLS) → Varnish → backend Nginx/PHP，停用时自动恢复原配置。
 
 
 > **权限说明（自 v1.0.9 起）**：除 `help`/`git`/`lint`/`format` 等只读命令外，SaltGoat CLI 默认需使用 `sudo saltgoat ...` 执行以读取 Pillar、`/etc` 及 Salt 组件。以下历史记录保留当时的命令写法，如需照搬请按照新版策略补上 `sudo`。
@@ -184,6 +191,8 @@
 - `saltgoat analyse install matomo` 支持自定义域名与数据库管理账号，默认复用 `/etc/salt/mysql_saltuser.cnf`，并新增 `tests/test_analyse_state.sh` 干跑测试。
 - `saltgoat git push` 新增 `--dry-run` 模式、推送失败回滚提示与辅助信息，同时提供 `tests/test_git_release.sh` 做回归验证。
 - Matomo 安装流程新增 `--install-dir/--php-socket/--owner/--group` 覆盖参数，随机生成的数据库密码写入 `/var/lib/saltgoat/reports/matomo-db-password.txt`，并在检测到现有 MySQL/Percona 时阻止 MariaDB 冲突；底层 Salt 状态改用 `mysql_user.present`/`mysql_grants.present` 保证幂等。
+- `saltgoat magetools api watch` 自动识别 Bearer/OAuth1 凭据，支持多页增量抓取并在 backlog 超量时跳过历史推送；新增 `tests/test_magento_api_watch.py` 覆盖核心逻辑。
+- `saltgoat magetools varnish enable|disable` 更新为启用大头部缓冲、无损回滚配置，解决启用后站点出现 `502 Bad Gateway` 的问题。
 
 ### 📚 文档
 - `docs/INSTALL.md` 补充 Matomo 快速部署与 Git 发布流程说明。
