@@ -8,7 +8,7 @@
 
 ### 基本语法
 ```bash
-saltgoat monitoring <service> [options]
+sudo saltgoat monitoring <service> [options]
 ```
 
 ### 支持的监控服务
@@ -26,40 +26,40 @@ saltgoat monitoring <service> [options]
 ### Prometheus监控
 ```bash
 # 安装Prometheus监控
-saltgoat monitoring prometheus
+sudo saltgoat monitoring prometheus
 
 # 配置不同级别的监控
-saltgoat monitoring prometheus low      # 基础监控
-saltgoat monitoring prometheus medium   # 中等监控
-saltgoat monitoring prometheus high     # 高级监控
-saltgoat monitoring prometheus auto    # 自动配置
+sudo saltgoat monitoring prometheus low      # 基础监控
+sudo saltgoat monitoring prometheus medium   # 中等监控
+sudo saltgoat monitoring prometheus high     # 高级监控
+sudo saltgoat monitoring prometheus auto    # 自动配置
 ```
 
 ### Grafana仪表板
 ```bash
 # 安装Grafana
-saltgoat monitoring grafana
+sudo saltgoat monitoring grafana
 
 # 配置邮件通知
-saltgoat monitoring grafana email <smtp_host> <user> <password> <from_email>
+sudo saltgoat monitoring grafana email <smtp_host> <user> <password> <from_email>
 
 # 测试邮件发送
-saltgoat monitoring grafana test-email
+sudo saltgoat monitoring grafana test-email
 
 # 查看邮件配置帮助
-saltgoat monitoring grafana email-help
+sudo saltgoat monitoring grafana email-help
 ```
 
 ### 智能监控
 ```bash
 # 启用智能监控
-saltgoat monitoring smart
+sudo saltgoat monitoring smart
 
 # 动态监控配置
-saltgoat monitoring dynamic
+sudo saltgoat monitoring dynamic
 
 # 成本优化监控
-saltgoat monitoring cost
+sudo saltgoat monitoring cost
 ```
 
 ## 📊 监控组件
@@ -110,9 +110,9 @@ modules/monitoring/
 
 ## 🔗 相关功能
 
-- **故障诊断**: `saltgoat diagnose` - 系统故障诊断
-- **性能分析**: `saltgoat profile analyze` - 性能分析
-- **系统维护**: `saltgoat maintenance` - 系统维护
+- **故障诊断**: `sudo saltgoat diagnose` - 系统故障诊断
+- **性能分析**: `sudo saltgoat profile analyze` - 性能分析
+- **系统维护**: `sudo saltgoat maintenance` - 系统维护
 
 ## 📝 更新日志
 

@@ -8,7 +8,7 @@
 
 ### 基本语法
 ```bash
-saltgoat diagnose <type>
+sudo saltgoat diagnose <type>
 ```
 
 ### 支持的诊断类型
@@ -27,28 +27,28 @@ saltgoat diagnose <type>
 ### 诊断单个服务
 ```bash
 # 诊断Nginx服务
-saltgoat diagnose nginx
+sudo saltgoat diagnose nginx
 
 # 诊断MySQL服务
-saltgoat diagnose mysql
+sudo saltgoat diagnose mysql
 
 # 诊断PHP服务
-saltgoat diagnose php
+sudo saltgoat diagnose php
 ```
 
 ### 诊断系统状态
 ```bash
 # 诊断系统状态
-saltgoat diagnose system
+sudo saltgoat diagnose system
 
 # 诊断网络连接
-saltgoat diagnose network
+sudo saltgoat diagnose network
 ```
 
 ### 完整系统诊断
 ```bash
 # 执行完整系统诊断
-saltgoat diagnose all
+sudo saltgoat diagnose all
 ```
 
 ## 📊 输出说明
@@ -100,9 +100,9 @@ modules/diagnose/
 
 ## 🔗 相关功能
 
-- **性能分析**: `saltgoat profile analyze` - 深度性能分析
-- **版本锁定**: `saltgoat version-lock` - 软件版本管理
-- **系统维护**: `saltgoat maintenance` - 系统维护工具
+- **性能分析**: `sudo saltgoat profile analyze` - 深度性能分析
+- **版本锁定**: `sudo saltgoat version-lock` - 软件版本管理
+- **系统维护**: `sudo saltgoat maintenance` - 系统维护工具
 
 ## 📝 更新日志
 

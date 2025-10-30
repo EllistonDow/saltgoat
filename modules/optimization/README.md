@@ -8,7 +8,7 @@
 
 ### 基本语法
 ```bash
-saltgoat <optimization_command> [options]
+sudo saltgoat <optimization_command> [options]
 ```
 
 ### 支持的优化功能
@@ -25,45 +25,45 @@ saltgoat <optimization_command> [options]
 ### 系统优化
 ```bash
 # Magento2 优化（自动档位）
-saltgoat optimize magento
+sudo saltgoat optimize magento
 
 # 指定档位与站点
-saltgoat optimize magento --profile medium --site shop01
+sudo saltgoat optimize magento --profile medium --site shop01
 
 # 仅预览变更并输出报告
-saltgoat optimize magento --dry-run --show-results
+sudo saltgoat optimize magento --dry-run --show-results
 ```
 
 ### 自动调优
 ```bash
 # 自动调优系统
-saltgoat auto-tune
+sudo saltgoat auto-tune
 
 # 查看调优建议
-saltgoat auto-tune --suggest
+sudo saltgoat auto-tune --suggest
 ```
 
 ### 基准测试
 ```bash
 # 运行基准测试
-saltgoat benchmark
+sudo saltgoat benchmark
 
 # 指定测试类型
-saltgoat benchmark cpu
-saltgoat benchmark memory
-saltgoat benchmark disk
+sudo saltgoat benchmark cpu
+sudo saltgoat benchmark memory
+sudo saltgoat benchmark disk
 ```
 
 ### 网络测试
 ```bash
 # 网络速度测试
-saltgoat speedtest
+sudo saltgoat speedtest
 
 # 指定服务器测试
-saltgoat speedtest --server 1234
+sudo saltgoat speedtest --server 1234
 
 # 详细测试结果
-saltgoat speedtest --verbose
+sudo saltgoat speedtest --verbose
 ```
 
 ## 🔧 优化功能详解
@@ -163,9 +163,9 @@ modules/optimization/
 
 ## 🔗 相关功能
 
-- **故障诊断**: `saltgoat diagnose` - 系统故障诊断
-- **性能分析**: `saltgoat profile analyze` - 性能分析
-- **系统维护**: `saltgoat maintenance` - 系统维护
+- **故障诊断**: `sudo saltgoat diagnose` - 系统故障诊断
+- **性能分析**: `sudo saltgoat profile analyze` - 性能分析
+- **系统维护**: `sudo saltgoat maintenance` - 系统维护
 
 ## 📝 更新日志
 

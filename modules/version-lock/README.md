@@ -8,7 +8,7 @@
 
 ### 基本语法
 ```bash
-saltgoat version-lock <action>
+sudo saltgoat version-lock <action>
 ```
 
 ### 支持的操作
@@ -25,16 +25,16 @@ saltgoat version-lock <action>
 ### 版本锁定操作
 ```bash
 # 锁定核心软件版本
-saltgoat version-lock lock
+sudo saltgoat version-lock lock
 
 # 解锁软件版本
-saltgoat version-lock unlock
+sudo saltgoat version-lock unlock
 
 # 显示锁定的软件包
-saltgoat version-lock show
+sudo saltgoat version-lock show
 
 # 检查软件版本状态
-saltgoat version-lock status
+sudo saltgoat version-lock status
 ```
 
 ## 🔒 锁定策略
@@ -63,7 +63,7 @@ saltgoat version-lock status
 
 ### 版本状态显示
 ```bash
-saltgoat version-lock status
+sudo saltgoat version-lock status
 ```
 
 输出示例：
@@ -90,7 +90,7 @@ saltgoat version-lock status
 
 ### 锁定包显示
 ```bash
-saltgoat version-lock show
+sudo saltgoat version-lock show
 ```
 
 输出示例：
@@ -138,9 +138,9 @@ COMPOSER_VERSION=2.8.12
 LOCK_REASON="防止意外更新，保持LEMP环境稳定性"
 
 # 注意事项
-# 1. 如需更新软件版本，请先解锁: saltgoat version-lock unlock
-# 2. 更新后请重新锁定: saltgoat version-lock lock
-# 3. 定期检查安全更新: saltgoat security-scan
+# 1. 如需更新软件版本，请先解锁: sudo saltgoat version-lock unlock
+# 2. 更新后请重新锁定: sudo saltgoat version-lock lock
+# 3. 定期检查安全更新: sudo saltgoat security-scan
 ```
 
 ## ⚠️ 注意事项
@@ -162,9 +162,9 @@ LOCK_REASON="防止意外更新，保持LEMP环境稳定性"
 
 ## 🔗 相关功能
 
-- **故障诊断**: `saltgoat diagnose` - 系统故障诊断
-- **性能分析**: `saltgoat profile analyze` - 性能分析
-- **安全扫描**: `saltgoat security-scan` - 安全扫描
+- **故障诊断**: `sudo saltgoat diagnose` - 系统故障诊断
+- **性能分析**: `sudo saltgoat profile analyze` - 性能分析
+- **安全扫描**: `sudo saltgoat security-scan` - 安全扫描
 
 ## 📁 文件结构
 

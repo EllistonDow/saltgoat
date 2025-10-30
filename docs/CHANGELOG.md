@@ -1,5 +1,13 @@
 # SaltGoat 更新日志
 
+## [1.0.9] - 2025-10-30
+
+### Changes
+- 修改 27 个文件: AGENTS.md, README.md, docs/BACKUP_RESTIC.md, docs/CHANGELOG.md, docs/INSTALL.md 等
+
+
+> **权限说明（自 v1.0.9 起）**：除 `help`/`git`/`lint`/`format` 等只读命令外，SaltGoat CLI 默认需使用 `sudo saltgoat ...` 执行以读取 Pillar、`/etc` 及 Salt 组件。以下历史记录保留当时的命令写法，如需照搬请按照新版策略补上 `sudo`。
+
 ## [1.1.8] - 2025-10-30
 
 ### Changes

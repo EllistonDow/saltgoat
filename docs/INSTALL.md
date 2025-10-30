@@ -31,7 +31,7 @@ cd /opt/saltgoat
 #### 2. 配置 Pillar（推荐）
 ```bash
 # 生成默认模板（包含随机密码，执行前可确认/覆盖）
-saltgoat pillar init
+sudo saltgoat pillar init
 
 # 注意：模板中的随机密码仅供首次安装使用，请按照安全要求修改并妥善保存。
 
@@ -39,13 +39,13 @@ saltgoat pillar init
 nano salt/pillar/saltgoat.sls
 
 # 保存后刷新 Pillar（Salt 会在安装过程中自动刷新，此步骤可选）
-saltgoat pillar refresh
+sudo saltgoat pillar refresh
 ```
 
 #### Pillar 管理命令
-- `saltgoat pillar init`：生成 `salt/pillar/saltgoat.sls` 模板，自动写入随机密码与默认通知邮箱。
-- `saltgoat pillar show`：以只读方式输出当前 Pillar 内容，便于安装前核对。
-- `saltgoat pillar refresh`：执行 `saltutil.refresh_pillar` 立即刷新缓存，确保后续 `saltgoat install` 使用最新值。
+- `sudo saltgoat pillar init`：生成 `salt/pillar/saltgoat.sls` 模板，自动写入随机密码与默认通知邮箱。
+- `sudo saltgoat pillar show`：以只读方式输出当前 Pillar 内容，便于安装前核对。
+- `sudo saltgoat pillar refresh`：执行 `saltutil.refresh_pillar` 立即刷新缓存，确保后续 `saltgoat install` 使用最新值。
 
 > Pillar 文件默认权限为 `600`（root 所有），请在编辑后保持该权限；如需自定义其他机密信息，可在同目录新增 `*.sls` 并在 `salt/pillar/top.sls` 中引用。
 
@@ -77,16 +77,16 @@ sudo apt install -y salt-master
 sudo systemctl enable --now salt-master
 
 # 应用 Beacon/ Reactor 配置
-saltgoat monitor enable-beacons
+sudo saltgoat monitor enable-beacons
 ```
 
 > **提示**：部分发行版默认仓库可能缺少最新 Salt，可参考官方文档 <https://repo.saltproject.io/> 添加源后再安装。即便暂未安装 `salt-minion`，SaltGoat 也会自动降级至系统 Cron/脚本方案，不影响基础功能。
 
 ### 🛠 自动化脚本与计划任务
 
-- `saltgoat automation script <create|list|edit|run|delete>`：生成带日志模板的 Bash 脚本，默认写入 `/srv/saltgoat/automation/scripts/`。
-- `saltgoat automation job <create|list|enable|disable|run|delete>`：注册计划任务。检测到 `salt-minion` 时使用 Salt Schedule（`salt-call schedule.list` 可验证）；否则自动落地 `/etc/cron.d/saltgoat-automation-<job>` 作为兜底。
-- `saltgoat automation logs <list|view|tail|cleanup>`：查看与维护 `/srv/saltgoat/automation/logs/`。
+- `sudo saltgoat automation script <create|list|edit|run|delete>`：生成带日志模板的 Bash 脚本，默认写入 `/srv/saltgoat/automation/scripts/`。
+- `sudo saltgoat automation job <create|list|enable|disable|run|delete>`：注册计划任务。检测到 `salt-minion` 时使用 Salt Schedule（`salt-call schedule.list` 可验证）；否则自动落地 `/etc/cron.d/saltgoat-automation-<job>` 作为兜底。
+- `sudo saltgoat automation logs <list|view|tail|cleanup>`：查看与维护 `/srv/saltgoat/automation/logs/`。
 
 命令执行前会自动调用 `saltutil.sync_modules`/`saltutil.sync_runners`，确保 `salt/_modules/saltgoat.py` 与 `salt/states/optional/automation/` 的最新逻辑立即生效。需要集中式下发时，可在 Salt Master 上使用 `salt-run saltgoat.automation_job_create tgt='minion-id' ...` 将同样的自动化策略推广到多台主机。
 
@@ -99,17 +99,17 @@ SaltGoat 自带 `analyse` 模块，用于快速部署 Matomo：
 bash tests/test_analyse_state.sh
 
 # 使用默认设置安装 Matomo，并创建数据库/用户
-saltgoat analyse install matomo --with-db
+sudo saltgoat analyse install matomo --with-db
 
 # 指定域名、数据库与管理员账户
-saltgoat analyse install matomo --with-db \
+sudo saltgoat analyse install matomo --with-db \
   --domain analytics.example.com \
   --db-name matomo_prod --db-user matomo_prod \
   --db-password 'StrongPass123!' \
   --db-provider existing
 
 # 复用既有数据库管理员凭据
-saltgoat analyse install matomo --with-db \
+sudo saltgoat analyse install matomo --with-db \
   --db-admin-user saltuser --db-admin-password 'YourRootPass'
 ```
 
@@ -122,7 +122,7 @@ saltgoat analyse install matomo --with-db \
 - 若系统存在 `/etc/salt/mysql_saltuser.cnf`，CLI 会自动复用 `saltuser` 凭据。
 - CLI 支持 `--domain`、`--install-dir`、`--with-db`、`--db-provider (existing|mariadb|percona)`、`--db-*` 系列参数，所有值都可以在 Pillar 中覆盖。
 - 需要自定义管理账户时，请补充 `--db-admin-user/--db-admin-password`，并在 `salt/pillar/saltgoat.sls` 中持久化 `matomo:db.*` 配置。
-- 部署完成后访问 `http://<域名>/` 完成 Matomo Web 安装；如需 HTTPS，可执行 `saltgoat nginx add-ssl <域名> <email>`。
+- 部署完成后访问 `http://<域名>/` 完成 Matomo Web 安装；如需 HTTPS，可执行 `sudo saltgoat nginx add-ssl <域名> <email>`。
 - 若自动生成数据库密码，会写入 `/var/lib/saltgoat/reports/matomo-db-password.txt`，请尽快同步到 Pillar 后删除该文件。
 
 #### Matomo Pillar 示例
@@ -146,10 +146,10 @@ matomo:
     admin_password: 'RootOrSaltUserPass'
 ```
 
-保存后执行 `saltgoat pillar refresh`，再运行 `saltgoat analyse install matomo` 即可引用 Pillar 参数。
+保存后执行 `sudo saltgoat pillar refresh`，再运行 `sudo saltgoat analyse install matomo` 即可引用 Pillar 参数。
 
 #### Magento 优化站点检测
-- 运行 `saltgoat optimize magento` 时，CLI 会在 `/var/www`、`/srv`、`/opt/magento` 下自动查找 `app/etc/env.php`，以推断站点根目录。
+- 运行 `sudo saltgoat optimize magento` 时，CLI 会在 `/var/www`、`/srv`、`/opt/magento` 下自动查找 `app/etc/env.php`，以推断站点根目录。
 - 如果存在多个站点，需要使用 `--site <站点名称|绝对路径|env.php>` 明确指定目标，避免误修改配置。
 - 自动检测结果会写入 `salt/pillar/magento-optimize.sls`，后续 Salt state 会根据 `detection_status` 决定是否继续执行或提示用户。
 
@@ -250,16 +250,16 @@ SaltGoat 配置一致性测试
 ### 🔒 安全配置
 
 #### 密码管理
-- `saltgoat passwords`：读取 Pillar 与实际配置，汇总 MySQL、Valkey、RabbitMQ、Webmin、phpMyAdmin 的当前密码。
-- `saltgoat passwords --refresh`：在编辑 Pillar 后刷新缓存并重新应用核心服务状态，确保新密码立即生效。
+- `sudo saltgoat passwords`：读取 Pillar 与实际配置，汇总 MySQL、Valkey、RabbitMQ、Webmin、phpMyAdmin 的当前密码。
+- `sudo saltgoat passwords --refresh`：在编辑 Pillar 后刷新缓存并重新应用核心服务状态，确保新密码立即生效。
 - 安装完成的摘要同样会提示 `versions`、`status`、`passwords` 三个常用命令，建议记录初始输出。
 
 ```bash
 # 查看当前凭据
-saltgoat passwords
+sudo saltgoat passwords
 
 # 编辑 pillar 后重新渲染密码相关状态
-saltgoat passwords --refresh
+sudo saltgoat passwords --refresh
 ```
 
 ### 🚀 Git 发布流程
@@ -286,7 +286,7 @@ saltgoat git push 0.10.0 "Release notes"
 ```bash
 # 建议通过 Pillar 统一管理密码
 nano salt/pillar/saltgoat.sls
-saltgoat passwords --refresh
+sudo saltgoat passwords --refresh
 ```
 
 ### 🎛️ 管理面板安装
@@ -296,37 +296,37 @@ SaltGoat 支持多种管理面板，可以根据需要选择安装：
 #### Cockpit 系统管理面板
 ```bash
 # 安装 Cockpit
-saltgoat cockpit install
+sudo saltgoat cockpit install
 
 # 查看状态
-saltgoat cockpit status
+sudo saltgoat cockpit status
 
 # 配置防火墙
-saltgoat cockpit config firewall
+sudo saltgoat cockpit config firewall
 ```
 
 #### Adminer 数据库管理面板
 ```bash
 # 安装 Adminer
-saltgoat adminer install
+sudo saltgoat adminer install
 
 # 查看状态
-saltgoat adminer status
+sudo saltgoat adminer status
 
 # 配置安全设置
-saltgoat adminer security
+sudo saltgoat adminer security
 ```
 
 #### Uptime Kuma 监控面板
 ```bash
 # 安装 Uptime Kuma
-saltgoat uptime-kuma install
+sudo saltgoat uptime-kuma install
 
 # 查看状态
-saltgoat uptime-kuma status
+sudo saltgoat uptime-kuma status
 
 # 配置 SaltGoat 服务监控
-saltgoat uptime-kuma monitor
+sudo saltgoat uptime-kuma monitor
 ```
 
 ### 🚨 故障排除
@@ -343,7 +343,7 @@ sudo saltgoat system install
 #### 2. 服务状态检查
 ```bash
 # 检查所有服务状态
-saltgoat status
+sudo saltgoat status
 
 # 重启服务
 sudo systemctl restart nginx mysql php8.3-fpm

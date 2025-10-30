@@ -8,13 +8,13 @@ SaltGoat Magento 2 维护系统提供了完整的自动化维护解决方案，�
 
 ```bash
 # 安装 / 更新 Salt Schedule
-saltgoat magetools cron <site> install
+sudo saltgoat magetools cron <site> install
 
 # 检查计划任务与 Salt Minion 状态
-saltgoat magetools cron <site> status
+sudo saltgoat magetools cron <site> status
 
 # 立即触发一次例行维护，用于验证
-saltgoat magetools cron <site> test
+sudo saltgoat magetools cron <site> test
 ```
 
 > 如果目标主机尚未运行 `salt-minion`，`install` 会自动写入 `/etc/cron.d/magento-maintenance` 作为临时替代；待 Minion 就绪后再次执行即可切换回 Salt Schedule。
@@ -42,56 +42,56 @@ saltgoat magetools cron <site> test
 
 ### 基本语法
 ```bash
-saltgoat magetools maintenance <site> <action>
-saltgoat magetools cron <site> <action>
+sudo saltgoat magetools maintenance <site> <action>
+sudo saltgoat magetools cron <site> <action>
 ```
 
 > 若已启用 Telegram ChatOps（`salt/pillar/chatops.sls.sample`），可在授权聊天中发送 `/saltgoat maintenance weekly <site>`、`/saltgoat cache clean <site>` 等命令；需要审批的操作会生成一次性 Token，需管理员 `/saltgoat approve <token>` 后才会真正执行。
 
-> **提示**：若目标主机未安装或未运行 `salt-minion`，上述 `saltgoat magetools cron` 命令会自动改用系统 Cron，在 `/etc/cron.d/magento-maintenance` 写入计划任务；待 `salt-minion` 启用后再次执行 `install` 即可恢复为 Salt Schedule。
+> **提示**：若目标主机未安装或未运行 `salt-minion`，上述 `sudo saltgoat magetools cron` 命令会自动改用系统 Cron，在 `/etc/cron.d/magento-maintenance` 写入计划任务；待 `salt-minion` 启用后再次执行 `install` 即可恢复为 Salt Schedule。
 
 ### 维护管理命令
 
 #### 维护状态检查
 ```bash
 # 检查维护状态
-saltgoat magetools maintenance tank status
+sudo saltgoat magetools maintenance tank status
 ```
 
 #### 维护模式控制
 ```bash
 # 启用维护模式
-saltgoat magetools maintenance tank enable
+sudo saltgoat magetools maintenance tank enable
 
 # 禁用维护模式
-saltgoat magetools maintenance tank disable
+sudo saltgoat magetools maintenance tank disable
 ```
 
 #### 维护任务执行
 ```bash
 # 执行每日维护任务
-saltgoat magetools maintenance tank daily
+sudo saltgoat magetools maintenance tank daily
 
 # 执行每周维护任务
-saltgoat magetools maintenance tank weekly
+sudo saltgoat magetools maintenance tank weekly
 
 # 执行每月维护任务（完整部署流程）
-saltgoat magetools maintenance tank monthly
+sudo saltgoat magetools maintenance tank monthly
 
 # 执行健康检查
-saltgoat magetools maintenance tank health
+sudo saltgoat magetools maintenance tank health
 
 # 创建备份
-saltgoat magetools maintenance tank backup
+sudo saltgoat magetools maintenance tank backup
 
 # 清理日志和缓存
-saltgoat magetools maintenance tank cleanup
+sudo saltgoat magetools maintenance tank cleanup
 
 # 完整部署流程
-saltgoat magetools maintenance tank deploy
+sudo saltgoat magetools maintenance tank deploy
 
 # 示例：每周任务同时刷新 Valkey 并触发 Restic
-saltgoat magetools maintenance tank weekly --allow-valkey-flush --trigger-restic
+sudo saltgoat magetools maintenance tank weekly --allow-valkey-flush --trigger-restic
 ```
 
 常用参数：
@@ -115,29 +115,29 @@ saltgoat magetools maintenance tank weekly --allow-valkey-flush --trigger-restic
 | `--static-langs \"en_US zh_CN\"` | 静态资源部署语言列表 |
 | `--static-jobs N` | 静态资源部署线程数（默认 4） |
 
-> 提示：`--restic-*` 参数会透传给 `saltgoat magetools backup restic run`。请先使用 `saltgoat magetools backup restic install --site <name>` 为目标站点生成配置；若只需一次性备份，可在维护任务外单独运行 `saltgoat magetools backup restic run --paths ...` 搭配 `--backup-dir` 等参数。
+> 提示：`--restic-*` 参数会透传给 `sudo saltgoat magetools backup restic run`。请先使用 `sudo saltgoat magetools backup restic install --site <name>` 为目标站点生成配置；若只需一次性备份，可在维护任务外单独运行 `sudo saltgoat magetools backup restic run --paths ...` 搭配 `--backup-dir` 等参数。
 
 ### 定时任务管理
 
 #### Salt Schedule（推荐）
 ```bash
 # 安装 Salt Schedule 任务
-saltgoat magetools cron tank install
+sudo saltgoat magetools cron tank install
 
 # 查看状态
-saltgoat magetools cron tank status
+sudo saltgoat magetools cron tank status
 
 # 测试功能
-saltgoat magetools cron tank test
+sudo saltgoat magetools cron tank test
 
 # 查看日志
-saltgoat magetools cron tank logs
+sudo saltgoat magetools cron tank logs
 
 # 卸载任务
-saltgoat magetools cron tank uninstall
+sudo saltgoat magetools cron tank uninstall
 ```
 
-> `saltgoat magetools cron` 现在基于 Salt Schedule 管理所有维护计划，无需再手动编辑 crontab。
+> `sudo saltgoat magetools cron` 现在基于 Salt Schedule 管理所有维护计划，无需再手动编辑 crontab。
 
 ## 维护任务详解
 
@@ -196,8 +196,8 @@ saltgoat magetools cron tank uninstall
 - 通过 Telegram / `/var/log/saltgoat/alerts.log` 输出健康检查上下文
 
 ### 备份策略建议
-- **推荐组合**：使用 Restic（`saltgoat magetools backup restic install/run`）搭配 XtraBackup 物理备份，满足长期和快速恢复需求。
-- **单库导出**：`saltgoat magetools xtrabackup mysql dump` 面向站点迁移/调试场景，命令会输出备份文件大小，通过 Salt event 与 Telegram 双管齐下记录结果。
+- **推荐组合**：使用 Restic（`sudo saltgoat magetools backup restic install/run`）搭配 XtraBackup 物理备份，满足长期和快速恢复需求。
+- **单库导出**：`sudo saltgoat magetools xtrabackup mysql dump` 面向站点迁移/调试场景，命令会输出备份文件大小，通过 Salt event 与 Telegram 双管齐下记录结果。
 - **归档备份**：只有在传入 `--backup-dir` 时才会生成 tar/mysqldump，若已启用 Restic/XtraBackup，可视情况关闭以避免重复占用存储。
 - **可观测性**：所有备份事件都会写入 `/var/log/saltgoat/alerts.log`；配置了 Telegram 的主机还能收到 `profile_summary/send_ok` 日志，用于审计。
 
@@ -219,7 +219,7 @@ magento_schedule:
       no_compress: true
       site: bank
 ```
-建议复制 `salt/pillar/magento-schedule.sls.sample` 为实际文件后再写入上述配置；执行 `saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule（若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`）。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。
+建议复制 `salt/pillar/magento-schedule.sls.sample` 为实际文件后再写入上述配置；执行 `sudo saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule（若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`）。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。
 
 ### 业务事件通知（API Watchers）
 SaltGoat 现在可以轮询 Magento REST API，将“新订单 / 新用户”推送到 Telegram。
@@ -245,14 +245,14 @@ SaltGoat 现在可以轮询 Magento REST API，将“新订单 / 新用户”推
            - orders
            - customers
    ```
-   执行 `saltgoat magetools cron bank install` 后，Salt Schedule 会创建 `saltgoat magetools api watch --site bank --kinds orders,customers` 任务。
+   执行 `sudo saltgoat magetools cron bank install` 后，Salt Schedule 会创建 `sudo saltgoat magetools api watch --site bank --kinds orders,customers` 任务。
 
 3. **首次运行**：若无历史记录，脚本会将最新 `entity_id` 作为基线（不推送历史订单/用户）。后续只要发现新的 ID，就会：
    - 发送 `saltgoat/business/order` 或 `saltgoat/business/customer` 事件；
    - 写入 `/var/log/saltgoat/alerts.log`；
    - 通过 `/opt/saltgoat-reactor` 直接广播 Telegram（默认发送到所有启用的 profile）。
 
-4. **手动触发**：可用 `saltgoat magetools api watch --site bank --kinds orders` 验证。首次运行若想立即收到通知，可先删除状态文件 `/var/lib/saltgoat/magento-watcher/bank/*`。
+4. **手动触发**：可用 `sudo saltgoat magetools api watch --site bank --kinds orders` 验证。首次运行若想立即收到通知，可先删除状态文件 `/var/lib/saltgoat/magento-watcher/bank/*`。
 
 > 如需更细颗粒控制，可将 `kinds` 限制为 `orders` 或 `customers`，并复制多条 watcher 分别推送到不同 Telegram profile。
 
@@ -264,7 +264,7 @@ SaltGoat 现在可以轮询 Magento REST API，将“新订单 / 新用户”推
 Salt Schedule 通过 Salt Minion 内置计划任务管理维护流程。执行以下命令可以查看当前配置：
 
 ```bash
-salt-call --local schedule.list --out=yaml | grep -A3 'magento-'
+sudo salt-call --local schedule.list --out=yaml | grep -A3 'magento-'
 ```
 
 默认会创建以下任务：
@@ -281,17 +281,17 @@ salt-call --local schedule.list --out=yaml | grep -A3 'magento-'
 salt-call --local schedule.modify magento-cron cron '*/10 * * * *'
 ```
 
-> 若 `salt-minion` 当前不可用，上述命令会返回空列表；此时 `saltgoat magetools cron <site> install` 将自动生成 `/etc/cron.d/magento-maintenance` 作为临时替代方案。
+> 若 `salt-minion` 当前不可用，上述命令会返回空列表；此时 `sudo saltgoat magetools cron <site> install` 将自动生成 `/etc/cron.d/magento-maintenance` 作为临时替代方案。
 
 ### Salt Beacons 与 Reactor
 SaltGoat 提供事件驱动的维护能力，推荐通过以下命令启用并检查状态：
 
 ```bash
 # 配置服务/资源 Beacon，并启用 Reactor 自动化
-saltgoat monitor enable-beacons
+sudo saltgoat monitor enable-beacons
 
 # 查看当前 Beacon 与 Schedule 状态
-saltgoat monitor beacons-status
+sudo saltgoat monitor beacons-status
 ```
 
 启用后，Salt 会自动监控关键服务与资源使用率，并在阈值触发时写入 `/var/log/saltgoat/alerts.log`，必要时重启服务或触发权限修复。
@@ -348,31 +348,31 @@ saltgoat monitor beacons-status
 #### 1. 权限问题
 ```bash
 # 修复权限
-saltgoat magetools permissions fix /var/www/tank
+sudo saltgoat magetools permissions fix /var/www/tank
 ```
 
 #### 2. 数据库连接问题
 ```bash
 # 检查数据库状态
-saltgoat magetools maintenance tank health
+sudo saltgoat magetools maintenance tank health
 ```
 
 #### 3. 缓存问题
 ```bash
 # 清理缓存
-saltgoat magetools maintenance tank cleanup
+sudo saltgoat magetools maintenance tank cleanup
 ```
 
 #### 4. 定时任务不执行
 ```bash
 # 检查定时任务状态
-saltgoat magetools cron tank status
+sudo saltgoat magetools cron tank status
 ```
 
 ### 日志分析
 ```bash
 # 查看维护日志
-saltgoat magetools cron tank logs
+sudo saltgoat magetools cron tank logs
 
 # 查看系统日志
 tail -f /var/log/magento-maintenance.log

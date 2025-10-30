@@ -27,51 +27,51 @@ Cockpit 是一个现代化的 Web 系统管理界面，提供直观的服务器�
 
 ```bash
 # 安装 Cockpit 及其所有插件
-saltgoat cockpit install
+sudo saltgoat cockpit install
 ```
 
 ### 查看状态
 
 ```bash
 # 查看 Cockpit 服务状态
-saltgoat cockpit status
+sudo saltgoat cockpit status
 ```
 
 ### 配置管理
 
 ```bash
 # 查看当前配置
-saltgoat cockpit config show
+sudo saltgoat cockpit config show
 
 # 配置防火墙规则
-saltgoat cockpit config firewall
+sudo saltgoat cockpit config firewall
 
 # 配置 SSL 证书
-saltgoat cockpit config ssl
+sudo saltgoat cockpit config ssl
 ```
 
 ### 日志管理
 
 ```bash
 # 查看最近 50 行日志
-saltgoat cockpit logs
+sudo saltgoat cockpit logs
 
 # 查看最近 100 行日志
-saltgoat cockpit logs 100
+sudo saltgoat cockpit logs 100
 ```
 
 ### 服务管理
 
 ```bash
 # 重启 Cockpit 服务
-saltgoat cockpit restart
+sudo saltgoat cockpit restart
 ```
 
 ### 卸载
 
 ```bash
 # 卸载 Cockpit
-saltgoat cockpit uninstall
+sudo saltgoat cockpit uninstall
 ```
 
 ## 访问地址
@@ -106,7 +106,7 @@ Cockpit 默认使用自签名证书。要使用自定义证书：
 
 2. 重启 Cockpit 服务：
    ```bash
-   saltgoat cockpit restart
+   sudo saltgoat cockpit restart
    ```
 
 ## 插件说明
@@ -166,8 +166,8 @@ Cockpit 与 SaltGoat 完美集成，可以：
 saltgoat cockpit help
 
 # 完整状态检查
-saltgoat cockpit status
+sudo saltgoat cockpit status
 
 # 配置防火墙
-saltgoat cockpit config firewall
+sudo saltgoat cockpit config firewall
 ```

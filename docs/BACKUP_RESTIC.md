@@ -1,6 +1,6 @@
 # Restic 备份模块使用手册
 
-SaltGoat 使用 [Restic](https://restic.net/) 构建文件级快照，支持本地目录、Dropbox 挂载以及 S3/Minio 等远端仓库。`saltgoat magetools backup restic` 模块提供站点级的安装、巡检与恢复命令，同时保留 Salt 状态 `optional.backup-restic` 作为集中化部署的选项。
+SaltGoat 使用 [Restic](https://restic.net/) 构建文件级快照，支持本地目录、Dropbox 挂载以及 S3/Minio 等远端仓库。`sudo saltgoat magetools backup restic` 模块提供站点级的安装、巡检与恢复命令，同时保留 Salt 状态 `optional.backup-restic` 作为集中化部署的选项。
 
 ---
 
@@ -24,7 +24,7 @@ SaltGoat 使用 [Restic](https://restic.net/) 构建文件级快照，支持本�
    cp salt/pillar/secret/auth.sls.example   salt/pillar/secret/auth.sls     # 其它密钥同理
    ```
    - 若只使用 CLI 自动生成密码，可跳过 `restic.sls`，脚本会写入 `salt/pillar/secret/auto.sls`。
-   - 建议在填写后执行一次 `saltgoat pillar refresh` 验证语法。
+   - 建议在填写后执行一次 `sudo saltgoat pillar refresh` 验证语法。
    - 多站点示例（复制自 `.example`）：
      ```yaml
      secrets:
@@ -212,8 +212,8 @@ bank         12     2024-10-29 05:47  1.2G     active/finished(0)   2024-10-29 0
        service_user: "{{ restic.get('service_user', 'root') }}"
        repo_owner: "{{ restic.get('repo_owner', 'root') }}"
    ```
-2. 在 `salt/pillar/top.sls` include `backup-restic`，执行 `saltgoat pillar refresh`。
-3. 运行 `sudo salt-call state.apply optional.backup-restic`（或通过 `saltgoat install optional --include backup-restic`）即可生成同名 systemd 单元。该方案适合希望统一管理所有主机、且无需站点维度拆分的场景。
+2. 在 `salt/pillar/top.sls` include `backup-restic`，执行 `sudo saltgoat pillar refresh`。
+3. 运行 `sudo salt-call state.apply optional.backup-restic`（或通过 `sudo saltgoat install optional --include backup-restic`）即可生成同名 systemd 单元。该方案适合希望统一管理所有主机、且无需站点维度拆分的场景。
 
 > 如需切换到 CLI 管理，可保留 Pillar 作为默认模板，再对特定站点运行 `install --site` 覆盖。
 

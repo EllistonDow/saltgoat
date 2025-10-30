@@ -16,32 +16,32 @@ SaltGoat 的自动化模块围绕自定义 Salt Execution Module 与 Runner 构�
 
 ```bash
 # 脚本管理
-saltgoat automation script create health-check
-saltgoat automation script list
-saltgoat automation script run health-check
-saltgoat automation script delete health-check
+sudo saltgoat automation script create health-check
+sudo saltgoat automation script list
+sudo saltgoat automation script run health-check
+sudo saltgoat automation script delete health-check
 
 # 任务调度
-saltgoat automation job create health-check "*/10 * * * *"
-saltgoat automation job list
-saltgoat automation job enable health-check
-saltgoat automation job run health-check
-saltgoat automation job disable health-check
+sudo saltgoat automation job create health-check "*/10 * * * *"
+sudo saltgoat automation job list
+sudo saltgoat automation job enable health-check
+sudo saltgoat automation job run health-check
+sudo saltgoat automation job disable health-check
 
 # 日志
-saltgoat automation logs list
-saltgoat automation logs view health-check_20241026.log
-saltgoat automation logs cleanup 14
+sudo saltgoat automation logs list
+sudo saltgoat automation logs view health-check_20241026.log
+sudo saltgoat automation logs cleanup 14
 ```
 
 ### 模板示例
 
 ```bash
 # 创建预置模板（脚本 + Salt Schedule/cron）
-saltgoat automation templates system-update
-saltgoat automation templates backup-cleanup
-saltgoat automation templates log-rotation
-saltgoat automation templates security-scan
+sudo saltgoat automation templates system-update
+sudo saltgoat automation templates backup-cleanup
+sudo saltgoat automation templates log-rotation
+sudo saltgoat automation templates security-scan
 ```
 
 ## 🧠 设计要点

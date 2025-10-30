@@ -8,7 +8,7 @@
 
 ### 基本语法
 ```bash
-saltgoat profile analyze <type>
+sudo saltgoat profile analyze <type>
 ```
 
 ### 支持的分析类型
@@ -29,34 +29,34 @@ saltgoat profile analyze <type>
 ### 分析单个组件
 ```bash
 # 分析系统性能
-saltgoat profile analyze system
+sudo saltgoat profile analyze system
 
 # 分析Nginx性能
-saltgoat profile analyze nginx
+sudo saltgoat profile analyze nginx
 
 # 分析MySQL性能
-saltgoat profile analyze mysql
+sudo saltgoat profile analyze mysql
 
 # 分析PHP性能
-saltgoat profile analyze php
+sudo saltgoat profile analyze php
 ```
 
 ### 分析资源使用
 ```bash
 # 分析内存性能
-saltgoat profile analyze memory
+sudo saltgoat profile analyze memory
 
 # 分析磁盘性能
-saltgoat profile analyze disk
+sudo saltgoat profile analyze disk
 
 # 分析网络性能
-saltgoat profile analyze network
+sudo saltgoat profile analyze network
 ```
 
 ### 完整性能分析
 ```bash
 # 执行完整性能分析
-saltgoat profile analyze all
+sudo saltgoat profile analyze all
 ```
 
 ## 📊 评分系统
@@ -130,9 +130,9 @@ modules/profile/
 
 ## 🔗 相关功能
 
-- **故障诊断**: `saltgoat diagnose` - 系统故障诊断
-- **版本锁定**: `saltgoat version-lock` - 软件版本管理
-- **系统优化**: `saltgoat optimize` - 系统优化工具
+- **故障诊断**: `sudo saltgoat diagnose` - 系统故障诊断
+- **版本锁定**: `sudo saltgoat version-lock` - 软件版本管理
+- **系统优化**: `sudo saltgoat optimize` - 系统优化工具
 
 ## 📝 更新日志
 

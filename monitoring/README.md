@@ -4,31 +4,31 @@
 
 ## 1. 模块概览
 
-- **即时巡检命令**：`saltgoat monitor <子命令>` 通过 `salt-call --local` 读取系统、服务、安全等信息，适合临时排查或定期人工检查。
+- **即时巡检命令**：`sudo saltgoat monitor <子命令>` 通过 `salt-call --local` 读取系统、服务、安全等信息，适合临时排查或定期人工检查。
 - **监控数据存放**：
   - 临时报表与历史输出：`/var/log/saltgoat/monitor/`
   - 本地配置快照：`/etc/saltgoat/monitor/`
-- **事件驱动监控（可选）**：`saltgoat monitor enable-beacons` 会调用自定义 Salt 模块 `saltgoat.enable_beacons`，依据 Pillar 中的 `saltgoat:beacons` 定义下发 `optional.salt-beacons` 与 `optional.salt-reactor` 状态，启用负载/内存/磁盘告警、关键服务自愈、配置变更追踪等自动化流程。
+- **事件驱动监控（可选）**：`sudo saltgoat monitor enable-beacons` 会调用自定义 Salt 模块 `saltgoat.enable_beacons`，依据 Pillar 中的 `saltgoat:beacons` 定义下发 `optional.salt-beacons` 与 `optional.salt-reactor` 状态，启用负载/内存/磁盘告警、关键服务自愈、配置变更追踪等自动化流程。
 
 > 提示：若主机未安装 `salt-minion` 或缺少 `salt-run`，脚本会自动降级为纯输出模式，不会留下半套配置。
 
 ## 2. 常用巡检指令
 
 ```bash
-saltgoat monitor install        # 安装 salt-minion 并启用 Salt Beacons/Reactor
-saltgoat monitor system         # 显示主机信息、负载、资源与网络概览
-saltgoat monitor services       # 检查 Nginx/MySQL/PHP/Valkey/RabbitMQ/OpenSearch 状态与主 PID
-saltgoat monitor resources      # 导出 CPU / Memory / I/O 统计与 Top 进程
-saltgoat monitor alert resources # 对照阈值检查 CPU/内存/磁盘/服务并推送 Telegram 告警
-saltgoat monitor network        # 列出网卡统计、连接数与监听端口
-saltgoat monitor logs           # 校验关键日志是否存在并输出最近错误
-saltgoat monitor security       # 查看防火墙、登录记录、SSH 连接与可更新套件数量
-saltgoat monitor performance    # 对照默认阈值（CPU 80%、内存 85%、根分区 90%）提示异常
-saltgoat monitor realtime 120   # 进入 120 秒的全屏实时监控（Ctrl+C 退出）
-saltgoat monitor report nightly # 生成综合巡检报告 `/var/log/saltgoat/monitor/nightly.txt`
-saltgoat monitor report daily   # 生成每日摘要（写入日志并推 Telegram，可加 --no-telegram）
-saltgoat monitor cleanup 14     # 清理 14 天前的旧报告（默认保留 7 天）
-saltgoat monitor config         # 输出当前阈值、目录与已启用的子功能
+sudo saltgoat monitor install        # 安装 salt-minion 并启用 Salt Beacons/Reactor
+sudo saltgoat monitor system         # 显示主机信息、负载、资源与网络概览
+sudo saltgoat monitor services       # 检查 Nginx/MySQL/PHP/Valkey/RabbitMQ/OpenSearch 状态与主 PID
+sudo saltgoat monitor resources      # 导出 CPU / Memory / I/O 统计与 Top 进程
+sudo saltgoat monitor alert resources # 对照阈值检查 CPU/内存/磁盘/服务并推送 Telegram 告警
+sudo saltgoat monitor network        # 列出网卡统计、连接数与监听端口
+sudo saltgoat monitor logs           # 校验关键日志是否存在并输出最近错误
+sudo saltgoat monitor security       # 查看防火墙、登录记录、SSH 连接与可更新套件数量
+sudo saltgoat monitor performance    # 对照默认阈值（CPU 80%、内存 85%、根分区 90%）提示异常
+sudo saltgoat monitor realtime 120   # 进入 120 秒的全屏实时监控（Ctrl+C 退出）
+sudo saltgoat monitor report nightly # 生成综合巡检报告 `/var/log/saltgoat/monitor/nightly.txt`
+sudo saltgoat monitor report daily   # 生成每日摘要（写入日志并推 Telegram，可加 --no-telegram）
+sudo saltgoat monitor cleanup 14     # 清理 14 天前的旧报告（默认保留 7 天）
+sudo saltgoat monitor config         # 输出当前阈值、目录与已启用的子功能
 ```
 
 所有子命令建议加上 `sudo`，避免因权限不足无法读取系统信息。
@@ -39,7 +39,7 @@ saltgoat monitor config         # 输出当前阈值、目录与已启用的子�
 2. 报告生成在 `/var/log/saltgoat/monitor/nightly.txt`，可用 `less` 或 `cat` 查看。
 3. 通过 `sudo saltgoat monitor cleanup <天数>` 删除旧文件，例如 `cleanup 30` 只保留近 30 天。
 
-如需在定时任务中生成报告，可在 systemd timer 或 cron 内调用 `saltgoat monitor report <name>`，并将结果发送到集中日志或备份目录。
+如需在定时任务中生成报告，可在 systemd timer 或 cron 内调用 `sudo saltgoat monitor report <name>`，并将结果发送到集中日志或备份目录。
 
 ## 4. 启用事件驱动监控（Beacons + Reactor）
 
@@ -104,7 +104,7 @@ saltgoat:
       log_path: /var/log/saltgoat/alerts.log
 ```
 
-更新 Pillar 后，可用 `salt-call pillar.items saltgoat` 验证数据，再执行 `saltgoat monitor enable-beacons` 重新加载。
+更新 Pillar 后，可用 `sudo salt-call --local pillar.items saltgoat` 验证数据，再执行 `sudo saltgoat monitor enable-beacons` 重新加载。
 
 ## 6. 常见问题排查
 
@@ -115,14 +115,14 @@ saltgoat:
 
 ## 7. 扩展与集成
 
-- `monitoring/schedule.sh`、`monitoring/memory.sh` 提供额外 CLI 封装，可通过 `saltgoat schedule ...`、`saltgoat memory ...` 使用（详见 `lib/help.sh` 对应条目）。
+- `monitoring/schedule.sh`、`monitoring/memory.sh` 提供额外 CLI 封装，可通过 `sudo saltgoat schedule ...`、`sudo saltgoat memory ...` 使用（详见 `lib/help.sh` 对应条目）。
 - 若需将监控结果整合至外部平台，可结合 Restic/S3 备份，或使用 `modules/monitoring/` 内的 `saltgoat monitoring prometheus|grafana` 方案。
 - 启用 `optional.salt-beacons` 后，系统服务异常会触发自动重启脚本；脚本会记录 systemd 重启结果（成功/失败/当前状态）、写入 `/var/log/saltgoat/alerts.log`，并推送 Telegram + Salt Event，便于人工复核与二次自动化。
 
 ## 8. Telegram ChatOps（实验性）
 
 1. **准备配置**：复制 `salt/pillar/chatops.sls.sample` 为真实 Pillar，设置允许的 `chat_id`、管理员 `approvers`、命令映射（`commands`）。
-2. **刷新 Pillar**：`saltgoat pillar refresh` 或 `saltgoat monitor enable-beacons`，系统会在 `/etc/saltgoat/chatops.json` 写入最新配置，同时创建 `/var/lib/saltgoat/chatops/pending` 与 `/var/log/saltgoat/chatops.log`。
+2. **刷新 Pillar**：`sudo saltgoat pillar refresh` 或 `sudo saltgoat monitor enable-beacons`，系统会在 `/etc/saltgoat/chatops.json` 写入最新配置，同时创建 `/var/lib/saltgoat/chatops/pending` 与 `/var/log/saltgoat/chatops.log`。
 3. **使用方式**：
    - 指令格式 `/saltgoat <match...> [参数]`，例如 `/saltgoat maintenance weekly bank`。
    - `requires_approval: true` 的命令会返回一次性 Token，需要管理员发送 `/saltgoat approve <token>` 才会真正执行。

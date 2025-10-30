@@ -54,7 +54,7 @@ saltgoat:
           saltgoat/backup/restic: 5
 ```
 
-应用 Pillar (`saltgoat pillar refresh`) 后，通知脚本会根据事件标签自动选择对应话题，无需额外参数。
+应用 Pillar (`sudo saltgoat pillar refresh`) 后，通知脚本会根据事件标签自动选择对应话题，无需额外参数。
 
 ## 后续工作
 

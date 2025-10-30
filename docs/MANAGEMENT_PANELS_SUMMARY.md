@@ -58,26 +58,26 @@ modules/
 
 ```bash
 # 安装 Cockpit
-saltgoat cockpit install
+sudo saltgoat cockpit install
 
 # 安装 Adminer
-saltgoat adminer install
+sudo saltgoat adminer install
 
 # 安装 Uptime Kuma
-saltgoat uptime-kuma install
+sudo saltgoat uptime-kuma install
 ```
 
 ### 查看状态
 
 ```bash
 # 查看 Cockpit 状态
-saltgoat cockpit status
+sudo saltgoat cockpit status
 
 # 查看 Adminer 状态
-saltgoat adminer status
+sudo saltgoat adminer status
 
 # 查看 Uptime Kuma 状态
-saltgoat uptime-kuma status
+sudo saltgoat uptime-kuma status
 ```
 
 ### 获取帮助

@@ -28,11 +28,11 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 ## ✅ 核心能力
 
 - **一键安装 LEMP + Magento 依赖**：支持 Nginx / Percona MySQL / PHP-FPM / Valkey / RabbitMQ / OpenSearch / Matomo 等组件。
-- **模块化 CLI**：`saltgoat install | maintenance | magetools | monitor | automation …` 覆盖安装、巡检、备份、安全、性能调优等日常操作。
-- **事件驱动自动化（可选）**：启用 `salt-minion`/`salt-master` 后，`saltgoat monitor enable-beacons` 下发服务自愈、资源阈值告警、配置变更处理等 Reactor，Salt Schedule 自动替换 Cron。
+- **模块化 CLI**：`sudo saltgoat install | maintenance | magetools | monitor | automation …` 覆盖安装、巡检、备份、安全、性能调优等日常操作。
+- **事件驱动自动化（可选）**：启用 `salt-minion`/`salt-master` 后，`sudo saltgoat monitor enable-beacons` 下发服务自愈、资源阈值告警、配置变更处理等 Reactor，Salt Schedule 自动替换 Cron。
 - **自动降级策略**：检测到缺失 `salt-minion` 时，所有计划任务会写入 `/etc/cron.d/`；Reactor 命令也会提示降级状态，保证功能可用。
 - **多层备份**：Restic + S3/Minio 快照、Percona XtraBackup 热备、单库 mysqldump（含 Salt Schedule 示例），并通过 Telegram / Salt event 写日志。
-- **完善的维护体系**：`saltgoat magetools maintenance` 日/周/月任务、健康检查、权限修复，全部附带 Telegram 通知和日志。
+- **完善的维护体系**：`sudo saltgoat magetools maintenance` 日/周/月任务、健康检查、权限修复，全部附带 Telegram 通知和日志。
 
 ---
 
@@ -68,8 +68,8 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    ```
 2. **初始化 Pillar（凭据/变量）**
    ```bash
-   saltgoat pillar init               # 生成 salt/pillar/saltgoat.sls（附带随机密码）
-   saltgoat pillar show               # 审核并按需修改
+   sudo saltgoat pillar init          # 生成 salt/pillar/saltgoat.sls（附带随机密码）
+   sudo saltgoat pillar show          # 审核并按需修改
    # 参考 *.sample 文件快速复制模板
    cp salt/pillar/magento-optimize.sls.sample salt/pillar/magento-optimize.sls
    cp salt/pillar/magento-schedule.sls.sample salt/pillar/magento-schedule.sls
@@ -87,9 +87,9 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    ```
 4. **启用事件驱动（可选）**
    ```bash
-   saltgoat monitor enable-beacons
-   saltgoat monitor beacons-status
-   saltgoat magetools cron <site> install            # 下发 Salt Schedule；若缺少 salt-minion 会自动写 /etc/cron.d/
+   sudo saltgoat monitor enable-beacons
+   sudo saltgoat monitor beacons-status
+   sudo saltgoat magetools cron <site> install       # 下发 Salt Schedule；若缺少 salt-minion 会自动写 /etc/cron.d/
    ```
 
 更多安装细节、Matomo 部署与 Pillar 示例请参考 [`docs/INSTALL.md`](docs/INSTALL.md)。
@@ -99,8 +99,8 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 ## 🔁 运维与自动化指南
 
 ### Magento & LEMP 维护
-- `saltgoat magetools maintenance <site> daily|weekly|monthly|health …`
-- `saltgoat magetools cron <site> install|status|test|logs|uninstall`
+- `sudo saltgoat magetools maintenance <site> daily|weekly|monthly|health …`
+- `sudo saltgoat magetools cron <site> install|status|test|logs|uninstall`
   - 默认安装 Salt Schedule；若无 `salt-minion` 则写入 `/etc/cron.d/magento-maintenance`。
   - 支持在 Pillar 中定义 `magento_schedule.mysql_dump_jobs`，以不同频率导出单个数据库：
     ```yaml
@@ -117,23 +117,23 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - 维护流程、权限修复、故障排查详见 [`docs/MAGENTO_MAINTENANCE.md`](docs/MAGENTO_MAINTENANCE.md)。
 
 ### 监控与巡检
-- `saltgoat monitor system|services|resources|logs|security|performance`
-- `saltgoat monitor report daily` 生成日报到 `/var/log/saltgoat/monitor/`
-- `saltgoat monitor alert resources` 即时检查 CPU/内存/磁盘/关键服务并推送 Telegram 告警（触发 Salt 事件 `saltgoat/monitor/resources`）
-- `saltgoat monitor report daily --no-telegram` 可生成日报而不推送；默认会写日志并发送 Telegram 摘要
-- `saltgoat monitor enable-beacons`：启用 Beacon/Reactors；若缺少 `salt-minion` 会提示并降级。
-- `saltgoat schedule enable`：下发 SaltGoat 自身任务（内存、日志清理等），同样支持自动降级到 cron。
+- `sudo saltgoat monitor system|services|resources|logs|security|performance`
+- `sudo saltgoat monitor report daily` 生成日报到 `/var/log/saltgoat/monitor/`
+- `sudo saltgoat monitor alert resources` 即时检查 CPU/内存/磁盘/关键服务并推送 Telegram 告警（触发 Salt 事件 `saltgoat/monitor/resources`）
+- `sudo saltgoat monitor report daily --no-telegram` 可生成日报而不推送；默认会写日志并发送 Telegram 摘要
+- `sudo saltgoat monitor enable-beacons`：启用 Beacon/Reactors；若缺少 `salt-minion` 会提示并降级。
+- `sudo saltgoat schedule enable`：下发 SaltGoat 自身任务（内存、日志清理等），同样支持自动降级到 cron。
 - Salt Beacon 触发的 systemd 自愈流程会自动执行 `systemctl restart`，并把成功/失败状态写入 `/var/log/saltgoat/alerts.log`、发送 Telegram，同时重新发布 Salt 事件（便于级联自动化）。
 
 ### 自动化脚本 (Automation)
-- `saltgoat automation script <create|list|edit|run|delete>`：生成并维护 `/srv/saltgoat/automation/scripts/*.sh`。
-- `saltgoat automation job <create|list|enable|disable|run|delete>`：首选 Salt Schedule 注册任务；未检测到 `salt-minion` 会自动写 `/etc/cron.d/saltgoat-automation-*`。
-- `saltgoat automation logs <list|view|tail|cleanup>`：统一管理任务日志。
+- `sudo saltgoat automation script <create|list|edit|run|delete>`：生成并维护 `/srv/saltgoat/automation/scripts/*.sh`。
+- `sudo saltgoat automation job <create|list|enable|disable|run|delete>`：首选 Salt Schedule 注册任务；未检测到 `salt-minion` 会自动写 `/etc/cron.d/saltgoat-automation-*`。
+- `sudo saltgoat automation logs <list|view|tail|cleanup>`：统一管理任务日志。
 
 ### 备份策略
 - Restic 快照：`sudo saltgoat magetools backup restic install --site <name> [--repo <path>]` 为单站点创建 systemd 定时器；`run/summary/logs` 子命令可手动触发与巡检。
 - Percona XtraBackup：`sudo saltgoat magetools xtrabackup mysql run`；配置详见 [`docs/MYSQL_BACKUP.md`](docs/MYSQL_BACKUP.md)。
-- 单库导出：`saltgoat magetools xtrabackup mysql dump --database <db> --backup-dir <path>` 会输出体积、写 Salt event，并发 Telegram。
+- 单库导出：`sudo saltgoat magetools xtrabackup mysql dump --database <db> --backup-dir <path>` 会输出体积、写 Salt event，并发 Telegram。
 - 所有备份事件都会写入 `/var/log/saltgoat/alerts.log`，便于审计。
 
 ### Telegram 通知 & ChatOps

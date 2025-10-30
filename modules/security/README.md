@@ -8,7 +8,7 @@
 
 ### 基本语法
 ```bash
-saltgoat <security_command> [options]
+sudo saltgoat <security_command> [options]
 ```
 
 ### 支持的安全功能
@@ -23,7 +23,7 @@ saltgoat <security_command> [options]
 ### 安全扫描
 ```bash
 # 完整安全扫描
-saltgoat security-scan
+sudo saltgoat security-scan
 
 # 扫描结果包含:
 # - 开放端口检查
@@ -38,16 +38,16 @@ saltgoat security-scan
 ### SSL证书管理
 ```bash
 # 生成自签名证书
-saltgoat ssl generate-self-signed example.com
+sudo saltgoat ssl generate-self-signed example.com
 
 # 配置Let's Encrypt证书
-saltgoat ssl configure-letsencrypt example.com
+sudo saltgoat ssl configure-letsencrypt example.com
 
 # 查看证书状态
-saltgoat ssl status
+sudo saltgoat ssl status
 
 # 续期证书
-saltgoat ssl renew
+sudo saltgoat ssl renew
 ```
 
 ## 🔧 安全功能详解
@@ -127,9 +127,9 @@ modules/security/
 
 ## 🔗 相关功能
 
-- **故障诊断**: `saltgoat diagnose` - 系统故障诊断
-- **性能分析**: `saltgoat profile analyze` - 性能分析
-- **版本锁定**: `saltgoat version-lock` - 版本管理
+- **故障诊断**: `sudo saltgoat diagnose` - 系统故障诊断
+- **性能分析**: `sudo saltgoat profile analyze` - 性能分析
+- **版本锁定**: `sudo saltgoat version-lock` - 版本管理
 
 ## 📝 更新日志
 

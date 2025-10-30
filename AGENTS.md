@@ -1,11 +1,11 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`./saltgoat` is the entrypoint and wires together automation hosted in `core/` (bootstrap, system install, tuning), `services/` (service orchestration), and `modules/` (feature packs such as `maintenance/`, `security/`, `monitoring/`, `optimization/`). Salt states live in `salt/states/` with matching data in `salt/pillar/`. Reusable Shell helpers stay in `lib/`, operational runbooks in `scripts/`, references in `docs/`, and validation assets in `tests/`. Initialize or update secrets by editing `salt/pillar/*.sls`（或使用 `scripts/sync-passwords.sh`）并运行 `saltgoat pillar refresh` 让变更生效。
+`./saltgoat` is the entrypoint and wires together automation hosted in `core/` (bootstrap, system install, tuning), `services/` (service orchestration), and `modules/` (feature packs such as `maintenance/`, `security/`, `monitoring/`, `optimization/`). Salt states live in `salt/states/` with matching data in `salt/pillar/`. Reusable Shell helpers stay in `lib/`, operational runbooks in `scripts/`, references in `docs/`, and validation assets in `tests/`. Initialize or update secrets by editing `salt/pillar/*.sls`（或使用 `scripts/sync-passwords.sh`）并运行 `sudo saltgoat pillar refresh` 让变更生效。
 
 ## Build, Test, and Development Commands
 - `sudo ./saltgoat system install` registers the launcher system-wide for parity with production hosts。
-- `./saltgoat install all --mysql-password 'Example123!' ...` provisions the entire stack; swap `all` for `core`, `optional`, or service verbs while iterating（命令行参数用于一次性覆盖）。
+- `sudo saltgoat install all --mysql-password 'Example123!' ...` provisions the entire stack; swap `all` for `core`, `optional`, or service verbs while iterating（命令行参数用于一次性覆盖）。
 - 编辑 `salt/pillar/saltgoat.sls` 或运行 `scripts/sync-passwords.sh` 填充所需凭据，然后执行安装命令。
 - `bash scripts/code-review.sh -a` runs ShellCheck and shfmt; append `-f` to auto-format updated files。
 - `bash tests/consistency-test.sh`、`bash tests/test_rabbitmq_check.sh` 与 `bash tests/test_magento_optimization.sh` 校验核心 Salt 流程和模板渲染。

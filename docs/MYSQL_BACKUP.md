@@ -8,7 +8,7 @@ SaltGoat 提供 `optional.mysql-backup` 可选模块，基于 [Percona XtraBacku
 - systemd timer 管理周期执行，可与 Restic 二次归档整合；
 - CLI 命令统一触发安装、运行、日志与巡检。
 
-> CLI 入口：`saltgoat magetools xtrabackup mysql <subcommand>`。旧命令 `saltgoat magetools backup mysql ...` 仍可使用，但会提示迁移。
+> CLI 入口：`sudo saltgoat magetools xtrabackup mysql <subcommand>`。旧命令 `sudo saltgoat magetools backup mysql ...` 仍可使用，但会提示迁移。
 
 -------------------------------------------------------------------------------
 
@@ -45,9 +45,9 @@ SaltGoat 提供 `optional.mysql-backup` 可选模块，基于 [Percona XtraBacku
    >      connection_password: "{{ salt['pillar.get']('mysql_password') }}"
    >    ```
    >    `mysql_backup_password` 建议单独写在 `salt/pillar/secret/mysql-backup.sls` 之类的私有 Pillar 文件，再在 `top.sls` 中按需 include，避免把真实密码提交到仓库。若目录位于 Dropbox 等用户空间，请确保 `service_user`/`repo_owner` 与该目录的属主一致，使 systemd 任务和备份文件都拥有写权限。
-   > 2. 执行 `saltgoat pillar refresh` 同步最新 Pillar。
+> 2. 执行 `sudo saltgoat pillar refresh` 同步最新 Pillar。
    > 3. 重新运行 `sudo saltgoat magetools xtrabackup mysql install`，Salt 状态会依照新的路径创建目录、刷新 `/etc/mysql/mysql-backup.env` 并重启定时器。
-   > 4. 之后无论是定时器还是 `saltgoat magetools xtrabackup mysql run` 都会使用新的 `backup_dir`。如需让逻辑导出 (`xtrabackup mysql dump`) 保存到其他位置，可在命令里追加 `--backup-dir /path/to/dir`。
+> 4. 之后无论是定时器还是 `sudo saltgoat magetools xtrabackup mysql run` 都会使用新的 `backup_dir`。如需让逻辑导出 (`xtrabackup mysql dump`) 保存到其他位置，可在命令里追加 `--backup-dir /path/to/dir`。
 
 3. 执行安装（需 root 权限，仅需运行一次即可创建账号、脚本与 timer）：
 
@@ -218,6 +218,8 @@ mysql_backup:
 | `timer` / `randomized_delay` | systemd 定时计划，可填写 `hourly` / `weekly` 或 Cron 表达式 |
 | `retention_days` | 清理旧备份的天数；设为 `0` 表示不自动删除 |
 | `prepare_backup` | 是否在备份完成后立即执行 `xtrabackup --prepare` |
+| `compress` | 是否启用 XtraBackup 内置压缩 |
+| `extra_args` | 传递给 `xtrabackup` 的附加参数，如 `--parallel=4` |
 
 ---
 
@@ -226,14 +228,12 @@ mysql_backup:
 当你在 `salt/pillar/secret/auth.sls` 或 `salt/pillar/secret/mysql-backup.sls` 中调整密码时，请按照以下步骤让系统同步到新值：
 
 1. 参照 [`docs/SECRET_MANAGEMENT.md`](docs/SECRET_MANAGEMENT.md) 修改或复制对应的 secret 模板。
-2. 执行 `saltgoat pillar refresh` 刷新 Pillar 缓存。
+2. 执行 `sudo saltgoat pillar refresh` 刷新 Pillar 缓存。
 3. 运行 `bash scripts/sync-passwords.sh`（会同时写入 MySQL/Valkey/RabbitMQ/Webmin/phpMyAdmin 密码），或单独执行：
    ```bash
    sudo saltgoat magetools xtrabackup mysql install   # 重新渲染 /etc/mysql/mysql-backup.env 并更新 systemd
    ```
-4. 用 `saltgoat magetools xtrabackup mysql run` 或 `saltgoat magetools xtrabackup mysql summary` 验证备份流程，必要时结合 `saltgoat passwords --show` 检查 CLI 读取的新值。
-| `compress` | 是否启用 XtraBackup 内置压缩 |
-| `extra_args` | 传递给 `xtrabackup` 的附加参数，如 `--parallel=4` |
+4. 用 `sudo saltgoat magetools xtrabackup mysql run` 或 `sudo saltgoat magetools xtrabackup mysql summary` 验证备份流程，必要时结合 `sudo saltgoat passwords --show` 检查 CLI 读取的新值。
 
 -------------------------------------------------------------------------------
 
@@ -262,13 +262,13 @@ magento_schedule:
 使用指南：
 
 1. 复制 `salt/pillar/magento-schedule.sls.sample` 为 `salt/pillar/magento-schedule.sls`，将上述配置写入并按站点调整。
-2. 执行 `saltgoat pillar refresh`。
-3. 对每个站点运行 `saltgoat magetools cron <site> install`。命令会为该站点的 Salt Schedule（或降级的 `/etc/cron.d/magento-maintenance`）生成 mysqldump 计划。
-4. 后续可通过 `saltgoat magetools cron <site> status` 查看条目。输出会包含中文注释（如“每分钟 / 每小时整点 / 每周日 03:00”）帮助识别频率。
+2. 执行 `sudo saltgoat pillar refresh`。
+3. 对每个站点运行 `sudo saltgoat magetools cron <site> install`。命令会为该站点的 Salt Schedule（或降级的 `/etc/cron.d/magento-maintenance`）生成 mysqldump 计划。
+4. 后续可通过 `sudo saltgoat magetools cron <site> status` 查看条目。输出会包含中文注释（如“每分钟 / 每小时整点 / 每周日 03:00”）帮助识别频率。
 
 > 若宿主缺少 `salt-minion`，`install` 会自动回退写入系统 Cron，但仍使用同样的站点配置。
 > 建议在每个任务中填写 `site` 或 `sites` 字段，SaltGoat 会据此只在对应站点的 `install` 命令中安装/卸载任务。
-> 如果需要让 Restic 抓取这些逻辑导出，可在 `saltgoat magetools backup restic install --site <name>` 时通过 `--paths` 将备份目录加入 include 列表，或使用 `saltgoat magetools backup restic run --paths <dir>` 临时触发。
+> 如果需要让 Restic 抓取这些逻辑导出，可在 `sudo saltgoat magetools backup restic install --site <name>` 时通过 `--paths` 将备份目录加入 include 列表，或使用 `sudo saltgoat magetools backup restic run --paths <dir>` 临时触发。
 
 -------------------------------------------------------------------------------
 
@@ -278,7 +278,7 @@ magento_schedule:
 |------|----------|
 | `xtrabackup` 命令不存在 | 确认已安装 `percona-xtrabackup-84`，必要时运行 `apt-cache policy percona-xtrabackup-84` |
 | 备份失败 `access denied` | 检查 `mysql_backup` Pillar 中的 `mysql_password` 是否与 `mysql.user` 中一致；必要时重新生成并 `install` | 
-| systemd 服务一直失败 | 查看 `saltgoat magetools xtrabackup mysql logs`，常见原因是目录权限或 MySQL 账号缺失 |
+| systemd 服务一直失败 | 查看 `sudo saltgoat magetools xtrabackup mysql logs`，常见原因是目录权限或 MySQL 账号缺失 |
 | 如何归档/远程存储 | 可将备份输出目录加入 Restic `paths`，或编写脚本上传至 S3/OSS |
 | 如何执行增量备份 | 可在 `extra_args` 中添加 `--incremental-basedir=/path/to/full` + `timer` 定制；目前示例默认为全量 |
 

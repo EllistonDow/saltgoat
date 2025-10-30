@@ -25,48 +25,48 @@ Adminer 是一个轻量级的 Web 数据库管理工具，单文件 PHP 应用�
 
 ```bash
 # 安装 Adminer
-saltgoat adminer install
+sudo saltgoat adminer install
 ```
 
 ### 查看状态
 
 ```bash
 # 查看 Adminer 状态
-saltgoat adminer status
+sudo saltgoat adminer status
 ```
 
 ### 配置管理
 
 ```bash
 # 查看当前配置
-saltgoat adminer config show
+sudo saltgoat adminer config show
 
 # 更新到最新版本
-saltgoat adminer config update
+sudo saltgoat adminer config update
 
 # 安装主题
-saltgoat adminer config theme nette
+sudo saltgoat adminer config theme nette
 ```
 
 ### 安全配置
 
 ```bash
 # 配置安全设置
-saltgoat adminer security
+sudo saltgoat adminer security
 ```
 
 ### 备份配置
 
 ```bash
 # 备份 Adminer 配置
-saltgoat adminer backup
+sudo saltgoat adminer backup
 ```
 
 ### 卸载
 
 ```bash
 # 卸载 Adminer
-saltgoat adminer uninstall
+sudo saltgoat adminer uninstall
 ```
 
 ## 访问地址
@@ -107,7 +107,7 @@ Adminer 支持多种主题：
 
 ```bash
 # 安装 Nette 主题
-saltgoat adminer config theme nette
+sudo saltgoat adminer config theme nette
 
 # 访问主题版本
 # http://your-server-ip:8081/nette.php
@@ -125,7 +125,7 @@ saltgoat adminer config theme nette
 
 ```bash
 # 配置完整安全设置
-saltgoat adminer security
+sudo saltgoat adminer security
 ```
 
 这将创建：
@@ -213,13 +213,13 @@ post_max_size = 100M
 saltgoat adminer help
 
 # 完整状态检查
-saltgoat adminer status
+sudo saltgoat adminer status
 
 # 安全配置
-saltgoat adminer security
+sudo saltgoat adminer security
 
 # 备份配置
-saltgoat adminer backup
+sudo saltgoat adminer backup
 ```
 
 ## 与 phpMyAdmin 对比

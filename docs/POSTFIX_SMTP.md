@@ -5,7 +5,7 @@ SaltGoat 允许在同一套 Pillar 中维护多组外发 SMTP 凭据，并可通
 ## 1. 准备工作
 
 1. **生成或更新 Pillar**  
-   运行 `saltgoat pillar init` 会写出一个支持多账号的基本结构；已有环境可直接编辑 `salt/pillar/saltgoat.sls`（或你的私有 Pillar）。
+   运行 `sudo saltgoat pillar init` 会写出一个支持多账号的基本结构；已有环境可直接编辑 `salt/pillar/saltgoat.sls`（或你的私有 Pillar）。
    > 提示：`salt/pillar/lemp.sls` 仍然是示例模板，真实环境下请把敏感凭据写入 `salt/pillar/saltgoat.sls` 或你的外部机密仓库。
 2. **账号凭据**  
    - 每个账号需要 `host`、`port`、`user`、`password`、`from_email`、`from_name` 字段。  
@@ -61,11 +61,11 @@ mail:
 ### 更新 SMTP / Postfix 凭据
 
 1. 在 `salt/pillar/secret/smtp.sls`（或其它 secret 文件）修改 `secrets.email_accounts` 与 `secrets.postfix_profile`。
-2. `saltgoat pillar refresh` 刷新 Pillar。
-3. `saltgoat postfix --smtp <profile>`（按需附加 `--enable` / `--disable`），该命令会写入 `/etc/postfix/sasl_passwd` 并重新加载 Postfix。
-4. 通过 `saltgoat passwords --show`、`saltgoat monitor enable-beacons` 或发送测试邮件确认生效。
+2. `sudo saltgoat pillar refresh` 刷新 Pillar。
+3. `sudo saltgoat postfix --smtp <profile>`（按需附加 `--enable` / `--disable`），该命令会写入 `/etc/postfix/sasl_passwd` 并重新加载 Postfix。
+4. 通过 `sudo saltgoat passwords --show`、`sudo saltgoat monitor enable-beacons` 或发送测试邮件确认生效。
 
-> 仅执行 `saltgoat pillar refresh` 不会自动更新系统配置，请务必完成步骤 3。
+> 仅执行 `sudo saltgoat pillar refresh` 不会自动更新系统配置，请务必完成步骤 3。
 
 ## 3. 切换 SMTP 账号
 
@@ -124,7 +124,7 @@ sudo ./saltgoat postfix --smtp gmail --disable
 | ---- | ------------------- |
 | `SendAsDenied`（M365） | 登录账号与 `from_email` 不一致且未授予 Send As 权限；请在 Exchange 管理中心配置或保持二者一致。 |
 | `postconf: command not found` | 本机未安装 Postfix；若仅使用脚本直连外部 SMTP 可忽略此警告。 |
-| 切换命令成功但邮件仍走旧账号 | 确认 `salt/pillar/saltgoat.sls` 已更新，并重新运行 `saltgoat postfix --smtp <account>` + `python3` 测试脚本。 |
+| 切换命令成功但邮件仍走旧账号 | 确认 `salt/pillar/saltgoat.sls` 已更新，并重新运行 `sudo saltgoat postfix --smtp <account>` + `python3` 测试脚本。 |
 
 ## 6. 清理与安全建议
 
@@ -135,5 +135,5 @@ sudo ./saltgoat postfix --smtp gmail --disable
 
 ---
 
-完成以上配置后，使用 `saltgoat postfix --smtp <account>` 即可在多套 SMTP 凭据之间自由切换，方便在 Gmail 与 Microsoft 365 等服务之间测试或运维切换。祝使用愉快！
-> 提示：若系统尚未安装 Postfix，即使使用 `--enable` 也只会生成凭据文件；待安装 Postfix 后再次执行 `saltgoat postfix --smtp <profile> --enable` 即可完成重载。
+完成以上配置后，使用 `sudo saltgoat postfix --smtp <account>` 即可在多套 SMTP 凭据之间自由切换，方便在 Gmail 与 Microsoft 365 等服务之间测试或运维切换。祝使用愉快！
+> 提示：若系统尚未安装 Postfix，即使使用 `--enable` 也只会生成凭据文件；待安装 Postfix 后再次执行 `sudo saltgoat postfix --smtp <profile> --enable` 即可完成重载。

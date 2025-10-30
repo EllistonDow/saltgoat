@@ -48,7 +48,7 @@ salt/pillar/secret/
 2. **刷新 Pillar**
 
    ```bash
-   saltgoat pillar refresh
+   sudo saltgoat pillar refresh
    ```
 
    此步骤仅让 Salt 拿到新配置，不会立刻修改系统中的服务密码。
@@ -58,7 +58,7 @@ salt/pillar/secret/
    - 全新安装：`sudo saltgoat install all`
    - 需要预先写入服务密码：`bash scripts/sync-passwords.sh`
 
-   完成后可用 `saltgoat passwords --show`（需确认后输出）检查当前值。
+   完成后可用 `sudo saltgoat passwords --show`（需确认后输出）检查当前值。
 
 ---
 
@@ -88,7 +88,7 @@ salt/pillar/secret/
 2. **刷新 Pillar**
 
    ```bash
-   saltgoat pillar refresh
+   sudo saltgoat pillar refresh
    ```
 
 3. **根据服务类型执行对应脚本/状态**
@@ -96,23 +96,23 @@ salt/pillar/secret/
    | 服务 / 组件                       | 同步命令                                                                                  |
    |-----------------------------------|-------------------------------------------------------------------------------------------|
    | MySQL / Valkey / RabbitMQ / Webmin | `bash scripts/sync-passwords.sh` （或针对单项使用 `sudo salt-call --local state.apply …`） |
-   | SMTP / Postfix                    | `saltgoat postfix --smtp <profile> [--enable|--disable]`                                  |
+   | SMTP / Postfix                    | `sudo saltgoat postfix --smtp <profile> [--enable|--disable]`                            |
    | Restic 备份                       | `sudo saltgoat magetools backup restic install`                                           |
    | Percona XtraBackup                | `sudo saltgoat magetools xtrabackup mysql install`                                        |
-   | Magento 维护任务（需新密码）        | `saltgoat magetools maintenance <site> …`（大多会自动读取新的 Pillar）                     |
+   | Magento 维护任务（需新密码）        | `sudo saltgoat magetools maintenance <site> …`（大多会自动读取新的 Pillar）               |
    | 其它 Salt 状态                    | `sudo salt-call --local state.apply <state.name>`                                         |
 
 4. **验证**
 
-   - `saltgoat passwords --show`（需确认后输出）确认凭据已被 CLI 读取。
-   - `saltgoat magetools backup/restic/xtrabackup …` 或服务自测命令检查是否成功。
-   - 如使用 Postfix，建议运行 `saltgoat postfix --smtp <profile>` 后测试告警或 `saltgoat monitor enable-beacons` 的 Telegram 推送。
+   - `sudo saltgoat passwords --show`（需确认后输出）确认凭据已被 CLI 读取。
+   - `sudo saltgoat magetools backup/restic/xtrabackup …` 或服务自测命令检查是否成功。
+   - 如使用 Postfix，建议运行 `sudo saltgoat postfix --smtp <profile>` 后测试告警或 `sudo saltgoat monitor enable-beacons` 的 Telegram 推送。
 
 ---
 
 ## 4. 常见问题
 
-### `saltgoat pillar refresh` 不会直接改密码吗？
+### `sudo saltgoat pillar refresh` 不会直接改密码吗？
 
 不会。该命令只刷新 Salt 的配置缓存。若要真正修改服务密码，必须在刷新 Pillar 后执行上表所列的状态/脚本，让服务读取新值并完成修改。
 

@@ -28,64 +28,64 @@ Uptime Kuma 是一个现代化的自托管监控工具，提供实时服务监�
 
 ```bash
 # 安装 Uptime Kuma
-saltgoat uptime-kuma install
+sudo saltgoat uptime-kuma install
 ```
 
 ### 查看状态
 
 ```bash
 # 查看 Uptime Kuma 状态
-saltgoat uptime-kuma status
+sudo saltgoat uptime-kuma status
 ```
 
 ### 配置管理
 
 ```bash
 # 查看当前配置
-saltgoat uptime-kuma config show
+sudo saltgoat uptime-kuma config show
 
 # 更改端口
-saltgoat uptime-kuma config port 3002
+sudo saltgoat uptime-kuma config port 3002
 
 # 更新到最新版本
-saltgoat uptime-kuma config update
+sudo saltgoat uptime-kuma config update
 
 # 备份数据
-saltgoat uptime-kuma config backup
+sudo saltgoat uptime-kuma config backup
 
 # 恢复数据
-saltgoat uptime-kuma config restore /path/to/backup.tar.gz
+sudo saltgoat uptime-kuma config restore /path/to/backup.tar.gz
 ```
 
 ### 日志管理
 
 ```bash
 # 查看最近 50 行日志
-saltgoat uptime-kuma logs
+sudo saltgoat uptime-kuma logs
 
 # 查看最近 100 行日志
-saltgoat uptime-kuma logs 100
+sudo saltgoat uptime-kuma logs 100
 ```
 
 ### 服务管理
 
 ```bash
 # 重启 Uptime Kuma 服务
-saltgoat uptime-kuma restart
+sudo saltgoat uptime-kuma restart
 ```
 
 ### 监控配置
 
 ```bash
 # 配置 SaltGoat 服务监控
-saltgoat uptime-kuma monitor
+sudo saltgoat uptime-kuma monitor
 ```
 
 ### 卸载
 
 ```bash
 # 卸载 Uptime Kuma
-saltgoat uptime-kuma uninstall
+sudo saltgoat uptime-kuma uninstall
 ```
 
 ## 访问地址
@@ -163,7 +163,7 @@ Uptime Kuma 与 SaltGoat 完美集成：
 
 ```bash
 # 配置 SaltGoat 服务监控
-saltgoat uptime-kuma monitor
+sudo saltgoat uptime-kuma monitor
 ```
 
 这将自动创建以下监控：
@@ -258,13 +258,13 @@ journalctl -u uptime-kuma -f
 saltgoat uptime-kuma help
 
 # 完整状态检查
-saltgoat uptime-kuma status
+sudo saltgoat uptime-kuma status
 
 # 配置监控
-saltgoat uptime-kuma monitor
+sudo saltgoat uptime-kuma monitor
 
 # 备份数据
-saltgoat uptime-kuma config backup
+sudo saltgoat uptime-kuma config backup
 ```
 
 ## 与其他监控工具对比

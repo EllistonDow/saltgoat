@@ -45,5 +45,5 @@ secrets:
 
 > 提示：如果使用 ext_pillar（如 Vault、Credstash），只需确保最终能在 Pillar 中拿到 `secrets.*` 对应的键值，即可与仓库中的模板文件配合使用。
 
-照新文档操作——复制 salt/pillar/secret/*.sls.example 为实际 .sls，填入密码后执行 saltgoat pillar refresh，再按照对应服务命令（如
-  bash scripts/sync-passwords.sh、saltgoat postfix --smtp …、sudo saltgoat magetools backup restic install 等）同步到系统。
+照新文档操作——复制 salt/pillar/secret/*.sls.example 为实际 .sls，填入密码后执行 `sudo saltgoat pillar refresh`，再按照对应服务命令（如
+  `bash scripts/sync-passwords.sh`、`sudo saltgoat postfix --smtp …`、`sudo saltgoat magetools backup restic install` 等）同步到系统。

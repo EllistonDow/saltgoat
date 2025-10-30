@@ -8,7 +8,7 @@
 
 ### 基本语法
 ```bash
-saltgoat maintenance <operation> [options]
+sudo saltgoat maintenance <operation> [options]
 ```
 
 ### 支持的维护操作
@@ -26,70 +26,70 @@ saltgoat maintenance <operation> [options]
 ### 系统更新
 ```bash
 # 检查系统更新
-saltgoat maintenance update check
+sudo saltgoat maintenance update check
 
 # 升级系统包
-saltgoat maintenance update upgrade
+sudo saltgoat maintenance update upgrade
 
 # 完整升级
-saltgoat maintenance update dist-upgrade
+sudo saltgoat maintenance update dist-upgrade
 
 # 自动清理
-saltgoat maintenance update autoremove
+sudo saltgoat maintenance update autoremove
 
 # 清理包缓存
-saltgoat maintenance update clean
+sudo saltgoat maintenance update clean
 ```
 
 ### 服务管理
 ```bash
 # 重启服务
-saltgoat maintenance service restart nginx
+sudo saltgoat maintenance service restart nginx
 
 # 启动服务
-saltgoat maintenance service start mysql
+sudo saltgoat maintenance service start mysql
 
 # 停止服务
-saltgoat maintenance service stop php8.3-fpm
+sudo saltgoat maintenance service stop php8.3-fpm
 
 # 重载配置
-saltgoat maintenance service reload nginx
+sudo saltgoat maintenance service reload nginx
 
 # 查看服务状态
-saltgoat maintenance service status nginx
+sudo saltgoat maintenance service status nginx
 ```
 
 ### 系统清理
 ```bash
 # 清理系统日志
-saltgoat maintenance cleanup logs
+sudo saltgoat maintenance cleanup logs
 
 # 清理临时文件
-saltgoat maintenance cleanup temp
+sudo saltgoat maintenance cleanup temp
 
 # 清理包缓存
-saltgoat maintenance cleanup cache
+sudo saltgoat maintenance cleanup cache
 
 # 清理用户缓存
-saltgoat maintenance cleanup user-cache
+sudo saltgoat maintenance cleanup user-cache
 ```
 
 ### 磁盘管理
 ```bash
 # 查看磁盘使用情况
-saltgoat maintenance disk usage
+sudo saltgoat maintenance disk usage
 
 # 查找大文件
-saltgoat maintenance disk find-large 100M
+sudo saltgoat maintenance disk find-large 100M
 
 # 查找大目录
-saltgoat maintenance disk find-large-dirs 1G
+sudo saltgoat maintenance disk find-large-dirs 1G
 ```
 
 ### 健康检查
 ```bash
 # 系统健康检查
-saltgoat maintenance health
+sudo saltgoat maintenance health
 ```
 
 ## 🔧 维护功能详解
@@ -129,7 +129,7 @@ saltgoat maintenance health
 [SUCCESS] 内存使用率: 45%
 [SUCCESS] 磁盘使用率: 60%
 [WARNING] 发现 3 个服务需要重启
-[INFO] 建议运行: saltgoat maintenance service restart <service>
+[INFO] 建议运行: sudo saltgoat maintenance service restart <service>
 ==========================================
 ```
 
@@ -157,9 +157,9 @@ modules/maintenance/
 
 ## 🔗 相关功能
 
-- **故障诊断**: `saltgoat diagnose` - 系统故障诊断
-- **性能分析**: `saltgoat profile analyze` - 性能分析
-- **版本锁定**: `saltgoat version-lock` - 版本管理
+- **故障诊断**: `sudo saltgoat diagnose` - 系统故障诊断
+- **性能分析**: `sudo saltgoat profile analyze` - 性能分析
+- **版本锁定**: `sudo saltgoat version-lock` - 版本管理
 
 ## 📝 更新日志
 

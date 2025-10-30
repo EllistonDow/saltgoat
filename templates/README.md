@@ -32,16 +32,16 @@
 
 ```bash
 # 创建系统更新模板
-saltgoat automation templates system-update
+sudo saltgoat automation templates system-update
 
 # 创建备份清理模板
-saltgoat automation templates backup-cleanup
+sudo saltgoat automation templates backup-cleanup
 
 # 创建日志轮转模板
-saltgoat automation templates log-rotation
+sudo saltgoat automation templates log-rotation
 
 # 创建安全扫描模板
-saltgoat automation templates security-scan
+sudo saltgoat automation templates security-scan
 ```
 
 ## 扩展模板
