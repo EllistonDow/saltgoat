@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.2.2] - 2025-10-30
+
+### Changes
+- 修改 4 个文件: docs/MAGENTO_MAINTENANCE.md, lib/help.sh, modules/magetools/varnish.sh, salt/states/optional/varnish.vcl
+
+
 ## [1.2.1] - 2025-10-30
 
 ### Changes

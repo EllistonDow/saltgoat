@@ -268,6 +268,7 @@ location ^~ /admin/ {
     proxy_set_header X-Forwarded-Port $server_port;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Ssl on;
+    proxy_set_header X-Magento-Vary $http_x_magento_vary;
     proxy_http_version 1.1;
     proxy_set_header Connection keep-alive;
     proxy_buffering on;
@@ -299,6 +300,7 @@ location ^~ /${admin_prefix}/ {
     proxy_set_header X-Forwarded-Port \$server_port;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Ssl on;
+    proxy_set_header X-Magento-Vary \$http_x_magento_vary;
     proxy_http_version 1.1;
     proxy_set_header Connection keep-alive;
     proxy_buffering on;
@@ -320,6 +322,7 @@ location ^~ /customer/ {
     proxy_set_header X-Forwarded-Port \$server_port;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Ssl on;
+    proxy_set_header X-Magento-Vary \$http_x_magento_vary;
     proxy_http_version 1.1;
     proxy_set_header Connection keep-alive;
     proxy_buffering off;
@@ -333,6 +336,7 @@ location ^~ /rest/ {
     proxy_set_header X-Forwarded-Port \$server_port;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Ssl on;
+    proxy_set_header X-Magento-Vary \$http_x_magento_vary;
     proxy_http_version 1.1;
     proxy_set_header Connection keep-alive;
     proxy_buffering off;
@@ -346,6 +350,7 @@ location ^~ /graphql {
     proxy_set_header X-Forwarded-Port \$server_port;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Ssl on;
+    proxy_set_header X-Magento-Vary \$http_x_magento_vary;
     proxy_http_version 1.1;
     proxy_set_header Connection keep-alive;
     proxy_buffering off;
@@ -359,6 +364,7 @@ location ^~ /page_cache/ {
     proxy_set_header X-Forwarded-Port \$server_port;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Ssl on;
+    proxy_set_header X-Magento-Vary \$http_x_magento_vary;
     proxy_http_version 1.1;
     proxy_set_header Connection keep-alive;
     proxy_buffering off;
@@ -372,6 +378,7 @@ location / {
     proxy_set_header X-Forwarded-Port \$server_port;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Ssl on;
+    proxy_set_header X-Magento-Vary \$http_x_magento_vary;
     proxy_http_version 1.1;
     proxy_set_header Connection keep-alive;
     proxy_buffering on;
@@ -504,6 +511,103 @@ configure_magento_builtin() {
     run_magento cache:flush >/dev/null
 }
 
+diagnose_varnish() {
+    require_site
+    log_highlight "诊断站点 ${SITE} 的 Varnish 集成"
+
+    local -i checks=0 failures=0
+    local snippet backend vcl_path value
+    local -a server_names=() domains=()
+
+    snippet="$(frontend_snippet)"
+    backend="$(backend_conf)"
+    vcl_path="${SCRIPT_DIR}/salt/states/optional/varnish.vcl"
+
+    ((++checks))
+    if [[ -f "$snippet" ]]; then
+        log_success "前端 snippet 存在: ${snippet}"
+    else
+        log_error "缺少前端 snippet: ${snippet}（尚未执行 varnish enable?）"
+        ((++failures))
+    fi
+
+    ((++checks))
+    if [[ -f "$snippet" ]] && grep -q 'proxy_set_header X-Magento-Vary' "$snippet"; then
+        log_success "snippet 透传 X-Magento-Vary 头，菜单/客户数据缓存安全"
+    else
+        log_error "snippet 未透传 X-Magento-Vary，可能导致菜单缺失"
+        ((++failures))
+    fi
+
+    ((++checks))
+    if [[ -f "$backend" ]]; then
+        log_success "backend 配置存在: ${backend}"
+        mapfile -t server_names < <(collect_server_names 2>/dev/null || true)
+        if (( ${#server_names[@]} > 0 )); then
+            log_info "backend server_name: ${server_names[*]}"
+        else
+            log_warning "backend 配置存在，但未解析出 server_name 行"
+        fi
+    else
+        log_error "缺少 backend 配置: ${backend}"
+        ((++failures))
+    fi
+
+    ((++checks))
+    if [[ -f "$backend" ]] && grep -q 'include /var/www/.*/nginx.conf.sample' "$backend"; then
+        log_success "backend 继承 Magento 官方 nginx.conf.sample（包含必需 FastCGI 参数）"
+    else
+        log_warning "请确认 backend 使用 Magento 官方 nginx.conf.sample，以防遗漏 X-Magento-Vary 透传"
+    fi
+
+    ((++checks))
+    if [[ -f "$vcl_path" ]] && grep -q 'req.http.X-Magento-Vary' "$vcl_path"; then
+        log_success "VCL 已将 X-Magento-Vary 纳入缓存键"
+    else
+        log_error "VCL 未检测到 req.http.X-Magento-Vary，建议更新 optional/varnish.vcl"
+        ((++failures))
+    fi
+
+    ((++checks))
+    value="$(run_magento config:show system/full_page_cache/caching_application 2>/dev/null | tr -d $'\r')"
+    if [[ "$value" == "2" ]]; then
+        log_success "Magento FPC 配置为 Varnish (caching_application=2)"
+    else
+        log_error "Magento FPC 当前不是 Varnish (值=${value:-空})"
+        ((++failures))
+    fi
+
+    ((++checks))
+    value="$(run_magento config:show ${MAGENTO_OFFLOADER_CONFIG} 2>/dev/null | tr -d $'\r')"
+    if [[ -n "$value" ]]; then
+        log_success "Magento offloader header 设置为 ${value}"
+    else
+        log_warning "Magento offloader header 未设置，HTTPS 回源可能读取到 HTTP 协议"
+    fi
+
+    mapfile -t domains < <(magento_base_domains 2>/dev/null || true)
+    if (( ${#domains[@]} > 0 )); then
+        log_info "Magento store Base URL 映射："
+        local entry host stores
+        for entry in "${domains[@]}"; do
+            host="${entry%%|*}"
+            stores="${entry#*|}"
+            if [[ "$host" == "$stores" ]]; then
+                log_info "  - ${host}"
+            else
+                log_info "  - ${host} (stores: ${stores//,/ })"
+            fi
+        done
+    fi
+
+    log_info "共执行 ${checks} 项诊断检查"
+    if (( failures > 0 )); then
+        log_error "诊断发现 ${failures} 项风险，请根据提示修正后再试"
+        exit 1
+    fi
+    log_success "未发现阻塞性问题，Varnish 集成状态良好"
+}
+
 enable_varnish() {
     log_highlight "为站点 ${SITE} 启用 Varnish"
     ensure_backup
@@ -532,6 +636,9 @@ case "${ACTION}" in
     enable)
         require_site
         enable_varnish
+        ;;
+    diagnose)
+        diagnose_varnish
         ;;
     disable)
         require_site

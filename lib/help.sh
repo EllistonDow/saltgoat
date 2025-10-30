@@ -534,6 +534,7 @@ show_magetools_help() {
     help_command "rabbitmq-salt remove <site>"    "停用消费者并清理 env.php queue 配置"
     help_command "varnish enable <site>"          "启用 Varnish（前端 Nginx → Varnish → backend Nginx/PHP）"
     help_command "varnish disable <site>"         "停用 Varnish 并恢复原始 Nginx/PHP 模式"
+    help_command "varnish diagnose <site>"        "体检 Varnish/Nginx/Magento 关键配置（只读诊断）"
     help_note "旧版 \`rabbitmq all|smart|check\` 仍可用，但推荐迁移至 rabbitmq-salt。"
     help_note "Valkey/RabbitMQ 凭据来自 Pillar，可通过 \`saltgoat passwords\` 查看。"
     echo ""

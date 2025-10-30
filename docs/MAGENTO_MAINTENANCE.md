@@ -293,6 +293,7 @@ PHP-FPM (php8.3-fpm/www-data)
 - **回滚安全**：`disable` 命令会恢复原 `/etc/nginx/sites-available/<site>`、删除临时 snippet/backend 并将 FPC 切回内置缓存，确保可以无损返回原状。
 - **服务管理**：禁用单个站点时不会停止全局 varnish 服务，避免其它仍在使用缓存的站点出现 502；若需要完全停用，可手动执行 `sudo systemctl stop varnish`。
 - **Pillar/State 一致性**：上述配置都写入仓库（`modules/magetools/varnish.sh`、`salt/states/optional/varnish.vcl`、`app/etc/csp_whitelist.xml`），因此 `git clone` + SaltGoat 安装后会得到完全一致的行为，不需要额外手工修改。
+- **快速体检**：使用 `sudo saltgoat magetools varnish diagnose <site>` 可只读检查 snippet 是否透传 `X-Magento-Vary`、VCL 是否包含 Vary 缓存键、Magento FPC 是否设为 Varnish、offloader header 是否正确等，便于排查菜单丢失等常见问题。
 
 > 若希望扩展缓存命中率，可在 `salt/states/optional/varnish.vcl` 中按需加入其他允许缓存的接口；测试通过后再执行 `sudo salt-call --local state.apply optional.varnish` 下发即可。
 

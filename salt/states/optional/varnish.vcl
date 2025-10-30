@@ -38,6 +38,17 @@ sub vcl_recv {
     return (hash);
 }
 
+sub vcl_hash {
+    hash_data(req.url);
+    if (req.http.Host) {
+        hash_data(req.http.Host);
+    }
+    if (req.http.X-Magento-Vary) {
+        hash_data(req.http.X-Magento-Vary);
+    }
+    return (lookup);
+}
+
 sub vcl_backend_response {
     # Set cache time for static files
     if (bereq.url ~ "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$") {
@@ -54,6 +65,10 @@ sub vcl_backend_response {
     # Remove cookies for static files
     if (bereq.url ~ "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$") {
         unset beresp.http.Set-Cookie;
+    }
+
+    if (bereq.method == "GET" && beresp.http.Content-Type ~ "text/html") {
+        set beresp.do_esi = true;
     }
     
     return (deliver);
