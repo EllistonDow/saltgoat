@@ -147,7 +147,7 @@ resource_alert_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.',
 
         message = "\n".join(lines)
 
-        reactor_common.broadcast_telegram(message, profiles, log)
+        reactor_common.broadcast_telegram(message, profiles, log, tag=tag)
         PY
     - python_shell: True
     - require:

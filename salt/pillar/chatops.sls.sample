@@ -1,0 +1,53 @@
+saltgoat:
+  chatops:
+    enabled: true
+    allowed_chats:
+      - 123456789          # Telegram chat ID 或群组 ID
+      - -1001234567890
+    reply_prefix: "[SaltGoat ChatOps]"
+    default_timeout: 900
+    log_path: /var/log/saltgoat/chatops.log
+    help_text: |
+      支持命令示例：
+        /saltgoat maintenance weekly <site>
+        /saltgoat cache clean <site> [--allow-valkey-flush]
+      如需查看站点列表，可发送 /saltgoat maintenance weekly
+    approvals:
+      enabled: true
+      ttl: 900
+      approvers:
+        - 123456789
+      allow_self: false
+      path: /var/lib/saltgoat/chatops/pending
+    commands:
+      - name: maintenance weekly
+        description: 触发指定站点的周度维护任务
+        match: ["maintenance", "weekly"]
+        arguments:
+          - name: site
+            position: 0
+            required: true
+            choices: ["bank", "tank"]
+        command:
+          - saltgoat
+          - magetools
+          - maintenance
+          - "{site}"
+          - weekly
+        requires_approval: false
+        forward_args: false
+      - name: cache clean
+        description: 清理 Magento 缓存（需管理员二次确认）
+        match: ["cache", "clean"]
+        arguments:
+          - name: site
+            position: 0
+            required: true
+        command:
+          - saltgoat
+          - magetools
+          - maintenance
+          - "{site}"
+          - cleanup
+        requires_approval: true
+        forward_args: true

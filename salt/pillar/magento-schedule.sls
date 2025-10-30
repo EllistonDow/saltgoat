@@ -15,8 +15,15 @@ magento_schedule:
       repo_owner: doge
       site: tank
   api_watchers:
-    - name: bank-api-orders
+    - name: bank-api-watch
       cron: '*/5 * * * *'
       site: bank
       kinds:
         - orders
+        - customers
+    - name: tank-api-watch
+      cron: '*/5 * * * *'
+      site: tank
+      kinds:
+        - orders
+        - customers

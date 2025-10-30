@@ -3,15 +3,60 @@ import json
 import pathlib
 import urllib.parse
 import urllib.request
-from typing import Iterable, List, Dict, Any
+from typing import Any, Dict, Iterable, List, Optional
 
 
-def _ensure_list(value: Any) -> List[str]:
+def _ensure_list(value: Any) -> List[Any]:
     if isinstance(value, (list, tuple, set)):
-        return [str(item) for item in value if item not in (None, "")]
+        return [item for item in value if item not in (None, "")]
     if value not in (None, ""):
-        return [str(value)]
+        return [value]
     return []
+
+
+def _normalize_target(target: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(target, dict):
+        chat_id = target.get("chat_id") or target.get("id") or target.get("chat")
+        if chat_id in (None, ""):
+            return None
+        normalized: Dict[str, Any] = {"chat_id": str(chat_id)}
+        thread = target.get("thread_id") or target.get("thread")
+        if thread not in (None, "", 0, "0"):
+            try:
+                normalized["thread_id"] = int(thread)
+            except Exception:  # pylint: disable=broad-except
+                normalized["thread_id"] = thread
+        return normalized
+    if target in (None, ""):
+        return None
+    return {"chat_id": str(target)}
+
+
+def _normalize_topics(topics: Any) -> Dict[str, Any]:
+    if not isinstance(topics, dict):
+        return {}
+    result: Dict[str, Any] = {}
+    for key, value in topics.items():
+        if key in (None, ""):
+            continue
+        thread = value
+        if thread in (None, "", 0, "0"):
+            continue
+        try:
+            result[str(key)] = int(thread)
+        except Exception:  # pylint: disable=broad-except
+            result[str(key)] = thread
+    return result
+
+
+def _resolve_topic(tag: Optional[str], topics: Dict[str, Any]) -> Optional[Any]:
+    if not tag or not topics:
+        return None
+    candidates = sorted(topics.keys(), key=len, reverse=True)
+    for key in candidates:
+        if tag == key or tag.startswith(f"{key}/"):
+            return topics[key]
+    return topics.get("*")
 
 
 def load_telegram_profiles(config_path: str, log=None) -> List[Dict[str, Any]]:
@@ -41,7 +86,7 @@ def load_telegram_profiles(config_path: str, log=None) -> List[Dict[str, Any]]:
         token = entry.get("token")
         if not token:
             continue
-        ordered_targets = []
+        ordered_targets: List[Any] = []
         for key in ("targets", "chat_ids", "accept_from"):
             for item in _ensure_list(entry.get(key)):
                 if item not in ordered_targets:
@@ -49,13 +94,19 @@ def load_telegram_profiles(config_path: str, log=None) -> List[Dict[str, Any]]:
         for item in _ensure_list(entry.get("chat_id")):
             if item not in ordered_targets:
                 ordered_targets.append(item)
-        if not ordered_targets:
+        targets_normalized = []
+        for target in ordered_targets:
+            normalized = _normalize_target(target)
+            if normalized and normalized not in targets_normalized:
+                targets_normalized.append(normalized)
+        if not targets_normalized:
             continue
         profiles.append(
             {
                 "name": entry.get("name") or f"profile{idx + 1}",
                 "token": token,
-                "targets": ordered_targets,
+                "targets": targets_normalized,
+                "topics": _normalize_topics(entry.get("topics")),
             }
         )
 
@@ -64,7 +115,13 @@ def load_telegram_profiles(config_path: str, log=None) -> List[Dict[str, Any]]:
     return profiles
 
 
-def broadcast_telegram(message: str, profiles: List[Dict[str, Any]], log=None) -> None:
+def broadcast_telegram(
+    message: str,
+    profiles: List[Dict[str, Any]],
+    log=None,
+    tag: Optional[str] = None,
+    thread_id: Optional[Any] = None,
+) -> None:
     if not message or not profiles:
         if log and not message:
             log("skip", {"reason": "empty_message"})
@@ -76,27 +133,68 @@ def broadcast_telegram(message: str, profiles: List[Dict[str, Any]], log=None) -
         token = profile.get("token")
         targets = profile.get("targets") or []
         name = profile.get("name", "profile")
+        topics = profile.get("topics") or {}
         if not token or not targets:
             if log:
                 log("skip", {"reason": "profile_missing", "profile": name})
             continue
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        for chat in targets:
+        for target in targets:
+            if isinstance(target, dict):
+                chat = target.get("chat_id")
+            else:
+                chat = target
+            if chat in (None, ""):
+                continue
+            effective_thread = thread_id
+            if effective_thread in (None, "", 0, "0") and isinstance(target, dict):
+                effective_thread = target.get("thread_id")
+            if effective_thread in (None, "", 0, "0"):
+                resolved = _resolve_topic(tag, topics)
+                if resolved not in (None, "", 0, "0"):
+                    effective_thread = resolved
             params = {
                 "chat_id": str(chat),
                 "text": message,
                 "disable_web_page_preview": True,
             }
+            if effective_thread not in (None, "", 0, "0"):
+                params["message_thread_id"] = str(effective_thread)
             data = urllib.parse.urlencode(params).encode()
             req = urllib.request.Request(url, data=data)
             if log:
-                log("send_attempt", {"profile": name, "chat": chat})
+                log(
+                    "send_attempt",
+                    {
+                        "profile": name,
+                        "chat": chat,
+                        "thread_id": params.get("message_thread_id"),
+                        "tag": tag,
+                    },
+                )
             try:
                 with urllib.request.urlopen(req, timeout=15):
                     pass
             except Exception as exc:  # pylint: disable=broad-except
                 if log:
-                    log("send_failed", {"profile": name, "chat": chat, "error": str(exc)})
+                    log(
+                        "send_failed",
+                        {
+                            "profile": name,
+                            "chat": chat,
+                            "thread_id": params.get("message_thread_id"),
+                            "tag": tag,
+                            "error": str(exc),
+                        },
+                    )
             else:
                 if log:
-                    log("send_ok", {"profile": name, "chat": chat})
+                    log(
+                        "send_ok",
+                        {
+                            "profile": name,
+                            "chat": chat,
+                            "thread_id": params.get("message_thread_id"),
+                            "tag": tag,
+                        },
+                    )

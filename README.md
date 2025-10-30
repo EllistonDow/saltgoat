@@ -116,8 +116,11 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 ### 监控与巡检
 - `saltgoat monitor system|services|resources|logs|security|performance`
 - `saltgoat monitor report daily` 生成日报到 `/var/log/saltgoat/monitor/`
+- `saltgoat monitor alert resources` 即时检查 CPU/内存/磁盘/关键服务并推送 Telegram 告警（触发 Salt 事件 `saltgoat/monitor/resources`）
+- `saltgoat monitor report daily --no-telegram` 可生成日报而不推送；默认会写日志并发送 Telegram 摘要
 - `saltgoat monitor enable-beacons`：启用 Beacon/Reactors；若缺少 `salt-minion` 会提示并降级。
 - `saltgoat schedule enable`：下发 SaltGoat 自身任务（内存、日志清理等），同样支持自动降级到 cron。
+- Salt Beacon 触发的 systemd 自愈流程会自动执行 `systemctl restart`，并把成功/失败状态写入 `/var/log/saltgoat/alerts.log`、发送 Telegram，同时重新发布 Salt 事件（便于级联自动化）。
 
 ### 自动化脚本 (Automation)
 - `saltgoat automation script <create|list|edit|run|delete>`：生成并维护 `/srv/saltgoat/automation/scripts/*.sh`。
@@ -130,6 +133,43 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - 单库导出：`saltgoat magetools xtrabackup mysql dump --database <db> --backup-dir <path>` 会输出体积、写 Salt event，并发 Telegram。
 - 所有备份事件都会写入 `/var/log/saltgoat/alerts.log`，便于审计。
 
+### Telegram 通知 & ChatOps
+- `optional.salt-beacons` 会自动部署 `/opt/saltgoat-reactor` 辅助脚本以及 `/etc/saltgoat/telegram.json` 配置，所有资源告警、备份、服务自愈都会同步到 Telegram。
+- 新增 `/etc/saltgoat/chatops.json`（模板：`salt/pillar/chatops.sls.sample`）。复制后按需填写 `allowed_chats`、`approvers`、命令映射，例如：
+  ```yaml
+  saltgoat:
+    chatops:
+      commands:
+        - name: maintenance weekly
+          match: ["maintenance", "weekly"]
+          arguments:
+            - name: site
+              position: 0
+              required: true
+              choices: ["bank", "tank"]
+          command:
+            - saltgoat
+            - magetools
+            - maintenance
+            - "{site}"
+            - weekly
+        - name: cache clean
+          match: ["cache", "clean"]
+          arguments:
+            - name: site
+              position: 0
+              required: true
+          command:
+            - saltgoat
+            - magetools
+            - maintenance
+            - "{site}"
+            - cleanup
+          requires_approval: true
+          forward_args: true
+  ```
+- 启用后即可在授权的 Telegram 会话中发送 `/saltgoat maintenance weekly bank`、`/saltgoat cache clean tank --allow-valkey-flush` 等指令。标记 `requires_approval: true` 的命令会生成一次性 Token，需管理员发送 `/saltgoat approve <token>` 才会真正执行，执行结果与输出同样会回传到 Telegram 并写入 `chatops.log`。
+
 ---
 
 ## 📚 主要文档
@@ -140,6 +180,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - [`docs/BACKUP_RESTIC.md`](docs/BACKUP_RESTIC.md)：Restic 仓库配置与恢复流程。
 - [`docs/MYSQL_BACKUP.md`](docs/MYSQL_BACKUP.md)：Percona XtraBackup 安装、巡检与恢复。
 - [`docs/SECRET_MANAGEMENT.md`](docs/SECRET_MANAGEMENT.md)：密钥模板、Pillar Secret 工作流与密码更新步骤。
+- [`docs/TELEGRAM_TOPICS.md`](docs/TELEGRAM_TOPICS.md)：Telegram 话题 `chat_id`/`message_thread_id` 对照表及通知分类建议。
 - [`docs/CHANGELOG.md`](docs/CHANGELOG.md)：版本更新。
 
 ---

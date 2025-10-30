@@ -236,6 +236,7 @@ message = "\n".join(message_lines)
 
 LOG_PATH = "/var/log/saltgoat/alerts.log"
 TAG = f"saltgoat/backup/restic/{status}"
+THREAD_ID = 5
 
 def log(label, payload):
     subprocess.run(
@@ -258,7 +259,7 @@ if not profiles:
 
 try:
     log("profile_summary", {"count": len(profiles)})
-    reactor_common.broadcast_telegram(message, profiles, log)
+    reactor_common.broadcast_telegram(message, profiles, log, tag=TAG, thread_id=THREAD_ID)
 except Exception as exc:  # pylint: disable=broad-except
     log("error", {"message": str(exc)})
 PY

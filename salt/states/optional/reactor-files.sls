@@ -32,3 +32,10 @@
     - user: root
     - group: root
     - mode: 640
+
+/srv/salt/reactor/telegram_chatops.sls:
+  file.managed:
+    - source: salt://reactor/telegram_chatops.sls
+    - user: root
+    - group: root
+    - mode: 640

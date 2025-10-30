@@ -19,6 +19,16 @@
     - require:
       - file: /var/log/saltgoat
 
+/var/log/saltgoat/chatops.log:
+  file.managed:
+    - user: root
+    - group: root
+    - mode: 640
+    - contents: ''
+    - replace: False
+    - require:
+      - file: /var/log/saltgoat
+
 /etc/saltgoat:
   file.directory:
     - user: root
@@ -32,6 +42,16 @@
     - group: root
     - mode: 640
     - source: salt://templates/telegram_config.json.jinja
+    - template: jinja
+    - require:
+      - file: /etc/saltgoat
+
+/etc/saltgoat/chatops.json:
+  file.managed:
+    - user: root
+    - group: root
+    - mode: 640
+    - source: salt://templates/chatops_config.json.jinja
     - template: jinja
     - require:
       - file: /etc/saltgoat
@@ -77,6 +97,49 @@
     - template: jinja
     - require:
       - file: /opt/saltgoat-reactor
+
+/opt/saltgoat-reactor/service_autoheal.py:
+  file.managed:
+    - user: root
+    - group: root
+    - mode: 755
+    - source: salt://templates/service_autoheal.py.jinja
+    - template: jinja
+    - require:
+      - file: /opt/saltgoat-reactor
+
+/opt/saltgoat-reactor/telegram_chatops.py:
+  file.managed:
+    - user: root
+    - group: root
+    - mode: 755
+    - source: salt://templates/telegram_chatops.py.jinja
+    - template: jinja
+    - require:
+      - file: /opt/saltgoat-reactor
+
+/var/lib/saltgoat:
+  file.directory:
+    - user: root
+    - group: root
+    - mode: 750
+    - makedirs: True
+
+/var/lib/saltgoat/chatops:
+  file.directory:
+    - user: root
+    - group: root
+    - mode: 750
+    - require:
+      - file: /var/lib/saltgoat
+
+/var/lib/saltgoat/chatops/pending:
+  file.directory:
+    - user: root
+    - group: root
+    - mode: 750
+    - require:
+      - file: /var/lib/saltgoat/chatops
 
 salt-beacon-system-packages:
   pkg.installed:

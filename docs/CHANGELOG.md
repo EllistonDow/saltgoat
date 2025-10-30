@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.1.7] - 2025-10-30
+
+### Changes
+- 修改 34 个文件: README.md, docs/MAGENTO_MAINTENANCE.md, docs/SECRET_MANAGEMENT.md, docs/TELEGRAM_TOPICS.md, modules/magetools/backup-restic.sh 等
+
+
 ## [1.1.6] - 2025-10-30
 
 ### Changes

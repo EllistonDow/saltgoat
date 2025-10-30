@@ -106,8 +106,9 @@ if not profiles:
     log("skip", {"reason": "no_profiles"})
     raise SystemExit(0)
 
-log("context", {"database": database, "status": status, "size": size, "compressed": compressed})
-reactor_common.broadcast_telegram(message, profiles, log)
+context = {"database": database, "status": status, "size": size, "compressed": compressed}
+log("context", context)
+reactor_common.broadcast_telegram(message, profiles, log, tag=tag, thread_id=4)
 PY
 }
 

@@ -13,6 +13,8 @@ salt/pillar/secret/
 ├── auth.sls.example    # 数据库/服务密码示例
 ├── restic.sls.example  # Restic 仓库信息示例
 └── smtp.sls.example    # SMTP/Postfix 凭据示例
+
+2025-10：新增 `telegram.sls.example`，用于记录 Telegram Bot Token、群组 chat_id 及话题 `message_thread_id` 映射。
 ```
 
 `.gitignore` 会忽略 `salt/pillar/secret/*.sls`，因此模板以 `.example` 结尾，只作为参考；真实环境需要复制后去掉 `.example` 后缀并填入实际密码。
@@ -27,6 +29,7 @@ salt/pillar/secret/
    cp salt/pillar/secret/auth.sls.example  salt/pillar/secret/auth.sls
    cp salt/pillar/secret/restic.sls.example salt/pillar/secret/restic.sls
    cp salt/pillar/secret/smtp.sls.example   salt/pillar/secret/smtp.sls
+   cp salt/pillar/secret/telegram.sls.example salt/pillar/secret/telegram.sls
    ```
 
    然后编辑 `.sls` 文件，将占位值（`ChangeMe*`）替换为真实密码。示例：
@@ -70,13 +73,16 @@ salt/pillar/secret/
    - `salt/pillar/secret/smtp.sls`：SMTP 账号、Postfix profile、告警邮箱。
    - 如需 Telegram Token，可在 `salt/pillar/secret/auto.sls` 或自建文件中加入：
      ```yaml
-     secrets:
-       telegram:
-         primary:
-           token: 'BOT_TOKEN'
-           accept_from:
-             - CHAT_ID
-           chat_id: CHAT_ID
+   secrets:
+     telegram:
+        primary:
+          token: 'BOT_TOKEN'
+          chat_id: -1003210805906
+          topics:
+            saltgoat/business/order: 2
+            saltgoat/business/customer: 3
+            saltgoat/backup/xtrabackup: 4
+            saltgoat/backup/restic: 5
      ```
 
 2. **刷新 Pillar**

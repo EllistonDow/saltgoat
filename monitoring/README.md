@@ -19,12 +19,14 @@ saltgoat monitor install        # 安装 salt-minion 并启用 Salt Beacons/Reac
 saltgoat monitor system         # 显示主机信息、负载、资源与网络概览
 saltgoat monitor services       # 检查 Nginx/MySQL/PHP/Valkey/RabbitMQ/OpenSearch 状态与主 PID
 saltgoat monitor resources      # 导出 CPU / Memory / I/O 统计与 Top 进程
+saltgoat monitor alert resources # 对照阈值检查 CPU/内存/磁盘/服务并推送 Telegram 告警
 saltgoat monitor network        # 列出网卡统计、连接数与监听端口
 saltgoat monitor logs           # 校验关键日志是否存在并输出最近错误
 saltgoat monitor security       # 查看防火墙、登录记录、SSH 连接与可更新套件数量
 saltgoat monitor performance    # 对照默认阈值（CPU 80%、内存 85%、根分区 90%）提示异常
 saltgoat monitor realtime 120   # 进入 120 秒的全屏实时监控（Ctrl+C 退出）
 saltgoat monitor report nightly # 生成综合巡检报告 `/var/log/saltgoat/monitor/nightly.txt`
+saltgoat monitor report daily   # 生成每日摘要（写入日志并推 Telegram，可加 --no-telegram）
 saltgoat monitor cleanup 14     # 清理 14 天前的旧报告（默认保留 7 天）
 saltgoat monitor config         # 输出当前阈值、目录与已启用的子功能
 ```
@@ -115,5 +117,21 @@ saltgoat:
 
 - `monitoring/schedule.sh`、`monitoring/memory.sh` 提供额外 CLI 封装，可通过 `saltgoat schedule ...`、`saltgoat memory ...` 使用（详见 `lib/help.sh` 对应条目）。
 - 若需将监控结果整合至外部平台，可结合 Restic/S3 备份，或使用 `modules/monitoring/` 内的 `saltgoat monitoring prometheus|grafana` 方案。
+- 启用 `optional.salt-beacons` 后，系统服务异常会触发自动重启脚本；脚本会记录 systemd 重启结果（成功/失败/当前状态）、写入 `/var/log/saltgoat/alerts.log`，并推送 Telegram + Salt Event，便于人工复核与二次自动化。
+
+## 8. Telegram ChatOps（实验性）
+
+1. **准备配置**：复制 `salt/pillar/chatops.sls.sample` 为真实 Pillar，设置允许的 `chat_id`、管理员 `approvers`、命令映射（`commands`）。
+2. **刷新 Pillar**：`saltgoat pillar refresh` 或 `saltgoat monitor enable-beacons`，系统会在 `/etc/saltgoat/chatops.json` 写入最新配置，同时创建 `/var/lib/saltgoat/chatops/pending` 与 `/var/log/saltgoat/chatops.log`。
+3. **使用方式**：
+   - 指令格式 `/saltgoat <match...> [参数]`，例如 `/saltgoat maintenance weekly bank`。
+   - `requires_approval: true` 的命令会返回一次性 Token，需要管理员发送 `/saltgoat approve <token>` 才会真正执行。
+   - 执行结果（返回值、耗时、stdout/stderr 摘要）会 push 回原聊天，同时写入 `chatops.log` 与 Salt 事件。
+4. **安全建议**：
+   - `allowed_chats` 建议使用私有群组或指定用户，避免被未知账号滥用。
+   - 如需允许执行带额外参数的命令，结合 `forward_args: true` 使用，但务必限制 `choices` 或在脚本内进行白名单校验。
+   - `approvals.allow_self: false` 可防止提交者自行审批高危操作。
+
+> ChatOps 仍在早期阶段，默认不会启用任何命令。复制模板并逐步扩展即可；所有逻辑均在 `/opt/saltgoat-reactor/telegram_chatops.py`，可按业务需要进一步扩展。
 
 完成以上步骤后，即可同时具备人工巡检效率与事件驱动自动化能力，确保 SaltGoat 主机的服务稳定与告警可追溯性。

@@ -1,0 +1,37 @@
+{#-
+  Render Telegram ChatOps configuration.
+-#}
+{% set chatops = salt['pillar.get']('saltgoat:chatops', {}) %}
+{% set approvals = chatops.get('approvals', {}) %}
+{% set raw_commands = chatops.get('commands', []) %}
+{% set normalized_commands = [] %}
+{% for command in raw_commands if command is mapping %}
+  {% set norm = {
+    "name": command.get('name') or ('command_' ~ loop.index),
+    "match": command.get('match'),
+    "command": command.get('command') or [],
+    "arguments": command.get('arguments') or [],
+    "requires_approval": command.get('requires_approval', False),
+    "forward_args": command.get('forward_args', False),
+    "timeout": command.get('timeout'),
+    "description": command.get('description')
+  } %}
+  {% do normalized_commands.append(norm) %}
+{% endfor %}
+{% set payload = {
+  "enabled": chatops.get('enabled', True),
+  "allowed_chats": chatops.get('allowed_chats', []),
+  "log_path": chatops.get('log_path', '/var/log/saltgoat/chatops.log'),
+  "reply_prefix": chatops.get('reply_prefix', '[SaltGoat ChatOps]'),
+  "help_text": chatops.get('help_text'),
+  "default_timeout": chatops.get('default_timeout', 600),
+  "commands": normalized_commands,
+  "approvals": {
+    "enabled": approvals.get('enabled', True),
+    "ttl": approvals.get('ttl', 900),
+    "approvers": approvals.get('approvers', []),
+    "allow_self": approvals.get('allow_self', False),
+    "path": approvals.get('path', '/var/lib/saltgoat/chatops/pending')
+  }
+} %}
+{{ payload | json }}

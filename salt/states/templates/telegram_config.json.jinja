@@ -19,43 +19,84 @@
   {% if not token %}
     {% continue %}
   {% endif %}
-  {% set targets = [] %}
+  {% set collected_targets = [] %}
   {% set accept_val = record.get('accept_from') %}
   {% if accept_val %}
     {% if accept_val is sequence and accept_val is not string %}
       {% for chat in accept_val %}
-        {% if chat not in targets %}
-          {% do targets.append(chat) %}
+        {% if chat not in collected_targets %}
+          {% do collected_targets.append(chat) %}
         {% endif %}
       {% endfor %}
     {% else %}
-      {% if accept_val not in targets %}
-        {% do targets.append(accept_val) %}
+      {% if accept_val not in collected_targets %}
+        {% do collected_targets.append(accept_val) %}
       {% endif %}
     {% endif %}
   {% endif %}
-  {% if record.get('chat_id') and record.get('chat_id') not in targets %}
-    {% do targets.append(record.get('chat_id')) %}
+  {% if record.get('chat_id') and record.get('chat_id') not in collected_targets %}
+    {% do collected_targets.append(record.get('chat_id')) %}
   {% endif %}
   {% set extra_targets = record.get('targets') %}
   {% if extra_targets %}
     {% if extra_targets is sequence and extra_targets is not string %}
       {% for chat in extra_targets %}
-        {% if chat not in targets %}
-          {% do targets.append(chat) %}
+        {% if chat not in collected_targets %}
+          {% do collected_targets.append(chat) %}
         {% endif %}
       {% endfor %}
     {% else %}
-      {% if extra_targets not in targets %}
-        {% do targets.append(extra_targets) %}
+      {% if extra_targets not in collected_targets %}
+        {% do collected_targets.append(extra_targets) %}
       {% endif %}
     {% endif %}
   {% endif %}
+
+  {% set targets = [] %}
+  {% for target in collected_targets %}
+    {% if target is mapping %}
+      {% set chat_id = target.get('chat_id') or target.get('id') or target.get('chat') %}
+      {% if chat_id in (None, '') %}
+        {% continue %}
+      {% endif %}
+      {% set normalized_target = {'chat_id': chat_id} %}
+      {% set thread_id = target.get('thread_id') or target.get('thread') %}
+      {% if thread_id not in (None, '', 0, '0') %}
+        {% do normalized_target.update({'thread_id': thread_id}) %}
+      {% endif %}
+      {% if normalized_target not in targets %}
+        {% do targets.append(normalized_target) %}
+      {% endif %}
+    {% else %}
+      {% if target not in (None, '') %}
+        {% set normalized_target = {'chat_id': target} %}
+        {% if normalized_target not in targets %}
+          {% do targets.append(normalized_target) %}
+        {% endif %}
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+
+  {% if not targets %}
+    {% continue %}
+  {% endif %}
+
+  {% set topics = {} %}
+  {% if record.get('topics') is mapping %}
+    {% for topic_key, topic_value in record.get('topics').items() %}
+      {% if topic_key in (None, '') or topic_value in (None, '', 0, '0') %}
+        {% continue %}
+      {% endif %}
+      {% do topics.update({(topic_key|string): topic_value}) %}
+    {% endfor %}
+  {% endif %}
+
   {% set normalized_entry = {
     "name": record.get('name') or 'profile_' ~ loop.index,
     "enabled": record.get('enabled', True),
     "token": token,
     "targets": targets,
+    "topics": topics,
     "interval": record.get('interval')
   } %}
   {% do normalized.append(normalized_entry) %}

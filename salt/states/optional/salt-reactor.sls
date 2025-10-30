@@ -31,6 +31,8 @@
             - salt://reactor/config_change.sls
           - 'salt/beacon/*/pkg/*':
             - salt://reactor/package_update.sls
+          - 'salt/beacon/*/telegram_bot_msg/*':
+            - salt://reactor/telegram_chatops.sls
           - 'saltgoat/backup/*':
             - salt://reactor/backup_notification.sls
     - require:

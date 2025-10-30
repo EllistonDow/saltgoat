@@ -71,6 +71,13 @@ schedule_enable() {
         job_kwargs='{"shell": "/bin/bash"}' \
         cron='*/10 * * * *' \
         maxrunning=1 >/dev/null
+
+    salt-call --local schedule.add saltgoat-resource-alert \
+        function=cmd.run \
+        job_args="['$saltgoat_bin', 'monitor', 'alert', 'resources']" \
+        job_kwargs='{"shell": "/bin/bash"}' \
+        cron='*/5 * * * *' \
+        maxrunning=1 >/dev/null
     
     salt-call --local schedule.save >/dev/null
     
@@ -86,6 +93,7 @@ schedule_disable() {
         "saltgoat-update-check"
         "saltgoat-log-cleanup"
         "saltgoat-health-check"
+        "saltgoat-resource-alert"
     )
     
     local removed=0

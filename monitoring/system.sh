@@ -8,6 +8,8 @@ MONITOR_CONFIG_DIR="/etc/saltgoat/monitor"
 MONITOR_THRESHOLD_CPU=80
 MONITOR_THRESHOLD_MEMORY=85
 MONITOR_THRESHOLD_DISK=90
+RESOURCE_ALERT_SCRIPT="${SCRIPT_DIR}/modules/monitoring/resource_alert.py"
+DAILY_SUMMARY_SCRIPT="${SCRIPT_DIR}/modules/monitoring/daily_summary.py"
 
 # 确保监控目录存在
 ensure_monitor_dirs() {
@@ -189,6 +191,38 @@ monitor_network_status() {
     local traffic_stats
     traffic_stats=$(salt-call --local cmd.run "cat /proc/net/dev" 2>/dev/null)
     echo "$traffic_stats"
+}
+
+# 资源告警（Telegram）
+monitor_alert_resources() {
+    log_highlight "检查关键资源并推送告警..."
+    if [[ ! -f "$RESOURCE_ALERT_SCRIPT" ]]; then
+        log_error "未找到资源告警脚本: $RESOURCE_ALERT_SCRIPT"
+        return 1
+    fi
+    if sudo python3 "$RESOURCE_ALERT_SCRIPT"; then
+        log_success "资源告警执行完成"
+    else
+        log_warning "资源告警脚本返回非零，请检查日志"
+    fi
+}
+
+# 每日总结（Telegram + 报告）
+monitor_report_daily_summary() {
+    local extra_args=()
+    if [[ "$1" == "--no-telegram" ]]; then
+        extra_args+=("--no-telegram")
+    fi
+    log_highlight "生成每日巡检摘要..."
+    if [[ ! -f "$DAILY_SUMMARY_SCRIPT" ]]; then
+        log_error "未找到每日摘要脚本: $DAILY_SUMMARY_SCRIPT"
+        return 1
+    fi
+    if sudo python3 "$DAILY_SUMMARY_SCRIPT" "${extra_args[@]}"; then
+        log_success "每日摘要已生成并记录"
+    else
+        log_warning "每日摘要生成失败，请查看 /var/log/saltgoat/monitor/"
+    fi
 }
 
 # 日志监控

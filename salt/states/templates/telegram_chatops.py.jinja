@@ -1,0 +1,520 @@
+#!/usr/bin/env python3
+"""SaltGoat Telegram ChatOps handler.
+
+Consumes `telegram_bot_msg` beacon events, validates the caller, and executes
+pre-approved SaltGoat commands with optional administrator approval.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import json
+import os
+import shlex
+import socket
+import subprocess
+import sys
+import time
+import uuid
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+
+LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
+CONFIG_DEFAULT = Path("/etc/saltgoat/chatops.json")
+DEFAULT_LOG_PATH = Path("/var/log/saltgoat/chatops.log")
+DEFAULT_PENDING_DIR = Path("/var/lib/saltgoat/chatops/pending")
+
+
+def shell_exists(path: Path) -> bool:
+    try:
+        path.stat()
+        return True
+    except (PermissionError, FileNotFoundError):
+        return False
+
+
+def log_entry(log_path: Path, tag: str, payload: Dict[str, Any]) -> None:
+    if not shell_exists(LOGGER_SCRIPT):
+        return
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(LOGGER_SCRIPT),
+                "CHATOPS",
+                str(log_path),
+                tag,
+                json.dumps(payload, ensure_ascii=False),
+            ],
+            check=False,
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+
+def load_config(path: Path) -> Dict[str, Any]:
+    if not shell_exists(path):
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def decode_event(event_b64: str) -> Dict[str, Any]:
+    if not event_b64:
+        return {}
+    try:
+        data = base64.b64decode(event_b64.encode())
+        return json.loads(data.decode("utf-8"))
+    except Exception:
+        return {}
+
+
+def flatten_event(data: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return {}
+    inner = data.get("data")
+    if isinstance(inner, dict):
+        merged = {**data}
+        merged.pop("data", None)
+        for key, value in inner.items():
+            if key == "_stamp":
+                continue
+            merged.setdefault(key, value)
+        return merged
+    return data
+
+
+def extract_message(payload: Dict[str, Any]) -> Tuple[Optional[str], Optional[int], Optional[int], Optional[str], Dict[str, Any]]:
+    message = payload.get("message")
+    token = payload.get("token") or payload.get("bot_token")
+    chat_id = None
+    sender_id = None
+    text = None
+    meta: Dict[str, Any] = {}
+
+    if isinstance(message, dict):
+        chat = message.get("chat") or {}
+        sender = message.get("from") or {}
+        chat_id = chat.get("id")
+        sender_id = sender.get("id")
+        text = message.get("text") or message.get("caption")
+        meta = {
+            "chat": chat,
+            "from": sender,
+            "message_id": message.get("message_id"),
+        }
+        token = token or message.get("token")
+    else:
+        chat = payload.get("chat") or {}
+        chat_id = chat.get("id") or payload.get("chat_id")
+        sender = payload.get("from") or {}
+        sender_id = sender.get("id") or payload.get("from_id")
+        text = payload.get("text") or payload.get("message")
+        meta = {"chat": chat, "from": sender}
+
+    return token, chat_id, sender_id, text, meta
+
+
+def send_telegram(token: str, chat_id: int, text: str, reply_to: Optional[int] = None) -> Tuple[bool, Optional[str]]:
+    if not token or chat_id is None:
+        return False, "missing token/chat_id"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    params = {
+        "chat_id": str(chat_id),
+        "text": text,
+        "disable_web_page_preview": "true",
+    }
+    if reply_to is not None:
+        params["reply_to_message_id"] = str(reply_to)
+        params["allow_sending_without_reply"] = "true"
+    data = urllib.parse.urlencode(params).encode()
+    try:
+        with urllib.request.urlopen(url, data=data, timeout=15):
+            return True, None
+    except Exception as exc:  # pragma: no cover - network failure surfaces via log
+        return False, str(exc)
+
+
+def ensure_directory(path: Path) -> None:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
+
+def cleanup_pending(spool: Path, now: float) -> None:
+    if not spool.exists():
+        return
+    for item in spool.glob("pending-*.json"):
+        try:
+            data = json.loads(item.read_text(encoding="utf-8"))
+        except Exception:
+            item.unlink(missing_ok=True)
+            continue
+        expires = data.get("expires_at", 0)
+        if expires and now > float(expires):
+            item.unlink(missing_ok=True)
+
+
+def store_pending(spool: Path, token: str, record: Dict[str, Any]) -> None:
+    ensure_directory(spool)
+    path = spool / f"pending-{token}.json"
+    path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+
+
+def load_pending(spool: Path, token: str) -> Optional[Dict[str, Any]]:
+    path = spool / f"pending-{token}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def remove_pending(spool: Path, token: str) -> None:
+    path = spool / f"pending-{token}.json"
+    path.unlink(missing_ok=True)
+
+
+def trim_text(text: str, limit: int = 1200) -> str:
+    if len(text) <= limit:
+        return text
+    head = text[: limit - 20]
+    return head + "\n...[truncated]"
+
+
+def summarise_output(stdout: str, stderr: str, max_len: int = 1200) -> str:
+    sections: List[str] = []
+    if stdout:
+        sections.append("stdout:\n" + trim_text(stdout.strip(), max_len // 2))
+    if stderr:
+        sections.append("stderr:\n" + trim_text(stderr.strip(), max_len // 2))
+    return "\n\n".join(sections)
+
+
+def run_command(cmd: List[str], timeout: int) -> Tuple[int, str, str, float]:
+    start = time.time()
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        duration = time.time() - start
+        return proc.returncode, proc.stdout or "", proc.stderr or "", duration
+    except subprocess.TimeoutExpired as exc:
+        duration = time.time() - start
+        stdout = exc.stdout.decode() if isinstance(exc.stdout, bytes) else exc.stdout or ""
+        stderr = exc.stderr.decode() if isinstance(exc.stderr, bytes) else exc.stderr or ""
+        return 124, stdout, stderr + "\n(command timed out)", duration
+    except Exception as exc:  # pragma: no cover - unexpected failure
+        duration = time.time() - start
+        return 125, "", str(exc), duration
+
+
+def normalise_match(value: Iterable[Any]) -> List[str]:
+    result: List[str] = []
+    for item in value:
+        if item is None:
+            continue
+        if isinstance(item, str):
+            item = item.strip()
+            if item:
+                result.append(item.lower())
+        else:
+            result.append(str(item).lower())
+    return result
+
+
+def lookup_command(commands: List[Dict[str, Any]], tokens: List[str]) -> Tuple[Optional[Dict[str, Any]], List[str]]:
+    lowered = [tok.lower() for tok in tokens]
+    for command in commands:
+        raw_match = command.get("match")
+        if raw_match:
+            match_tokens = normalise_match(raw_match)
+        else:
+            match_tokens = normalise_match((command.get("name") or "").split())
+        if not match_tokens:
+            continue
+        if len(lowered) < len(match_tokens):
+            continue
+        if lowered[: len(match_tokens)] == match_tokens:
+            return command, tokens[len(match_tokens) :]
+    return None, tokens
+
+
+def collect_arguments(command: Dict[str, Any], remainder: List[str]) -> Tuple[Dict[str, str], List[str], Optional[str]]:
+    arguments = command.get("arguments") or []
+    context: Dict[str, str] = {}
+    used_indexes: set[int] = set()
+
+    for arg in arguments:
+        if not isinstance(arg, dict):
+            continue
+        name = arg.get("name")
+        if not name:
+            continue
+        position = int(arg.get("position", len(used_indexes)))
+        required = bool(arg.get("required", True))
+        default = arg.get("default")
+        value = None
+        if position < len(remainder):
+            value = remainder[position]
+            used_indexes.add(position)
+        elif required and default is None:
+            return {}, [], f"缺少参数 {name}"
+        else:
+            value = default
+        if value is None:
+            continue
+        value_str = str(value)
+        choices = arg.get("choices")
+        if isinstance(choices, list) and choices and value_str not in choices:
+            return {}, [], f"参数 {name} 必须是 {', '.join(choices)}"
+        if arg.get("lower", False):
+            value_str = value_str.lower()
+        context[name] = value_str
+
+    extra = [token for idx, token in enumerate(remainder) if idx not in used_indexes]
+    return context, extra, None
+
+
+def format_help(commands: List[Dict[str, Any]], help_text: Optional[str]) -> str:
+    if help_text:
+        return help_text
+    lines = ["支持的命令:"]
+    for command in commands:
+        name = command.get("name") or "命令"
+        match_tokens = command.get("match") or (name.split())
+        sample = " ".join(str(token) for token in match_tokens)
+        if command.get("arguments"):
+            for argument in command["arguments"]:
+                if isinstance(argument, dict) and argument.get("name"):
+                    sample += f" <{argument['name']}>"
+        lines.append(f"/saltgoat {sample}")
+    return "\n".join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="SaltGoat Telegram ChatOps handler")
+    parser.add_argument("--config", default=str(CONFIG_DEFAULT))
+    parser.add_argument("--event-b64", required=True, help="Base64 encoded beacon payload")
+    parser.add_argument("--no-telegram", action="store_true")
+    parser.add_argument("--no-exec", action="store_true")
+    args = parser.parse_args()
+
+    event = decode_event(args.event_b64)
+    payload = flatten_event(event)
+    token, chat_id, sender_id, text, meta = extract_message(payload)
+
+    config_path = Path(args.config)
+    config = load_config(config_path)
+    if not config.get("enabled", True):
+        return 0
+
+    log_path = Path(config.get("log_path") or DEFAULT_LOG_PATH)
+    approvals_cfg = config.get("approvals") or {}
+    spool_path = Path(approvals_cfg.get("path") or DEFAULT_PENDING_DIR)
+    cleanup_pending(spool_path, time.time())
+
+    reply_prefix = config.get("reply_prefix") or "[SaltGoat ChatOps]"
+
+    if text is None or not isinstance(text, str):
+        return 0
+
+    tokens = shlex.split(text)
+    if not tokens:
+        return 0
+
+    first = tokens[0]
+    if first.startswith("/saltgoat"):
+        # Telegram commands may appear as /saltgoat@BotName
+        first = first.split("@", 1)[0]
+    if first != "/saltgoat":
+        return 0
+
+    tokens = tokens[1:]
+    if not tokens:
+        message = format_help(config.get("commands") or [], config.get("help_text"))
+        if not args.no_telegram and token and chat_id is not None:
+            send_telegram(token, chat_id, f"{reply_prefix}\n{message}")
+        return 0
+
+    allowed_chats = config.get("allowed_chats") or []
+    if allowed_chats and chat_id not in allowed_chats:
+        notice = f"{reply_prefix} 未授权的聊天 ID: {chat_id}"
+        log_entry(log_path, "chatops/unauthorized", {
+            "chat_id": chat_id,
+            "sender_id": sender_id,
+            "text": text,
+        })
+        if not args.no_telegram and token and chat_id is not None:
+            send_telegram(token, chat_id, notice)
+        return 0
+
+    approvers = approvals_cfg.get("approvers") or []
+    allow_self = bool(approvals_cfg.get("allow_self", False))
+    approval_ttl = int(approvals_cfg.get("ttl", 900))
+    approval_enabled = bool(approvals_cfg.get("enabled", True))
+
+    reply_to = meta.get("message_id") if isinstance(meta.get("message_id"), int) else None
+
+    prefix = reply_prefix
+
+    if tokens[0].lower() in {"approve", "confirm"}:
+        if len(tokens) < 2:
+            if not args.no_telegram and token and chat_id is not None:
+                send_telegram(token, chat_id, f"{prefix} 缺少审批 token。", reply_to)
+            return 0
+        pending_token = tokens[1]
+        record = load_pending(spool_path, pending_token)
+        if not record:
+            if not args.no_telegram and token and chat_id is not None:
+                send_telegram(token, chat_id, f"{prefix} 未找到待审批指令或已过期。", reply_to)
+            return 0
+        if approval_enabled and approvers and sender_id not in approvers:
+            if not args.no_telegram and token and chat_id is not None:
+                send_telegram(token, chat_id, f"{prefix} 需要管理员审批。", reply_to)
+            log_entry(log_path, "chatops/approval_denied", {
+                "chat_id": chat_id,
+                "sender_id": sender_id,
+                "pending_token": pending_token,
+            })
+            return 0
+        if not allow_self and sender_id == record.get("requested_by") and approvers:
+            if not args.no_telegram and token and chat_id is not None:
+                send_telegram(token, chat_id, f"{prefix} 需要其它管理员确认。", reply_to)
+            return 0
+        expires_at = float(record.get("expires_at", 0))
+        if expires_at and time.time() > expires_at:
+            remove_pending(spool_path, pending_token)
+            if not args.no_telegram and token and chat_id is not None:
+                send_telegram(token, chat_id, f"{prefix} 待审批指令已过期。", reply_to)
+            return 0
+        command_parts = record.get("command") or []
+        timeout = int(record.get("timeout", config.get("default_timeout", 600)))
+        if args.no_exec:
+            rc, stdout, stderr, duration = (0, "", "", 0.0)
+        else:
+            rc, stdout, stderr, duration = run_command(command_parts, timeout)
+        remove_pending(spool_path, pending_token)
+        log_entry(log_path, "chatops/approved", {
+            "chat_id": chat_id,
+            "sender_id": sender_id,
+            "pending_token": pending_token,
+            "returncode": rc,
+            "duration": duration,
+        })
+        summary = summarise_output(stdout, stderr)
+        status_icon = "✅" if rc == 0 else "⚠️"
+        message = [
+            f"{prefix} {status_icon} 已执行 {record.get('name', '命令')}",
+            f"返回值: {rc}，耗时 {duration:.1f}s",
+        ]
+        if summary:
+            message.append(summary)
+        if not args.no_telegram and token and chat_id is not None:
+            send_telegram(token, chat_id, "\n".join(message), reply_to)
+        return 0
+
+    commands = config.get("commands") or []
+    command_spec, remainder = lookup_command(commands, tokens)
+    if not command_spec:
+        message = format_help(commands, config.get("help_text"))
+        if not args.no_telegram and token and chat_id is not None:
+            send_telegram(token, chat_id, f"{prefix}\n未识别指令。\n{message}", reply_to)
+        return 0
+
+    context, extra_tokens, error = collect_arguments(command_spec, remainder)
+    if error:
+        if not args.no_telegram and token and chat_id is not None:
+            send_telegram(token, chat_id, f"{prefix} {error}", reply_to)
+        return 0
+
+    command_parts: List[str] = []
+    for part in command_spec.get("command", []):
+        if not isinstance(part, str):
+            command_parts.append(str(part))
+        else:
+            try:
+                command_parts.append(part.format(**context))
+            except KeyError as exc:
+                if not args.no_telegram and token and chat_id is not None:
+                    send_telegram(token, chat_id, f"{prefix} 缺少变量 {exc}", reply_to)
+                return 0
+
+    if command_spec.get("forward_args"):
+        command_parts.extend(extra_tokens)
+
+    timeout = int(command_spec.get("timeout", config.get("default_timeout", 600)))
+
+    log_entry(log_path, "chatops/received", {
+        "chat_id": chat_id,
+        "sender_id": sender_id,
+        "command": command_spec.get("name"),
+        "tokens": tokens,
+        "command_parts": command_parts,
+    })
+
+    if command_spec.get("requires_approval") and approval_enabled:
+        pending_token = uuid.uuid4().hex[:12]
+        record = {
+            "name": command_spec.get("name"),
+            "command": command_parts,
+            "chat_id": chat_id,
+            "requested_by": sender_id,
+            "timeout": timeout,
+            "created_at": time.time(),
+            "expires_at": time.time() + approval_ttl,
+        }
+        store_pending(spool_path, pending_token, record)
+        message = [
+            f"{prefix} 指令需要管理员确认:",
+            f"命令: {command_spec.get('name')}",
+            f"Token: {pending_token} (有效期 {approval_ttl} 秒)",
+            "请发送 /saltgoat approve {token}",
+        ]
+        if not args.no_telegram and token and chat_id is not None:
+            send_telegram(token, chat_id, "\n".join(message), reply_to)
+        return 0
+
+    if args.no_exec:
+        rc, stdout, stderr, duration = (0, "", "", 0.0)
+    else:
+        rc, stdout, stderr, duration = run_command(command_parts, timeout)
+
+    log_entry(log_path, "chatops/executed", {
+        "chat_id": chat_id,
+        "sender_id": sender_id,
+        "command": command_spec.get("name"),
+        "returncode": rc,
+        "duration": duration,
+    })
+
+    status_icon = "✅" if rc == 0 else "⚠️"
+    message = [
+        f"{prefix} {status_icon} 已执行 {command_spec.get('name')}",
+        f"返回值: {rc}，耗时 {duration:.1f}s",
+    ]
+    summary = summarise_output(stdout, stderr)
+    if summary:
+        message.append(summary)
+
+    if not args.no_telegram and token and chat_id is not None:
+        send_telegram(token, chat_id, "\n".join(message), reply_to)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

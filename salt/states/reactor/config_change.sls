@@ -77,7 +77,7 @@ config_change_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.', 
         lines.append(details)
         message = "\n".join(lines)
 
-        reactor_common.broadcast_telegram(message, profiles, log)
+        reactor_common.broadcast_telegram(message, profiles, log, tag=TAG)
         PY
     - python_shell: True
     - require:

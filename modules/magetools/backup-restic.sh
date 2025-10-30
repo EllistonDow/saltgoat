@@ -271,6 +271,8 @@ payload: Dict[str, Any] = {
     "origin": origin or "manual",
 }
 
+payload["telegram_thread"] = 5
+
 if not site:
     payload.pop("site")
 if not payload["paths"]:
@@ -295,6 +297,9 @@ if payload.get("tags"):
 lines.append(f"Return code: {rc}")
 message = "\n".join(lines)
 
+tag_base = f"saltgoat/backup/restic/{status}"
+payload["tag"] = tag_base
+
 def log(label, data):
     subprocess.run(
         [
@@ -302,7 +307,7 @@ def log(label, data):
             logger_path,
             "TELEGRAM",
             log_path,
-            f"saltgoat/backup/restic/{status} {label}",
+            f"{tag_base} {label}",
             json.dumps(data, ensure_ascii=False),
         ],
         check=False,
@@ -316,7 +321,7 @@ if not profiles:
 
 try:
     log("profile_summary", {"count": len(profiles)})
-    reactor_common.broadcast_telegram(message, profiles, log)
+    reactor_common.broadcast_telegram(message, profiles, log, tag=tag_base, thread_id=payload.get("telegram_thread"))
 except Exception as exc:  # pylint: disable=broad-except
     log("error", {"message": str(exc)})
     sys.exit(1)

@@ -792,6 +792,18 @@ case "$1" in
         "monitor")
             require_module "monitor"
             case "$2" in
+                "alert")
+                    case "$3" in
+                        "resources"|"resource")
+                            monitor_alert_resources
+                            ;;
+                        *)
+                            log_error "未知的监控告警操作: ${3:-<empty>}"
+                            log_info "示例: saltgoat monitor alert resources"
+                            exit 1
+                            ;;
+                    esac
+                    ;;
                 "install")
                     monitor_install_stack
                     ;;
@@ -823,7 +835,11 @@ case "$1" in
                     monitor_performance
                     ;;
                 "report")
-                    monitor_generate_report "$3"
+                    if [[ "$3" == "daily" ]]; then
+                        monitor_report_daily_summary "$4"
+                    else
+                        monitor_generate_report "$3"
+                    fi
                     ;;
                 "realtime")
                     monitor_realtime "$3"

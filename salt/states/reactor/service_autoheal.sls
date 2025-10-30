@@ -28,93 +28,22 @@
   {% else %}
     {% set ns.running = running_value %}
   {% endif %}
-  {% if ns.service_name in allowed_services and not ns.running %}
-service_autorestart_{{ ns.service_name }}:
-  local.service.restart:
-    - tgt: {{ event_minion }}
-    - arg:
-      - {{ ns.service_name }}
-
-service_autorestart_log_{{ ns.service_name }}:
+  {% if not ns.running %}
+    {% set event_b64 = salt['hashutil.base64_encode'](data|json) %}
+    {% set allowed_b64 = salt['hashutil.base64_encode'](allowed_services|json) %}
+service_autoheal_handler_{{ ns.service_name | replace('-', '_') }}:
   local.cmd.run:
     - tgt: {{ event_minion }}
     - arg:
       - |-
-        python3 /opt/saltgoat-reactor/logger.py SERVICE "{{ log_path }}" "{{ tag }} service={{ ns.service_name }} action=autorestart" '{{ data|json }}'
+        python3 /opt/saltgoat-reactor/service_autoheal.py \
+          --tag '{{ tag }}' \
+          --service '{{ ns.service_name }}' \
+          --event-b64 '{{ event_b64 }}' \
+          --allowed-b64 '{{ allowed_b64 }}' \
+          --log-path '{{ log_path }}' \
+          --telegram-config '{{ telegram_cfg_path }}' \
+          --minion '{{ event_minion }}'
     - python_shell: True
-    - require:
-      - local: service_autorestart_{{ ns.service_name }}
-
-service_autorestart_telegram_{{ ns.service_name }}:
-  local.cmd.run:
-    - tgt: {{ event_minion }}
-    - arg:
-      - |-
-        python3 - <<'PY'
-        import json
-        import subprocess
-        import sys
-
-        sys.path.insert(0, "/opt/saltgoat-reactor")
-        import reactor_common  # pylint: disable=import-error
-
-        payload = {{ data|json }}
-        inner = payload.get("data") if isinstance(payload, dict) else None
-        if isinstance(inner, dict):
-            payload = {**inner, **{k: v for k, v in payload.items() if k != "data"}}
-        host = payload.get('id') or payload.get('host') or payload.get('minion_id') or "{{ event_minion }}"
-        service = "{{ ns.service_name }}"
-        service_info = payload.get(service, {}) or payload.get("services", {}).get(service, {})
-        previous_state = service_info.get('previous', service_info.get('status'))
-        running_state = service_info.get('running', service_info.get('status'))
-        if isinstance(running_state, str):
-            running_bool = running_state.lower() not in {'false', 'down', 'stopped', '0'}
-        else:
-            running_bool = bool(running_state)
-        if previous_state is None:
-            previous_state = 'running' if running_bool else 'down'
-        extra = json.dumps(service_info, ensure_ascii=False)
-
-        LOG_PATH = "{{ log_path }}"
-        TAG = "{{ tag }}"
-
-        def log(kind, payload_obj):
-            try:
-                subprocess.run(
-                    [
-                        "python3",
-                        "/opt/saltgoat-reactor/logger.py",
-                        "TELEGRAM",
-                        LOG_PATH,
-                        f"{TAG} {kind}",
-                        json.dumps(payload_obj, ensure_ascii=False),
-                    ],
-                    check=False,
-                    timeout=5,
-                )
-            except Exception:
-                pass
-
-        profiles = reactor_common.load_telegram_profiles("{{ telegram_cfg_path }}", log)
-        if not profiles:
-            log("skip", {"reason": "no_profiles"})
-            raise SystemExit()
-
-        lines = [
-            "[SaltGoat] WARNING service auto-heal",
-            f"Host: {host}",
-            f"Service: {service}",
-            f"Previous state: {previous_state}",
-            "Action: restart issued automatically",
-        ]
-        if extra and extra not in ('{}', 'null'):
-            lines.append(f"Details: {extra}")
-        message = "\n".join(lines)
-
-        reactor_common.broadcast_telegram(message, profiles, log)
-        PY
-    - python_shell: True
-    - require:
-      - local: service_autorestart_log_{{ ns.service_name }}
   {% endif %}
 {% endif %}

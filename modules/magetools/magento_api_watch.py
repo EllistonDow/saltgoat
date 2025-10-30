@@ -125,18 +125,26 @@ def log_to_file(label: str, tag: str, payload: Dict[str, Any]) -> None:
 def telegram_broadcast(tag: str, message: str, payload: Dict[str, Any]) -> None:
     if not TELEGRAM_AVAILABLE:
         return
-    try:
-        def _log(label: str, extra: Dict[str, Any]) -> None:
-            log_to_file("TELEGRAM", f"{tag} {label}", extra)
 
+    def _log(label: str, extra: Dict[str, Any]) -> None:
+        log_to_file("TELEGRAM", f"{tag} {label}", extra)
+
+    try:
         profiles = reactor_common.load_telegram_profiles(str(TELEGRAM_CONFIG), _log)
-        if not profiles:
-            _log("skip", {"reason": "no_profiles"})
-            return
-        _log("profile_summary", {"count": len(profiles)})
-        reactor_common.broadcast_telegram(message, profiles, _log)
     except Exception as exc:  # pragma: no cover
         log_to_file("TELEGRAM", f"{tag} error", {"message": str(exc)})
+        return
+
+    if not profiles:
+        _log("skip", {"reason": "no_profiles"})
+        return
+
+    _log("profile_summary", {"count": len(profiles)})
+    thread_id = payload.get("telegram_thread")
+    try:
+        reactor_common.broadcast_telegram(message, profiles, _log, tag=tag, thread_id=thread_id)
+    except Exception as exc:  # pragma: no cover
+        _log("error", {"message": str(exc)})
 
 
 def build_message(kind: str, site: str, payload: Dict[str, Any]) -> str:
@@ -195,9 +203,38 @@ class MagentoWatcher:
         path = self._state_file(kind)
         path.write_text(json.dumps({"last_id": last_id}), encoding="utf-8")
 
+    def _bootstrap_last_id(self, kind: str, endpoint: str, id_field: str) -> int:
+        params = {
+            "searchCriteria[sortOrders][0][field]": id_field,
+            "searchCriteria[sortOrders][0][direction]": "DESC",
+            "searchCriteria[pageSize]": 1,
+        }
+        try:
+            payload = self._request(endpoint, params)
+        except Exception as exc:  # pragma: no cover - bootstrap 时失败仅记录
+            LOG(f"[WARNING] {self.site} 初始化 {kind} 基线失败: {exc}")
+            return 0
+
+        items = payload.get("items", []) if isinstance(payload, dict) else []
+        if not items:
+            return 0
+
+        try:
+            latest = int(items[0].get(id_field, 0))
+        except Exception:
+            latest = 0
+        if latest > 0:
+            self._save_last_id(kind, latest)
+            LOG(f"[INFO] {self.site} 初始化 {kind} 基线 ID={latest}，不推送历史记录。")
+        return latest
+
     def process_orders(self) -> None:
         kind = "orders"
         last_id = self._load_last_id(kind)
+        if last_id <= 0:
+            if self._bootstrap_last_id(kind, "/rest/V1/orders", "entity_id") > 0:
+                return
+            # 若无法获取最新 ID，继续按照默认逻辑尝试（避免长期静默）
         bootstrap = last_id == 0
         params = {
             "searchCriteria[filter_groups][0][filters][0][field]": "entity_id",
@@ -259,6 +296,8 @@ class MagentoWatcher:
                 "customer": customer,
                 "email": email,
             }
+            event_data["tag"] = "saltgoat/business/order"
+            event_data["telegram_thread"] = 2
             emit_event("saltgoat/business/order", event_data)
             message = build_message(
                 "order",
@@ -278,6 +317,9 @@ class MagentoWatcher:
     def process_customers(self) -> None:
         kind = "customers"
         last_id = self._load_last_id(kind)
+        if last_id <= 0:
+            if self._bootstrap_last_id(kind, "/rest/V1/customers/search", "id") > 0:
+                return
         bootstrap = last_id == 0
         params = {
             "searchCriteria[filter_groups][0][filters][0][field]": "entity_id",
@@ -333,6 +375,8 @@ class MagentoWatcher:
                 "created_at": created_at,
                 "group_id": group_id,
             }
+            event_data["tag"] = "saltgoat/business/customer"
+            event_data["telegram_thread"] = 3
             emit_event("saltgoat/business/customer", event_data)
             message = build_message(
                 "customer",

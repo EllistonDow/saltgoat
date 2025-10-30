@@ -46,6 +46,8 @@ saltgoat magetools maintenance <site> <action>
 saltgoat magetools cron <site> <action>
 ```
 
+> 若已启用 Telegram ChatOps（`salt/pillar/chatops.sls.sample`），可在授权聊天中发送 `/saltgoat maintenance weekly <site>`、`/saltgoat cache clean <site>` 等命令；需要审批的操作会生成一次性 Token，需管理员 `/saltgoat approve <token>` 后才会真正执行。
+
 > **提示**：若目标主机未安装或未运行 `salt-minion`，上述 `saltgoat magetools cron` 命令会自动改用系统 Cron，在 `/etc/cron.d/magento-maintenance` 写入计划任务；待 `salt-minion` 启用后再次执行 `install` 即可恢复为 Salt Schedule。
 
 ### 维护管理命令

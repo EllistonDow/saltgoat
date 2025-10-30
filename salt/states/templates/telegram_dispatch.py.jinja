@@ -23,6 +23,7 @@ def main() -> int:
     parser.add_argument("--tag", required=True, help="Log tag prefix")
     parser.add_argument("--message", required=True, help="JSON encoded message string")
     parser.add_argument("--payload", default="{}", help="JSON encoded payload for diagnostics")
+    parser.add_argument("--thread-id", default=None, help="Optional Telegram topic thread ID")
     args = parser.parse_args()
 
     log_path = Path(args.log_path)
@@ -62,7 +63,10 @@ def main() -> int:
         return 0
 
     log("context", {"payload": payload_obj})
-    reactor_common.broadcast_telegram(message, profiles, log)
+    thread_id = args.thread_id
+    if thread_id in ("", "None"):
+        thread_id = None
+    reactor_common.broadcast_telegram(message, profiles, log, tag=tag, thread_id=thread_id)
     return 0
 
 

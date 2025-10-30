@@ -4,8 +4,12 @@
 {% set load_max_15m = (cpu_count * 1.1) %}
 {% set mem_warn_percent = 78 %}
 {% set disk_root_percent = 88 %}
+{% import_yaml 'secret/telegram.sls' as telegram_secret %}
 {% set secrets = pillar.get('secrets', {}) %}
 {% set telegram_cfg = secrets.get('telegram', {}).get('primary', {}) %}
+{% if not telegram_cfg and telegram_secret is mapping %}
+{%   set telegram_cfg = telegram_secret.get('secrets', {}).get('telegram', {}).get('primary', {}) %}
+{% endif %}
 {% set accept_from = telegram_cfg.get('accept_from', []) %}
 {% if not accept_from %}
 {% set accept_from = [123456789] %}
@@ -89,6 +93,11 @@ saltgoat:
       - chat_id: {{ default_chat_id }}
       - interval: 10
       - name: primary
+      - topics:
+          saltgoat/business/order: 2
+          saltgoat/business/customer: 3
+          saltgoat/backup/xtrabackup: 4
+          saltgoat/backup/restic: 5
     watchdog:
       - directories:
           /var/www:

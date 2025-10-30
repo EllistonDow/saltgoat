@@ -1,0 +1,363 @@
+#!/usr/bin/env python3
+"""SaltGoat service auto-heal helper.
+
+Processes systemd failure events emitted by Salt beacons:
+- Restarts whitelisted services (unless in dry-run mode).
+- Captures restart results / systemd state for diagnostics.
+- Logs outcomes to `/var/log/saltgoat/alerts.log` via the shared logger helper.
+- Broadcasts Telegram notifications and re-emits Salt events for downstream automations.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import json
+import socket
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Dict, Iterable, Optional, Tuple
+
+
+LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
+TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
+DEFAULT_TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
+
+
+def shell_exists(path: Path) -> bool:
+    try:
+        path.stat()
+        return True
+    except (PermissionError, FileNotFoundError):
+        return False
+
+
+TELEGRAM_AVAILABLE = shell_exists(TELEGRAM_COMMON)
+
+if TELEGRAM_AVAILABLE:
+    sys.path.insert(0, str(TELEGRAM_COMMON.parent))
+    try:
+        import reactor_common  # type: ignore
+    except Exception:  # pragma: no cover - degrade on runtime import failure
+        TELEGRAM_AVAILABLE = False
+
+try:
+    from salt.client import Caller  # type: ignore
+except Exception:  # pragma: no cover - fallback when Salt libs unavailable
+    Caller = None  # type: ignore
+
+
+HOSTNAME = socket.getfqdn() or socket.gethostname() or "localhost"
+
+
+def log_to_file(tag: str, log_path: Path, payload: Dict[str, Any]) -> None:
+    if not shell_exists(LOGGER_SCRIPT):
+        return
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(LOGGER_SCRIPT),
+                "SERVICE",
+                str(log_path),
+                tag,
+                json.dumps(payload, ensure_ascii=False),
+            ],
+            check=False,
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+
+def telegram_notify(message: str, payload: Dict[str, Any], log_path: Path, config_path: Path) -> None:
+    if not TELEGRAM_AVAILABLE or not shell_exists(config_path):
+        return
+
+    def _log(kind: str, info: Dict[str, Any]) -> None:
+        merged = {"kind": kind, **info}
+        log_to_file(payload.get("tag", "saltgoat/service/autoheal"), log_path, merged)
+
+    try:
+        profiles = reactor_common.load_telegram_profiles(str(config_path), _log)  # type: ignore[attr-defined]
+    except Exception as exc:  # pragma: no cover
+        _log("config_error", {"error": str(exc)})
+        return
+
+    if not profiles:
+        _log("skip", {"reason": "no_profiles"})
+        return
+
+    try:
+        reactor_common.broadcast_telegram(  # type: ignore[attr-defined]
+            message,
+            profiles,
+            _log,
+            tag=payload.get("tag"),
+            thread_id=payload.get("telegram_thread"),
+        )
+    except Exception as exc:  # pragma: no cover
+        _log("error", {"error": str(exc)})
+
+
+def emit_event(tag: str, payload: Dict[str, Any]) -> None:
+    if Caller is None:
+        return
+    try:
+        caller = Caller()  # type: ignore[call-arg]
+        caller.cmd("event.send", tag, payload)
+    except Exception:
+        pass
+
+
+def flatten_event(data: Any) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return {}
+    inner = data.get("data")
+    if isinstance(inner, dict):
+        merged = {**data}
+        merged.pop("data", None)
+        for key, value in inner.items():
+            if key == "_stamp":
+                continue
+            merged.setdefault(key, value)
+        return merged
+    return data
+
+
+def parse_service_info(service: str, payload: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[bool]]:
+    info: Dict[str, Any] = {}
+    if isinstance(payload.get(service), dict):
+        info = payload.get(service) or {}
+    elif isinstance(payload.get("services"), dict):
+        maybe = payload["services"].get(service)
+        if isinstance(maybe, dict):
+            info = maybe
+
+    running: Optional[bool] = None
+    for key in ("running", "status", "active"):
+        if key in info:
+            value = info[key]
+            if isinstance(value, str):
+                running = value.lower() not in {"false", "down", "stopped", "inactive", "failed", "dead", "0"}
+            elif isinstance(value, (bool, int)):
+                running = bool(value)
+            break
+
+    if running is None:
+        value = payload.get("running") or payload.get("status")
+        if isinstance(value, str):
+            running = value.lower() not in {"false", "down", "stopped", "inactive", "failed", "dead", "0"}
+        elif isinstance(value, (bool, int)):
+            running = bool(value)
+
+    return info, running
+
+
+def systemctl_restart(service: str) -> Tuple[int, str, str]:
+    try:
+        proc = subprocess.run(
+            ["systemctl", "restart", service],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
+    except Exception as exc:  # pragma: no cover
+        return 99, "", str(exc)
+
+
+def systemctl_state(service: str) -> Dict[str, Any]:
+    result: Dict[str, Any] = {}
+    try:
+        active = subprocess.check_output(
+            ["systemctl", "is-active", service],
+            text=True,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+        ).strip()
+    except subprocess.CalledProcessError as exc:
+        active = (exc.output or exc.stderr or "unknown").strip()
+    except Exception as exc:  # pragma: no cover
+        active = f"error: {exc}"
+    result["is_active"] = active or "unknown"
+
+    try:
+        details = subprocess.check_output(
+            [
+                "systemctl",
+                "show",
+                service,
+                "--property=Result,NRestarts,ExecMainStatus,ExecMainStartTimestamp,StateChangeTimestamp",
+                "--no-page",
+            ],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+    except Exception:
+        details = ""
+
+    for line in details.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        result[key] = value
+    return result
+
+
+def build_message(host: str, service: str, severity: str, items: Iterable[str]) -> str:
+    lines = [
+        f"[SaltGoat] {severity} service auto-heal",
+        f"Host: {host}",
+        f"Service: {service}",
+    ]
+    lines.extend(items)
+    return "\n".join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="SaltGoat service auto-heal helper")
+    parser.add_argument("--tag", required=True)
+    parser.add_argument("--service", required=False)
+    parser.add_argument("--event", required=False, help="Beacon payload JSON")
+    parser.add_argument("--event-b64", required=False, help="Base64 encoded beacon payload JSON")
+    parser.add_argument("--allowed", default="[]", help="JSON list of auto-heal services")
+    parser.add_argument("--allowed-b64", required=False, help="Base64 encoded JSON list of auto-heal services")
+    parser.add_argument("--log-path", default="/var/log/saltgoat/alerts.log")
+    parser.add_argument("--telegram-config", default=str(DEFAULT_TELEGRAM_CONFIG))
+    parser.add_argument("--minion", default="")
+    parser.add_argument("--no-telegram", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    if args.event_b64:
+        try:
+            event = json.loads(base64.b64decode(args.event_b64.encode()).decode("utf-8"))
+        except Exception:
+            event = {}
+    elif args.event:
+        try:
+            event = json.loads(args.event)
+        except json.JSONDecodeError:
+            event = {}
+    else:
+        event = {}
+
+    payload = flatten_event(event)
+    service = args.service or payload.get("service") or payload.get("service_name")
+    if not isinstance(service, str) or not service:
+        return 0
+
+    host = (
+        payload.get("host")
+        or payload.get("id")
+        or payload.get("minion_id")
+        or args.minion
+        or HOSTNAME
+    )
+
+    if args.allowed_b64:
+        try:
+            allowed_list = json.loads(base64.b64decode(args.allowed_b64.encode()).decode("utf-8"))
+        except Exception:
+            allowed_list = []
+    else:
+        try:
+            allowed_list = json.loads(args.allowed)
+        except Exception:
+            allowed_list = []
+    allowed_set = {str(item) for item in allowed_list if isinstance(item, (str, int))}
+    allowed = service in allowed_set if allowed_set else True
+
+    service_info, running_state = parse_service_info(service, payload)
+    if running_state is True:
+        # Already healthy, nothing to do.
+        return 0
+
+    state_before = service_info.get("previous") or service_info.get("old") or service_info.get("before")
+    if isinstance(state_before, str):
+        state_before = state_before.lower()
+
+    details = []
+    severity = "WARNING"
+    log_path = Path(args.log_path)
+    config_path = Path(args.telegram_config)
+
+    result_payload: Dict[str, Any] = {
+        "host": host,
+        "service": service,
+        "allowed": allowed,
+        "running": running_state,
+        "event": event,
+        "service_info": service_info,
+        "log_path": str(log_path),
+        "tag": args.tag,
+    }
+
+    if not allowed:
+        severity = "CRITICAL"
+        details.append("Auto restart disabled for this service; manual intervention required.")
+        if state_before:
+            details.append(f"Previous state: {state_before}")
+        details.append("Detected by SaltGoat beacon.")
+        result_payload["result"] = "not_allowed"
+    else:
+        if args.dry_run:
+            restart_rc = 0
+            restart_stdout = ""
+            restart_stderr = ""
+            details.append("Dry-run mode: restart skipped.")
+        else:
+            restart_rc, restart_stdout, restart_stderr = systemctl_restart(service)
+
+        status_info = systemctl_state(service)
+        active_state = status_info.get("is_active", "unknown")
+
+        result_payload.update(
+            {
+                "result": "restart",
+                "restart_rc": restart_rc,
+                "restart_stdout": restart_stdout,
+                "restart_stderr": restart_stderr,
+                "status_info": status_info,
+            }
+        )
+
+        if restart_rc == 0 and active_state == "active":
+            severity = "NOTICE"
+            details.append("systemctl restart succeeded; service is active.")
+        elif restart_rc == 0:
+            severity = "WARNING"
+            details.append(f"systemctl restart returned 0 but active state is '{active_state}'.")
+        else:
+            severity = "CRITICAL"
+            details.append(f"systemctl restart failed (rc={restart_rc}).")
+            if restart_stderr:
+                details.append(f"stderr: {restart_stderr}")
+
+        if restart_stdout:
+            details.append(f"stdout: {restart_stdout}")
+        if state_before:
+            details.append(f"Previous state: {state_before}")
+        if status_info:
+            details.append("systemd summary: " + json.dumps(status_info, ensure_ascii=False))
+
+    message = build_message(host, service, severity, details)
+    tag = f"saltgoat/service/autoheal/{severity.lower()}"
+    result_payload.update({"severity": severity, "details": details, "tag": tag})
+
+    log_to_file(tag, log_path, result_payload)
+    emit_event(tag, result_payload)
+
+    if not args.no_telegram:
+        telegram_notify(message, result_payload, log_path, config_path)
+
+    print(message)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

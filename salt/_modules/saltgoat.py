@@ -28,6 +28,35 @@ def _has_schedule():
         return False
 
 
+def _schedule_entries() -> Optional[Dict[str, Any]]:
+    try:
+        entries = __salt__["schedule.list"](return_yaml=False)  # type: ignore[call-arg]
+    except TypeError:
+        try:
+            entries = __salt__["schedule.list"]()  # type: ignore[union-attr]
+        except Exception:  # noqa: BLE001
+            return None
+    except Exception:  # noqa: BLE001
+        return None
+
+    if isinstance(entries, dict):
+        if "schedule" in entries and isinstance(entries["schedule"], dict):
+            return entries["schedule"]
+        return entries
+    if isinstance(entries, str):
+        try:
+            import yaml  # type: ignore
+
+            data = yaml.safe_load(entries)
+        except Exception:  # noqa: BLE001
+            return None
+        if isinstance(data, dict):
+            if "schedule" in data and isinstance(data["schedule"], dict):
+                return data["schedule"]
+            return data
+    return None
+
+
 def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
     """
     Install Magento maintenance schedule for the given site.
@@ -42,6 +71,79 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
         "changes": {},
     }
 
+    config: Dict[str, Any] = __salt__["pillar.get"]("magento_schedule", {})  # type: ignore[assignment]
+    maintenance_cmd = config.get("maintenance_command", "saltgoat magetools maintenance")
+    maintenance_extra_args = config.get("maintenance_extra_args", "")
+    daily_args = config.get("daily_args", "")
+    weekly_args = config.get("weekly_args", "")
+    monthly_args = config.get("monthly_args", "")
+    health_args = config.get("health_args", "")
+
+    site_token = site.strip().lower().replace(" ", "_").replace("-", "_") or site
+
+    base_jobs: Dict[str, str] = {
+        f"magento_{site_token}_cron": f"cd /var/www/{site} && sudo -u www-data php bin/magento cron:run >> /var/log/magento-cron.log 2>&1",
+        f"magento_{site_token}_daily": f"{maintenance_cmd} {site} daily {maintenance_extra_args} {daily_args} >> /var/log/magento-maintenance.log 2>&1",
+        f"magento_{site_token}_weekly": f"{maintenance_cmd} {site} weekly {maintenance_extra_args} {weekly_args} >> /var/log/magento-maintenance.log 2>&1",
+        f"magento_{site_token}_monthly": f"{maintenance_cmd} {site} monthly {maintenance_extra_args} {monthly_args} >> /var/log/magento-maintenance.log 2>&1",
+        f"magento_{site_token}_health": f"{maintenance_cmd} {site} health {maintenance_extra_args} {health_args} >> /var/log/magento-health.log 2>&1",
+    }
+
+    dump_jobs_config = config.get("mysql_dump_jobs", []) or []
+    dump_jobs: Dict[str, str] = {}
+    if isinstance(dump_jobs_config, list):
+        for dump_job in dump_jobs_config:
+            if not isinstance(dump_job, dict):
+                continue
+            name = dump_job.get("name")
+            if not name:
+                continue
+            job_site = dump_job.get("site")
+            job_sites = dump_job.get("sites")
+            if job_site and job_site != site:
+                continue
+            if job_sites and site not in job_sites:
+                continue
+            command = ["saltgoat", "magetools", "xtrabackup", "mysql", "dump"]
+            if dump_job.get("database"):
+                command += ["--database", str(dump_job["database"])]
+            if dump_job.get("backup_dir"):
+                command += ["--backup-dir", str(dump_job["backup_dir"])]
+            if dump_job.get("repo_owner"):
+                command += ["--repo-owner", str(dump_job["repo_owner"])]
+            if dump_job.get("no_compress"):
+                command.append("--no-compress")
+            dump_jobs[name] = " ".join(command)
+
+    api_watchers_config = config.get("api_watchers", []) or []
+    api_watchers: Dict[str, str] = {}
+    if isinstance(api_watchers_config, list):
+        for watcher in api_watchers_config:
+            if not isinstance(watcher, dict):
+                continue
+            name = watcher.get("name")
+            if not name:
+                continue
+            job_site = watcher.get("site")
+            job_sites = watcher.get("sites")
+            if job_site and job_site != site:
+                continue
+            if job_sites and site not in job_sites:
+                continue
+            kinds = watcher.get("kinds") or []
+            if isinstance(kinds, (list, tuple, set)):
+                kinds_list = ",".join(str(kind) for kind in kinds)
+            elif kinds:
+                kinds_list = str(kinds)
+            else:
+                kinds_list = "orders,customers"
+            api_watchers[name] = f"saltgoat magetools api watch --site {site} --kinds {kinds_list}"
+
+    expected_commands: Dict[str, str] = {}
+    expected_commands.update(base_jobs)
+    expected_commands.update(dump_jobs)
+    expected_commands.update(api_watchers)
+
     state_result = __salt__["state.apply"](
         "optional.magento-schedule",
         pillar={"site_name": site},
@@ -52,6 +154,36 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
         ret["comment"] = (
             "Salt Schedule entries rendered; ensure salt-minion service is running."
         )
+        schedule_entries = _schedule_entries()
+
+        removed: List[str] = []
+        if isinstance(schedule_entries, dict):
+            for job_name, details in schedule_entries.items():
+                if job_name in expected_commands:
+                    continue
+                if not isinstance(details, dict):
+                    continue
+                args = details.get("args") or details.get("job_args")
+                command = ""
+                if isinstance(args, list) and args:
+                    command = " ".join(str(item) for item in args)
+                elif isinstance(args, str):
+                    command = args
+                if not command:
+                    continue
+                if (
+                    f"--site {site}" in command
+                    or f"/var/www/{site}" in command
+                    or (command.strip().startswith("saltgoat magetools xtrabackup mysql dump") and site in command)
+                    or any(command.strip() == expected.strip() for expected in expected_commands.values())
+                ):
+                    try:
+                        if __salt__["schedule.delete"](job_name):
+                            removed.append(job_name)
+                    except Exception:  # noqa: BLE001
+                        pass
+        if removed:
+            ret.setdefault("changes", {}).setdefault("removed_extra", removed)
     else:
         ret["mode"] = "cron"
         ret["comment"] = (
@@ -84,16 +216,21 @@ def magento_schedule_uninstall(site: str = "tank") -> Dict[str, Any]:
         "comment": "",
     }
 
+    expected_removed: List[str] = []
     for job in base_jobs:
         try:
             res = __salt__["schedule.delete"](job)
             ret["changes"]["schedule"][job] = res  # type: ignore[index]
+            if res:
+                expected_removed.append(job)
         except Exception:  # noqa: BLE001
             ret["changes"]["schedule"][job] = False  # type: ignore[index]
 
-    dump_jobs = __salt__["pillar.get"]("magento_schedule:mysql_dump_jobs", [])  # type: ignore[assignment]
-    if isinstance(dump_jobs, list):
-        for job in dump_jobs:
+    config: Dict[str, Any] = __salt__["pillar.get"]("magento_schedule", {})  # type: ignore[assignment]
+
+    dump_jobs_cfg = config.get("mysql_dump_jobs", []) or []
+    if isinstance(dump_jobs_cfg, list):
+        for job in dump_jobs_cfg:
             if not isinstance(job, dict):
                 continue
             name = job.get("name")
@@ -108,8 +245,59 @@ def magento_schedule_uninstall(site: str = "tank") -> Dict[str, Any]:
             try:
                 res = __salt__["schedule.delete"](name)
                 ret["changes"]["schedule"][name] = res  # type: ignore[index]
+                if res:
+                    expected_removed.append(name)
             except Exception:  # noqa: BLE001
                 ret["changes"]["schedule"][name] = False  # type: ignore[index]
+
+    api_watchers_cfg = config.get("api_watchers", []) or []
+    if isinstance(api_watchers_cfg, list):
+        for watcher in api_watchers_cfg:
+            if not isinstance(watcher, dict):
+                continue
+            name = watcher.get("name")
+            if not name:
+                continue
+            job_site = watcher.get("site")
+            job_sites = watcher.get("sites")
+            if job_site and job_site != site:
+                continue
+            if job_sites and site not in job_sites:
+                continue
+            try:
+                res = __salt__["schedule.delete"](name)
+                ret["changes"]["schedule"][name] = res  # type: ignore[index]
+                if res:
+                    expected_removed.append(name)
+            except Exception:  # noqa: BLE001
+                ret["changes"]["schedule"][name] = False  # type: ignore[index]
+
+    schedule_entries = _schedule_entries()
+
+    if isinstance(schedule_entries, dict):
+        for job_name, details in schedule_entries.items():
+            if job_name in expected_removed:
+                continue
+            if not isinstance(details, dict):
+                continue
+            args = details.get("args") or details.get("job_args")
+            command = ""
+            if isinstance(args, list) and args:
+                command = " ".join(str(item) for item in args)
+            elif isinstance(args, str):
+                command = args
+            if not command:
+                continue
+            if (
+                f"--site {site}" in command
+                or f"/var/www/{site}" in command
+                or (command.strip().startswith("saltgoat magetools xtrabackup mysql dump") and site in command)
+            ):
+                try:
+                    res = __salt__["schedule.delete"](job_name)
+                except Exception:  # noqa: BLE001
+                    res = False
+                ret["changes"]["schedule"][job_name] = res  # type: ignore[index]
 
     removed = False
     if __salt__["file.file_exists"](cron_file):
