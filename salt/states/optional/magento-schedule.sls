@@ -44,9 +44,29 @@
   {% do api_watchers_ns.items.append(watcher) %}
 {% endfor %}
 {% set api_watchers = api_watchers_ns.items %}
+{% set all_stats_jobs = pillar.get('magento_schedule', {}).get('stats_jobs', []) %}
+{% set stats_jobs_ns = namespace(items=[]) %}
+{% for stats_job in all_stats_jobs %}
+  {% if not stats_job.get('name') %}
+    {% continue %}
+  {% endif %}
+  {% set job_site = stats_job.get('site') %}
+  {% set job_sites = stats_job.get('sites') %}
+  {% if job_site and job_site != site_name %}
+    {% continue %}
+  {% endif %}
+  {% if job_sites and site_name not in job_sites %}
+    {% continue %}
+  {% endif %}
+  {% do stats_jobs_ns.items.append(stats_job) %}
+{% endfor %}
+{% set stats_jobs = stats_jobs_ns.items %}
 {% macro shquote(val) -%}'{{ val | replace("'", "'\\''") }}'{%- endmacro %}
 {% macro build_dump_cmd(job) -%}
 saltgoat magetools xtrabackup mysql dump{% if job.get('database') %} --database {{ shquote(job.database) }}{% endif %}{% if job.get('backup_dir') %} --backup-dir {{ shquote(job.backup_dir) }}{% endif %}{% if job.get('repo_owner') %} --repo-owner {{ shquote(job.repo_owner) }}{% endif %}{% if job.get('no_compress', False) %} --no-compress{% endif %}
+{%- endmacro %}
+{% macro build_stats_cmd(job) -%}
+saltgoat magetools stats --site {{ site_name }}{% if job.get('period') %} --period {{ job.period }}{% else %} --period daily{% endif %}{% if job.get('page_size') %} --page-size {{ job.page_size }}{% endif %}{% if job.get('no_telegram', False) %} --no-telegram{% endif %}{% if job.get('quiet', False) %} --quiet{% endif %}{% set job_extra = job.get('extra_args') %}{% if job_extra %}{% if job_extra is string %} {{ job_extra }}{% elif job_extra is sequence %}{% for arg in job_extra %} {{ arg }}{% endfor %}{% else %} {{ job_extra }}{% endif %}{% endif %}
 {%- endmacro %}
 {% set salt_minion_service = salt['file.file_exists']('/lib/systemd/system/salt-minion.service') or salt['file.file_exists']('/etc/systemd/system/salt-minion.service') %}
 {% set cron_file = '/etc/cron.d/magento-maintenance-' ~ site_token %}
@@ -168,6 +188,21 @@ magento_schedule_api_watch_{{ watcher.name }}:
     - maxrunning: 1
 {% endfor %}
 
+{% for stats_job in stats_jobs %}
+magento_schedule_stats_{{ stats_job.name }}:
+  schedule.present:
+    - name: {{ stats_job.name }}
+    - function: cmd.run
+    - job_args:
+      - {{ build_stats_cmd(stats_job).strip() }}
+    - job_kwargs:
+        shell: /bin/bash
+    - cron: '{{ stats_job.cron }}'
+    - run_on_start: False
+    - persistent: True
+    - maxrunning: 1
+{% endfor %}
+
 {% if salt['service.available']('salt-minion') %}
 salt-minion-schedule-service:
   service.running:
@@ -182,6 +217,9 @@ salt-minion-schedule-service:
 {% endfor %}
 {% for watcher in api_watchers %}
       - schedule: magento_schedule_api_watch_{{ watcher.name }}
+{% endfor %}
+{% for stats_job in stats_jobs %}
+      - schedule: magento_schedule_stats_{{ stats_job.name }}
 {% endfor %}
 {% endif %}
 
@@ -205,6 +243,9 @@ salt-minion-schedule-service:
 {% endfor %}
 {% for watcher in api_watchers %}
         {{ watcher.cron }} root saltgoat magetools api watch --site {{ site_name }}{% if watcher.get('kinds') %} --kinds {{ watcher.kinds|join(',') }}{% endif %}
+{% endfor %}
+{% for stats_job in stats_jobs %}
+        {{ stats_job.cron }} root {{ build_stats_cmd(stats_job).strip() }}
 {% endfor %}
 
 cron-service-magento:

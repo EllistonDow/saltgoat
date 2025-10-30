@@ -26,3 +26,17 @@ magento_schedule:
       kinds:
         - orders
         - customers
+  stats_jobs:
+    - name: site1-stats-daily
+      cron: '5 6 * * *'
+      site: site1
+      period: daily
+      # 可选：关闭 Telegram 推送，仅生成日志
+      no_telegram: false
+    - name: site2-stats-weekly
+      cron: '15 6 * * 1'
+      sites:
+        - site2
+        - site2-staging
+      period: weekly
+      page_size: 500

@@ -256,7 +256,35 @@ SaltGoat 现在可以轮询 Magento REST API，将“新订单 / 新用户”推
 
 > 如需更细颗粒控制，可将 `kinds` 限制为 `orders` 或 `customers`，并复制多条 watcher 分别推送到不同 Telegram profile。
 
-> 提示：在 mysqldump 任务中加入 `site` 或 `sites` 字段，SaltGoat 才能在多站点场景下仅为指定站点安装/卸载该计划任务。
+### 业务汇总报表（Stats Jobs）
+配合 `saltgoat magetools stats`，可以自动生成每日/每周/每月的订单与新注册统计，并写入 `/var/log/saltgoat/alerts.log`（可选推送 Telegram）。
+
+1. **配置 Pillar**：在 `magento_schedule.stats_jobs` 中声明报表任务与执行频率：
+   ```yaml
+   magento_schedule:
+     stats_jobs:
+       - name: bank-stats-daily
+         cron: '5 6 * * *'        # 每天 06:05
+         site: bank
+         period: daily
+       - name: bank-stats-weekly
+         cron: '15 6 * * 1'       # 每周一 06:15
+         site: bank
+         period: weekly
+         no_telegram: true        # 仅写日志，不推送 Telegram
+       - name: tank-stats-monthly
+         cron: '25 6 1 * *'       # 每月 1 日 06:25
+         site: tank
+         period: monthly
+         page_size: 500           # 可选：自定义分页
+   ```
+   支持 `site` 或 `sites` 字段筛选多个站点；`period` 可选 `daily` / `weekly` / `monthly`；`page_size`、`no_telegram`、`quiet`、`extra_args` 均为可选参数。
+
+2. **安装计划**：执行 `sudo saltgoat magetools cron <site> install`，新任务会与维护/备份计划一起下发到 Salt Schedule（或自动回退 `/etc/cron.d/`）。
+
+3. **查看结果**：报表运行成功后会在 Telegram (如启用) 和 `/var/log/saltgoat/alerts.log` 中生成 `[SUMMARY]` 记录；如需临时运行，可执行 `sudo saltgoat magetools stats --period daily --site <site> --no-telegram --quiet`。
+
+> 提示：在 mysqldump 和 stats 任务中使用 `site` / `sites` 字段，可让多站点主机按需启用或停用指定任务。
 
 ## 定时任务配置
 

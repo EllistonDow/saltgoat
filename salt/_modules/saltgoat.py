@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import time
 from datetime import datetime
 from pathlib import Path
@@ -139,10 +140,51 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
                 kinds_list = "orders,customers"
             api_watchers[name] = f"saltgoat magetools api watch --site {site} --kinds {kinds_list}"
 
+    stats_jobs_config = config.get("stats_jobs", []) or []
+    stats_jobs: Dict[str, str] = {}
+    if isinstance(stats_jobs_config, list):
+        for stats_job in stats_jobs_config:
+            if not isinstance(stats_job, dict):
+                continue
+            name = stats_job.get("name")
+            if not name:
+                continue
+            job_site = stats_job.get("site")
+            job_sites = stats_job.get("sites")
+            if job_site and job_site != site:
+                continue
+            if job_sites and site not in job_sites:
+                continue
+            period = str(stats_job.get("period", "daily")).lower()
+            args: List[str] = [
+                "saltgoat",
+                "magetools",
+                "stats",
+                "--site",
+                site,
+                "--period",
+                period,
+            ]
+            page_size = stats_job.get("page_size")
+            if page_size:
+                args.extend(["--page-size", str(page_size)])
+            if stats_job.get("no_telegram"):
+                args.append("--no-telegram")
+            if stats_job.get("quiet"):
+                args.append("--quiet")
+            extra_args = stats_job.get("extra_args")
+            if extra_args:
+                if isinstance(extra_args, str):
+                    args.extend(shlex.split(extra_args))
+                elif isinstance(extra_args, (list, tuple, set)):
+                    args.extend(str(part) for part in extra_args)
+            stats_jobs[name] = " ".join(shlex.quote(arg) for arg in args)
+
     expected_commands: Dict[str, str] = {}
     expected_commands.update(base_jobs)
     expected_commands.update(dump_jobs)
     expected_commands.update(api_watchers)
+    expected_commands.update(stats_jobs)
 
     state_result = __salt__["state.apply"](
         "optional.magento-schedule",
@@ -260,6 +302,28 @@ def magento_schedule_uninstall(site: str = "tank") -> Dict[str, Any]:
                 continue
             job_site = watcher.get("site")
             job_sites = watcher.get("sites")
+            if job_site and job_site != site:
+                continue
+            if job_sites and site not in job_sites:
+                continue
+            try:
+                res = __salt__["schedule.delete"](name)
+                ret["changes"]["schedule"][name] = res  # type: ignore[index]
+                if res:
+                    expected_removed.append(name)
+            except Exception:  # noqa: BLE001
+                ret["changes"]["schedule"][name] = False  # type: ignore[index]
+
+    stats_jobs_cfg = config.get("stats_jobs", []) or []
+    if isinstance(stats_jobs_cfg, list):
+        for stats_job in stats_jobs_cfg:
+            if not isinstance(stats_job, dict):
+                continue
+            name = stats_job.get("name")
+            if not name:
+                continue
+            job_site = stats_job.get("site")
+            job_sites = stats_job.get("sites")
             if job_site and job_site != site:
                 continue
             if job_sites and site not in job_sites:
