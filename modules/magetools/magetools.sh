@@ -178,6 +178,10 @@ magetools_handler() {
                     ;;
             esac
             ;;
+        "stats")
+            shift
+            "${SCRIPT_DIR}/modules/magetools/magento_summary.py" "$@"
+            ;;
         "opensearch")
             # 调用 opensearch 认证配置脚本
             "${SCRIPT_DIR}/modules/magetools/opensearch-auth.sh" "$2"

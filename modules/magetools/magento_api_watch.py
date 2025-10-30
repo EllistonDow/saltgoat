@@ -66,6 +66,17 @@ if TELEGRAM_AVAILABLE:
         TELEGRAM_AVAILABLE = False
 
 
+def ensure_root() -> None:
+    if os.geteuid() != 0:  # type: ignore[attr-defined]
+        print(
+            "[ERROR] Magento API 工具需要 root 权限，请使用 'sudo saltgoat magetools <command> ...'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+ensure_root()
+
 CALLER = Caller()
 
 

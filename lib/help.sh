@@ -96,6 +96,9 @@ show_main_help() {
     echo -e "用法: ${GREEN}saltgoat <command> [options]${NC}"
     echo ""
 
+    help_note "除少数只读命令（help/git/lint/format）外，建议使用 'sudo saltgoat ...' 执行以读取 /etc 与 Salt 资源。"
+    echo ""
+
     help_subtitle "核心功能"
     help_command "install"                         "安装 LEMP 栈或指定组件"
     help_command "pillar"                          "初始化 / 查看 / 刷新 Pillar 凭据"
@@ -507,6 +510,9 @@ show_magetools_help() {
     echo -e "用法: ${GREEN}saltgoat magetools <command> [options]${NC}"
     echo ""
 
+    help_note "除 help 之外的 magetools 命令默认需要 root，请使用 'sudo saltgoat magetools ...'"
+    echo ""
+
     help_subtitle "工具安装"
     help_command "install n98-magerun2"         "安装 N98 Magerun2 CLI（常用管理命令）"
     help_command "install phpunit"              "安装 PHPUnit 以运行单元测试"
@@ -556,6 +562,11 @@ show_magetools_help() {
     help_subtitle "数据库管理"
     help_command "mysql create --database shopmage --user shop --password 'Passw0rd!'" "创建数据库与账号，默认授予 ALL + PROCESS/SUPER"
     help_note "可通过 --host/--charset/--collation/--no-super 调整参数"
+    echo ""
+
+    help_subtitle "业务洞察"
+    help_command "stats --period daily --site bank" "汇总订单与新客户（支持 daily/weekly/monthly，可多站点）"
+    help_command "stats --period weekly --site bank --no-telegram" "生成报表但仅输出到终端/日志，不推送 Telegram"
     echo ""
 
     help_subtitle "站点诊断"

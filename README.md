@@ -77,6 +77,9 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    # 秘钥模板位于 salt/pillar/secret/*.sls.example，复制后填入真实密码
    # 其它 Pillar 也提供 *.sample 文件，可按需复制后修改
    ```
+   > ⚠️ **权限提示**  
+   > 除 `help`、`git`、`lint`、`format` 等只读命令外，SaltGoat 会访问 `/etc`、`/var/lib/saltgoat` 以及 Salt Caller 接口。请默认使用 `sudo saltgoat …`，CLI 也会在需要时自动尝试用 sudo 重新执行。
+
 3. **执行安装**
    ```bash
    sudo saltgoat install all
