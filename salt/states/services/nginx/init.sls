@@ -135,7 +135,6 @@ nginx_main_config:
 {% endif %}
 {% endfor %}
 
-{% if magento_sites %}
 nginx_magento_fastcgi_upstream:
   file.managed:
     - name: {{ settings.conf_d_dir }}/fastcgi_backend.conf
@@ -150,15 +149,6 @@ nginx_magento_fastcgi_upstream:
         }
     - watch_in:
       - cmd: nginx_configtest
-{% else %}
-nginx_magento_fastcgi_upstream_cleanup:
-  file.absent:
-    - name: {{ settings.conf_d_dir }}/fastcgi_backend.conf
-    - require:
-      - file: nginx_directories
-    - watch_in:
-      - cmd: nginx_configtest
-{% endif %}
 
 {% set csp_cfg = settings.get('csp', {}) %}
 {% if csp_cfg.get('enabled', False) and csp_cfg.get('policy') %}

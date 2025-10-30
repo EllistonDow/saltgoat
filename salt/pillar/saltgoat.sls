@@ -1,1 +1,8 @@
-restic_password: vi1uhqfHtElVKih^Z2=NT9o(
+mysql_password: 'SaltGoat2024!'
+valkey_password: 'Valkey2024!'
+rabbitmq_password: 'RabbitMQ2024!'
+webmin_password: 'Webmin2024!'
+phpmyadmin_password: 'phpMyAdmin2024!'
+ssl_email: 'admin@example.com'
+timezone: 'America/Los_Angeles'
+language: 'en_US.UTF-8'

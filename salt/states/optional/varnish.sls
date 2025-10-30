@@ -1,9 +1,21 @@
 # Varnish 7.6 安装和配置
 
-# 安装 Varnish
+# 添加官方 Varnish 7.6 仓库
+varnish_package_repo:
+  pkgrepo.managed:
+    - name: deb https://packagecloud.io/varnishcache/varnish76/ubuntu/ {{ grains['oscodename'] }} main
+    - file: /etc/apt/sources.list.d/varnishcache_varnish76.list
+    - key_url: https://packagecloud.io/varnishcache/varnish76/gpgkey
+    - require_in:
+        - pkg: install_varnish
+
+# 安装 / 更新 Varnish（使用官方仓库，默认获取 7.6+）
 install_varnish:
-  pkg.installed:
+  pkg.latest:
     - name: varnish
+    - refresh: true
+    - require:
+      - pkgrepo: varnish_package_repo
 
 # 配置 Varnish
 configure_varnish:

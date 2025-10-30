@@ -10,6 +10,9 @@ source "${SCRIPT_DIR}/lib/logger.sh"
 
 ACTION="${1:-}"
 SITE="${2:-}"
+APP_DIR=""
+APP_BOOTSTRAP=""
+MAGENTO_OFFLOADER_CONFIG="web/secure/offloader_header"
 
 require_site() {
     if [[ -z "${SITE}" ]]; then
@@ -24,11 +27,76 @@ require_site() {
         log_error "Nginx 站点配置不存在: /etc/nginx/sites-available/${SITE}"
         exit 1
     fi
+    APP_DIR="/var/www/${SITE}"
+    APP_BOOTSTRAP="${APP_DIR}/app/bootstrap.php"
 }
 
 run_magento() {
     local args=("$@")
     sudo -u www-data -H bash -lc "cd /var/www/${SITE} && php bin/magento ${args[*]}"
+}
+
+magento_php() {
+    local php_script="$1"
+    [[ -f "$APP_BOOTSTRAP" ]] || return 1
+    sudo -u www-data -H php <<PHP
+<?php
+require '${APP_BOOTSTRAP}';
+\$bootstrap = \Magento\Framework\App\Bootstrap::create(BP, \$_SERVER);
+\$objectManager = \$bootstrap->getObjectManager();
+\$state = \$objectManager->get(\Magento\Framework\App\State::class);
+try {
+    \$state->setAreaCode('adminhtml');
+} catch (\Magento\Framework\Exception\LocalizedException \$e) {
+    // area code already set
+}
+${php_script}
+PHP
+}
+
+magento_list_websites() {
+    magento_php '
+$storeManager = $objectManager->get(\Magento\Store\Model\StoreManagerInterface::class);
+foreach ($storeManager->getWebsites() as $website) {
+    $code = $website->getCode();
+    if ($code && $code !== "admin") {
+        echo $code, PHP_EOL;
+    }
+}
+'
+}
+
+magento_list_stores() {
+    magento_php '
+$storeManager = $objectManager->get(\Magento\Store\Model\StoreManagerInterface::class);
+foreach ($storeManager->getStores() as $store) {
+    $code = $store->getCode();
+    if ($code && $code !== "admin") {
+        echo $code, PHP_EOL;
+    }
+}
+'
+}
+
+ensure_magento_offload_header() {
+    if [[ ! -f "$APP_BOOTSTRAP" ]]; then
+        log_warning "未找到 ${APP_BOOTSTRAP}，跳过 Magento offload header 设置"
+        return
+    fi
+    local header="${MAGENTO_OFFLOAD_HEADER:-X-Forwarded-Proto}"
+
+    run_magento config:set "${MAGENTO_OFFLOADER_CONFIG}" "$header" >/dev/null 2>&1 || true
+
+    local code
+    while IFS= read -r code; do
+        [[ -z "$code" ]] && continue
+        run_magento config:set --scope=websites --scope-code "$code" "${MAGENTO_OFFLOADER_CONFIG}" "$header" >/dev/null 2>&1 || true
+    done < <(magento_list_websites 2>/dev/null)
+
+    while IFS= read -r code; do
+        [[ -z "$code" ]] && continue
+        run_magento config:set --scope=stores --scope-code "$code" "${MAGENTO_OFFLOADER_CONFIG}" "$header" >/dev/null 2>&1 || true
+    done < <(magento_list_stores 2>/dev/null)
 }
 
 backup_dir() {
@@ -47,14 +115,71 @@ backend_symlink() {
     echo "/etc/nginx/sites-enabled/${SITE}-backend"
 }
 
+collect_server_names() {
+    sudo python3 - "$SITE" <<'PY'
+import sys
+import pathlib
+import re
+
+site = sys.argv[1]
+path = pathlib.Path("/etc/nginx/sites-available") / site
+names = []
+if path.exists():
+    data = path.read_text(encoding="utf-8")
+    pattern = re.compile(r"server_name\s+([^;]+);", re.IGNORECASE)
+    for match in pattern.finditer(data):
+        tokens = match.group(1).split()
+        for token in tokens:
+            tok = token.strip()
+            if tok and tok not in names:
+                names.append(tok)
+for name in names:
+    print(name)
+PY
+}
+
+magento_base_domains() {
+    [[ -f "$APP_BOOTSTRAP" ]] || return
+    magento_php '
+$storeManager = $objectManager->get(\Magento\Store\Model\StoreManagerInterface::class);
+$domains = [];
+foreach ($storeManager->getStores() as $store) {
+    foreach ([\Magento\Framework\UrlInterface::URL_TYPE_WEB, \Magento\Framework\UrlInterface::URL_TYPE_LINK] as $type) {
+        foreach ([true, false] as $secure) {
+            try {
+                $url = $store->getBaseUrl($type, $secure);
+            } catch (\Throwable $e) {
+                continue;
+            }
+            if (!$url) {
+                continue;
+            }
+            $host = parse_url($url, PHP_URL_HOST);
+            if ($host) {
+                $domains[$host] = true;
+            }
+        }
+    }
+}
+foreach (array_keys($domains) as $host) {
+    echo $host, PHP_EOL;
+}
+' 2>/dev/null
+}
+
 detect_admin_prefix() {
     local env_file="/var/www/${SITE}/app/etc/env.php"
     if [[ ! -f "$env_file" ]]; then
         echo "admin"
         return
     fi
-    sudo -u www-data -H php -r "require '${env_file}'; echo isset(\$config['backend']['frontName']) ? trim(\$config['backend']['frontName']) : 'admin';" 2>/dev/null | tr -dc '[:alnum:]_-'
-    echo
+    local prefix
+    prefix="$(sudo -u www-data -H php -r "(\$env = include '${env_file}'); echo isset(\$env['backend']['frontName']) ? trim(\$env['backend']['frontName']) : 'admin';" 2>/dev/null | tr -dc '[:alnum:]_-')"
+    if [[ -z "$prefix" ]]; then
+        echo "admin"
+    else
+        echo "$prefix"
+    fi
 }
 
 ensure_backup() {
@@ -125,14 +250,16 @@ write_frontend_snippet() {
     snippet="$(frontend_snippet)"
     extra_admin_block=""
     if [[ "$admin_prefix" != "admin" ]]; then
-        read -r -d '' extra_admin_block <<'EOADMIN'
+        extra_admin_block="$(
+cat <<'EOADMIN'
+
 location ^~ /admin/ {
     proxy_pass http://127.0.0.1:8080;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Forwarded-Host \$host;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_set_header X-Forwarded-Port \$server_port;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Port $server_port;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Ssl on;
     proxy_http_version 1.1;
     proxy_set_header Connection keep-alive;
@@ -142,10 +269,10 @@ location ^~ /admin/ {
     proxy_busy_buffers_size 512k;
     proxy_temp_file_write_size 512k;
     proxy_max_temp_file_size 0;
-    proxy_cache_bypass \$http_cache_control;
+    proxy_cache_bypass $http_cache_control;
 }
-
 EOADMIN
+)"
     fi
     sudo tee "$snippet" >/dev/null <<EOF
 # Auto-generated by SaltGoat varnish enable
@@ -254,11 +381,32 @@ EOF
 write_backend_config() {
     local backend
     backend="$(backend_conf)"
+    local -a server_names=()
+    local -A seen=()
+    local name
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        if [[ -z "${seen[$name]:-}" ]]; then
+            server_names+=("$name")
+            seen[$name]=1
+        fi
+    done < <(collect_server_names 2>/dev/null || true)
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        if [[ -z "${seen[$name]:-}" ]]; then
+            server_names+=("$name")
+            seen[$name]=1
+        fi
+    done < <(magento_base_domains 2>/dev/null || true)
+    if [[ ${#server_names[@]} -eq 0 ]]; then
+        server_names=("${SITE}")
+    fi
+    local server_name_line="${server_names[*]}"
     sudo tee "$backend" >/dev/null <<EOF
 # Auto-generated by SaltGoat varnish enable
 server {
     listen 127.0.0.1:8080;
-    server_name ${SITE};
+    server_name ${server_name_line};
 
     set \$MAGE_ROOT /var/www/${SITE};
     include /var/www/${SITE}/nginx.conf.sample;
@@ -324,6 +472,7 @@ enable_varnish() {
     nginx_reload
     apply_varnish_state
     configure_magento_varnish
+    ensure_magento_offload_header
     log_success "站点 ${SITE} 已启用 Varnish（前端 Nginx -> Varnish -> backend Nginx/PHP）"
 }
 
@@ -335,7 +484,6 @@ disable_varnish() {
     remove_backend_config
     nginx_reload
     configure_magento_builtin
-    sudo systemctl disable --now varnish >/dev/null 2>&1 || true
     log_success "站点 ${SITE} 已恢复为原始 Nginx/PHP 模式"
 }
 

@@ -263,6 +263,39 @@ SaltGoat 现在可以轮询 Magento REST API，将“新订单 / 新用户”推
 
 > 如需更细颗粒控制，可将 `kinds` 限制为 `orders` 或 `customers`，并复制多条 watcher 分别推送到不同 Telegram profile。
 
+### Varnish 加速
+
+SaltGoat 提供 `sudo saltgoat magetools varnish enable|disable <site>`，用于在几秒内切换以下拓扑：
+
+```
+访客 HTTPS 请求
+        │
+        ▼
+前端 Nginx (TLS 终止，绑定 80/443)
+        │  proxy_pass 127.0.0.1:6081
+        ▼
+Varnish (HTTP 缓存层)
+        │  backend 127.0.0.1:8080
+        ▼
+Nginx backend (监听 127.0.0.1:8080，加载站点原始 nginx.conf.sample)
+        │  FastCGI
+        ▼
+PHP-FPM (php8.3-fpm/www-data)
+```
+
+主要行为与注意事项如下：
+
+- **TLS 不变**：HTTPS/Certbot 仍由前端 Nginx 处理，`.well-known/acme-challenge` 被写入到站点 `pub/`，因此证书申请/续期不受影响。
+- **缓存策略**：`salt/states/optional/varnish.vcl` 仅缓存无 Cookie 的 GET/HEAD 静态资源与 HTML 页面；后台路径、`/customer/section`、`/rest/`、`/graphql/`、`/page_cache/`、`/checkout/*` 等接口都会直接回源 8080，保证功能正确。
+- **后台适配**：脚本会自动读取 `app/etc/env.php` 的 `backend.frontName`，生成对应的 `/etc/nginx/snippets/varnish-frontend-<site>.conf`，并放大缓存缓冲区 (`proxy_buffers 64 256k` 等)，同时隐藏上游的 CSP 头并注入 `https://assets.adobedtm.com` 白名单，避免 Magento 2 后台弹出 “Attention” 脚本错误。
+- **多域名兼容**：生成 backend 配置时会提取原站点 `server_name`，并补充 Magento 中各 store 的 Base URL 域名，确保多语言/多商店不会误路由到其它站点（避免此前出现的 bank↔tank 交叉跳转）。
+- **版本管理**：`optional.varnish` 会自动添加官方 packagecloud 仓库并安装 Varnish 7.6，与 Magento 2.4.8 的推荐版本保持一致；多站点仅需运行 enable/disable 命令即可复用同一套依赖。
+- **回滚安全**：`disable` 命令会恢复原 `/etc/nginx/sites-available/<site>`、删除临时 snippet/backend 并将 FPC 切回内置缓存，确保可以无损返回原状。
+- **服务管理**：禁用单个站点时不会停止全局 varnish 服务，避免其它仍在使用缓存的站点出现 502；若需要完全停用，可手动执行 `sudo systemctl stop varnish`。
+- **Pillar/State 一致性**：上述配置都写入仓库（`modules/magetools/varnish.sh`、`salt/states/optional/varnish.vcl`、`app/etc/csp_whitelist.xml`），因此 `git clone` + SaltGoat 安装后会得到完全一致的行为，不需要额外手工修改。
+
+> 若希望扩展缓存命中率，可在 `salt/states/optional/varnish.vcl` 中按需加入其他允许缓存的接口；测试通过后再执行 `sudo salt-call --local state.apply optional.varnish` 下发即可。
+
 ### 业务汇总报表（Stats Jobs）
 配合 `saltgoat magetools stats`，可以自动生成每日/每周/每月的订单与新注册统计，并写入 `/var/log/saltgoat/alerts.log`（可选推送 Telegram）。
 

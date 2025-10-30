@@ -35,8 +35,7 @@
     'listen': [{'port': 80}],
     'root': merged.get('default_site_root'),
     'index': merged.get('default_site_index'),
-    'php': {'enabled': False},
-    'extra_config': '    location / {\n        try_files $uri $uri/ =404;\n    }\n'
+    'php': {'enabled': False}
   } %}
   {% if 'default' not in sites %}
     {% set sites = salt['slsutil.merge'](sites, {'default': default_site}, strategy='recurse', merge_lists=True) %}

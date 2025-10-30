@@ -46,14 +46,14 @@ load_pillar_defaults() {
 
 	if [[ -f "$pillar_file" ]]; then
         log_info "从 Pillar 加载默认配置: ${pillar_file#"${SCRIPT_DIR}/"}"
-		MYSQL_PASSWORD="${MYSQL_PASSWORD:-$(get_local_pillar_value mysql_password)}"
-		VALKEY_PASSWORD="${VALKEY_PASSWORD:-$(get_local_pillar_value valkey_password)}"
-		RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(get_local_pillar_value rabbitmq_password)}"
-		WEBMIN_PASSWORD="${WEBMIN_PASSWORD:-$(get_local_pillar_value webmin_password)}"
-		PHPMYADMIN_PASSWORD="${PHPMYADMIN_PASSWORD:-$(get_local_pillar_value phpmyadmin_password)}"
-		SSL_EMAIL="${SSL_EMAIL:-$(get_local_pillar_value ssl_email)}"
-		TIMEZONE="${TIMEZONE:-$(get_local_pillar_value timezone)}"
-		LANGUAGE="${LANGUAGE:-$(get_local_pillar_value language)}"
+		MYSQL_PASSWORD="${MYSQL_PASSWORD:-$(get_local_pillar_value mysql_password || true)}"
+		VALKEY_PASSWORD="${VALKEY_PASSWORD:-$(get_local_pillar_value valkey_password || true)}"
+		RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(get_local_pillar_value rabbitmq_password || true)}"
+		WEBMIN_PASSWORD="${WEBMIN_PASSWORD:-$(get_local_pillar_value webmin_password || true)}"
+		PHPMYADMIN_PASSWORD="${PHPMYADMIN_PASSWORD:-$(get_local_pillar_value phpmyadmin_password || true)}"
+		SSL_EMAIL="${SSL_EMAIL:-$(get_local_pillar_value ssl_email || true)}"
+		TIMEZONE="${TIMEZONE:-$(get_local_pillar_value timezone || true)}"
+		LANGUAGE="${LANGUAGE:-$(get_local_pillar_value language || true)}"
 	else
 		log_warning "未找到 Pillar 配置 salt/pillar/saltgoat.sls，将使用内置默认值"
 	fi
