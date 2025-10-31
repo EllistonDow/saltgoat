@@ -1,9 +1,15 @@
 # SaltGoat 更新日志
 
+## [1.2.5] - 2025-10-31
+
+### Changes
+- 修改 11 个文件: README.md, docs/CHANGELOG.md, docs/MAGENTO_PWA.md, docs/pwa-todo.md, lib/help.sh 等
+
+
 ## [1.2.4] - 2025-10-31
 
 ### Changes
-- 修改 7 个文件: docs/MAGENTO_PWA.md, modules/magetools/permissions.sh, modules/magetools/pwa-install.sh, modules/magetools/pwa-overrides/productDetailFragment.gql.js, modules/magetools/pwa-overrides/useProductFullDetail.js 等
+- 修改 7 个文件: docs/MAGENTO_PWA.md, modules/magetools/permissions.sh, modules/pwa/install.sh, modules/pwa/overrides/productDetailFragment.gql.js, modules/pwa/overrides/useProductFullDetail.js 等
 
 
 ## [1.2.3] - 2025-10-31

@@ -1,6 +1,6 @@
 # Magento PWA 后端一键部署指南
 
-SaltGoat 在 `v1.2.x` 起新增 `saltgoat magetools pwa install`，用于在全新目录中快速部署 Magento 2（作为 PWA 后端）并串联 Valkey / RabbitMQ / Cron 等现有自动化组件，可选同时拉取 Magento PWA Studio 并执行 Yarn 构建。
+SaltGoat 在 `v1.2.x` 起新增 `saltgoat pwa install`，用于在全新目录中快速部署 Magento 2（作为 PWA 后端）并串联 Valkey / RabbitMQ / Cron 等现有自动化组件，可选同时拉取 Magento PWA Studio 并执行 Yarn 构建。
 
 > ⚠️ 粗体步骤中涉及的密码、密钥请务必放在未纳入版本控制的 Pillar 文件中（如 `salt/pillar/magento-pwa.sls`）。示例 `.sample` 仅为说明用途，千万不要提交真实帐号。
 
@@ -29,7 +29,7 @@ SaltGoat 在 `v1.2.x` 起新增 `saltgoat magetools pwa install`，用于在全�
 ## 2. 执行一键安装
 
 ```bash
-sudo saltgoat magetools pwa install pwa --with-pwa
+sudo saltgoat pwa install pwa --with-pwa
 ```
 
 脚本将依次执行：
@@ -89,4 +89,4 @@ sudo saltgoat magetools pwa install pwa --with-pwa
 3. Cron/Salt Schedule（`saltgoat magetools cron pwa uninstall`）
 4. Valkey / RabbitMQ 配置（`valkey-setup ... --no-reuse`、`rabbitmq-salt remove pwa`）
 
-完成清理后重新执行 `sudo saltgoat magetools pwa install pwa` 即可。
+完成清理后重新执行 `sudo saltgoat pwa install pwa` 即可。

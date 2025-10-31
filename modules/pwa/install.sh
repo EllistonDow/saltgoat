@@ -54,8 +54,8 @@ usage() {
 SaltGoat Magento PWA 安装助手
 
 用法:
-  saltgoat magetools pwa install <site> [--with-pwa|--no-pwa]
-  saltgoat magetools pwa help
+  saltgoat pwa install <site> [--with-pwa|--no-pwa]
+  saltgoat pwa help
 
 说明:
   - <site> 必须在 salt/pillar/magento-pwa.sls 中定义
@@ -678,7 +678,7 @@ PY
 
     local product_fragment="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/RootComponents/Product/productDetailFragment.gql.js"
     local product_talon="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/ProductFullDetail/useProductFullDetail.js"
-    local overrides_dir="${SCRIPT_DIR}/modules/magetools/pwa-overrides"
+    local overrides_dir="${SCRIPT_DIR}/modules/pwa/overrides"
 
     if [[ -f "${overrides_dir}/productDetailFragment.gql.js" ]]; then
         log_info "应用内置 productDetailFragment.gql.js 覆盖"
@@ -1247,7 +1247,7 @@ case "$ACTION" in
             esac
         done
         if [[ -z "$SITE" ]]; then
-            abort "请提供站点名称，例如: saltgoat magetools pwa install pwa"
+            abort "请提供站点名称，例如: saltgoat pwa install pwa"
         fi
         install_site "$SITE" "$PWA_OVERRIDE"
         ;;

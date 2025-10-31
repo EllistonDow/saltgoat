@@ -59,6 +59,9 @@ show_help() {
         "ssl")
             show_ssl_help
             ;;
+        "pwa")
+            show_pwa_help
+            ;;
         "git")
             show_git_help
             ;;
@@ -107,6 +110,7 @@ show_main_help() {
     help_command "optimize"                        "系统 / Magento 优化"
     help_command "monitor"                         "系统与服务监控"
     help_command "magetools"                       "Magento 专用工具集"
+    help_command "pwa"                             "PWA 部署与管理工具"
     help_command "analyse"                         "部署网站分析与可观测组件"
     help_command "git"                             "Git 快速发布工具"
     help_command "postfix --smtp <名称> [--enable|--disable]" "切换 SMTP 帐号并可同步开启/关闭 Postfix"
@@ -526,12 +530,6 @@ show_magetools_help() {
     help_note "命令内部执行 sudo salt-call state.apply optional.magento-permissions-* (pillar=site_path)；详见 docs/MAGENTO_PERMISSIONS.md。"
     echo ""
 
-    help_subtitle "PWA 安装"
-    help_command "pwa install <site> [--with-pwa|--no-pwa]" "读取 Pillar (magento-pwa.sls) 并一键部署 Magento + PWA 站点"
-    help_note "脚本会自动检查 Node/Yarn、创建数据库、执行 setup:install，可选调用 valkey-setup / rabbitmq-salt。"
-    help_note "--with-pwa 会克隆 Magento PWA Studio 并执行 Yarn 命令，--no-pwa 可覆盖 Pillar 中的 enable:true。"
-    echo ""
-
     help_subtitle "缓存 / 队列"
     help_command "valkey-check <site>"          "验证 Valkey 连接、密码与权限"
     help_command "rabbitmq-salt smart|all <site>" "使用 Salt 状态启用消费者（默认 1 线程）"
@@ -588,6 +586,32 @@ show_magetools_help() {
     help_subtitle "常用示例"
     help_command "saltgoat magetools install n98-magerun2"          "部署 Magento CLI 工具组合"
     help_command "saltgoat magetools permissions fix /var/www/shop" "快速修复线上站点权限"
+}
+
+# PWA 工具帮助
+show_pwa_help() {
+    help_title "PWA 部署与管理"
+    echo -e "用法: ${GREEN}saltgoat pwa <command> [options]${NC}"
+    echo ""
+
+    help_subtitle "核心命令"
+    help_command "install <site> [--with-pwa|--no-pwa]" "读取 Pillar (magento-pwa.sls) 并一键部署 Magento + Venia PWA 前端"
+    help_command "help"                          "显示本帮助"
+    echo ""
+
+    help_subtitle "选项说明"
+    help_command "--with-pwa"                    "强制构建 PWA Studio，即便 Pillar 中未启用"
+    help_command "--no-pwa"                      "跳过前端构建，仅部署后端"
+    help_note "脚本会检测 Node/Yarn、创建数据库、执行 setup:install，并可按 Pillar 自动调用 valkey-setup / rabbitmq-salt / cron。"
+    help_note "覆盖文件位于 modules/pwa/overrides/，用于保持 MOS GraphQL 兼容与本地定制。"
+    echo ""
+
+    help_subtitle "相关文档"
+    help_command "docs/MAGENTO_PWA.md"          "安装流程与注意事项"
+    help_command "docs/pwa-todo.md"             "UI 与 Page Builder 推进计划"
+    echo ""
+
+    help_note "旧命令 'saltgoat magetools pwa' 已兼容转发，请尽快迁移至新命名空间。"
 }
 
 # XtraBackup 帮助

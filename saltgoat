@@ -115,6 +115,7 @@ register_module "diagnose" "${SCRIPT_DIR}/modules/diagnose/diagnose.sh"
 register_module "version-lock" "${SCRIPT_DIR}/modules/version-lock/version-lock.sh"
 register_module "profile" "${SCRIPT_DIR}/modules/profile/performance-analysis.sh"
 register_module "magetools" "${SCRIPT_DIR}/modules/magetools/magetools.sh"
+register_module "pwa" "${SCRIPT_DIR}/modules/pwa/pwa.sh"
 register_module "analyse" "${SCRIPT_DIR}/modules/analyse/analyse.sh"
 register_module "git" "${SCRIPT_DIR}/modules/git/git.sh"
 register_module "cockpit" "${SCRIPT_DIR}/modules/cockpit/cockpit.sh"
@@ -1183,6 +1184,10 @@ case "$1" in
     "magetools")
         require_module "magetools"
         magetools_handler "${@:2}"
+        ;;
+    "pwa")
+        require_module "pwa"
+        pwa_handler "${@:2}"
         ;;
     "cockpit")
         require_module "cockpit"

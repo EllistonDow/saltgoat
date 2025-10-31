@@ -200,7 +200,9 @@ magetools_handler() {
             ;;
         "pwa")
             shift
-            "${SCRIPT_DIR}/modules/magetools/pwa-install.sh" "$@"
+            log_warning "命令已迁移至 'saltgoat pwa'，当前调用将继续执行但建议尽快使用新命名空间"
+            require_module "pwa"
+            pwa_handler "$@"
             ;;
         "varnish")
             shift
