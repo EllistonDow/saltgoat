@@ -26,6 +26,11 @@
 {%- set sample_path = '' %}
 {%- set has_magento_sample = False %}
 {%- endif %}
+{%- set location_blocks = site_cfg.get('locations', {}) %}
+{%- if location_blocks.items is not defined %}
+{%- set location_blocks = {} %}
+{%- endif %}
+{%- set has_location_root_override = '/' in location_blocks %}
 
 server {
 {%- for entry in listen_blocks %}
@@ -88,6 +93,7 @@ server {
     root {{ root_path }};
     index {{ index_files | join(' ') }};
 
+    {%- if not has_location_root_override %}
     location / {
         {%- if site_cfg.get('try_files') %}
         try_files {{ site_cfg.get('try_files') }};
@@ -95,6 +101,7 @@ server {
         try_files $uri $uri/ {{ fallback }};
         {%- endif %}
     }
+    {%- endif %}
 
 {%- if php_cfg.get('enabled', True) %}
     location ~ \.php$ {
@@ -107,11 +114,11 @@ server {
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         {%- if has_fastcgi_snippet %}
         include fastcgi_params;
-        {%- endif %}
+{%- endif %}
     }
 {%- endif %}
 
-{%- for path, block in site_cfg.get('locations', {}).items() %}
+{%- for path, block in location_blocks.items() %}
     location {{ path }} {
 {%- for directive in block.get('directives', []) %}
         {{ directive }};

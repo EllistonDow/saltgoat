@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.2.3] - 2025-10-31
+
+### Changes
+- 修改 13 个文件: .gitignore, README.md, docs/MAGENTO_PWA.md, lib/help.sh, modules/magetools/magetools.sh 等
+
+
 ## [1.2.2] - 2025-10-30
 
 ### Changes

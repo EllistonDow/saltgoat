@@ -198,12 +198,16 @@ root = site_cfg.get("root") or nginx.get("default_site_root") or (f"/var/www/{si
 domains = site_cfg.get("server_name") or []
 if not domains and site_name:
     domains = [site_name]
-email = data.get("ssl_email") or nginx.get("ssl_email") or ""
+email = site_cfg.get("ssl_email") or data.get("ssl_email") or nginx.get("ssl_email") or ""
+magento_flag = bool(site_cfg.get("magento"))
+ssl_webroot = site_cfg.get("ssl_webroot", "")
 
 print(json.dumps({
     "root": root,
     "domains": domains,
     "email": email,
+    "magento": magento_flag,
+    "ssl_webroot": ssl_webroot,
 }))
 PY
 }
@@ -223,23 +227,36 @@ ensure_ssl_certificate() {
         return 1
     fi
 
-    local root_path
-    local ssl_email
+    local root_path fallback_root
+    local ssl_email configured_webroot
+    local magento_flag
     local -a domains=()
 
-    root_path=$(python3 - "$info_json" <<'PY'
+    read -r fallback_root magento_flag ssl_email configured_webroot <<<"$(python3 - "$info_json" <<'PY'
 import json, sys
 data = json.loads(sys.argv[1])
-print(data.get("root", ""))
+root = data.get("root", "")
+magento = data.get("magento", False)
+email = data.get("email", "")
+webroot = data.get("ssl_webroot", "")
+print(root)
+print("1" if magento else "0")
+print(email)
+print(webroot)
 PY
-)
+)"
 
-    ssl_email=$(python3 - "$info_json" <<'PY'
-import json, sys
-data = json.loads(sys.argv[1])
-print(data.get("email", ""))
-PY
-)
+    if [[ -n "$configured_webroot" ]]; then
+        root_path="$configured_webroot"
+    elif [[ "$magento_flag" == "1" ]]; then
+        root_path="${fallback_root%/}/pub"
+    else
+        root_path="$fallback_root"
+    fi
+
+    if [[ -z "$root_path" ]]; then
+        root_path="/var/www/${site}"
+    fi
 
     mapfile -t domains < <(python3 - "$info_json" <<'PY'
 import json, sys
@@ -280,6 +297,11 @@ PY
     fi
 
     log_highlight "未检测到 ${primary} 的证书，尝试自动申请 Let's Encrypt 证书..."
+
+    if ! run_salt_call state.apply nginx.acme_helper pillar="{'nginx': {'current_site': '$site'}}"; then
+        log_error "配置 ACME 路径失败。"
+        return 1
+    fi
 
     if ! run_salt_call state.apply optional.certbot; then
         log_error "安装/配置 Certbot 失败。"

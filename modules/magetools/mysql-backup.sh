@@ -228,7 +228,6 @@ dump_database() {
     local backup_dir=""
     local repo_owner=""
     local compress=1
-    local opt
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -290,7 +289,7 @@ EOF
     fi
 
     # 载入环境
-    # shellcheck disable=SC1091
+    # shellcheck disable=SC1090,SC1091
     source "$MYSQL_ENV"
 
     local mysql_user="${MYSQL_BACKUP_USER:-backup}"

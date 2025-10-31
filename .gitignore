@@ -47,6 +47,7 @@ erl_crash.dump
 .env
 .env.local
 .env.production
+salt/pillar/magento-pwa.sls
 salt/pillar/secret/*
 !salt/pillar/secret/README.md
 !salt/pillar/secret/.gitkeep

@@ -326,6 +326,11 @@ location ^~ /customer/ {
     proxy_http_version 1.1;
     proxy_set_header Connection keep-alive;
     proxy_buffering off;
+    proxy_buffer_size 512k;
+    proxy_buffers 64 256k;
+    proxy_busy_buffers_size 512k;
+    proxy_temp_file_write_size 512k;
+    proxy_max_temp_file_size 0;
 }
 
 location ^~ /rest/ {
@@ -368,6 +373,11 @@ location ^~ /page_cache/ {
     proxy_http_version 1.1;
     proxy_set_header Connection keep-alive;
     proxy_buffering off;
+    proxy_buffer_size 512k;
+    proxy_buffers 64 256k;
+    proxy_busy_buffers_size 512k;
+    proxy_temp_file_write_size 512k;
+    proxy_max_temp_file_size 0;
 }
 
 location / {

@@ -1,0 +1,73 @@
+# Magento PWA 站点配置示例
+# 复制为 salt/pillar/magento-pwa.sls 并替换为真实值（请勿提交明文密码到仓库）
+
+magento_pwa:
+  sites:
+    pwa:
+      root: /var/www/pwa
+      base_url: http://pwa.magento.example.com/
+      base_url_secure: https://pwa.magento.example.com/
+
+      admin:
+        frontname: admin_tattoo
+        firstname: PWA
+        lastname: Admin
+        email: pwa@example.com
+        user: pwa
+        password: ChangeMePwa2025!
+
+      crypt_key: CHANGE-ME-32-CHAR-HEX-STRING
+
+      db:
+        host: localhost
+        name: pwamage
+        user: pwa
+        password: ChangeMeDb2025!
+
+      timezone: America/Los_Angeles
+      locale: en_US
+      currency: USD
+
+      composer:
+        repo_user: your-magento-marketplace-public-key
+        repo_pass: your-magento-marketplace-private-key
+
+      opensearch:
+        host: localhost
+        port: 9210
+        scheme: http
+        index_prefix: magento2pwa
+        username: doge
+        password: ChangeMeSearch2025!
+        timeout: 15
+        enable_auth: true
+
+      options:
+        use_secure: true
+        use_secure_admin: true
+        use_rewrites: true
+        cleanup_database: true
+
+      node:
+        ensure: true
+        version: "18"
+        install_yarn: true
+
+      services:
+        install_cron: true
+        configure_valkey: true
+        configure_rabbitmq: true
+
+      pwa_studio:
+        enable: false
+        repo: https://github.com/magento/pwa-studio.git
+        branch: develop
+        target_dir: /var/www/pwa/pwa-studio
+        yarn_command: "yarn install"
+        build_command: "yarn build"
+        env_template: packages/venia-concept/.env.dist
+        env_file: /var/www/pwa/pwa-studio/packages/venia-concept/.env
+        serve_port: 8082
+        env_overrides:
+          MAGENTO_BACKEND_URL: https://pwa.magento.example.com/
+          CHECKOUT_BRAINTREE_TOKEN: sandbox_example_token

@@ -526,6 +526,12 @@ show_magetools_help() {
     help_note "命令内部执行 sudo salt-call state.apply optional.magento-permissions-* (pillar=site_path)；详见 docs/MAGENTO_PERMISSIONS.md。"
     echo ""
 
+    help_subtitle "PWA 安装"
+    help_command "pwa install <site> [--with-pwa|--no-pwa]" "读取 Pillar (magento-pwa.sls) 并一键部署 Magento + PWA 站点"
+    help_note "脚本会自动检查 Node/Yarn、创建数据库、执行 setup:install，可选调用 valkey-setup / rabbitmq-salt。"
+    help_note "--with-pwa 会克隆 Magento PWA Studio 并执行 Yarn 命令，--no-pwa 可覆盖 Pillar 中的 enable:true。"
+    echo ""
+
     help_subtitle "缓存 / 队列"
     help_command "valkey-check <site>"          "验证 Valkey 连接、密码与权限"
     help_command "rabbitmq-salt smart|all <site>" "使用 Salt 状态启用消费者（默认 1 线程）"

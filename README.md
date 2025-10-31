@@ -116,6 +116,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
   - `magento_schedule.api_watchers` 可轮询 Magento REST API，将新订单/新用户同步到 Telegram（首次运行仅建立基线，不推送历史数据）。
   - `magento_schedule.stats_jobs` 可定时运行 `saltgoat magetools stats --period <daily|weekly|monthly>`，自动生成业务汇总并写入 `/var/log/saltgoat/alerts.log`（可选推送 Telegram）。
 - 维护流程、权限修复、故障排查详见 [`docs/MAGENTO_MAINTENANCE.md`](docs/MAGENTO_MAINTENANCE.md)。
+- `sudo saltgoat magetools pwa install <site> [--with-pwa]`：读取 `salt/pillar/magento-pwa.sls`，自动部署全新 Magento + PWA 站点并串联 Valkey / RabbitMQ / Cron，详见 [`docs/MAGENTO_PWA.md`](docs/MAGENTO_PWA.md)。
 
 ### 监控与巡检
 - `sudo saltgoat monitor system|services|resources|logs|security|performance`

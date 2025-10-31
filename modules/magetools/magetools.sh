@@ -198,6 +198,10 @@ magetools_handler() {
             # 调用 Salt Schedule 管理脚本
             "${SCRIPT_DIR}/modules/magetools/magento-salt-schedule.sh" "$2" "$3"
             ;;
+        "pwa")
+            shift
+            "${SCRIPT_DIR}/modules/magetools/pwa-install.sh" "$@"
+            ;;
         "varnish")
             shift
             "${SCRIPT_DIR}/modules/magetools/varnish.sh" "$@"
