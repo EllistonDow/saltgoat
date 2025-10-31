@@ -9,6 +9,8 @@ set -euo pipefail
 source "${SCRIPT_DIR}/lib/logger.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/utils.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/modules/magetools/permissions.sh"
 
 CONFIG_FILE="${SCRIPT_DIR}/salt/pillar/magento-pwa.sls"
 DEFAULT_NODE_VERSION="18"
@@ -170,7 +172,7 @@ emit("PWA_STUDIO_DIR", target_dir)
 emit("PWA_STUDIO_INSTALL_COMMAND", pwa_studio.get("yarn_command", "yarn install"))
 emit("PWA_STUDIO_BUILD_COMMAND", pwa_studio.get("build_command", "yarn build"))
 emit("PWA_STUDIO_ENV_TEMPLATE", pwa_studio.get("env_template", "packages/venia-concept/.env.dist"))
-env_file_default = pwa_studio.get("env_file", f"{target_dir}/packages/venia-concept/.env")
+env_file_default = pwa_studio.get("env_file", f"{target_dir}/.env")
 emit("PWA_STUDIO_ENV_FILE", env_file_default)
 emit("PWA_STUDIO_PORT", pwa_studio.get("serve_port", 8082))
 import base64
@@ -518,19 +520,8 @@ permissions_need_fix() {
 }
 
 fix_permissions() {
-    log_info "修正权限 ..."
-    chown -R www-data:www-data "$PWA_ROOT"
-    find "$PWA_ROOT" -type d -exec chmod 755 {} \;
-    find "$PWA_ROOT" -type f -exec chmod 644 {} \;
-    chmod 755 "$PWA_ROOT/bin/magento"
-    local dir
-    for dir in var generated pub/static pub/media; do
-        if [[ -d "$PWA_ROOT/$dir" ]]; then
-            find "$PWA_ROOT/$dir" -type d -exec chmod 775 {} \;
-            find "$PWA_ROOT/$dir" -type f -exec chmod 664 {} \;
-            find "$PWA_ROOT/$dir" -type d -exec chmod g+s {} \;
-        fi
-    done
+    log_info "修正权限（并行优化模式）..."
+    fast_fix_magento_permissions_local "$PWA_ROOT" "www-data" "www-data"
 }
 
 fix_permissions_if_needed() {
@@ -612,6 +603,301 @@ prepare_pwa_repo() {
     fi
 }
 
+sync_env_copy() {
+    local source_file="$1"
+    local target_file="$2"
+    if [[ -z "$source_file" || -z "$target_file" ]]; then
+        return
+    fi
+    if [[ "$source_file" == "$target_file" ]]; then
+        return
+    fi
+    local target_dir
+    target_dir="$(dirname "$target_file")"
+    sudo -u www-data -H mkdir -p "$target_dir"
+    log_info "同步 PWA 环境变量到 ${target_file}"
+    sudo -u www-data -H cp "$source_file" "$target_file"
+}
+
+ensure_env_default() {
+    local env_file="$1"
+    local key="$2"
+    local value="$3"
+    sudo -u www-data -H python3 - "$env_file" "$key" "$value" <<'PY'
+import sys
+from pathlib import Path
+
+env_path = Path(sys.argv[1])
+key = sys.argv[2]
+value = sys.argv[3]
+
+if not env_path.exists():
+    env_path.write_text('', encoding='utf-8')
+
+lines = []
+found = False
+for raw in env_path.read_text(encoding='utf-8').splitlines():
+    if raw.strip().startswith('#') or '=' not in raw:
+        lines.append(raw)
+        continue
+    current_key, _, current_val = raw.partition('=')
+    if current_key.strip() == key:
+        lines.append(raw)
+        found = True
+    else:
+        lines.append(raw)
+
+if not found:
+    lines.append(f"{key}={value}")
+
+output = '\n'.join(lines).rstrip() + '\n'
+env_path.write_text(output, encoding='utf-8')
+PY
+}
+
+apply_mos_graphql_fixes() {
+    if ! is_true "${PWA_WITH_FRONTEND}"; then
+        return
+    fi
+
+    local create_account_file="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/CreateAccount/createAccount.gql.js"
+    if [[ -f "$create_account_file" && -n "$(grep -F 'is_confirmed' "$create_account_file" || true)" ]]; then
+        log_info "移除 Commerce 专属字段 (is_confirmed) 以兼容 MOS GraphQL"
+        sudo -u www-data -H python3 - "$create_account_file" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding='utf-8')
+lines = [line for line in text.splitlines() if 'is_confirmed' not in line]
+new_text = '\n'.join(lines) + '\n'
+if new_text != text:
+    path.write_text(new_text, encoding='utf-8')
+PY
+    fi
+
+    local product_fragment="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/RootComponents/Product/productDetailFragment.gql.js"
+    local product_talon="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/ProductFullDetail/useProductFullDetail.js"
+    local overrides_dir="${SCRIPT_DIR}/modules/magetools/pwa-overrides"
+
+    if [[ -f "${overrides_dir}/productDetailFragment.gql.js" ]]; then
+        log_info "应用内置 productDetailFragment.gql.js 覆盖"
+        sudo cp "${overrides_dir}/productDetailFragment.gql.js" "$product_fragment"
+        sudo chown www-data:www-data "$product_fragment"
+    elif [[ -f "$product_fragment" && -n "$(grep -F 'ProductAttributeMetadata' "$product_fragment" || true)" ]]; then
+        log_info "裁剪 ProductAttributeMetadata 相关片段，避免 MOS GraphQL schema 缺失"
+        sudo -u www-data -H python3 - "$product_fragment" <<'PY'
+import sys
+from pathlib import Path
+
+def strip_block(source: str, marker: str) -> str:
+    while True:
+        idx = source.find(marker)
+        if idx == -1:
+            return source
+        # include preceding whitespace on the same line
+        start = source.rfind('\n', 0, idx)
+        if start == -1:
+            start = idx
+        depth = 0
+        i = idx
+        while i < len(source):
+            ch = source[i]
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    i += 1
+                    break
+            i += 1
+        source = source[:start] + source[i:]
+    return source
+
+def strip_lines_containing(source: str, keyword: str) -> str:
+    lines = [line for line in source.splitlines() if keyword not in line]
+    return '\n'.join(lines) + '\n'
+
+path = Path(sys.argv[1])
+original = path.read_text(encoding='utf-8')
+text = strip_block(original, 'attribute_metadata {')
+text = strip_lines_containing(text, '... on ProductAttributeMetadata')
+text = strip_lines_containing(text, 'used_in_components')
+text = strip_block(text, 'custom_attributes {')
+text = strip_lines_containing(text, 'selected_attribute_options')
+text = strip_lines_containing(text, 'entered_attribute_value')
+if text != original:
+    path.write_text(text, encoding='utf-8')
+PY
+    fi
+
+    if [[ -f "${overrides_dir}/useProductFullDetail.js" ]]; then
+        log_info "应用内置 useProductFullDetail.js 覆盖"
+        sudo cp "${overrides_dir}/useProductFullDetail.js" "$product_talon"
+        sudo chown www-data:www-data "$product_talon"
+    elif [[ -f "$product_talon" && -n "$(grep -F \"attribute1['attribute_metadata']\" "$product_talon" || true)" ]]; then
+        log_info "调整 ProductFullDetail talon，兼容缺失的 custom_attributes 元数据"
+        sudo python3 - "$product_talon" <<'PY'
+from pathlib import Path
+import sys
+talon_path = Path(sys.argv[1])
+text = talon_path.read_text(encoding='utf-8')
+
+old_compare = """const attributeLabelCompare = (attribute1, attribute2) => {
+    const label1 = attribute1['attribute_metadata']['label'].toLowerCase();
+    const label2 = attribute2['attribute_metadata']['label'].toLowerCase();
+    if (label1 < label2) return -1;
+    else if (label1 > label2) return 1;
+    else return 0;
+};"""
+
+new_compare = """const attributeLabelCompare = (attribute1, attribute2) => {
+    const label1 =
+        attribute1?.attribute_metadata?.label ??
+        attribute1?.attribute_option?.label ??
+        '';
+    const label2 =
+        attribute2?.attribute_metadata?.label ??
+        attribute2?.attribute_option?.label ??
+        '';
+    const safeLabel1 = label1.toLowerCase();
+    const safeLabel2 = label2.toLowerCase();
+    if (safeLabel1 < safeLabel2) return -1;
+    else if (safeLabel1 > safeLabel2) return 1;
+    else return 0;
+};"""
+
+old_custom = """const getCustomAttributes = (product, optionCodes, optionSelections) => {
+    const { custom_attributes, variants } = product;
+    const isConfigurable = isProductConfigurable(product);
+    const optionsSelected =
+        Array.from(optionSelections.values()).filter(value => !!value).length >
+        0;
+
+    if (isConfigurable && optionsSelected) {
+        const item = findMatchingVariant({
+            optionCodes,
+            optionSelections,
+            variants
+        });
+
+        return item && item.product
+            ? [...item.product.custom_attributes].sort(attributeLabelCompare)
+            : [];
+    }
+
+    return custom_attributes
+        ? [...custom_attributes].sort(attributeLabelCompare)
+        : [];
+};"""
+
+new_custom = """const getCustomAttributes = (product, optionCodes, optionSelections) => {
+    const {
+        custom_attributes: baseAttributes = [],
+        variants = []
+    } = product;
+    const isConfigurable = isProductConfigurable(product);
+    const optionsSelected =
+        Array.from(optionSelections.values()).filter(value => !!value).length >
+        0;
+
+    if (isConfigurable && optionsSelected) {
+        const item = findMatchingVariant({
+            optionCodes,
+            optionSelections,
+            variants
+        });
+
+        const variantAttributes = item?.product?.custom_attributes || [];
+
+        return variantAttributes.length
+            ? [...variantAttributes].sort(attributeLabelCompare)
+            : [];
+    }
+
+    return baseAttributes.length
+        ? [...baseAttributes].sort(attributeLabelCompare)
+        : [];
+};"""
+
+updated = text
+if old_compare in updated:
+    updated = updated.replace(old_compare, new_compare)
+if old_custom in updated:
+    updated = updated.replace(old_custom, new_custom)
+
+if updated != text:
+    talon_path.write_text(updated, encoding='utf-8')
+PY
+    fi
+
+    local cart_fragment="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/Header/cartTriggerFragments.gql.js"
+    if [[ -f "$cart_fragment" && -n "$(grep -F 'total_summary_quantity_including_config' "$cart_fragment" || true)" ]]; then
+        log_info "移除 MOS 不支持的购物车统计字段"
+        sudo -u www-data -H python3 - "$cart_fragment" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding='utf-8')
+filtered = '\n'.join(
+    line for line in text.splitlines()
+    if 'total_summary_quantity_including_config' not in line
+) + '\n'
+if filtered != text:
+    path.write_text(filtered, encoding='utf-8')
+PY
+    fi
+
+    local cart_trigger_hook="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/Header/useCartTrigger.js"
+    if [[ -f "$cart_trigger_hook" && -n "$(grep -F 'total_summary_quantity_including_config' "$cart_trigger_hook" || true)" ]]; then
+        log_info "调整购物车角标统计，兼容 MOS 字段"
+        sudo -u www-data -H python3 - "$cart_trigger_hook" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+old = 'const itemCount = data?.cart?.total_summary_quantity_including_config || 0;'
+new = 'const itemCount = data?.cart?.total_quantity || 0;'
+text = path.read_text(encoding='utf-8')
+if old in text and new not in text:
+    path.write_text(text.replace(old, new), encoding='utf-8')
+PY
+    fi
+
+    local xp_intercept="${PWA_STUDIO_DIR%/}/packages/extensions/experience-platform-connector/intercept.js"
+    if [[ -f "$xp_intercept" && -z "$(grep -F 'MAGENTO_EXPERIENCE_PLATFORM_ENABLED' "$xp_intercept" || true)" ]]; then
+        log_info "禁用 Experience Platform 扩展（MOS 不支持）"
+        sudo -u www-data -H python3 - "$xp_intercept" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding='utf-8')
+guard = "module.exports = targets => {\n    if (process.env.MAGENTO_EXPERIENCE_PLATFORM_ENABLED !== 'true') {\n        return;\n    }\n"
+if text.startswith("module.exports = targets => {\n") and guard not in text:
+    text = text.replace("module.exports = targets => {\n", guard, 1)
+    path.write_text(text, encoding='utf-8')
+PY
+    fi
+
+    local live_search_intercept="${PWA_STUDIO_DIR%/}/packages/extensions/venia-pwa-live-search/src/targets/intercept.js"
+    if [[ -f "$live_search_intercept" && -z "$(grep -F 'MAGENTO_LIVE_SEARCH_ENABLED' "$live_search_intercept" || true)" ]]; then
+        log_info "按需禁用 PWA Live Search 扩展"
+        sudo -u www-data -H python3 - "$live_search_intercept" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding='utf-8')
+guard = "module.exports = targets => {\n    if (process.env.MAGENTO_LIVE_SEARCH_ENABLED !== 'true') {\n        return;\n    }\n"
+if text.startswith("module.exports = targets => {\n") and guard not in text:
+    text = text.replace("module.exports = targets => {\n", guard, 1)
+    path.write_text(text, encoding='utf-8')
+PY
+    fi
+}
+
 prepare_pwa_env() {
     local env_file="$PWA_STUDIO_ENV_FILE"
     local template="$PWA_STUDIO_ENV_TEMPLATE"
@@ -658,6 +944,15 @@ for key, value in overrides.items():
 env_path.write_text('\n'.join(lines).rstrip() + '\n', encoding='utf-8')
 PY
     fi
+
+    ensure_env_default "$env_file" "MAGENTO_BACKEND_EDITION" "MOS"
+    ensure_env_default "$env_file" "MAGENTO_EXPERIENCE_PLATFORM_ENABLED" "false"
+    ensure_env_default "$env_file" "MAGENTO_LIVE_SEARCH_ENABLED" "false"
+
+    local root_env="${PWA_STUDIO_DIR%/}/.env"
+    local venia_env="${PWA_STUDIO_DIR%/}/packages/venia-concept/.env"
+    sync_env_copy "$env_file" "$root_env"
+    sync_env_copy "$env_file" "$venia_env"
 }
 
 ensure_pwa_env_vars() {
@@ -763,6 +1058,11 @@ run_yarn_task() {
     local yarn_global_dir="${PWA_STUDIO_DIR}/.yarn-global"
     local npm_cache_dir="${PWA_STUDIO_DIR}/.cache/npm"
     local npx_cache_dir="${PWA_STUDIO_DIR}/.cache/npx"
+    local backend_edition
+    backend_edition="$(read_pwa_env_value "MAGENTO_BACKEND_EDITION" || true)"
+    if [[ -z "$backend_edition" ]]; then
+        backend_edition="MOS"
+    fi
     log_info "执行 PWA 命令: ${command}"
     sudo -u www-data -H bash -lc "cd '${PWA_STUDIO_DIR}' \
         && export HOME='${PWA_STUDIO_DIR}' \
@@ -772,6 +1072,7 @@ run_yarn_task() {
         && export npm_config_cache='${npm_cache_dir}' \
         && export npm_config_prefix='${yarn_global_dir}' \
         && export NPX_CACHE_DIR='${npx_cache_dir}' \
+        && export MAGENTO_BACKEND_EDITION='${backend_edition}' \
         && ${command}"
 }
 
@@ -782,6 +1083,7 @@ build_pwa_frontend() {
     fi
 
     prepare_pwa_repo
+    apply_mos_graphql_fixes
     prepare_pwa_env
     if ! ensure_pwa_env_vars; then
         log_warning "缺少必要的 PWA 环境变量，已跳过前端构建。"

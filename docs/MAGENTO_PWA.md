@@ -44,7 +44,7 @@ sudo saltgoat magetools pwa install pwa --with-pwa
    - `saltgoat magetools magento-cron.sh <site> install`
    - `saltgoat magetools valkey-setup <site> --no-reuse`
    - `saltgoat magetools rabbitmq-salt smart <site>`
-8. 当 `pwa_studio.enable: true` 或 CLI 指定 `--with-pwa` 时，克隆 PWA Studio 仓库并依次执行 `PWA_STUDIO_INSTALL_COMMAND`（默认 `yarn install`）与 `PWA_STUDIO_BUILD_COMMAND`（默认 `yarn build`）；若缺少必填环境变量（如 `MAGENTO_BACKEND_URL`、`CHECKOUT_BRAINTREE_TOKEN`），脚本会提示缺失项并跳过构建，可在 Pillar 补齐后重新运行
+8. 当 `pwa_studio.enable: true` 或 CLI 指定 `--with-pwa` 时，克隆 PWA Studio 仓库并依次执行 `PWA_STUDIO_INSTALL_COMMAND`（默认 `yarn install`）与 `PWA_STUDIO_BUILD_COMMAND`（默认 `yarn build`）；脚本会使用 `env_template` 生成 `<target_dir>/.env`，自动写入 `env_overrides`、补全 `MAGENTO_BACKEND_EDITION=MOS`、`MAGENTO_EXPERIENCE_PLATFORM_ENABLED=false` 与 `MAGENTO_LIVE_SEARCH_ENABLED=false`，同时同步到 `packages/venia-concept/.env`；并会提前移除 Commerce 专属 GraphQL 字段（例如 `is_confirmed`、`ProductAttributeMetadata`、`custom_attributes`），避免 MOS 环境出现对应的 GraphQL 报错。若缺少必填环境变量（如 `MAGENTO_BACKEND_URL`、`CHECKOUT_BRAINTREE_TOKEN`），脚本会提示缺失项并跳过构建，可在 Pillar 补齐后重新运行
 9. 自动生成 systemd 单元 `pwa-frontend-<site>.service`（运行 `yarn buildpack serve .` 监听 `serve_port`，默认 8082），并将 Nginx 站点反向代理到该端口，最终暴露 `https://<pwa 域名>/`
 10. 输出安装摘要（后台地址、数据库信息、后续建议等）
 
@@ -68,8 +68,8 @@ sudo saltgoat magetools pwa install pwa --with-pwa
   sudo saltgoat magetools cron pwa status
   sudo saltgoat magetools salt-schedule pwa status
   ```
-- **PWA Studio 前端**：根据 `docs/` 官方指引配置 `.env` 与 GraphQL endpoint，然后在 `target_dir` 内运行 `yarn watch` 或 `yarn build`。
-  - 构建脚本会使用 `pwa_studio.env_template`（默认 `packages/venia-concept/.env.dist`）生成 `.env`，并按 `env_overrides` 写入额外键值。
+- **PWA Studio 前端**：根据 `docs/` 官方指引配置 `<target_dir>/.env` 与 GraphQL endpoint，然后在 `target_dir` 内运行 `yarn watch` 或 `yarn build`。
+  - 安装脚本会使用 `pwa_studio.env_template`（默认 `packages/venia-concept/.env.dist`）生成 `<target_dir>/.env`，并按 `env_overrides` 写入额外键值且默认附加 `MAGENTO_BACKEND_EDITION=MOS`，随后同步至 `packages/venia-concept/.env` 以兼容旧脚本。
 - **演示数据**：当前推荐沿用 Magento 官方的传统 sample data 流程，例如在站点根目录执行 `php bin/magento sampledata:deploy && php bin/magento setup:upgrade`，无需额外的 PWA 专用数据包。
 
 ## 4. 常见问题

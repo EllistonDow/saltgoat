@@ -8,6 +8,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../../lib/logger.sh
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
+# shellcheck source=../../modules/magetools/permissions.sh
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/modules/magetools/permissions.sh"
 
 # 全局变量
 LOCK_FILE="/tmp/rabbitmq_manager_${SITE_NAME}.lock"
@@ -83,45 +86,8 @@ fix_permissions_fast() {
     
     log_info "修复 Magento 权限（超高性能模式）..."
     
-    # 性能配置（激进优化参数）
-    local max_parallel_jobs=16  # 增加并行任务数
-    local batch_size=2000       # 增加批处理大小
+    fast_fix_magento_permissions_local "$site_path" "$site_user" "$nginx_group"
     
-    # 切换到网站目录
-    cd "$site_path" || return 1
-    
-    # 1. 批量设置所有者和组（一次性处理整个目录）
-    sudo chown -R "${site_user}:${nginx_group}" .
-    
-    # 2. 并行设置基础权限（755/644）
-    find . -type d -print0 | xargs -0 -n $batch_size -P $max_parallel_jobs sudo chmod 755 2>/dev/null || true
-    find . -type f -print0 | xargs -0 -n $batch_size -P $max_parallel_jobs sudo chmod 644 2>/dev/null || true
-    
-    # 3. 并行设置可写目录权限（775/664 + setgid）
-    local writable_dirs=("var" "generated" "pub/media" "pub/static")
-    
-    for dir in "${writable_dirs[@]}"; do
-        if [[ -d "$dir" ]]; then
-            # 并行设置目录权限
-            find "$dir" -type d -print0 | xargs -0 -n $batch_size -P $max_parallel_jobs sudo chmod 775 2>/dev/null || true
-            
-            # 并行设置文件权限
-            find "$dir" -type f -print0 | xargs -0 -n $batch_size -P $max_parallel_jobs sudo chmod 664 2>/dev/null || true
-            
-            # 并行设置 setgid 位（确保新文件继承组）
-            find "$dir" -type d -print0 | xargs -0 -n $batch_size -P $max_parallel_jobs sudo chmod g+s 2>/dev/null || true
-        fi
-    done
-    
-    # 4. 设置可执行文件权限
-    if [[ -f "bin/magento" ]]; then
-        sudo chmod 755 bin/magento
-    fi
-    
-    # 查找其他可执行文件
-    find . -name "*.sh" -type f -print0 | xargs -0 -n $batch_size -P $max_parallel_jobs sudo chmod 755 2>/dev/null || true
-    
-    log_success "权限修复完成（超高性能模式）"
     log_info "[INFO] 权限管理最佳实践:"
     echo "  [SUCCESS] 使用: sudo -u www-data php bin/magento <command>"
     echo "  [ERROR] 避免: sudo php bin/magento <command>"

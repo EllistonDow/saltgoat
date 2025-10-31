@@ -61,13 +61,17 @@ magento_pwa:
       pwa_studio:
         enable: false
         repo: https://github.com/magento/pwa-studio.git
-        branch: develop
+        branch: release/14.3.1
         target_dir: /var/www/pwa/pwa-studio
         yarn_command: "yarn install"
         build_command: "yarn build"
         env_template: packages/venia-concept/.env.dist
-        env_file: /var/www/pwa/pwa-studio/packages/venia-concept/.env
+        # 建议使用项目根目录的 .env 作为唯一来源，脚本会自动同步到 packages/venia-concept/.env
+        env_file: /var/www/pwa/pwa-studio/.env
         serve_port: 8082
         env_overrides:
           MAGENTO_BACKEND_URL: https://pwa.magento.example.com/
+          MAGENTO_BACKEND_EDITION: MOS
+          MAGENTO_LIVE_SEARCH_ENABLED: "false"
+          MAGENTO_EXPERIENCE_PLATFORM_ENABLED: "false"
           CHECKOUT_BRAINTREE_TOKEN: sandbox_example_token
