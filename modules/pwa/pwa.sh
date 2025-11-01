@@ -10,12 +10,12 @@ pwa_handler() {
     fi
 
     case "$1" in
-        "install"|"help"|"--help"|"-h"|"version"|"--version")
+        "install"|"remove"|"status"|"sync-content"|"help"|"--help"|"-h"|"version"|"--version")
             "${SCRIPT_DIR}/modules/pwa/install.sh" "$@"
             ;;
         *)
             log_error "未知的 PWA 操作: ${1}"
-            log_info "支持: install, help"
+            log_info "支持: install, remove, status, sync-content, help"
             exit 1
             ;;
     esac

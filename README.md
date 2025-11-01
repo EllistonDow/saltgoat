@@ -116,7 +116,11 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
   - `magento_schedule.api_watchers` 可轮询 Magento REST API，将新订单/新用户同步到 Telegram（首次运行仅建立基线，不推送历史数据）。
   - `magento_schedule.stats_jobs` 可定时运行 `saltgoat magetools stats --period <daily|weekly|monthly>`，自动生成业务汇总并写入 `/var/log/saltgoat/alerts.log`（可选推送 Telegram）。
 - 维护流程、权限修复、故障排查详见 [`docs/MAGENTO_MAINTENANCE.md`](docs/MAGENTO_MAINTENANCE.md)。
-- `sudo saltgoat pwa install <site> [--with-pwa]`：读取 `salt/pillar/magento-pwa.sls`，自动部署全新 Magento + PWA 站点并串联 Valkey / RabbitMQ / Cron，详见 [`docs/MAGENTO_PWA.md`](docs/MAGENTO_PWA.md)。
+- `sudo saltgoat pwa install <site> [--with-pwa]`：读取 `salt/pillar/magento-pwa.sls`，自动部署全新 Magento + PWA 站点并串联 Valkey / RabbitMQ / Cron，详见 [`docs/MAGENTO_PWA.md`](docs/MAGENTO_PWA.md)。支持通过 `cms.home` 配置自动创建/更新 `pwa_home` 页面。
+- `sudo saltgoat pwa status|sync-content|remove <site>`：巡检 PWA 服务、重新应用 overrides/构建或清理前端服务。
+- React/依赖统一通过 Yarn 管理，`sync-content --rebuild` 会校验 `@saltgoat/venia-extension` workspace 并阻止 `package-lock.json` 残留，必要时请手动执行 `yarn list --pattern react` 确认仅保留一个版本。
+- PWA 项目细节与更新准则请参考 [`docs/PWA_PROJECT_GUIDE.md`](docs/PWA_PROJECT_GUIDE.md)。
+- 自定义前端组件统一封装在 `@saltgoat/venia-extension`（同步自 `modules/pwa/workspaces/saltgoat-venia-extension`），避免直接修改官方 Venia 代码。
 - PHP-FPM 进程池默认按 CPU / 内存容量自动放大（可在 Pillar `saltgoat:php_fpm` 配置最小值、上限与 per_cpu 系数），`resource alert` 会在使用率逼近上限时提前预警。
 
 ### 监控与巡检

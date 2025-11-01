@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.2.7] - 2025-11-01
+
+### Changes
+- 修改 11 个文件: README.md, docs/PWA_PROJECT_GUIDE.md, docs/pwa-todo.md, modules/pwa/install.sh, modules/pwa/overrides/packages/venia-concept/local-intercept.js 等
+
+
 ## [1.2.6] - 2025-11-01
 
 ### Changes

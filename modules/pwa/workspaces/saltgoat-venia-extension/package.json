@@ -1,0 +1,12 @@
+{
+  "name": "@saltgoat/venia-extension",
+  "version": "0.1.0",
+  "description": "SaltGoat custom components and utilities for Magento PWA Studio",
+  "main": "src/index.js",
+  "license": "MIT",
+  "sideEffects": false,
+  "peerDependencies": {
+    "react": "^17.0.0",
+    "react-dom": "^17.0.0"
+  }
+}

@@ -7,7 +7,5 @@ module.exports = targets => {
         '@magento/venia-ui/lib/components/HomePage/homePage.ce.js'
     );
 
-    homePage.wrapWithFile(
-        '@magento/venia-concept/src/components/HomePage/HomeContent'
-    );
+    homePage.wrapWithFile('@saltgoat/venia-extension/src/components/HomeContent');
 };

@@ -17,6 +17,7 @@ DEFAULT_NODE_VERSION="18"
 DEFAULT_PWA_PORT="8082"
 declare -a PWA_REQUIRED_ENV_VARS=("MAGENTO_BACKEND_URL" "CHECKOUT_BRAINTREE_TOKEN")
 PWA_WITH_FRONTEND="false"
+PWA_HOME_TEMPLATE_WARNING=""
 
 is_true() {
     case "$1" in
@@ -55,6 +56,9 @@ SaltGoat Magento PWA 安装助手
 
 用法:
   saltgoat pwa install <site> [--with-pwa|--no-pwa]
+  saltgoat pwa status <site>
+  saltgoat pwa sync-content <site> [--pull] [--rebuild]
+  saltgoat pwa remove <site> [--purge]
   saltgoat pwa help
 
 说明:
@@ -62,12 +66,57 @@ SaltGoat Magento PWA 安装助手
   - 首次运行会自动安装 Node/Yarn（如缺失）、创建数据库/用户、生成 Magento 项目并执行 setup:install
   - 可选地调用现有的 Valkey / RabbitMQ / Cron 自动化脚本
   - 如配置中启用 pwa_studio.enable 或追加 --with-pwa，将自动克隆 PWA Studio 并执行 Yarn 构建
+  - `status` 输出站点与前端服务状态；`sync-content` 用于重新应用 overrides/环境变量，按需拉取仓库或重建；`remove --purge` 可清理 systemd 服务并删除 PWA Studio 目录
 EOF
 }
 
 abort() {
     log_error "$1"
     exit 1
+}
+
+systemd_unit_exists() {
+    local unit="$1"
+    systemctl list-unit-files "$unit" >/dev/null 2>&1
+}
+
+systemd_stop_unit() {
+    local unit="$1"
+    if systemd_unit_exists "$unit"; then
+        if systemctl stop "$unit" >/dev/null 2>&1; then
+            log_info "已停止 systemd 单元: ${unit}"
+        fi
+    fi
+}
+
+systemd_disable_unit() {
+    local unit="$1"
+    if systemd_unit_exists "$unit"; then
+        if systemctl disable "$unit" >/dev/null 2>&1; then
+            log_info "已禁用 systemd 单元: ${unit}"
+        fi
+    fi
+}
+
+pwa_service_name() {
+    echo "pwa-frontend-${PWA_SITE_NAME}"
+}
+
+pwa_service_unit() {
+    echo "$(pwa_service_name).service"
+}
+
+pwa_service_path() {
+    echo "/etc/systemd/system/$(pwa_service_name).service"
+}
+
+safe_remove_path() {
+    local target="$1"
+    if [[ -z "$target" || "$target" == "/" || "$target" == "/*" ]]; then
+        log_warning "安全保护：忽略对路径 '${target}' 的删除请求"
+        return 1
+    fi
+    rm -rf --one-file-system "$target"
 }
 
 load_site_config() {
@@ -181,6 +230,19 @@ def emit_b64(key, value):
     encoded = base64.b64encode(raw.encode()).decode()
     print(f'{key}="{encoded}"')
 emit_b64("PWA_STUDIO_ENV_OVERRIDES_B64", pwa_studio.get("env_overrides", {}))
+
+cms_cfg = (cfg.get("cms") or {}).get("home", {}) or {}
+def normalize_store_ids(value):
+    if value is None:
+        return ["0"]
+    if isinstance(value, (list, tuple)):
+        return [str(v) for v in value] or ["0"]
+    return [str(value)]
+
+emit("PWA_HOME_TITLE", cms_cfg.get("title", "PWA Home"))
+emit("PWA_HOME_TEMPLATE", cms_cfg.get("template", ""))
+emit("PWA_HOME_STORE_IDS", ",".join(normalize_store_ids(cms_cfg.get("store_ids"))))
+emit("PWA_HOME_IDENTIFIER", cms_cfg.get("identifier", ""))
 PY
     ); then
         log_error "解析 PWA 配置失败，请检查上方错误输出。"
@@ -189,6 +251,18 @@ PY
 
     eval "$exports"
     PWA_STUDIO_ENV_OVERRIDES_JSON=$(decode_b64_json "${PWA_STUDIO_ENV_OVERRIDES_B64:-}")
+    if [[ -n "${PWA_HOME_TEMPLATE:-}" ]]; then
+        if [[ "${PWA_HOME_TEMPLATE}" != /* ]]; then
+            PWA_HOME_TEMPLATE_PATH="${SCRIPT_DIR%/}/${PWA_HOME_TEMPLATE}"
+        else
+            PWA_HOME_TEMPLATE_PATH="${PWA_HOME_TEMPLATE}"
+        fi
+        if [[ ! -f "$PWA_HOME_TEMPLATE_PATH" ]]; then
+            PWA_HOME_TEMPLATE_WARNING="模板文件未找到: ${PWA_HOME_TEMPLATE_PATH}"
+        fi
+    else
+        PWA_HOME_TEMPLATE_PATH=""
+    fi
     if is_true "${PWA_STUDIO_ENABLE:-false}"; then
         PWA_WITH_FRONTEND="true"
     else
@@ -603,6 +677,122 @@ prepare_pwa_repo() {
     fi
 }
 
+ensure_saltgoat_extension_workspace() {
+    local workspace_src="${SCRIPT_DIR}/modules/pwa/workspaces/saltgoat-venia-extension"
+    if [[ ! -d "$workspace_src" ]]; then
+        return
+    fi
+
+    local workspace_dest="${PWA_STUDIO_DIR%/}/packages/saltgoat-venia-extension"
+    log_info "同步 SaltGoat Venia 扩展 workspace"
+    sudo -u www-data -H mkdir -p "$(dirname "$workspace_dest")"
+    sudo rsync -a "$workspace_src/" "$workspace_dest/"
+    sudo chown -R www-data:www-data "$workspace_dest"
+
+    sudo -u www-data -H python3 - "$PWA_STUDIO_DIR" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+pkg_path = root / "package.json"
+data = json.loads(pkg_path.read_text(encoding="utf-8"))
+
+workspace_entry = "packages/saltgoat-venia-extension"
+workspaces = data.get("workspaces")
+if isinstance(workspaces, list):
+    if workspace_entry not in workspaces:
+        workspaces.append(workspace_entry)
+elif isinstance(workspaces, dict):
+    packages = workspaces.get("packages")
+    if isinstance(packages, list) and workspace_entry not in packages:
+        packages.append(workspace_entry)
+
+    deps = data.setdefault("dependencies", {})
+    if deps.get("@saltgoat/venia-extension") != "workspace:*":
+        deps["@saltgoat/venia-extension"] = "workspace:*"
+
+    pkg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+PY
+}
+
+cleanup_package_lock() {
+    local lock="${PWA_STUDIO_DIR%/}/package-lock.json"
+    if [[ -f "$lock" ]]; then
+        log_warning "检测到 package-lock.json，已删除以避免 npm/yarn 混用。"
+        rm -f "$lock"
+    fi
+}
+
+check_single_react_version() {
+    local result
+    result=$(python3 - "${PWA_STUDIO_DIR%/}" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1]) / "node_modules"
+names = ["react", "react-dom"]
+report = []
+exit_code = 0
+if not root.exists():
+    print("skip")
+    sys.exit(0)
+for name in names:
+    versions = set()
+    for path in root.rglob(f"*/{name}/package.json"):
+        if ".cache" in path.parts:
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if data.get("name") == name:
+            versions.add(data.get("version"))
+    if not versions:
+        report.append(f"{name}=missing")
+        exit_code = 1
+    elif len(versions) == 1:
+        report.append(f"{name}={next(iter(versions))}")
+    else:
+        report.append(f"{name}={','.join(sorted(versions))}")
+        exit_code = 1
+print("; ".join(report))
+sys.exit(exit_code)
+PY
+)
+    local status=$?
+    if [[ "$result" == "skip" ]]; then
+        return
+    fi
+    if [[ $status -ne 0 ]]; then
+        log_warning "React 依赖检测异常: ${result}"
+    else
+        log_info "React 依赖检测: ${result}"
+    fi
+}
+
+graphql_ping() {
+    local base="${PWA_BASE_URL_SECURE:-$PWA_BASE_URL}"
+    base="${base%/}"
+    if [[ -z "$base" ]]; then
+        return
+    fi
+    local url="${base}/graphql"
+    local response
+    response=$(curl -sS -m 5 -H 'Content-Type: application/json' -d '{"query":"{storeConfig{store_name}}"}' "$url" 2>&1)
+    local status=$?
+    if [[ $status -ne 0 ]]; then
+        log_warning "GraphQL 探测失败: ${url} (${response})"
+        return
+    fi
+    if ! grep -q '"storeConfig"' <<<"$response"; then
+        log_warning "GraphQL 返回异常: ${response}"
+    else
+        log_info "GraphQL 探测成功: ${url}"
+    fi
+}
+
 sync_env_copy() {
     local source_file="$1"
     local target_file="$2"
@@ -659,6 +849,8 @@ apply_mos_graphql_fixes() {
     if ! is_true "${PWA_WITH_FRONTEND}"; then
         return
     fi
+
+    ensure_saltgoat_extension_workspace
 
     local create_account_file="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/CreateAccount/createAccount.gql.js"
     if [[ -f "$create_account_file" && -n "$(grep -F 'is_confirmed' "$create_account_file" || true)" ]]; then
@@ -951,9 +1143,13 @@ env_path.write_text('\n'.join(lines).rstrip() + '\n', encoding='utf-8')
 PY
     fi
 
+    if [[ -n "${PWA_HOME_IDENTIFIER:-}" ]]; then
+        ensure_env_default "$env_file" "MAGENTO_PWA_HOME_IDENTIFIER" "${PWA_HOME_IDENTIFIER}"
+    fi
     ensure_env_default "$env_file" "MAGENTO_BACKEND_EDITION" "MOS"
     ensure_env_default "$env_file" "MAGENTO_EXPERIENCE_PLATFORM_ENABLED" "false"
     ensure_env_default "$env_file" "MAGENTO_LIVE_SEARCH_ENABLED" "false"
+    ensure_env_default "$env_file" "MAGENTO_PWA_HOME_IDENTIFIER" "home"
 
     local root_env="${PWA_STUDIO_DIR%/}/.env"
     local venia_env="${PWA_STUDIO_DIR%/}/packages/venia-concept/.env"
@@ -1004,6 +1200,39 @@ for line in env_path.read_text(encoding="utf-8").splitlines():
 if value:
     print(value.strip())
 PY
+}
+
+log_pwa_home_identifier_hint() {
+    local identifier
+    identifier="$(read_pwa_env_value "MAGENTO_PWA_HOME_IDENTIFIER" 2>/dev/null || echo "")"
+    if [[ -z "$identifier" ]]; then
+        identifier="home"
+    fi
+    log_info "PWA 首页 CMS Identifier: ${identifier}"
+    if [[ "$identifier" == "home" ]]; then
+        log_info "提示：可在 Magento Admin 中创建 Identifier=pwa_home 的 Page Builder 页面，并在 Pillar env_overrides 中设置 MAGENTO_PWA_HOME_IDENTIFIER=pwa_home。"
+    else
+        log_info "请确保 Magento Admin 中存在 Identifier=${identifier} 的 CMS 页面，并已发布到对应 Store View。"
+    fi
+    if [[ -n "$PWA_HOME_TEMPLATE_WARNING" ]]; then
+        log_warning "$PWA_HOME_TEMPLATE_WARNING"
+    fi
+}
+
+resolve_home_template_file() {
+    local identifier="$1"
+    local template_path="${PWA_HOME_TEMPLATE_PATH:-}"
+    if [[ -n "$template_path" && -f "$template_path" ]]; then
+        printf '%s\n' "$template_path"
+        return 0
+    fi
+    local default="${SCRIPT_DIR%/}/modules/pwa/templates/cms/${identifier}.html"
+    if [[ -f "$default" ]]; then
+        printf '%s\n' "$default"
+        return 0
+    fi
+    printf '%s\n' ""
+    return 1
 }
 
 ensure_magento_graphql_ready() {
@@ -1091,6 +1320,8 @@ build_pwa_frontend() {
     prepare_pwa_repo
     apply_mos_graphql_fixes
     prepare_pwa_env
+    cleanup_package_lock
+    ensure_pwa_home_cms_page
     if ! ensure_pwa_env_vars; then
         log_warning "缺少必要的 PWA 环境变量，已跳过前端构建。"
         return
@@ -1099,6 +1330,7 @@ build_pwa_frontend() {
         return
     fi
     run_yarn_task "${PWA_STUDIO_INSTALL_COMMAND:-yarn install}"
+    check_single_react_version
     run_yarn_task "${PWA_STUDIO_BUILD_COMMAND:-yarn build}"
 }
 
@@ -1161,6 +1393,200 @@ escape_arg() {
     echo "$escaped"
 }
 
+magento_cli() {
+    local cd_dir
+    cd_dir="$(escape_arg "$PWA_ROOT")"
+    local args=()
+    local arg
+    for arg in "$@"; do
+        args+=("$(escape_arg "$arg")")
+    done
+    sudo -u www-data -H bash -lc "cd ${cd_dir} && php bin/magento ${args[*]}"
+}
+
+magento_apply_cms_page_php() {
+    local identifier="$1"
+    local title="$2"
+    local store_ids="$3"
+    local content_file="$4"
+    local is_active="$5"
+    local layout="$6"
+
+    local php_file
+    php_file="$(mktemp)"
+    cat <<'PHP' > "$php_file"
+<?php
+require 'app/bootstrap.php';
+
+use Magento\Cms\Api\Data\PageInterfaceFactory;
+use Magento\Cms\Api\PageRepositoryInterface;
+use Magento\Framework\App\Bootstrap;
+use Magento\Framework\Api\SearchCriteriaBuilder;
+use Magento\Framework\Exception\LocalizedException;
+
+$identifier = $argv[1];
+$title = $argv[2];
+$storeIds = array_filter(explode(',', $argv[3]), 'strlen');
+if (!$storeIds) {
+    $storeIds = ['0'];
+}
+$contentFile = $argv[4];
+$isActive = (int) $argv[5];
+$pageLayout = $argv[6] ?: '1column';
+
+if ($contentFile && file_exists($contentFile)) {
+    $content = file_get_contents($contentFile);
+} else {
+    $content = '<h1>PWA Home Placeholder</h1><p>请在 Magento 后台编辑此页面。</p>';
+}
+
+$bootstrap = Bootstrap::create(BP, $_SERVER);
+$objectManager = $bootstrap->getObjectManager();
+$state = $objectManager->get(\Magento\Framework\App\State::class);
+try {
+    $state->setAreaCode('adminhtml');
+} catch (LocalizedException $e) {
+    // 已设置过 area code，可忽略
+}
+
+$repository = $objectManager->get(PageRepositoryInterface::class);
+$factory = $objectManager->get(PageInterfaceFactory::class);
+$searchCriteriaBuilder = $objectManager->get(SearchCriteriaBuilder::class);
+
+$searchCriteria = $searchCriteriaBuilder->addFilter('identifier', $identifier)->create();
+$existing = $repository->getList($searchCriteria)->getItems();
+
+try {
+    if ($existing) {
+        $page = array_shift($existing);
+        $page->setTitle($title);
+        $page->setContent($content);
+        $page->setIsActive($isActive);
+        $page->setPageLayout($pageLayout);
+        $page->setData('store_id', $storeIds);
+        $repository->save($page);
+        echo 'updated';
+    } else {
+        $page = $factory->create();
+        $page->setIdentifier($identifier);
+        $page->setTitle($title);
+        $page->setContent($content);
+        $page->setIsActive($isActive);
+        $page->setPageLayout($pageLayout);
+        $page->setData('store_id', $storeIds);
+        $repository->save($page);
+        echo 'created';
+    }
+} catch (\Exception $e) {
+    fwrite(STDERR, $e->getMessage());
+    exit(1);
+}
+PHP
+    chmod 644 "$php_file"
+
+    local output
+    local root_escaped
+    root_escaped="$(escape_arg "$PWA_ROOT")"
+    if ! output=$(sudo -u www-data -H bash -lc "cd ${root_escaped} && php '$php_file' '$identifier' '$title' '$store_ids' '$content_file' '$is_active' '$layout'" 2>&1); then
+        rm -f "$php_file"
+        log_warning "通过 PHP API 应用 CMS 页面 ${identifier} 失败: ${output}"
+        return 1
+    fi
+    rm -f "$php_file"
+    if [[ "$output" == created* ]]; then
+        log_success "已自动创建 CMS 页面 ${identifier}（PHP API）"
+    elif [[ "$output" == updated* ]]; then
+        log_info "已更新 CMS 页面 ${identifier}（PHP API）"
+    else
+        log_info "CMS 页面 ${identifier} 已处理: ${output}"
+    fi
+    return 0
+}
+
+cms_page_exists() {
+    local identifier="$1"
+    local root_pass
+    root_pass="$(get_local_pillar_value mysql_password || true)"
+    if [[ -z "$root_pass" ]]; then
+        log_warning "缺少 mysql_password Pillar，无法检查 CMS 页面 ${identifier}。"
+        return 1
+    fi
+    local escaped_identifier="${identifier//\'/\'\'}"
+    local query="SELECT page_id FROM cms_page WHERE identifier='${escaped_identifier}' LIMIT 1;"
+    local result
+    result=$(mysql -uroot -p"$root_pass" -N -B -D "$PWA_DB_NAME" -e "$query" 2>/dev/null || true)
+    if [[ -n "$result" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+ensure_pwa_home_cms_page() {
+    local identifier
+    identifier="$(read_pwa_env_value "MAGENTO_PWA_HOME_IDENTIFIER" 2>/dev/null || echo "")"
+    identifier="${identifier//[$'\r\n']/}"
+    if [[ -z "$identifier" ]]; then
+        identifier="home"
+    fi
+    if [[ "$identifier" == "home" ]]; then
+        return
+    fi
+    local title="${PWA_HOME_TITLE:-PWA Home}"
+    local store_ids="${PWA_HOME_STORE_IDS:-0}"
+    local content_file
+    content_file="$(resolve_home_template_file "$identifier")"
+
+    local has_cli="true"
+    if ! magento_command_exists "cms:page:create"; then
+        has_cli="false"
+    fi
+
+    if [[ "$has_cli" == "true" ]]; then
+        if cms_page_exists "$identifier"; then
+            log_info "CMS 页面 ${identifier} 已存在，准备更新标题和内容。"
+            if [[ -n "$content_file" ]]; then
+                if magento_cli cms:page:update "--identifier=${identifier}" "--title=${title}" --is-active=1 "--store-id=${store_ids}" --page-layout=1column "--content-file=${content_file}"; then
+                    log_success "已更新 CMS 页面 ${identifier} 的内容与配置。"
+                else
+                    log_warning "更新 CMS 页面 ${identifier} 失败，请检查 Magento CLI 输出。"
+                fi
+            else
+                log_info "未提供模板文件，保持现有页面内容。"
+            fi
+            return
+        fi
+
+        local tmp_file=""
+        local cleanup_tmp="false"
+        if [[ -n "$content_file" ]]; then
+            tmp_file="$content_file"
+        else
+            tmp_file="$(mktemp)"
+            cat <<'EOF' > "$tmp_file"
+<h1>PWA Home Placeholder</h1>
+<p>请在 Magento 后台 (Content &gt; Pages) 编辑此页面的 Page Builder 布局。</p>
+EOF
+            cleanup_tmp="true"
+        fi
+
+        if magento_cli cms:page:create "--title=${title}" "--identifier=${identifier}" --is-active=1 "--page-layout=1column" "--store-id=${store_ids}" "--content-file=${tmp_file}"; then
+            log_success "已自动创建 CMS 页面 ${identifier}（PWA 首页占位内容）。"
+        else
+            log_warning "创建 CMS 页面 ${identifier} 失败，请在 Magento 后台手动创建。"
+        fi
+
+        if [[ "$cleanup_tmp" == "true" ]]; then
+            rm -f "$tmp_file"
+        fi
+        return
+    fi
+
+    log_info "Magento CLI 缺少 cms:page:create，改用 PHP API 更新页面 ${identifier}。"
+    if ! magento_apply_cms_page_php "$identifier" "$title" "$store_ids" "$content_file" 1 "1column"; then
+        log_warning "自动创建/更新 CMS 页面 ${identifier} 失败，请手动处理。"
+    fi
+}
+
 summarize_install() {
     echo ""
     log_highlight "PWA 站点安装完成"
@@ -1216,6 +1642,159 @@ install_site() {
     summarize_install
 }
 
+status_site() {
+    local site="$1"
+    load_site_config "$site"
+
+    local service_name
+    service_name="$(pwa_service_name)"
+    local service_unit
+    service_unit="$(pwa_service_unit)"
+    local service_path
+    service_path="$(pwa_service_path)"
+    local service_exists="no"
+    local service_active="inactive"
+    local service_enabled="disabled"
+    if systemd_unit_exists "$service_unit"; then
+        service_exists="yes"
+        service_active="$(systemctl is-active "$service_name" 2>/dev/null || echo "inactive")"
+        service_enabled="$(systemctl is-enabled "$service_name" 2>/dev/null || echo "disabled")"
+    fi
+
+    local studio_dir_status="absent"
+    [[ -d "$PWA_STUDIO_DIR" ]] && studio_dir_status="present"
+
+    local env_file_status="absent"
+    [[ -f "$PWA_STUDIO_ENV_FILE" ]] && env_file_status="present"
+
+    local home_identifier="home"
+    if identifier="$(read_pwa_env_value "MAGENTO_PWA_HOME_IDENTIFIER" 2>/dev/null)"; then
+        if [[ -n "$identifier" ]]; then
+            home_identifier="$identifier"
+        fi
+    fi
+
+    local template_path
+    template_path="$(resolve_home_template_file "$home_identifier")"
+    local template_note
+    if [[ -n "$template_path" ]]; then
+        template_note="$template_path"
+    else
+        template_note="<占位模板>"
+    fi
+
+    local pillar_frontend="disabled"
+    if is_true "${PWA_WITH_FRONTEND:-false}"; then
+        pillar_frontend="enabled"
+    fi
+    if ! is_true "${PWA_WITH_FRONTEND:-false}" && is_true "${PWA_STUDIO_ENABLE:-false}"; then
+        pillar_frontend="enabled"
+    fi
+
+    log_highlight "PWA 状态（${PWA_SITE_NAME}）"
+    cat <<EOF
+- Magento 根目录: ${PWA_ROOT}
+- PWA Studio 目录: ${PWA_STUDIO_DIR} (${studio_dir_status})
+- PWA 环境文件: ${PWA_STUDIO_ENV_FILE} (${env_file_status})
+- CMS 首页标识: ${home_identifier}
+- CMS 首页模板: ${template_note}
+- Pillar 前端开关: ${pillar_frontend}
+- systemd 服务: ${service_name} (exists=${service_exists}, active=${service_active}, enabled=${service_enabled})
+- PWA 服务端口: ${PWA_STUDIO_PORT:-$DEFAULT_PWA_PORT}
+EOF
+    if [[ "$service_exists" == "no" ]]; then
+        log_info "如需同步覆盖并创建服务，可执行: saltgoat pwa sync-content ${PWA_SITE_NAME} --pull --rebuild"
+    fi
+    log_pwa_home_identifier_hint
+    if [[ "$pillar_frontend" == "enabled" ]]; then
+        check_single_react_version
+        graphql_ping
+    fi
+}
+
+sync_site_content() {
+    local site="$1"
+    local do_pull="$2"
+    local do_rebuild="$3"
+    load_site_config "$site"
+
+    if ! is_true "${PWA_WITH_FRONTEND:-false}" && ! is_true "${PWA_STUDIO_ENABLE:-false}"; then
+        log_warning "Pillar 未启用 PWA Studio，但仍尝试同步。"
+    fi
+    if [[ ! -d "$PWA_STUDIO_DIR" ]]; then
+        if is_true "$do_pull"; then
+            log_info "PWA Studio 目录缺失，将重新克隆。"
+        else
+            log_warning "未检测到 PWA Studio 目录: ${PWA_STUDIO_DIR}，建议添加 --pull 重新获取仓库。"
+        fi
+    fi
+
+    local previous_flag="${PWA_WITH_FRONTEND:-false}"
+    PWA_WITH_FRONTEND="true"
+
+    if is_true "$do_pull"; then
+        prepare_pwa_repo
+    elif [[ ! -d "$PWA_STUDIO_DIR/.git" ]]; then
+        log_warning "PWA Studio 仓库未初始化，可使用 --pull 自动克隆。"
+    fi
+
+    if [[ -d "$PWA_STUDIO_DIR" ]]; then
+        apply_mos_graphql_fixes
+        prepare_pwa_env
+        ensure_pwa_home_cms_page
+        log_pwa_home_identifier_hint
+        if is_true "$do_rebuild"; then
+            if ensure_pwa_env_vars; then
+                run_yarn_task "${PWA_STUDIO_INSTALL_COMMAND:-yarn install}"
+                run_yarn_task "${PWA_STUDIO_BUILD_COMMAND:-yarn build}"
+            else
+                log_warning "缺少必需的 PWA 环境变量，已跳过 Yarn 构建。"
+            fi
+        fi
+        ensure_pwa_service
+        log_highlight "PWA 内容同步完成（${PWA_SITE_NAME}）"
+    else
+        log_warning "同步已结束，但 PWA Studio 目录仍不存在，请检查配置或使用 --pull 重新获取。"
+    fi
+
+    PWA_WITH_FRONTEND="$previous_flag"
+}
+
+remove_site() {
+    local site="$1"
+    local purge="$2"
+    load_site_config "$site"
+
+    local service_name
+    service_name="$(pwa_service_name)"
+    local service_unit
+    service_unit="$(pwa_service_unit)"
+    local service_path
+    service_path="$(pwa_service_path)"
+
+    systemd_stop_unit "$service_unit"
+    systemd_disable_unit "$service_unit"
+
+    if [[ -f "$service_path" ]]; then
+        rm -f "$service_path"
+        log_info "已移除 systemd 服务文件: ${service_path}"
+        systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+
+    if is_true "$purge"; then
+        if [[ -d "$PWA_STUDIO_DIR" ]]; then
+            log_info "清理 PWA Studio 目录: ${PWA_STUDIO_DIR}"
+            safe_remove_path "$PWA_STUDIO_DIR"
+        else
+            log_info "未检测到 PWA Studio 目录，无需清理。"
+        fi
+    else
+        log_info "保留 PWA Studio 目录: ${PWA_STUDIO_DIR}"
+    fi
+
+    log_highlight "已完成 PWA 前端卸载（${PWA_SITE_NAME}）"
+}
+
 ACTION="${1:-}"
 case "$ACTION" in
     ""|"help"|"-h"|"--help")
@@ -1257,7 +1836,88 @@ case "$ACTION" in
         fi
         install_site "$SITE" "$PWA_OVERRIDE"
         ;;
+    "status")
+        shift
+        if [[ $# -lt 1 ]]; then
+            abort "请提供站点名称，例如: saltgoat pwa status pwa"
+        fi
+        SITE="$1"
+        shift
+        if [[ $# -gt 0 ]]; then
+            abort "检测到多余参数: $*"
+        fi
+        status_site "$SITE"
+        ;;
+    "sync-content")
+        shift
+        SITE=""
+        DO_PULL="false"
+        DO_REBUILD="false"
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --pull)
+                    DO_PULL="true"
+                    shift
+                    ;;
+                --rebuild)
+                    DO_REBUILD="true"
+                    shift
+                    ;;
+                --help|-h)
+                    usage
+                    exit 0
+                    ;;
+                -*)
+                    abort "未知参数: $1"
+                    ;;
+                *)
+                    if [[ -z "$SITE" ]]; then
+                        SITE="$1"
+                    else
+                        abort "检测到多余参数: $1"
+                    fi
+                    shift
+                    ;;
+            esac
+        done
+        if [[ -z "$SITE" ]]; then
+            abort "请提供站点名称，例如: saltgoat pwa sync-content pwa"
+        fi
+        sync_site_content "$SITE" "$DO_PULL" "$DO_REBUILD"
+        ;;
+    "remove")
+        shift
+        SITE=""
+        PURGE="false"
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --purge)
+                    PURGE="true"
+                    shift
+                    ;;
+                --help|-h)
+                    usage
+                    exit 0
+                    ;;
+                -*)
+                    abort "未知参数: $1"
+                    ;;
+                *)
+                    if [[ -z "$SITE" ]]; then
+                        SITE="$1"
+                    else
+                        abort "检测到多余参数: $1"
+                    fi
+                    shift
+                    ;;
+            esac
+        done
+        if [[ -z "$SITE" ]]; then
+            abort "请提供站点名称，例如: saltgoat pwa remove pwa"
+        fi
+        remove_site "$SITE" "$PURGE"
+        ;;
     *)
-        abort "未知操作: ${ACTION}。支持: install, help"
+        abort "未知操作: ${ACTION}。支持: install, status, sync-content, remove, help"
         ;;
 esac

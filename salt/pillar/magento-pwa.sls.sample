@@ -53,13 +53,21 @@ magento_pwa:
         version: "18"
         install_yarn: true
 
-      services:
-        install_cron: true
-        configure_valkey: true
-        configure_rabbitmq: true
+    services:
+      install_cron: true
+      configure_valkey: true
+      configure_rabbitmq: true
 
-      pwa_studio:
-        enable: false
+    cms:
+      home:
+        identifier: pwa_home
+        title: PWA Home
+        store_ids:
+          - 0
+        template: modules/pwa/templates/cms/pwa_home.html
+
+    pwa_studio:
+      enable: false
         repo: https://github.com/magento/pwa-studio.git
         branch: release/14.3.1
         target_dir: /var/www/pwa/pwa-studio
@@ -74,4 +82,6 @@ magento_pwa:
           MAGENTO_BACKEND_EDITION: MOS
           MAGENTO_LIVE_SEARCH_ENABLED: "false"
           MAGENTO_EXPERIENCE_PLATFORM_ENABLED: "false"
+          # 设置 PWA 专用首页 Identifier，缺失时脚本会自动创建占位页面
+          MAGENTO_PWA_HOME_IDENTIFIER: pwa_home
           CHECKOUT_BRAINTREE_TOKEN: sandbox_example_token
