@@ -54,6 +54,7 @@ configure_php_fpm:
   file.managed:
     - name: /etc/php/8.3/fpm/pool.d/www.conf
     - source: salt://core/php-fpm.conf
+    - template: jinja
     - require:
       - pkg: install_php_fpm
 

@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.2.6] - 2025-11-01
+
+### Changes
+- 修改 9 个文件: README.md, modules/monitoring/__pycache__/resource_alert.cpython-312.pyc, modules/monitoring/resource_alert.py, modules/pwa/install.sh, modules/pwa/overrides/packages/venia-concept/local-intercept.js 等
+
+
 ## [1.2.5] - 2025-10-31
 
 ### Changes

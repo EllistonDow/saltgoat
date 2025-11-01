@@ -27,10 +27,13 @@ ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
 LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
 TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
+PHP_FPM_CONFIG = Path("/etc/php/8.3/fpm/pool.d/www.conf")
 DEFAULT_THRESHOLDS = {
     "memory": {"notice": 78.0, "warning": 85.0, "critical": 92.0},
     "disk": {"notice": 80.0, "warning": 90.0, "critical": 95.0},
 }
+FPM_NOTICE_RATIO = 0.8
+FPM_WARNING_RATIO = 0.9
 
 
 def shell_exists(path: Path) -> bool:
@@ -127,6 +130,42 @@ def service_status(services: Iterable[str]) -> Dict[str, bool]:
         ) == 0
         result[svc] = ok
     return result
+
+
+def php_fpm_max_children(conf_path: Path = PHP_FPM_CONFIG) -> Optional[int]:
+    if not shell_exists(conf_path):
+        return None
+    try:
+        with open(conf_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                if "pm.max_children" not in line:
+                    continue
+                parts = line.strip().split("=", 1)
+                if len(parts) != 2:
+                    continue
+                try:
+                    return int(parts[1].strip())
+                except ValueError:
+                    return None
+    except (FileNotFoundError, PermissionError):
+        return None
+    return None
+
+
+def php_fpm_children_count() -> Optional[int]:
+    try:
+        output = subprocess.check_output(
+            ["ps", "-o", "cmd=", "-C", "php-fpm8.3"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    count = 0
+    for line in output.splitlines():
+        if "php-fpm: pool" in line and "master process" not in line:
+            count += 1
+    return count
 
 
 def hostname() -> str:
@@ -299,6 +338,34 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
     else:
         details.append("All critical services running.")
 
+    fpm_info: Dict[str, Any] = {}
+    max_children = php_fpm_max_children()
+    current_children = php_fpm_children_count()
+    if max_children is not None:
+        fpm_info["max_children"] = max_children
+    if current_children is not None:
+        fpm_info["children"] = current_children
+    if max_children and current_children is not None and max_children > 0:
+        usage = current_children / max_children
+        fpm_info["utilization"] = round(usage, 4)
+        if usage >= 1.0:
+            bump("CRITICAL", "PHP-FPM capacity")
+            details.append(f"PHP-FPM pool saturated: {current_children}/{max_children} workers in use.")
+        elif usage >= FPM_WARNING_RATIO:
+            bump("WARNING", "PHP-FPM capacity")
+            details.append(
+                "PHP-FPM pool near capacity: "
+                f"{current_children}/{max_children} workers ({usage*100:.1f}%)."
+            )
+        elif usage >= FPM_NOTICE_RATIO:
+            bump("NOTICE", "PHP-FPM capacity")
+            details.append(
+                "PHP-FPM pool warming up: "
+                f"{current_children}/{max_children} workers ({usage*100:.1f}%)."
+            )
+    elif max_children and current_children is None:
+        details.append(f"PHP-FPM worker count unavailable; configured max_children={max_children}.")
+
     payload = {
         "host": hostname(),
         "severity": severity,
@@ -306,10 +373,12 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         "memory": mem_percent,
         "disks": disks,
         "services": services,
+        "php_fpm": fpm_info,
         "thresholds": {
             "load": thresholds,
             "memory": {"notice": mem_notice, "warning": mem_warn, "critical": mem_crit},
             "disk": {"notice": disk_notice, "warning": disk_warn, "critical": disk_crit},
+            "php_fpm": {"notice_ratio": FPM_NOTICE_RATIO, "warning_ratio": FPM_WARNING_RATIO},
         },
     }
     return severity, details, payload, triggers

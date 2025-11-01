@@ -117,6 +117,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
   - `magento_schedule.stats_jobs` 可定时运行 `saltgoat magetools stats --period <daily|weekly|monthly>`，自动生成业务汇总并写入 `/var/log/saltgoat/alerts.log`（可选推送 Telegram）。
 - 维护流程、权限修复、故障排查详见 [`docs/MAGENTO_MAINTENANCE.md`](docs/MAGENTO_MAINTENANCE.md)。
 - `sudo saltgoat pwa install <site> [--with-pwa]`：读取 `salt/pillar/magento-pwa.sls`，自动部署全新 Magento + PWA 站点并串联 Valkey / RabbitMQ / Cron，详见 [`docs/MAGENTO_PWA.md`](docs/MAGENTO_PWA.md)。
+- PHP-FPM 进程池默认按 CPU / 内存容量自动放大（可在 Pillar `saltgoat:php_fpm` 配置最小值、上限与 per_cpu 系数），`resource alert` 会在使用率逼近上限时提前预警。
 
 ### 监控与巡检
 - `sudo saltgoat monitor system|services|resources|logs|security|performance`

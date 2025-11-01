@@ -46,6 +46,7 @@ sudo saltgoat monitor config         # 输出当前阈值、目录与已启用�
 - Load：警告 1m≈1.25×CPU 核心、5m≈1.1×核心、15m≈1.0×核心；致命 1m≈1.5×核心等
 - Memory：78% Notice、85% Warning、92% Critical
 - Disk：80% Notice、90% Warning、95% Critical
+- PHP-FPM：当工作进程使用率 ≥80% 提示 Notice，≥90% Warning，100% 视为 Critical（同时附带当前/上限详情）
 
 可在 Pillar 中覆盖这些值（支持 `saltgoat:monitor:thresholds` 或旧版 `monitor_thresholds` 路径）：
 ```yaml

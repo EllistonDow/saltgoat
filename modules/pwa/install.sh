@@ -680,6 +680,12 @@ PY
     local product_talon="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/ProductFullDetail/useProductFullDetail.js"
     local overrides_dir="${SCRIPT_DIR}/modules/pwa/overrides"
 
+    if [[ -d "${overrides_dir}/packages" ]]; then
+        log_info "同步 PWA 自定义 overrides (packages/*)"
+        sudo rsync -a "${overrides_dir}/packages/" "${PWA_STUDIO_DIR%/}/packages/"
+        sudo chown -R www-data:www-data "${PWA_STUDIO_DIR%/}/packages/venia-concept"
+    fi
+
     if [[ -f "${overrides_dir}/productDetailFragment.gql.js" ]]; then
         log_info "应用内置 productDetailFragment.gql.js 覆盖"
         sudo cp "${overrides_dir}/productDetailFragment.gql.js" "$product_fragment"
