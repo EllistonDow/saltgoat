@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.2.8] - 2025-11-01
+
+### Changes
+- 修改 4 个文件: docs/PWA_PROJECT_GUIDE.md, docs/pwa-todo.md, modules/pwa/install.sh, modules/pwa/workspaces/saltgoat-venia-extension/src/components/HomeContent/index.js
+
+
 ## [1.2.7] - 2025-11-01
 
 ### Changes

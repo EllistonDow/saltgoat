@@ -46,6 +46,7 @@
 ### 3.5 自定义 Workspace (`@saltgoat/venia-extension`)
 - `modules/pwa/workspaces/saltgoat-venia-extension/` 保存了所有自研 React 组件（例如新的 `HomeContent`、自定义 talon 等）。
 - `sync-content` 会自动将该目录同步到 PWA Studio 的 `packages/saltgoat-venia-extension/` 并写入 `package.json` 的 `workspaces` 与 `dependencies`。
+- 同步脚本同时会在 `packages/venia-ui/package.json` 与 `packages/venia-concept/package.json` 中写入 `@saltgoat/venia-extension` 依赖（以 `link:../saltgoat-venia-extension` 形式），确保 intercept 注入的 `import` 可被 Yarn 解析。
 - 新增组件流程：
   1. 在 workspace 下的 `src` 中编写组件并从 `src/index.js` 导出；
   2. 在 intercept 中引用（示例：`modules/pwa/overrides/.../local-intercept.js` wrap 到 `@saltgoat/venia-extension/src/...`）；
@@ -58,7 +59,7 @@
 - 推荐每次同步后手动验证：
   - `curl https://<domain>/graphql` 查询 `storeConfig`；
   - `curl https://<domain>/client.*.js` 检查返回的 bundle 名称是否最新；
-  - 浏览器控制台执行 `window.__PWA_REACT_VERSION__`（由 `HomeContent` workspace 注入）确认只有一份 React。
+  - 浏览器控制台执行 `window.__PWA_REACT_VERSION__`（由 `HomeContent` workspace 注入）确认只有一份 React，若需进一步排查可查看 `window.__PWA_REACT_DEBUG__`（含 dispatcher 状态与全局 React 对比结果）。
 
 ## 4. 内容隔离与 Page Builder 策略
 

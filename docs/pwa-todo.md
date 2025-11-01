@@ -19,6 +19,7 @@
 - **PWA CLI 模块化**：为 `saltgoat pwa` 增加 `remove`、`sync-content`、`status` 等子命令，支持独立安装/卸载/重同步覆盖文件，并输出运营提示。
 - **模板资产沉淀**：把自研的 Venia 覆盖、首页/分类 Page Builder 模板整理到 `modules/pwa/templates/`，安装流程按站点选择推送，形成可复用的“样板库”。
 - **依赖治理**：统一使用 Yarn workspace（`@saltgoat/venia-extension`），清除 `package-lock.json` / sample 扩展，加入 React 单版本检查（`yarn list --pattern react`）和构建 guard（进行中）。
+- **React 单实例校验**：复测首页构建后 `window.__PWA_REACT_VERSION__` 是否返回版本号，若仍出现 Invalid hook call (#321) ，追踪是否有二次加载 React 的 Page Builder 片段或第三方脚本，并在脚本中给予防护提示。
 - **文档维护**：每次调整 PWA 脚本或模板时，更新 [`docs/PWA_PROJECT_GUIDE.md`](PWA_PROJECT_GUIDE.md)，保持方案与实现同步。
 
 ## 🔜 待实现 / Backlog

@@ -704,16 +704,61 @@ if isinstance(workspaces, list):
     if workspace_entry not in workspaces:
         workspaces.append(workspace_entry)
 elif isinstance(workspaces, dict):
-    packages = workspaces.get("packages")
+    packages = workspaces.setdefault("packages", [])
     if isinstance(packages, list) and workspace_entry not in packages:
         packages.append(workspace_entry)
+else:
+    workspaces = [workspace_entry]
+    data["workspaces"] = workspaces
 
-    deps = data.setdefault("dependencies", {})
-    if deps.get("@saltgoat/venia-extension") != "workspace:*":
-        deps["@saltgoat/venia-extension"] = "workspace:*"
+deps = data.setdefault("dependencies", {})
+if deps.get("@saltgoat/venia-extension") != f"link:{workspace_entry}":
+    deps["@saltgoat/venia-extension"] = f"link:{workspace_entry}"
 
+pkg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+PY
+
+    ensure_workspace_dependency "${PWA_STUDIO_DIR%/}/packages/venia-ui/package.json" \
+        "@saltgoat/venia-extension" "link:../saltgoat-venia-extension"
+    ensure_workspace_dependency "${PWA_STUDIO_DIR%/}/packages/venia-concept/package.json" \
+        "@saltgoat/venia-extension" "link:../saltgoat-venia-extension"
+}
+
+ensure_workspace_dependency() {
+    local package_json="$1"
+    local package_name="$2"
+    local package_value="$3"
+
+    if [[ -z "$package_json" || -z "$package_name" || -z "$package_value" ]]; then
+        return
+    fi
+    if [[ ! -f "$package_json" ]]; then
+        log_warning "未找到 package.json (${package_json})，跳过依赖写入。"
+        return
+    fi
+
+    sudo -u www-data -H python3 - "$package_json" "$package_name" "$package_value" <<'PY'
+import json
+import pathlib
+import sys
+
+pkg_path = pathlib.Path(sys.argv[1])
+name = sys.argv[2]
+value = sys.argv[3]
+
+data = json.loads(pkg_path.read_text(encoding="utf-8"))
+deps = data.setdefault("dependencies", {})
+changed = False
+
+if deps.get(name) != value:
+    deps[name] = value
+    changed = True
+
+if changed:
     pkg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 PY
+
+    sudo chown www-data:www-data "$package_json"
 }
 
 cleanup_package_lock() {
