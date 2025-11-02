@@ -1,0 +1,32 @@
+{# SaltGoat monitoring & self-healing sample pillar #}
+
+saltgoat:
+  monitor:
+    sites:
+      - name: example-frontend
+        url: "https://example.com/"
+        timeout: 6          # 请求超时时间（秒）
+        retries: 2          # 失败后重试次数
+        expect: 200         # 期望返回码
+        headers:
+          Host: example.com
+        timeout_services:     # 502/503/504 等超时/网关错误时执行
+          - php8.3-fpm
+          - varnish
+        server_error_services:  # 500 系错误
+          - php8.3-fpm
+          - nginx
+          - varnish
+        failure_services:     # 其余异常
+          - php8.3-fpm
+          - nginx
+
+  beacons:
+    service:
+      services:
+        nginx:
+          interval: 20
+        php8.3-fpm:
+          interval: 20
+        varnish:
+          interval: 20

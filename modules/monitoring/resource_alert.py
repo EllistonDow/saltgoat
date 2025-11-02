@@ -690,34 +690,51 @@ def check_sites(
         timeout = float(site.get("timeout", 5.0) or 5.0)
         expected = int(site.get("expect", 200) or 200)
         headers = site.get("headers") if isinstance(site.get("headers"), dict) else {}
-        req = urllib.request.Request(url, headers={"User-Agent": "SaltGoatHealth/1.0", **headers})
-        start = time.time()
+        retries = max(1, int(site.get("retries", 1) or 1))
+        success_attempt: Optional[int] = None
         status: Optional[int] = None
         body_snippet = ""
         error_msg: Optional[str] = None
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                status = resp.getcode()
+        duration = 0.0
+
+        for attempt in range(1, retries + 1):
+            req = urllib.request.Request(url, headers={"User-Agent": "SaltGoatHealth/1.0", **headers})
+            start = time.time()
+            status = None
+            body_snippet = ""
+            error_msg = None
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    status = resp.getcode()
+                    try:
+                        body_snippet = resp.read(256).decode("utf-8", errors="ignore")
+                    except Exception:
+                        body_snippet = ""
+            except urllib.error.HTTPError as exc:
+                status = exc.code
                 try:
-                    body_snippet = resp.read(256).decode("utf-8", errors="ignore")
+                    body_snippet = exc.read(256).decode("utf-8", errors="ignore")
                 except Exception:
                     body_snippet = ""
-        except urllib.error.HTTPError as exc:
-            status = exc.code
-            try:
-                body_snippet = exc.read(256).decode("utf-8", errors="ignore")
-            except Exception:
-                body_snippet = ""
-        except Exception as exc:
-            error_msg = str(exc)
-        duration = time.time() - start
+            except Exception as exc:
+                error_msg = str(exc)
+            duration = time.time() - start
+            if error_msg is None and status == expected:
+                success_attempt = attempt
+                break
+            if attempt < retries:
+                time.sleep(min(2.0, timeout / 2))
+
         site_result = {
             "name": name,
             "url": url,
             "status": status,
             "expected": expected,
             "duration": round(duration, 3),
+            "attempts": retries,
         }
+        if success_attempt is not None:
+            site_result["success_attempt"] = success_attempt
         if error_msg:
             site_result["error"] = error_msg
         if body_snippet:

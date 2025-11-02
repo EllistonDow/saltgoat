@@ -357,6 +357,7 @@ def run_auto(
     expected_all: Set[str] = set()
     for record in sites:
         expected_all.update(expected_job_names(record, config))
+    expected_all.add("saltgoat_schedule_auto")
 
     removed_jobs: List[str] = []
     for job_name, details in list(refreshed_map.items()):

@@ -857,9 +857,12 @@ case "$1" in
                 "cleanup")
                     monitor_cleanup "$3"
                     ;;
+                "auto-sites")
+                    monitor_auto_sites
+                    ;;
                 *)
                     log_error "未知的监控操作: $2"
-                    log_info "支持: install, install-master, verify-master, system, services, resources, network, logs, security, performance, report, realtime, enable-beacons, beacons-status, config, cleanup"
+                    log_info "支持: install, install-master, verify-master, system, services, resources, network, logs, security, performance, report, realtime, enable-beacons, beacons-status, config, cleanup, auto-sites"
                     exit 1
                     ;;
             esac

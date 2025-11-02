@@ -266,6 +266,15 @@ install_all() {
 			log_warning "自动规划 Salt Schedule 失败，可稍后手动执行 'sudo saltgoat magetools schedule auto'"
 			printf '%s\n' "$schedule_output"
 		fi
+
+		log_highlight "生成站点健康检查配置..."
+		if monitor_output=$(sudo saltgoat monitor auto-sites 2>&1); then
+			log_success "站点健康检查已自动配置"
+			printf '%s\n' "$monitor_output"
+		else
+			log_warning "站点健康检查自动配置失败，可稍后手动执行 'sudo saltgoat monitor auto-sites'"
+			printf '%s\n' "$monitor_output"
+		fi
 	else
 		log_info "提示: 安装完成后可运行 'sudo saltgoat magetools schedule auto' 规划 Magento Salt Schedule"
 	fi

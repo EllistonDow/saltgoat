@@ -268,6 +268,7 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
     expected_commands.update(dump_jobs)
     expected_commands.update(api_watchers)
     expected_commands.update(stats_jobs)
+    expected_commands["saltgoat_schedule_auto"] = "saltgoat magetools schedule auto"
 
     state_result = __salt__["state.apply"](
         "optional.magento-schedule",

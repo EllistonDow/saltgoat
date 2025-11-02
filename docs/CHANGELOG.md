@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.3.2] - 2025-11-02
+
+### Changes
+- 修改 10 个文件: core/install.sh, lib/help.sh, modules/magetools/magento-schedule.py, modules/monitoring/resource_alert.py, monitoring/README.md 等
+
+
 ## [1.3.1] - 2025-11-02
 
 ### Changes

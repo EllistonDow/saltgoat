@@ -225,6 +225,19 @@ salt-minion-schedule-service:
 {% endfor %}
 {% endif %}
 
+saltgoat_schedule_auto_job:
+  schedule.present:
+    - name: saltgoat_schedule_auto
+    - function: cmd.run
+    - job_args:
+      - saltgoat magetools schedule auto
+    - job_kwargs:
+        shell: /bin/bash
+    - cron: '30 3 * * *'
+    - run_on_start: False
+    - persistent: True
+    - maxrunning: 1
+
 {% else %}
 
 {{ legacy_cron_file }}:
@@ -240,6 +253,16 @@ salt-minion-schedule-service:
 {% for job in base_jobs %}
         {{ job.cron }} root {{ job.command }}
 {% endfor %}
+
+saltgoat_schedule_auto_cron:
+  file.managed:
+    - name: /etc/cron.d/saltgoat-schedule-auto
+    - user: root
+    - group: root
+    - mode: 644
+    - contents: |
+        # SaltGoat Magento schedule auto convergence
+        30 3 * * * root saltgoat magetools schedule auto >/var/log/saltgoat/schedule-auto.log 2>&1
 {% for dump_job in mysql_dump_jobs %}
         {{ dump_job.cron }} root {{ build_dump_cmd(dump_job).strip() }}
 {% endfor %}

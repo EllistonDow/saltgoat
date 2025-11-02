@@ -80,6 +80,7 @@ saltgoat:
    sudo saltgoat monitor install        # 首次执行会自动安装 salt-minion
    # 或者已安装 salt-minion 时
    sudo saltgoat monitor enable-beacons
+   sudo saltgoat monitor auto-sites      # 自动生成站点健康检查 Pillar
    ```
    - `install` 会自动安装/启动 `salt-minion`（若尚未存在），默认尝试发行版仓库，必要时回退到 Salt 官方 bootstrap 脚本（GitHub `bootstrap-salt.sh`），然后同步 `optional.salt-beacons` 与 `optional.salt-reactor`。
 - 若主机已安装 salt-minion，可直接运行 `enable-beacons`。

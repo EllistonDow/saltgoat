@@ -581,6 +581,7 @@ show_magetools_help() {
     help_command "cron status|enable <site>"    "查看或启用 magento cron 计划"
     help_command "schedule list|auto"           "自动检测并安装 Salt Schedule（多站点智能处理）"
     help_note "auto 会为缺省站点补齐 cron/php/health、API Watch、mysqldump、stats 任务，可再用 Pillar 精细化覆盖"
+    help_command "monitor auto-sites"           "扫描 Magento 站点并写入 health check Pillar"
     help_command "migrate-detect <path>"        "检测站点迁移风险与遗留配置"
     help_command "opensearch-auth <site>"       "修复 Magento ↔ OpenSearch 鉴权"
     echo ""
