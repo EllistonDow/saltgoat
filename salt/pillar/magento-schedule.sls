@@ -32,47 +32,47 @@ magento_schedule:
       cron: '5 6 * * *'
       site: bank
       period: daily
-      telegram_thread: 4
+      telegram_thread: 2634
     - name: bank-stats-weekly
       cron: '15 6 * * 1'
       site: bank
       period: weekly
       no_telegram: true
-      telegram_thread: 4
+      telegram_thread: 2634
     - name: bank-stats-monthly
       cron: '20 6 1 * *'
       site: bank
       period: monthly
-      telegram_thread: 4
+      telegram_thread: 2634
     - name: pwas-stats-daily
       cron: '7 6 * * *'
       site: pwas
       period: daily
-      telegram_thread: 5
+      telegram_thread: 2635
     - name: pwas-stats-weekly
       cron: '17 6 * * 1'
       site: pwas
       period: weekly
       no_telegram: true
-      telegram_thread: 5
+      telegram_thread: 2635
     - name: pwas-stats-monthly
       cron: '22 6 1 * *'
       site: pwas
       period: monthly
-      telegram_thread: 5
+      telegram_thread: 2635
     - name: tank-stats-daily
       cron: '10 6 * * *'
       site: tank
       period: daily
-      telegram_thread: 6
+      telegram_thread: 2636
     - name: tank-stats-weekly
       cron: '20 6 * * 1'
       site: tank
       period: weekly
       no_telegram: true
-      telegram_thread: 6
+      telegram_thread: 2636
     - name: tank-stats-monthly
       cron: '25 6 1 * *'
       site: tank
       period: monthly
-      telegram_thread: 6
+      telegram_thread: 2636

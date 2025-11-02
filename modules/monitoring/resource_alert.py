@@ -8,6 +8,7 @@ Evaluates load/memory/disk/service health and pushes Telegram + Salt events when
 from __future__ import annotations
 
 import json
+import html
 import math
 import os
 import re
@@ -959,7 +960,13 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any]) -> None:
         _log("skip", {"reason": "no_profiles"})
         return
     _log("profile_summary", {"count": len(profiles)})
-    reactor_common.broadcast_telegram(message, profiles, _log, tag=tag)
+    reactor_common.broadcast_telegram(
+        message,
+        profiles,
+        _log,
+        tag=tag,
+        parse_mode="HTML",
+    )
 
 
 def emit_salt_event(tag: str, payload: Dict[str, Any]) -> None:
@@ -974,6 +981,20 @@ def emit_salt_event(tag: str, payload: Dict[str, Any]) -> None:
 
 def color_severity(level: str) -> str:
     return level
+
+
+def format_html_block(title: str, pairs: List[Tuple[str, str]]) -> Tuple[str, str]:
+    underline = "=" * 30
+    entries = [(label, value) for label, value in pairs if value not in (None, "")]
+    width = max((len(label) for label, _ in entries), default=8)
+    lines = [underline, title, underline]
+    for label, value in entries:
+        parts = str(value).splitlines() or [""]
+        lines.append(f"{label.ljust(width)} : {parts[0]}")
+        for extra in parts[1:]:
+            lines.append(f"{' ' * width}   {extra}")
+    plain = "\n".join(lines)
+    return plain, f"<pre>{html.escape(plain)}</pre>"
 
 
 def get_threshold_overrides() -> Dict[str, Any]:
@@ -1259,13 +1280,14 @@ def main() -> None:
         }
         log_to_file("AUTOSCALE", "saltgoat/autoscale", autoscale_payload)
         host_id = autoscale_payload["host"]
-        lines = ["[INFO] Autoscale Actions", f"[host]: {host_id}"]
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        fields: List[Tuple[str, str]] = [("Host", host_id), ("Time", timestamp)]
         for action in auto_actions:
-            lines.append(f"[action]: {action}")
+            fields.append(("Action", action))
         if auto_states:
-            lines.append(f"[states]: {', '.join(auto_states)}")
-        message = "\n".join(lines)
-        telegram_notify("saltgoat/autoscale", message, autoscale_payload)
+            fields.append(("States", ", ".join(auto_states)))
+        _, html_block = format_html_block("AUTOSCALE ACTIONS", fields)
+        telegram_notify("saltgoat/autoscale", html_block, autoscale_payload)
         emit_salt_event("saltgoat/autoscale", autoscale_payload)
 
     if auto_services:
@@ -1309,25 +1331,23 @@ def main() -> None:
 
     if severity in {"WARNING", "CRITICAL"}:
         trigger_text = ", ".join(triggers) if triggers else "load"
-        lines = [
-            f"[{severity}] Resource Alert",
-            f"[host]: {payload['host']}",
-            f"[trigger]: {trigger_text}",
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        fields: List[Tuple[str, str]] = [
+            ("Host", payload["host"]),
+            ("Trigger", trigger_text),
+            ("Time", timestamp),
         ]
         for detail in details:
-            parts = str(detail).splitlines()
-            if not parts:
+            if not detail:
                 continue
-            lines.append(f"[detail]: {parts[0]}")
-            for extra in parts[1:]:
-                lines.append(f"  {extra}")
-        message = "\n".join(lines)
+            fields.append(("Detail", str(detail)))
+        plain_block, html_block = format_html_block(f"{severity} RESOURCE ALERT", fields)
         tag = f"saltgoat/monitor/resources/{severity.lower()}"
         augmented = payload | {"details": details, "tag": tag}
         log_to_file("RESOURCE", tag, augmented)
-        telegram_notify("saltgoat/monitor/resources", message, augmented)
+        telegram_notify("saltgoat/monitor/resources", html_block, augmented)
         emit_salt_event(tag, payload)
-        print(message)
+        print(plain_block)
     else:
         print("Resources within normal range; no alert issued.")
 

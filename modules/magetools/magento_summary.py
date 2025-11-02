@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Tuple
+import html
 
 from magento_api_watch import (
     CALLER,
@@ -82,7 +83,9 @@ def period_range(period: str) -> Tuple[dt.datetime, dt.datetime, str]:
 
 
 def fmt_ts(value: dt.datetime) -> str:
-    return value.strftime("%Y-%m-%d %H:%M")
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=dt.timezone.utc)
+    return value.astimezone(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def fmt_api_ts(value: dt.datetime) -> str:
@@ -213,15 +216,31 @@ def main() -> None:
         order_count, totals = summarise_orders(orders)
         customer_count = summarise_customers(customers)
 
-        lines = [
-            f"[INFO] {label} Summary",
-            f"[site]: {site.upper()}",
-            f"[window]: {start_str} -> {end_str}",
-            f"[orders]: {order_count}",
-            f"[revenue]: {format_totals(totals)}",
-            f"[customers]: {customer_count}",
+        def format_block(title: str, site_label: str, rows: List[Tuple[str, str]]) -> Tuple[str, str]:
+            underline = "=" * 30
+            if rows:
+                width = max(len(label) for label, _ in rows)
+            else:
+                width = 8
+            lines = [underline, f"{title} ({site_label})", underline]
+            for label, value in rows:
+                parts = value.splitlines() if value else [""]
+                lines.append(f"{label.ljust(width)} : {parts[0]}")
+                for extra in parts[1:]:
+                    lines.append(f"{' ' * width}   {extra}")
+            plain = "\n".join(lines)
+            html_block = f"<pre>{html.escape(plain)}</pre>"
+            return plain, html_block
+
+        generated = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        rows = [
+            ("Window", f"{start_str} -> {end_str}"),
+            ("Orders", str(order_count)),
+            ("Revenue", format_totals(totals)),
+            ("Customers", str(customer_count)),
+            ("Generated", generated),
         ]
-        message = "\n".join(lines)
+        plain_text, message = format_block(f"{label.upper()} SUMMARY", site.upper(), rows)
         payload = {
             "site": site,
             "period": args.period.lower(),
@@ -240,7 +259,7 @@ def main() -> None:
             telegram_broadcast(tag_base, message, payload)
 
         if not args.quiet:
-            print(message)
+            print(plain_text)
 
 
 if __name__ == "__main__":

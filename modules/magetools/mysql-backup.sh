@@ -55,6 +55,8 @@ notify_dump_telegram() {
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
+from html import escape
 
 status, database, path, size, reason, return_code, compressed, host = sys.argv[1:9]
 
@@ -69,20 +71,30 @@ log_path = "/var/log/saltgoat/alerts.log"
 tag = f"saltgoat/backup/mysql_dump/{status}"
 
 level = "INFO" if status == "success" else "ERROR"
-lines = [
-    f"[{level}] MySQL Dump Backup",
-    f"[host]: {host}",
-    f"[status]: {status.upper()}",
-    f"[file]: {path or 'n/a'}",
-    f"[return_code]: {return_code}",
+timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+header = "=" * 30
+entries = [
+    ("Level", level),
+    ("Host", host),
+    ("Status", status.upper()),
+    ("File", path or "n/a"),
+    ("Return", return_code),
+    ("Time", timestamp),
 ]
 if path and size and size.lower() != "unknown":
-    lines.append(f"[size]: {size}")
+    entries.append(("Size", size))
 if database:
-    lines.append(f"[database]: {database}")
+    entries.append(("Database", database))
 if reason:
-    lines.append(f"[reason]: {reason}")
-message = "\n".join(lines)
+    entries.append(("Reason", reason))
+width = max(len(label) for label, _ in entries)
+lines = [header, "MYSQL DUMP BACKUP", header]
+for label, value in entries:
+    parts = str(value).splitlines() or [""]
+    lines.append(f"{label.ljust(width)} : {parts[0]}")
+    for extra in parts[1:]:
+        lines.append(f"{' ' * width}   {extra}")
+message = f"<pre>{escape('\n'.join(lines))}</pre>"
 
 def log(kind, payload_obj):
     try:
@@ -108,7 +120,7 @@ if not profiles:
 
 context = {"database": database, "status": status, "size": size, "compressed": compressed}
 log("context", context)
-reactor_common.broadcast_telegram(message, profiles, log, tag=tag, thread_id=4)
+reactor_common.broadcast_telegram(message, profiles, log, tag=tag, thread_id=4, parse_mode="HTML")
 PY
 }
 

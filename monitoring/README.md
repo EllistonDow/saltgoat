@@ -43,6 +43,17 @@ sudo saltgoat monitor config         # 输出当前阈值、目录与已启用�
 - **实时订单/新用户告警**：`modules/magetools/magento_api_watch.py` 会读取 `salt/pillar/secret/magento_api.sls` 中的 `base_url` 与 token，监听每个站点的新订单/新注册并写入 `/var/log/saltgoat/alerts.log`、推送 Telegram（tag：`saltgoat/business/order|customer`）。如某站点缺少 token，可在 Pillar 中新增 `auth_mode: admin_login` + `username/password`，脚本会自动换取 Bearer Token。
 - **周期汇总报表**：`saltgoat magetools stats --site <name> --period daily|weekly|monthly` 统计区间订单/新用户，默认由 `magento_schedule.stats_jobs` 自动生成 Salt Schedule。支持在 Pillar 中为每个 job 设置 `telegram_thread`、`no_telegram`、`extra_args` 等参数，借助新参数 `--telegram-thread` 将汇总消息导向不同的 Telegram 话题。
 - **日志维护**：所有业务告警/汇总都写入 `/var/log/saltgoat/alerts.log`，建议结合 logrotate 或执行 `sudo mv /var/log/saltgoat/alerts.log /var/log/saltgoat/alerts.log.$(date +%Y%m%d).bak && sudo install -m 640 -o root -g root /dev/null /var/log/saltgoat/alerts.log` 定期归档，避免旧误报占据空间。
+- **通知样式**：所有消息采用统一分隔线 + 左右对齐的键值对格式，便于在手机端快速浏览，例如：
+  ```
+  ==============================
+  DAILY SUMMARY (BANK)
+  ==============================
+  Window   : 2025-11-02 00:00 -> 2025-11-02 23:59
+  Orders   : 12
+  Revenue  : USD 4,215.90
+  Customers: 7
+  Generated: 2025-11-02 06:00 UTC
+  ```
 
 如需在定时任务中生成报告，可在 systemd timer 或 cron 内调用 `sudo saltgoat monitor report <name>`，并将结果发送到集中日志或备份目录。
 

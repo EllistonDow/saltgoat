@@ -245,6 +245,8 @@ import json
 import pathlib
 import subprocess
 import sys
+from datetime import datetime, timezone
+from html import escape
 from typing import Dict, Any
 
 status, repo, site, log_file, paths, tags, rc, origin, host_hint, config_path, logger_path, log_path = sys.argv[1:]
@@ -281,22 +283,32 @@ if not payload["tags"]:
     payload.pop("tags")
 
 level = "INFO" if status == "success" else "ERROR"
-lines = [
-    f"[{level}] Restic Backup",
-    f"[host]: {payload.get('host') or 'ns510140'}",
-    f"[status]: {status.upper()}",
-    f"[repo]: {repo or 'n/a'}",
-    f"[return_code]: {rc}",
+timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+underline = "=" * 30
+entries = [
+    ("Level", level),
+    ("Host", payload.get('host') or 'ns510140'),
+    ("Status", status.upper()),
+    ("Repo", repo or 'n/a'),
+    ("Return", rc),
+    ("Time", timestamp),
 ]
 if site:
-    lines.append(f"[site]: {site}")
+    entries.append(("Site", site))
 if log_file:
-    lines.append(f"[log]: {log_file}")
+    entries.append(("Log", log_file))
 if payload.get("paths"):
-    lines.append(f"[paths]: {payload['paths']}")
+    entries.append(("Paths", payload['paths']))
 if payload.get("tags"):
-    lines.append(f"[tags]: {payload['tags']}")
-message = "\n".join(lines)
+    entries.append(("Tags", payload['tags']))
+width = max(len(label) for label, _ in entries)
+lines = [underline, "RESTIC BACKUP", underline]
+for label, value in entries:
+    parts = str(value).splitlines() or [""]
+    lines.append(f"{label.ljust(width)} : {parts[0]}")
+    for extra in parts[1:]:
+        lines.append(f"{' ' * width}   {extra}")
+message = f"<pre>{escape('\n'.join(lines))}</pre>"
 
 tag_base = f"saltgoat/backup/restic/{status}"
 payload["tag"] = tag_base
@@ -322,7 +334,14 @@ if not profiles:
 
 try:
     log("profile_summary", {"count": len(profiles)})
-    reactor_common.broadcast_telegram(message, profiles, log, tag=tag_base, thread_id=payload.get("telegram_thread"))
+    reactor_common.broadcast_telegram(
+        message,
+        profiles,
+        log,
+        tag=tag_base,
+        thread_id=payload.get("telegram_thread"),
+        parse_mode="HTML",
+    )
 except Exception as exc:  # pylint: disable=broad-except
     log("error", {"message": str(exc)})
     sys.exit(1)

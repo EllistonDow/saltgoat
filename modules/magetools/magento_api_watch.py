@@ -20,6 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+import html
 try:
     import yaml  # type: ignore
 except Exception:  # pragma: no cover
@@ -360,66 +361,60 @@ def telegram_broadcast(tag: str, message: str, payload: Dict[str, Any]) -> None:
     _log("profile_summary", {"count": len(profiles)})
     thread_id = payload.get("telegram_thread")
     try:
-        reactor_common.broadcast_telegram(message, profiles, _log, tag=tag, thread_id=thread_id)
+        reactor_common.broadcast_telegram(
+            message,
+            profiles,
+            _log,
+            tag=tag,
+            thread_id=thread_id,
+            parse_mode="HTML",
+        )
     except Exception as exc:  # pragma: no cover
         _log("error", {"message": str(exc)})
 
 
 def build_message(kind: str, site: str, payload: Dict[str, Any]) -> str:
+    def format_block(title: str, subtitle: str, fields: List[Tuple[str, Optional[str]]]) -> str:
+        underline = "=" * 30
+        entries: List[Tuple[str, str]] = []
+        for label, value in fields:
+            if value in (None, ""):
+                continue
+            entries.append((label, str(value)))
+        lines = [underline, f"{title} ({subtitle})", underline]
+        if entries:
+            width = max(len(label) for label, _ in entries)
+            for label, text in entries:
+                parts = text.splitlines() or [""]
+                lines.append(f"{label.ljust(width)} : {parts[0]}")
+                for extra in parts[1:]:
+                    lines.append(f"{' ' * width}   {extra}")
+        body = "\n".join(lines)
+        return f"<pre>{html.escape(body)}</pre>"
+
     site_label = site.upper()
     if kind == "order":
-        underline = "=" * 30
-        lines = [
-            f"{underline}",
-            f"NEW ORDER ({site_label})",
-            f"{underline}",
+        fields = [
+            ("Order", payload.get("order")),
+            ("Total", payload.get("total")),
+            ("Status", payload.get("status")),
+            ("Customer", payload.get("customer")),
+            ("Email", payload.get("email")),
+            ("Created", payload.get("created_at")),
         ]
-        order_id = payload.get("order")
-        if order_id:
-            lines.append(f"Order    : {order_id}")
-        total = payload.get("total")
-        if total:
-            lines.append(f"Total    : {total}")
-        status = payload.get("status")
-        if status:
-            lines.append(f"Status   : {status}")
-        customer = payload.get("customer")
-        if customer:
-            lines.append(f"Customer : {customer}")
-        email = payload.get("email")
-        if email:
-            lines.append(f"Email    : {email}")
-        created = payload.get("created_at")
-        if created:
-            lines.append(f"Created  : {created}")
+        return format_block("NEW ORDER", site_label, fields)
     elif kind == "customer":
-        underline = "=" * 30
-        lines = [
-            f"{underline}",
-            f"NEW CUSTOMER ({site_label})",
-            f"{underline}",
+        fields = [
+            ("Name", payload.get("customer")),
+            ("Email", payload.get("email")),
+            ("ID", payload.get("id")),
+            ("Group", payload.get("customer_group")),
+            ("Created", payload.get("created_at")),
         ]
-        name = payload.get("customer")
-        if name:
-            lines.append(f"Name     : {name}")
-        email = payload.get("email")
-        if email:
-            lines.append(f"Email    : {email}")
-        customer_id = payload.get("id")
-        if customer_id not in (None, ""):
-            lines.append(f"ID       : {customer_id}")
-        group = payload.get("customer_group")
-        if group not in (None, ""):
-            lines.append(f"Group    : {group}")
-        created = payload.get("created_at")
-        if created:
-            lines.append(f"Created  : {created}")
+        return format_block("NEW CUSTOMER", site_label, fields)
     else:
-        underline = "=" * 30
-        lines = [underline, f"{kind.upper()} ({site_label})", underline]
-        for key, value in payload.items():
-            lines.append(f"{key.title():<8}: {value}")
-    return "\n".join(lines)
+        fields = [(key.title(), str(value)) for key, value in payload.items()]
+        return format_block(kind.upper(), site_label, fields)
 
 
 class MagentoWatcher:
