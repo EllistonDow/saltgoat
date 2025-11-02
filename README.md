@@ -34,6 +34,15 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - **多层备份**：Restic + S3/Minio 快照、Percona XtraBackup 热备、单库 mysqldump（含 Salt Schedule 示例），并通过 Telegram / Salt event 写日志。
 - **完善的维护体系**：`sudo saltgoat magetools maintenance` 日/周/月任务、健康检查、权限修复，全部附带 Telegram 通知和日志。
 
+### 🛠 智能自愈与巡检
+
+- `sudo saltgoat magetools schedule auto`：扫描现有站点自动补齐 Magento cron/维护/API Watch/备份/统计任务，并清理已移除站点的残留计划任务。
+- `sudo saltgoat monitor auto-sites`：分析 `/var/www` 与 Nginx 配置生成 `salt/pillar/monitoring.sls`，内置 HTTP 健康检查、TLS 证书提前预警、以及针对 5xx/504 的 PHP-FPM/nginx/varnish 自愈策略。
+- `sudo saltgoat monitor quick-check`：即时执行一遍资源/站点巡检，将结果直接输出到终端（适合临时排查）。
+- `modules/monitoring/resource_alert.py`：定时评估资源与站点可用性，失败后记录 `systemctl` 与 `journalctl` 摘要、触发自愈并通过 Telegram/Salt Event 通知；内置重试与冷却窗口避免频繁重启。
+- `salt/states/optional/magento-schedule.sls` 默认下发每日 `saltgoat monitor report daily` 与 `saltgoat magetools schedule auto`，确保巡检与计划任务长期收敛。
+- `saltgoat pillar backup` 一键将 `salt/pillar` 打包到 `/var/lib/saltgoat/pillar-backups/`，配合版本库和外部存储实现配置留痕。
+
 ---
 
 ## 🧰 前置要求

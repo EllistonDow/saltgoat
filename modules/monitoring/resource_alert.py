@@ -13,15 +13,18 @@ import os
 import re
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import defaultdict
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from datetime import datetime, timezone
 
 try:
     from salt.client import Caller  # type: ignore
@@ -63,6 +66,8 @@ MYSQL_AUTOSCALE_MIN_STEP = 20
 VALKEY_AUTOSCALE_STEP_RATIO = 0.2
 VALKEY_AUTOSCALE_MIN_STEP_MB = 256
 VALKEY_AUTOSCALE_MAX_RATIO = 0.75
+SERVICE_HEAL_COOLDOWN = 300
+RECENT_IDS_LIMIT = 200
 
 _SERVICE_CACHE: Dict[str, bool] = {}
 
@@ -595,8 +600,8 @@ def apply_states(states: Iterable[str]) -> Dict[str, bool]:
     return results
 
 
-def restart_services(services: Iterable[str]) -> Dict[str, bool]:
-    results: Dict[str, bool] = {}
+def restart_services(services: Iterable[str]) -> Dict[str, Dict[str, Any]]:
+    results: Dict[str, Dict[str, Any]] = {}
     for service in services:
         if not service_exists(service):
             continue
@@ -608,9 +613,44 @@ def restart_services(services: Iterable[str]) -> Dict[str, bool]:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            results[service] = proc.returncode == 0
+            ok = proc.returncode == 0
+            status_snippet = ""
+            log_snippet = ""
+            if ok:
+                try:
+                    status_proc = subprocess.run(
+                        ["systemctl", "status", service, "--no-pager", "--lines", "5"],
+                        check=False,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                    )
+                    status_snippet = status_proc.stdout.strip()
+                except FileNotFoundError:
+                    status_snippet = ""
+                try:
+                    journal_proc = subprocess.run(
+                        [
+                            "journalctl",
+                            "-u",
+                            service,
+                            "--since",
+                            "-5 min",
+                            "--no-pager",
+                            "--lines",
+                            "20",
+                        ],
+                        check=False,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                    )
+                    log_snippet = journal_proc.stdout.strip()
+                except FileNotFoundError:
+                    log_snippet = ""
+            results[service] = {"ok": ok, "status": status_snippet, "journal": log_snippet}
         except FileNotFoundError:
-            results[service] = False
+            results[service] = {"ok": False, "status": "systemctl not found", "journal": ""}
     return results
 
 
@@ -641,6 +681,52 @@ def normalize_services(value: Any) -> List[str]:
     if value:
         return [str(value)]
     return []
+
+
+def tls_days_until_expiry(url: str, timeout: float) -> Tuple[Optional[float], Optional[str]]:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme.lower() != "https":
+        return None, None
+    host = parsed.hostname
+    if not host:
+        return None, "invalid host"
+    port = parsed.port or 443
+    context = ssl.create_default_context()
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            with context.wrap_socket(sock, server_hostname=host) as ssock:
+                cert = ssock.getpeercert()
+    except Exception as exc:  # noqa: BLE001
+        return None, f"TLS handshake failed: {exc}"
+    if not cert or "notAfter" not in cert:
+        return None, "certificate missing expiry"
+    try:
+        expiry = datetime.strptime(cert["notAfter"], "%b %d %H:%M:%S %Y %Z").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None, "unable to parse certificate expiry"
+    days_left = (expiry - datetime.now(timezone.utc)).total_seconds() / 86400
+    return days_left, None
+
+
+def load_service_heal_map() -> Dict[str, float]:
+    try:
+        data = json.loads((RUNTIME_DIR / "service-heal.json").read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return {str(k): float(v) for k, v in data.items()}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+    return {}
+
+
+def save_service_heal_map(data: Dict[str, float]) -> None:
+    try:
+        ensure_runtime_dir()
+        path = RUNTIME_DIR / "service-heal.json"
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def _command_from_details(details: Dict[str, Any]) -> str:
@@ -744,6 +830,27 @@ def check_sites(
         failure_defaults = default_failure_services()
         timeout_defaults = default_timeout_services()
         server_error_defaults = default_server_error_services()
+
+        tls_warn = int(site.get("tls_warn_days", 14) or 14)
+        tls_crit = int(site.get("tls_critical_days", 7) or 7)
+        tls_days, tls_error = tls_days_until_expiry(url, timeout)
+        if tls_days is not None:
+            site_result["tls_days_remaining"] = round(tls_days, 2)
+            if tls_days < 0:
+                bump("CRITICAL", f"TLS {name}")
+                details.append(f"Site {name} TLS certificate expired {-round(tls_days, 2)} days ago")
+                auto_ctx.setdefault("services", set()).update(
+                    normalize_services(site.get("failure_services", failure_defaults))
+                )
+            elif tls_days <= tls_crit:
+                bump("CRITICAL", f"TLS {name}")
+                details.append(f"Site {name} TLS certificate expires in {round(tls_days, 2)} days")
+            elif tls_days <= tls_warn:
+                bump("WARNING", f"TLS {name}")
+                details.append(f"Site {name} TLS certificate expires in {round(tls_days, 2)} days")
+        elif tls_error:
+            bump("WARNING", f"TLS {name}")
+            details.append(f"Site {name} TLS check failed: {tls_error}")
 
         if error_msg:
             bump("CRITICAL", f"Site {name}")
@@ -1156,13 +1263,43 @@ def main() -> None:
         emit_salt_event("saltgoat/autoscale", autoscale_payload)
 
     if auto_services:
-        service_results = restart_services(auto_services)
-        payload.setdefault("autoscale", {})["services"] = service_results
-        for service, ok in service_results.items():
-            if ok:
-                details.append(f"AUTOSCALE: restarted service {service}")
+        heal_map = load_service_heal_map()
+        now = time.time()
+        to_restart: List[str] = []
+        skipped: List[str] = []
+        for service in auto_services:
+            last = heal_map.get(service)
+            if last and now - last < SERVICE_HEAL_COOLDOWN:
+                skipped.append(service)
             else:
-                details.append(f"AUTOSCALE: restart service {service} failed")
+                to_restart.append(service)
+
+        if skipped:
+            details.append(
+                "AUTOSCALE: skip restart for {} (cooldown)".format(
+                    ", ".join(sorted(skipped))
+                )
+            )
+
+        if to_restart:
+            service_results = restart_services(to_restart)
+            autoscale_section = payload.setdefault("autoscale", {})
+            autoscale_section["services"] = {svc: info.get("ok", False) for svc, info in service_results.items()}
+            autoscale_section["service_status"] = {svc: info.get("status", "") for svc, info in service_results.items()}
+            autoscale_section["service_logs"] = {svc: info.get("journal", "") for svc, info in service_results.items()}
+            for service, info in service_results.items():
+                if info.get("ok"):
+                    details.append(f"AUTOSCALE: restarted service {service}")
+                    status_text = info.get("status")
+                    if status_text:
+                        details.append(f"AUTOSCALE: systemctl status {service}\n{status_text}")
+                    journal_text = info.get("journal")
+                    if journal_text:
+                        details.append(f"AUTOSCALE: journalctl -u {service}\n{journal_text}")
+                    heal_map[service] = now
+                else:
+                    details.append(f"AUTOSCALE: restart service {service} failed")
+            save_service_heal_map(heal_map)
 
     if severity in {"WARNING", "CRITICAL"}:
         lines = [

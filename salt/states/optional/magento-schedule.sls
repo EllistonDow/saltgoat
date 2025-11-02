@@ -223,6 +223,8 @@ salt-minion-schedule-service:
 {% for stats_job in stats_jobs %}
       - schedule: magento_schedule_stats_{{ stats_job.name }}
 {% endfor %}
+      - schedule: saltgoat_schedule_auto_job
+      - schedule: saltgoat_daily_summary_job
 {% endif %}
 
 saltgoat_schedule_auto_job:
@@ -234,6 +236,19 @@ saltgoat_schedule_auto_job:
     - job_kwargs:
         shell: /bin/bash
     - cron: '30 3 * * *'
+    - run_on_start: False
+    - persistent: True
+    - maxrunning: 1
+
+saltgoat_daily_summary_job:
+  schedule.present:
+    - name: saltgoat_daily_summary
+    - function: cmd.run
+    - job_args:
+      - saltgoat monitor report daily
+    - job_kwargs:
+        shell: /bin/bash
+    - cron: '0 6 * * *'
     - run_on_start: False
     - persistent: True
     - maxrunning: 1
@@ -263,6 +278,16 @@ saltgoat_schedule_auto_cron:
     - contents: |
         # SaltGoat Magento schedule auto convergence
         30 3 * * * root saltgoat magetools schedule auto >/var/log/saltgoat/schedule-auto.log 2>&1
+
+saltgoat_daily_summary_cron:
+  file.managed:
+    - name: /etc/cron.d/saltgoat-daily-summary
+    - user: root
+    - group: root
+    - mode: 644
+    - contents: |
+        # SaltGoat daily summary report
+        0 6 * * * root saltgoat monitor report daily >/var/log/saltgoat/daily-summary.log 2>&1
 {% for dump_job in mysql_dump_jobs %}
         {{ dump_job.cron }} root {{ build_dump_cmd(dump_job).strip() }}
 {% endfor %}

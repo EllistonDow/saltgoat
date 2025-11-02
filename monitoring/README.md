@@ -135,14 +135,17 @@ saltgoat:
       - name: tank-frontend
         url: "https://tank.example.com/"
         timeout: 6
+        retries: 2
         expect: 200
+        tls_warn_days: 14
+        tls_critical_days: 7
         timeout_services:
           - php8.3-fpm
         server_error_services:
           - php8.3-fpm
           - nginx
 
-上述 `monitor.sites` 配置会被 `modules/monitoring/resource_alert.py` 读取：脚本会按时间间隔拉取页面并写入 `alerts.log`；若状态码异常或请求超时，将自动重启对应服务（示例中 502/503/504 会重启 PHP-FPM，系统检测到 Varnish 正在使用时也会一并拉起）。可通过 `failure_services`/`server_error_services` 字段自定义不同错误场景下的自愈策略。
+上述 `monitor.sites` 配置会被 `modules/monitoring/resource_alert.py` 读取：脚本会按时间间隔拉取页面并写入 `alerts.log`；若状态码异常或请求超时，将自动重启对应服务（示例中 502/503/504 会重启 PHP-FPM，系统检测到 Varnish 正在使用时也会一并拉起）。`tls_warn_days` / `tls_critical_days` 会对证书即将过期发出 WARNING/CRITICAL 并写入通知。可通过 `failure_services`/`server_error_services` 字段自定义不同错误场景下的自愈策略。
 ```
 
 更新 Pillar 后，可用 `sudo salt-call --local pillar.items saltgoat` 验证数据，再执行 `sudo saltgoat monitor enable-beacons` 重新加载。

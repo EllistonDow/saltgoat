@@ -5,6 +5,7 @@ Magento API watcher: polls recent orders/customers and emits Salt events + Teleg
 
 import argparse
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -18,7 +19,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 try:
     import yaml  # type: ignore
 except Exception:  # pragma: no cover
@@ -41,6 +42,9 @@ TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
 TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
 TEST_MODE = os.environ.get("MAGENTO_WATCHER_TEST_MODE") == "1"
+RECENT_IDS_LIMIT = 256
+ADMIN_TOKEN_CACHE_FILE = "admin_token.json"
+ADMIN_TOKEN_EXPIRY_BUFFER = 300
 
 def safe_exists(path: Path) -> bool:
     try:
@@ -73,6 +77,90 @@ else:
         except Exception as exc:  # pragma: no cover
             LOG(f"[WARNING] 无法导入 reactor_common: {exc}")
             TELEGRAM_AVAILABLE = False
+
+
+def _admin_token_cache_path(site: str) -> Path:
+    site_dir = STATE_ROOT / site
+    site_dir.mkdir(parents=True, exist_ok=True)
+    return site_dir / ADMIN_TOKEN_CACHE_FILE
+
+
+def _decode_jwt_expiry(token: str) -> Optional[int]:
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    payload_b64 = parts[1]
+    padding = "=" * (-len(payload_b64) % 4)
+    try:
+        payload_raw = base64.urlsafe_b64decode((payload_b64 + padding).encode("ascii"))
+        payload = json.loads(payload_raw.decode("utf-8"))
+    except (binascii.Error, ValueError, json.JSONDecodeError):
+        return None
+    exp = payload.get("exp")
+    if isinstance(exp, (int, float)):
+        return int(exp)
+    return None
+
+
+def _load_cached_admin_token(site: str) -> Optional[str]:
+    path = _admin_token_cache_path(site)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    token = data.get("token")
+    if not token or not isinstance(token, str):
+        return None
+    expires_at = data.get("exp")
+    if isinstance(expires_at, (int, float)):
+        if time.time() >= float(expires_at) - ADMIN_TOKEN_EXPIRY_BUFFER:
+            return None
+    return token
+
+
+def _save_cached_admin_token(site: str, token: str) -> None:
+    path = _admin_token_cache_path(site)
+    payload: Dict[str, Any] = {"token": token}
+    exp = _decode_jwt_expiry(token)
+    if exp:
+        payload["exp"] = exp
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
+def obtain_admin_token(site: str, base_url: str, username: str, password: str, force_refresh: bool = False) -> str:
+    if not force_refresh:
+        cached = _load_cached_admin_token(site)
+        if cached:
+            return cached
+    token_url = base_url.rstrip("/") + "/rest/V1/integration/admin/token"
+    body = json.dumps({"username": username, "password": password}).encode("utf-8")
+    req = urllib.request.Request(token_url, data=body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # nosec
+            charset = resp.headers.get_content_charset() or "utf-8"
+            raw = resp.read().decode(charset, errors="replace")
+    except urllib.error.HTTPError as exc:
+        raise MagentoAPIError(f"获取 admin token 失败: HTTP {exc.code} {exc.reason}") from exc
+    except urllib.error.URLError as exc:
+        raise MagentoAPIError(f"获取 admin token 失败: {exc.reason}") from exc
+    except Exception as exc:
+        raise MagentoAPIError(f"获取 admin token 失败: {exc}") from exc
+    token: Optional[str] = None
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, str) and parsed:
+            token = parsed
+    except json.JSONDecodeError:
+        pass
+    if not token:
+        stripped = raw.strip().strip('"')
+        token = stripped if stripped else None
+    if not token:
+        raise MagentoAPIError("获取 admin token 失败: 响应为空")
+    _save_cached_admin_token(site, token)
+    return token
 
 
 class MagentoAPIError(Exception):
@@ -535,19 +623,96 @@ class MagentoWatcher:
     def _state_file(self, kind: str) -> Path:
         return self.state_dir / f"last_{kind}.json"
 
-    def _load_last_id(self, kind: str) -> int:
+    def _load_state(self, kind: str) -> Dict[str, Any]:
+        default = {"last_id": 0, "recent_ids": []}
         path = self._state_file(kind)
         if not path.exists():
-            return 0
+            return default
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            return int(data.get("last_id", 0))
+        except Exception:
+            return default
+        state = {
+            "last_id": 0,
+            "recent_ids": [],
+        }
+        try:
+            state["last_id"] = int(data.get("last_id", 0))
+        except Exception:
+            state["last_id"] = 0
+        recent_ids: List[int] = []
+        raw_recent = data.get("recent_ids", [])
+        if isinstance(raw_recent, list):
+            for entry in raw_recent:
+                try:
+                    recent_ids.append(int(entry))
+                except (TypeError, ValueError):
+                    continue
+        state["recent_ids"] = recent_ids[-RECENT_IDS_LIMIT:]
+        return state
+
+    def _load_last_id(self, kind: str) -> int:
+        state = self._load_state(kind)
+        try:
+            return int(state.get("last_id", 0))
         except Exception:
             return 0
 
-    def _save_last_id(self, kind: str, last_id: int) -> None:
+    def _save_state(self, kind: str, state: Dict[str, Any]) -> None:
         path = self._state_file(kind)
-        path.write_text(json.dumps({"last_id": last_id}), encoding="utf-8")
+        recent_ids: List[int] = []
+        for entry in state.get("recent_ids", []):
+            try:
+                recent_ids.append(int(entry))
+            except (TypeError, ValueError):
+                continue
+        payload = {
+            "last_id": int(state.get("last_id", 0)),
+            "recent_ids": recent_ids[-RECENT_IDS_LIMIT:],
+        }
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    def _save_last_id(
+        self,
+        kind: str,
+        last_id: int,
+        new_ids: Optional[List[int]] = None,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self._update_state(kind, last_id, new_ids or [], state=state)
+
+    def _update_state(
+        self,
+        kind: str,
+        last_id: int,
+        new_ids: Optional[List[int]] = None,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if state is None:
+            state = self._load_state(kind)
+        if new_ids is None:
+            new_ids = []
+        existing: List[int] = []
+        for entry in state.get("recent_ids", []):
+            try:
+                existing.append(int(entry))
+            except (TypeError, ValueError):
+                continue
+        merged: List[int] = []
+        seen: Set[int] = set()
+        for value in existing + list(new_ids):
+            try:
+                num = int(value)
+            except (TypeError, ValueError):
+                continue
+            if num in seen:
+                continue
+            seen.add(num)
+            merged.append(num)
+        merged = merged[-RECENT_IDS_LIMIT:]
+        state["last_id"] = int(last_id)
+        state["recent_ids"] = merged
+        self._save_state(kind, state)
 
     def _bootstrap_last_id(
         self,
@@ -594,10 +759,11 @@ class MagentoWatcher:
         max_id = result["max_id"]
         last_id = result["last_id"]
         items = result["items"]
+        state = self._load_state("orders")
 
         if bootstrap:
             if max_id > last_id:
-                self._save_last_id("orders", max_id)
+                self._save_last_id("orders", max_id, state=state)
                 LOG(f"[INFO] {self.site} 首次运行，记录最新订单 ID={max_id}，不发送通知。")
             return
 
@@ -605,15 +771,34 @@ class MagentoWatcher:
             return
 
         if result["truncated"]:
-            self._save_last_id("orders", max_id)
+            self._save_last_id("orders", max_id, state=state)
             LOG(
                 f"[WARNING] {self.site} orders 回溯记录超过 {self.max_pages * self.page_size} 条，"
                 "已更新基线并跳过本次通知，避免刷屏。"
             )
             return
 
+        recent_ids: Set[int] = set()
+        for entry in state.get("recent_ids", []):
+            try:
+                recent_ids.add(int(entry))
+            except (TypeError, ValueError):
+                continue
+        new_ids: List[int] = []
+
         for item in items:
-            entity_id = item.get("entity_id")
+            raw_entity_id = item.get("entity_id")
+            entity_id_int: Optional[int] = None
+            try:
+                entity_id_int = int(raw_entity_id)
+            except (TypeError, ValueError):
+                entity_id_int = None
+            if entity_id_int is not None and entity_id_int in recent_ids:
+                continue
+            if entity_id_int is not None:
+                new_ids.append(entity_id_int)
+                recent_ids.add(entity_id_int)
+            entity_id = entity_id_int if entity_id_int is not None else raw_entity_id
             increment_id = item.get("increment_id") or entity_id
             total = item.get("grand_total")
             currency = item.get("base_currency_code") or ""
@@ -650,7 +835,7 @@ class MagentoWatcher:
                 },
             )
             telegram_broadcast("saltgoat/business/order", message, event_data)
-        self._save_last_id("orders", max_id)
+        self._save_last_id("orders", max_id, new_ids, state=state)
         if result["truncated"]:
             LOG(f"[WARNING] {self.site} 订单存在超过 {self.max_pages * self.page_size} 条新纪录，已仅推送最近 {len(items)} 条。")
 
@@ -668,10 +853,11 @@ class MagentoWatcher:
         max_id = result["max_id"]
         last_id = result["last_id"]
         items = result["items"]
+        state = self._load_state("customers")
 
         if bootstrap:
             if max_id > last_id:
-                self._save_last_id("customers", max_id)
+                self._save_last_id("customers", max_id, state=state)
                 LOG(f"[INFO] {self.site} 首次运行，记录最新用户 ID={max_id}，不发送通知。")
             return
 
@@ -679,15 +865,34 @@ class MagentoWatcher:
             return
 
         if result["truncated"]:
-            self._save_last_id("customers", max_id)
+            self._save_last_id("customers", max_id, state=state)
             LOG(
                 f"[WARNING] {self.site} customers 回溯记录超过 {self.max_pages * self.page_size} 条，"
                 "已更新基线并跳过本次通知，避免刷屏。"
             )
             return
 
+        recent_ids: Set[int] = set()
+        for entry in state.get("recent_ids", []):
+            try:
+                recent_ids.add(int(entry))
+            except (TypeError, ValueError):
+                continue
+        new_ids: List[int] = []
+
         for item in items:
-            entity_id = item.get("id")
+            raw_entity_id = item.get("id")
+            entity_id_int: Optional[int] = None
+            try:
+                entity_id_int = int(raw_entity_id)
+            except (TypeError, ValueError):
+                entity_id_int = None
+            if entity_id_int is not None and entity_id_int in recent_ids:
+                continue
+            if entity_id_int is not None:
+                new_ids.append(entity_id_int)
+                recent_ids.add(entity_id_int)
+            entity_id = entity_id_int if entity_id_int is not None else raw_entity_id
             firstname = item.get("firstname") or ""
             lastname = item.get("lastname") or ""
             name = (firstname + " " + lastname).strip() or "(未命名)"
@@ -718,7 +923,7 @@ class MagentoWatcher:
                 },
             )
             telegram_broadcast("saltgoat/business/customer", message, event_data)
-        self._save_last_id("customers", max_id)
+        self._save_last_id("customers", max_id, new_ids, state=state)
         if result["truncated"]:
             LOG(f"[WARNING] {self.site} 用户存在超过 {self.max_pages * self.page_size} 条新纪录，已仅推送最近 {len(items)} 条。")
 
@@ -765,6 +970,8 @@ def main() -> None:
         entry = {}
 
     raw_oauth_params: Dict[str, Any] = {}
+    admin_username = ""
+    admin_password = ""
 
     def _collect_oauth(source: Dict[str, Any]) -> None:
         for group_key in ("oauth", "oauth1"):
@@ -788,6 +995,16 @@ def main() -> None:
                 raw_oauth_params[key] = value
 
     _collect_oauth(entry)
+    for key in ("admin_username", "username", "user"):
+        value = entry.get(key)
+        if isinstance(value, str) and value:
+            admin_username = value
+            break
+    for key in ("admin_password", "password"):
+        value = entry.get(key)
+        if isinstance(value, str) and value:
+            admin_password = value
+            break
 
     detected_mode = (entry.get("auth_mode") or entry.get("auth") or "").lower()
 
@@ -800,6 +1017,18 @@ def main() -> None:
         _collect_oauth(local_entry)
         if not detected_mode:
             detected_mode = (local_entry.get("auth_mode") or local_entry.get("auth") or "").lower()
+        if not admin_username:
+            for key in ("admin_username", "username", "user"):
+                value = local_entry.get(key)
+                if isinstance(value, str) and value:
+                    admin_username = value
+                    break
+        if not admin_password:
+            for key in ("admin_password", "password"):
+                value = local_entry.get(key)
+                if isinstance(value, str) and value:
+                    admin_password = value
+                    break
 
     def has_oauth_credentials(params: Dict[str, Any]) -> bool:
         consumer_key = params.get("consumer_key") or params.get("client_key")
@@ -817,7 +1046,7 @@ def main() -> None:
     auth_mode_request = args.auth_mode.lower()
     if auth_mode_request != "auto":
         auth_mode = auth_mode_request
-    elif detected_mode in {"bearer", "oauth1"}:
+    elif detected_mode in {"bearer", "oauth1", "admin_login"}:
         auth_mode = detected_mode
     elif has_oauth_credentials(raw_oauth_params):
         auth_mode = "oauth1"
@@ -830,6 +1059,9 @@ def main() -> None:
         LOG(f"[ERROR] 未找到站点 {site} 的 base_url（pillar 路径 {base_path}）")
         sys.exit(1)
 
+    if auth_mode == "bearer" and not token and admin_username and admin_password:
+        auth_mode = "admin_login"
+
     if auth_mode == "bearer":
         if not token:
             LOG(f"[ERROR] 未找到站点 {site} 的 Bearer token，请在 Pillar 或 secret 中配置 token/access_token。")
@@ -837,6 +1069,10 @@ def main() -> None:
     elif auth_mode == "oauth1":
         if not oauth_params:
             LOG(f"[ERROR] 站点 {site} 未提供 OAuth1 所需的 consumer/access token 参数。")
+            sys.exit(1)
+    elif auth_mode == "admin_login":
+        if not admin_username or not admin_password:
+            LOG(f"[ERROR] 站点 {site} 未提供 admin 登录凭据（username/password）。")
             sys.exit(1)
     else:
         LOG(f"[ERROR] 不支持的认证模式: {auth_mode}")
@@ -855,6 +1091,13 @@ def main() -> None:
             or oauth_params.get("oauth_token")
             or token
         )
+    elif auth_mode == "admin_login":
+        try:
+            init_token = obtain_admin_token(site, base_url, admin_username, admin_password)
+        except MagentoAPIError as exc:
+            LOG(f"[ERROR] {exc}")
+            sys.exit(1)
+        auth_mode = "bearer"
 
     try:
         watcher = MagentoWatcher(

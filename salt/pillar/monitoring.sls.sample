@@ -8,6 +8,8 @@ saltgoat:
         timeout: 6          # 请求超时时间（秒）
         retries: 2          # 失败后重试次数
         expect: 200         # 期望返回码
+        tls_warn_days: 14
+        tls_critical_days: 7
         headers:
           Host: example.com
         timeout_services:     # 502/503/504 等超时/网关错误时执行

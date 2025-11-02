@@ -100,9 +100,9 @@ def fetch_entities(
             "searchCriteria[filter_groups][0][filters][0][field]": "created_at",
             "searchCriteria[filter_groups][0][filters][0][value]": fmt_api_ts(start),
             "searchCriteria[filter_groups][0][filters][0][condition_type]": "from",
-            "searchCriteria[filter_groups][0][filters][1][field]": "created_at",
-            "searchCriteria[filter_groups][0][filters][1][value]": fmt_api_ts(end),
-            "searchCriteria[filter_groups][0][filters][1][condition_type]": "to",
+            "searchCriteria[filter_groups][1][filters][0][field]": "created_at",
+            "searchCriteria[filter_groups][1][filters][0][value]": fmt_api_ts(end),
+            "searchCriteria[filter_groups][1][filters][0][condition_type]": "to",
             "searchCriteria[sortOrders][0][field]": id_field,
             "searchCriteria[sortOrders][0][direction]": "ASC",
         }

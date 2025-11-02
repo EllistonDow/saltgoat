@@ -419,6 +419,22 @@ pillar_refresh() {
     fi
 }
 
+pillar_backup() {
+    local backup_dir="/var/lib/saltgoat/pillar-backups"
+    local timestamp archive
+    timestamp=$(date +%Y%m%d-%H%M%S)
+    archive="${backup_dir}/pillar-${timestamp}.tar.gz"
+
+    log_highlight "创建 Pillar 备份..."
+    if sudo mkdir -p "$backup_dir" && sudo tar -czf "$archive" -C "${SCRIPT_DIR}/salt" pillar; then
+        sudo chmod 640 "$archive" 2>/dev/null || true
+        log_success "Pillar 备份完成: $archive"
+    else
+        log_error "创建 Pillar 备份失败"
+        return 1
+    fi
+}
+
 pillar_init() {
     local pillar_file
     pillar_file="$(pillar_file_path)"
@@ -544,9 +560,12 @@ case "$1" in
             "refresh")
                 pillar_refresh
                 ;;
+            "backup")
+                pillar_backup
+                ;;
             *)
                 log_error "未知的 Pillar 操作: ${2:-<none>}"
-                log_info "支持: show, init, refresh"
+                log_info "支持: show, init, refresh, backup"
                 exit 1
                 ;;
         esac
@@ -857,12 +876,15 @@ case "$1" in
                 "cleanup")
                     monitor_cleanup "$3"
                     ;;
+                "quick-check")
+                    monitor_quick_check
+                    ;;
                 "auto-sites")
                     monitor_auto_sites
                     ;;
                 *)
                     log_error "未知的监控操作: $2"
-                    log_info "支持: install, install-master, verify-master, system, services, resources, network, logs, security, performance, report, realtime, enable-beacons, beacons-status, config, cleanup, auto-sites"
+                    log_info "支持: install, install-master, verify-master, system, services, resources, network, logs, security, performance, report, realtime, enable-beacons, beacons-status, config, cleanup, quick-check, auto-sites"
                     exit 1
                     ;;
             esac

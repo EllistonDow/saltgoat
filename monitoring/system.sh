@@ -798,6 +798,28 @@ monitor_beacon_status() {
     fi
 }
 
+monitor_quick_check() {
+    log_highlight "执行即时资源巡检..."
+    if [[ ! -f "$RESOURCE_ALERT_SCRIPT" ]]; then
+        log_error "未找到资源告警脚本: $RESOURCE_ALERT_SCRIPT"
+        return 1
+    fi
+
+    local output
+    if ! output=$(python3 "$RESOURCE_ALERT_SCRIPT" 2>&1); then
+        log_error "资源巡检脚本执行失败"
+        echo "$output"
+        return 1
+    fi
+
+    if [[ -z "$output" ]]; then
+        log_info "资源巡检脚本未输出内容"
+    else
+        echo "$output"
+    fi
+    log_success "巡检完成"
+}
+
 monitor_auto_sites() {
     log_highlight "自动生成站点健康检查配置..."
 
@@ -998,6 +1020,8 @@ def main():
                 entry["timeout"] = 6
                 entry["retries"] = 2
                 entry["expect"] = 200
+                entry["tls_warn_days"] = 14
+                entry["tls_critical_days"] = 7
                 timeout_services = ["php8.3-fpm"]
                 if varnish_exists:
                     timeout_services.append("varnish")
@@ -1036,6 +1060,8 @@ def main():
         entry["timeout"] = 6
         entry["retries"] = 2
         entry["expect"] = 200
+        entry["tls_warn_days"] = 14
+        entry["tls_critical_days"] = 7
         timeout_services = ["php8.3-fpm"]
         if varnish_exists:
             timeout_services.append("varnish")
