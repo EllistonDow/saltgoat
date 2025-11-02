@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.2.10] - 2025-11-02
+
+### Changes
+- 修改 3 个文件: modules/monitoring/resource_alert.py, salt/states/core/php-fpm-pools.sls, salt/states/optional/magento-optimization.sls
+
+
 ## [1.2.9] - 2025-11-02
 
 ### Changes

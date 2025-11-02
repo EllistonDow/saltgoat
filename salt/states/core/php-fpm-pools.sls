@@ -4,6 +4,13 @@
 -#}
 {% set php_version = salt['pillar.get']('saltgoat:php_version', '8.3') %}
 {% set pool_dir = '/etc/php/{}/fpm/pool.d'.format(php_version) %}
+{% set runtime_dir = '/etc/saltgoat/runtime' %}
+{% set runtime_file = runtime_dir + '/php-fpm-pools.json' %}
+{% if salt['file.file_exists'](runtime_file) %}
+  {% set runtime_data = salt['slsutil.deserialize']('json', salt['file.read'](runtime_file)) %}
+{% else %}
+  {% set runtime_data = {} %}
+{% endif %}
 {% set pool_defaults = salt['pillar.get']('magento_optimize:php_pool_defaults', {}) %}
 {% set magento_optimize = salt['pillar.get']('magento_optimize', {}) %}
 {% set sites = magento_optimize.get('sites', {}) or {} %}
@@ -61,6 +68,9 @@
   {% set pool_cfg = site_cfg.get('php_pool', {}) %}
   {% if pool_cfg is mapping %}
     {% set pool_name = pool_cfg.get('name') or pool_cfg.get('pool_name') or ('magento-' ~ site_id) %}
+    {% set runtime_override = runtime_data.get(pool_name, {}) %}
+    {% set runtime_meta = runtime_override.get('__meta__', {}) %}
+    {% set runtime_cfg = runtime_override %}
     {% set pm_mode = pool_cfg.get('pm', pool_defaults.get('pm', 'dynamic')) %}
     {% set weight = pool_cfg.get('weight', 1) or 1 %}
     {% set estimated_child_mb = pool_cfg.get('estimated_child_mb', pool_defaults.get('estimated_child_mb', 2048)) %}
@@ -87,14 +97,14 @@
     {% if cpu_based > 0 and auto_children > cpu_based %}
       {% set auto_children = cpu_based %}
     {% endif %}
-    {% set max_children = (pool_cfg.get('max_children') or auto_children) | int %}
+    {% set max_children = (runtime_cfg.get('max_children') or pool_cfg.get('max_children') or auto_children) | int %}
     {% if max_children < min_children %}
       {% set max_children = min_children %}
     {% endif %}
     {% if max_cap and max_children > max_cap %}
       {% set max_children = max_cap %}
     {% endif %}
-    {% set start_servers = pool_cfg.get('start_servers') %}
+    {% set start_servers = runtime_cfg.get('start_servers') if runtime_cfg.get('start_servers') is not none else pool_cfg.get('start_servers') %}
     {% if start_servers is none %}
       {% if pm_mode == 'dynamic' %}
         {% set start_servers = (max_children // 2) | int %}
@@ -108,7 +118,7 @@
     {% if start_servers > max_children %}
       {% set start_servers = max_children %}
     {% endif %}
-    {% set min_spare = pool_cfg.get('min_spare_servers') %}
+    {% set min_spare = runtime_cfg.get('min_spare_servers') if runtime_cfg.get('min_spare_servers') is not none else pool_cfg.get('min_spare_servers') %}
     {% if min_spare is none %}
       {% if pm_mode == 'dynamic' %}
         {% set min_spare = (max_children // 3) | int %}
@@ -122,7 +132,7 @@
     {% if min_spare > max_children %}
       {% set min_spare = max_children %}
     {% endif %}
-    {% set max_spare = pool_cfg.get('max_spare_servers') %}
+    {% set max_spare = runtime_cfg.get('max_spare_servers') if runtime_cfg.get('max_spare_servers') is not none else pool_cfg.get('max_spare_servers') %}
     {% if max_spare is none %}
       {% if pm_mode == 'dynamic' %}
         {% set max_spare = (max_children * 2 // 3) | int %}
@@ -139,12 +149,16 @@
     {% if max_spare > max_children %}
       {% set max_spare = max_children %}
     {% endif %}
-    {% set max_requests = pool_cfg.get('max_requests', pool_defaults.get('max_requests', 1500)) %}
-    {% set idle_timeout = pool_cfg.get('process_idle_timeout', pool_defaults.get('process_idle_timeout', '60s')) %}
-    {% set listen = pool_cfg.get('listen', '/run/php/php{}-fpm-{}.sock'.format(php_version, pool_name)) %}
-    {% set php_admin_values = salt['slsutil.merge']({'memory_limit': pool_cfg.get('memory_limit', pool_defaults.get('memory_limit', '2048M'))}, pool_cfg.get('php_admin_values', {}), strategy='recurse') %}
-    {% set php_values = pool_cfg.get('php_values', {}) %}
-    {% set slowlog = pool_cfg.get('slowlog', '/var/log/php{}-fpm-{}.slow.log'.format(php_version, pool_name)) %}
+    {% set max_requests = runtime_cfg.get('max_requests') if runtime_cfg.get('max_requests') is not none else pool_cfg.get('max_requests', pool_defaults.get('max_requests', 1500)) %}
+    {% set idle_timeout = runtime_cfg.get('process_idle_timeout') if runtime_cfg.get('process_idle_timeout') is not none else pool_cfg.get('process_idle_timeout', pool_defaults.get('process_idle_timeout', '60s')) %}
+    {% set listen = runtime_cfg.get('listen') or pool_cfg.get('listen', '/run/php/php{}-fpm-{}.sock'.format(php_version, pool_name)) %}
+    {% set php_admin_values = salt['slsutil.merge'](pool_cfg.get('php_admin_values', {}), {}, strategy='recurse') %}
+    {% set php_admin_values = salt['slsutil.merge'](php_admin_values, {'memory_limit': runtime_cfg.get('memory_limit', pool_cfg.get('memory_limit', pool_defaults.get('memory_limit', '2048M')))}, strategy='recurse') %}
+    {% if runtime_cfg.get('php_admin_values') %}
+      {% set php_admin_values = salt['slsutil.merge'](php_admin_values, runtime_cfg.get('php_admin_values'), strategy='recurse') %}
+    {% endif %}
+    {% set php_values = salt['slsutil.merge'](pool_cfg.get('php_values', {}), runtime_cfg.get('php_values', {}), strategy='recurse') %}
+    {% set slowlog = runtime_cfg.get('slowlog') or pool_cfg.get('slowlog', '/var/log/php{}-fpm-{}.slow.log'.format(php_version, pool_name)) %}
     {% set ns_pools.items = ns_pools.items + [ {
       'site_id': site_id,
       'pool_name': pool_name,
@@ -180,6 +194,13 @@
 
 {% if pool_items %}
 
+ensure_saltgoat_runtime_dir:
+  file.directory:
+    - name: {{ runtime_dir }}
+    - mode: 750
+    - user: root
+    - group: root
+
 ensure_php_fpm_pool_dir:
   file.directory:
     - name: {{ pool_dir }}
@@ -204,6 +225,7 @@ manage_php_pool_{{ pool.pool_name }}:
         pool: {{ pool | json }}
         php_version: {{ php_version | json }}
     - require:
+      - file: ensure_saltgoat_runtime_dir
       - file: ensure_php_fpm_pool_dir
     - watch_in:
       - service: start_php_fpm

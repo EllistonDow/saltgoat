@@ -191,6 +191,26 @@
 {% set php_pool_conf = '/etc/php/{}/fpm/pool.d/www.conf'.format(php_ns.version) if php_ns.version else None %}
 {% set php_cli_exists = php_cli_ini and salt['file.file_exists'](php_cli_ini) %}
 
+{% set runtime_dir = '/etc/saltgoat/runtime' %}
+{% set mysql_runtime_file = runtime_dir + '/mysql-autotune.json' %}
+{% set valkey_runtime_file = runtime_dir + '/valkey-autotune.json' %}
+{% if salt['file.file_exists'](mysql_runtime_file) %}
+  {% set mysql_runtime_all = salt['slsutil.deserialize']('json', salt['file.read'](mysql_runtime_file)) %}
+  {% set mysql_runtime = mysql_runtime_all.get('mysql', {}) %}
+  {% if mysql_runtime %}
+    {% set profile_config = salt['slsutil.merge'](profile_config, {'mysql': mysql_runtime}, strategy='recurse', merge_lists=False) %}
+    {% set mysql_config = profile_config.get('mysql', {}) %}
+  {% endif %}
+{% endif %}
+{% if salt['file.file_exists'](valkey_runtime_file) %}
+  {% set valkey_runtime_all = salt['slsutil.deserialize']('json', salt['file.read'](valkey_runtime_file)) %}
+  {% set valkey_runtime = valkey_runtime_all.get('valkey', {}) %}
+  {% if valkey_runtime %}
+    {% set profile_config = salt['slsutil.merge'](profile_config, {'valkey': valkey_runtime}, strategy='recurse', merge_lists=False) %}
+    {% set valkey_config = profile_config.get('valkey', {}) %}
+  {% endif %}
+{% endif %}
+
 {% if not nginx_ns.conf %}
 magento_nginx_config_missing:
   test.fail_without_changes:

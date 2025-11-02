@@ -8,15 +8,17 @@ Evaluates load/memory/disk/service health and pushes Telegram + Salt events when
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import socket
 import subprocess
 import sys
+import time
 from collections import defaultdict
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 try:
     from salt.client import Caller  # type: ignore
@@ -36,6 +38,28 @@ DEFAULT_THRESHOLDS = {
 }
 FPM_NOTICE_RATIO = 0.8
 FPM_WARNING_RATIO = 0.9
+MYSQL_NOTICE_RATIO = 0.8
+MYSQL_WARNING_RATIO = 0.9
+MYSQL_CRITICAL_RATIO = 0.95
+VALKEY_WARNING_RATIO = 0.85
+VALKEY_CRITICAL_RATIO = 0.93
+
+RUNTIME_DIR = Path("/etc/saltgoat/runtime")
+PHP_AUTOSCALE_FILE = RUNTIME_DIR / "php-fpm-pools.json"
+MYSQL_AUTOSCALE_FILE = RUNTIME_DIR / "mysql-autotune.json"
+VALKEY_AUTOSCALE_FILE = RUNTIME_DIR / "valkey-autotune.json"
+VALKEY_CONFIG = Path("/etc/valkey/valkey.conf")
+
+AUTOSCALE_MIN_INTERVAL = 300  # seconds
+PHP_AUTOSCALE_MAX = 240
+PHP_AUTOSCALE_STEP_RATIO = 0.25
+PHP_AUTOSCALE_MIN_STEP = 2
+MYSQL_AUTOSCALE_MAX = 800
+MYSQL_AUTOSCALE_STEP_RATIO = 0.2
+MYSQL_AUTOSCALE_MIN_STEP = 20
+VALKEY_AUTOSCALE_STEP_RATIO = 0.2
+VALKEY_AUTOSCALE_MIN_STEP_MB = 256
+VALKEY_AUTOSCALE_MAX_RATIO = 0.75
 
 
 def shell_exists(path: Path) -> bool:
@@ -132,6 +156,52 @@ def service_status(services: Iterable[str]) -> Dict[str, bool]:
         ) == 0
         result[svc] = ok
     return result
+
+
+def ensure_runtime_dir() -> None:
+    try:
+        RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        pass
+
+
+def load_runtime_json(path: Path) -> Dict[str, Any]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def save_runtime_json(path: Path, data: Dict[str, Any]) -> None:
+    ensure_runtime_dir()
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp_path.replace(path)
+
+
+def runtime_meta_scope(data: Dict[str, Any], scope: str) -> Dict[str, Any]:
+    meta: Dict[str, Any]
+    meta_obj = data.get("__meta__")
+    if isinstance(meta_obj, dict):
+        meta = meta_obj
+    else:
+        meta = {}
+        data["__meta__"] = meta
+    scope_meta = meta.get(scope)
+    if not isinstance(scope_meta, dict):
+        scope_meta = {}
+        meta[scope] = scope_meta
+    return scope_meta
+
+
+def recently_scaled(meta: Dict[str, Any], min_interval: int = AUTOSCALE_MIN_INTERVAL) -> bool:
+    last = meta.get("last_scaled_at")
+    if isinstance(last, (int, float)):
+        if time.time() - last < min_interval:
+            return True
+    return False
 
 
 def php_fpm_pool_configs(pool_dir: Path = PHP_FPM_POOL_DIR) -> Dict[str, Dict[str, Any]]:
@@ -241,6 +311,252 @@ def php_fpm_children_by_pool() -> Dict[str, int]:
     return dict(counts)
 
 
+def collect_mysql_metrics() -> Optional[Dict[str, Any]]:
+    def _run(query: str) -> Optional[int]:
+        try:
+            output = subprocess.check_output(
+                ["mysql", "-Nse", query],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return None
+        for line in output.splitlines():
+            parts = line.strip().split()
+            if len(parts) == 2:
+                try:
+                    return int(float(parts[1]))
+                except ValueError:
+                    continue
+        return None
+
+    max_connections = _run("SHOW VARIABLES LIKE 'max_connections';")
+    threads_connected = _run("SHOW GLOBAL STATUS LIKE 'Threads_connected';")
+    threads_running = _run("SHOW GLOBAL STATUS LIKE 'Threads_running';")
+    max_used = _run("SHOW GLOBAL STATUS LIKE 'Max_used_connections';")
+    uptime = _run("SHOW GLOBAL STATUS LIKE 'Uptime';")
+    if max_connections is None or threads_connected is None:
+        return None
+    return {
+        "max_connections": max_connections,
+        "threads_connected": threads_connected,
+        "threads_running": threads_running,
+        "max_used_connections": max_used,
+        "uptime": uptime,
+    }
+
+
+def collect_valkey_metrics() -> Optional[Dict[str, Any]]:
+    cli = shutil.which("valkey-cli") or shutil.which("redis-cli")
+    if not cli:
+        return None
+    password: Optional[str] = None
+    if shell_exists(VALKEY_CONFIG):
+        try:
+            for line in VALKEY_CONFIG.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if line.lower().startswith("requirepass"):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        password = parts[1]
+                    break
+        except (OSError, UnicodeDecodeError):
+            password = None
+    base_cmd = [cli, "INFO", "memory"]
+    auth_cmd = [cli, "-a", password, "INFO", "memory"] if password else None
+    try:
+        output = subprocess.check_output(
+            base_cmd,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        return None
+    except subprocess.CalledProcessError:
+        output = ""
+    if "NOAUTH" in output and password and auth_cmd:
+        try:
+            output = subprocess.check_output(
+                auth_cmd,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError:
+            return None
+    if not output:
+        return None
+    metrics: Dict[str, Any] = {}
+    for raw in output.splitlines():
+        if ":" not in raw:
+            continue
+        key, value = raw.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if key in {"used_memory", "used_memory_peak", "maxmemory"}:
+            try:
+                metrics[key] = int(value)
+            except ValueError:
+                continue
+        elif key in {"maxmemory_human"}:
+            metrics[key] = value
+        elif key == "mem_fragmentation_ratio":
+            try:
+                metrics[key] = float(value)
+            except ValueError:
+                continue
+    if "used_memory" not in metrics:
+        return None
+    metrics["cli"] = cli
+    if password:
+        metrics["password"] = password
+    return metrics
+
+
+def autoscale_php_pool(pool_name: str, config: Dict[str, Any], auto_ctx: Dict[str, Any]) -> None:
+    max_children = config.get("max_children")
+    if not isinstance(max_children, int) or max_children <= 0:
+        return
+    data = load_runtime_json(PHP_AUTOSCALE_FILE)
+    meta = runtime_meta_scope(data, pool_name)
+    if recently_scaled(meta):
+        return
+    new_max = max_children + max(int(math.ceil(max_children * PHP_AUTOSCALE_STEP_RATIO)), PHP_AUTOSCALE_MIN_STEP)
+    if new_max > PHP_AUTOSCALE_MAX:
+        new_max = PHP_AUTOSCALE_MAX
+    if new_max <= max_children:
+        return
+    new_start = max(4, min(new_max, max(config.get("start_servers", new_max // 2), new_max // 2)))
+    new_min_spare = max(3, min(new_max, max(config.get("min_spare_servers", new_max // 3), new_max // 3)))
+    new_max_spare = min(
+        new_max,
+        max(
+            new_min_spare + 2,
+            config.get("max_spare_servers", new_max // 2),
+            new_max // 2 + 2,
+        ),
+    )
+    data[pool_name] = {
+        "max_children": new_max,
+        "start_servers": new_start,
+        "min_spare_servers": new_min_spare,
+        "max_spare_servers": new_max_spare,
+    }
+    meta["last_scaled_at"] = time.time()
+    save_runtime_json(PHP_AUTOSCALE_FILE, data)
+    auto_ctx["actions"].append(
+        f"Autoscaled PHP-FPM pool {pool_name}: max_children {max_children} -> {new_max}."
+    )
+    auto_ctx["states"].add("core.php")
+
+
+def autoscale_mysql(metrics: Dict[str, Any], auto_ctx: Dict[str, Any]) -> None:
+    max_connections = metrics.get("max_connections")
+    threads_connected = metrics.get("threads_connected")
+    if not isinstance(max_connections, int) or not isinstance(threads_connected, int) or max_connections <= 0:
+        return
+    ratio = threads_connected / max_connections
+    if ratio < MYSQL_CRITICAL_RATIO:
+        return
+    data = load_runtime_json(MYSQL_AUTOSCALE_FILE)
+    meta = runtime_meta_scope(data, "mysql")
+    if recently_scaled(meta):
+        return
+    increment = max(int(math.ceil(max_connections * MYSQL_AUTOSCALE_STEP_RATIO)), MYSQL_AUTOSCALE_MIN_STEP)
+    new_max = max_connections + increment
+    if new_max > MYSQL_AUTOSCALE_MAX:
+        new_max = MYSQL_AUTOSCALE_MAX
+    if new_max <= max_connections:
+        return
+    data["mysql"] = {"max_connections": new_max}
+    meta["last_scaled_at"] = time.time()
+    save_runtime_json(MYSQL_AUTOSCALE_FILE, data)
+    auto_ctx["actions"].append(
+        f"Autoscaled MySQL max_connections {max_connections} -> {new_max}."
+    )
+    try:
+        subprocess.run(
+            ["mysql", "-e", f"SET GLOBAL max_connections = {new_max};"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+
+def autoscale_valkey(metrics: Dict[str, Any], auto_ctx: Dict[str, Any]) -> None:
+    maxmemory = metrics.get("maxmemory")
+    used_memory = metrics.get("used_memory")
+    cli = metrics.get("cli")
+    if not isinstance(maxmemory, int) or maxmemory <= 0:
+        return
+    if not isinstance(used_memory, int) or used_memory <= 0:
+        return
+    ratio = used_memory / maxmemory if maxmemory else 0
+    if ratio < VALKEY_CRITICAL_RATIO:
+        return
+    total_mem = read_meminfo().get("MemTotal", 0) * 1024
+    hard_cap = int(total_mem * VALKEY_AUTOSCALE_MAX_RATIO)
+    if hard_cap <= 0:
+        hard_cap = maxmemory
+    increment = max(
+        int(maxmemory * VALKEY_AUTOSCALE_STEP_RATIO),
+        VALKEY_AUTOSCALE_MIN_STEP_MB * 1024 * 1024,
+    )
+    new_max = maxmemory + increment
+    if new_max > hard_cap:
+        new_max = hard_cap
+    if new_max <= maxmemory:
+        return
+    data = load_runtime_json(VALKEY_AUTOSCALE_FILE)
+    meta = runtime_meta_scope(data, "valkey")
+    if recently_scaled(meta):
+        return
+    new_value_mb = max(new_max // (1024 * 1024), VALKEY_AUTOSCALE_MIN_STEP_MB)
+    data["valkey"] = {"maxmemory": f"{new_value_mb}mb"}
+    meta["last_scaled_at"] = time.time()
+    save_runtime_json(VALKEY_AUTOSCALE_FILE, data)
+    auto_ctx["actions"].append(
+        f"Autoscaled Valkey maxmemory {maxmemory // (1024 * 1024)}mb -> {new_value_mb}mb."
+    )
+    if isinstance(cli, str):
+        password = metrics.get("password")
+        try:
+            cmd = [cli]
+            if password:
+                cmd += ["-a", password]
+            cmd += ["CONFIG", "SET", "maxmemory", f"{new_value_mb}mb"]
+            subprocess.run(
+                cmd,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
+
+
+def apply_states(states: Iterable[str]) -> Dict[str, bool]:
+    results: Dict[str, bool] = {}
+    for state in states:
+        cmd = ["salt-call", "--local", "state.apply", state]
+        try:
+            proc = subprocess.run(
+                cmd,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            success = proc.returncode == 0
+        except FileNotFoundError:
+            success = False
+        results[state] = success
+    return results
+
 def hostname() -> str:
     return HOSTNAME or run_cmd(["hostname"]) or "localhost"
 
@@ -338,6 +654,7 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
     severity = "INFO"
     details: List[str] = []
     triggers: List[str] = []
+    auto_ctx: Dict[str, Any] = {"actions": [], "states": set()}
 
     def bump(level: str, reason: str) -> None:
         nonlocal severity
@@ -444,6 +761,7 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
                         f"PHP-FPM pool '{pool_name}' saturated: "
                         f"{current_children}/{max_children} workers in use."
                     )
+                    autoscale_php_pool(pool_name, config, auto_ctx)
                 elif usage >= FPM_WARNING_RATIO:
                     bump("WARNING", "PHP-FPM capacity")
                     details.append(
@@ -479,6 +797,49 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         fpm_info["children_total"] = sum(pool_children.values())
         fpm_info["pools"] = {pool: {"children": count} for pool, count in pool_children.items()}
 
+    mysql_info: Dict[str, Any] = {}
+    mysql_metrics = collect_mysql_metrics()
+    if mysql_metrics:
+        max_connections = mysql_metrics["max_connections"]
+        threads_connected = mysql_metrics["threads_connected"]
+        ratio = threads_connected / max_connections if max_connections else 0
+        mysql_info.update(mysql_metrics)
+        mysql_info["utilization"] = round(ratio, 4)
+        details.append(
+            f"MySQL connections: {threads_connected}/{max_connections} ({ratio*100:.1f}%)."
+        )
+        if ratio >= MYSQL_CRITICAL_RATIO:
+            bump("CRITICAL", "MySQL connections")
+            details.append("MySQL connections saturated; attempting autoscale.")
+            autoscale_mysql(mysql_metrics, auto_ctx)
+        elif ratio >= MYSQL_WARNING_RATIO:
+            bump("WARNING", "MySQL connections")
+        elif ratio >= MYSQL_NOTICE_RATIO:
+            bump("NOTICE", "MySQL connections")
+
+    valkey_info: Dict[str, Any] = {}
+    valkey_metrics = collect_valkey_metrics()
+    if valkey_metrics:
+        used_memory = valkey_metrics.get("used_memory", 0)
+        maxmemory = valkey_metrics.get("maxmemory", 0)
+        ratio = used_memory / maxmemory if maxmemory else 0
+        valkey_info.update({k: v for k, v in valkey_metrics.items() if k != "cli"})
+        valkey_info["utilization"] = round(ratio, 4) if maxmemory else 0
+        if maxmemory:
+            details.append(
+                "Valkey memory: {used}/{limit} ({ratio:.1f}%).".format(
+                    used=used_memory // (1024 * 1024),
+                    limit=maxmemory // (1024 * 1024),
+                    ratio=ratio * 100,
+                )
+            )
+            if ratio >= VALKEY_CRITICAL_RATIO:
+                bump("CRITICAL", "Valkey memory")
+                details.append("Valkey memory near limit; attempting autoscale.")
+                autoscale_valkey(valkey_metrics, auto_ctx)
+            elif ratio >= VALKEY_WARNING_RATIO:
+                bump("WARNING", "Valkey memory")
+
     payload = {
         "host": hostname(),
         "severity": severity,
@@ -487,14 +848,20 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         "disks": disks,
         "services": services,
         "php_fpm": fpm_info,
+        "mysql": mysql_info,
+        "valkey": valkey_info,
         "thresholds": {
             "load": thresholds,
             "memory": {"notice": mem_notice, "warning": mem_warn, "critical": mem_crit},
             "disk": {"notice": disk_notice, "warning": disk_warn, "critical": disk_crit},
             "php_fpm": {"notice_ratio": FPM_NOTICE_RATIO, "warning_ratio": FPM_WARNING_RATIO},
+            "mysql": {"notice_ratio": MYSQL_NOTICE_RATIO, "warning_ratio": MYSQL_WARNING_RATIO, "critical_ratio": MYSQL_CRITICAL_RATIO},
+            "valkey": {"warning_ratio": VALKEY_WARNING_RATIO, "critical_ratio": VALKEY_CRITICAL_RATIO},
         },
+        "autoscale": {"actions": list(auto_ctx["actions"])},
     }
-    return severity, details, payload, triggers
+    auto_ctx["states"] = list(auto_ctx["states"])
+    return severity, details, payload, triggers, auto_ctx
 
 
 def parse_args():
@@ -509,9 +876,27 @@ def parse_args():
 
 def main() -> None:
     args = parse_args()
-    severity, details, payload, triggers = evaluate()
+    severity, details, payload, triggers, auto_ctx = evaluate()
     if args.force_severity:
         severity = args.force_severity
+
+    auto_actions: List[str] = auto_ctx.get("actions", []) if isinstance(auto_ctx, dict) else []
+    auto_states = auto_ctx.get("states", []) if isinstance(auto_ctx, dict) else []
+    if auto_actions:
+        for action in auto_actions:
+            print(f"[AUTOSCALE] {action}")
+            details.append(f"AUTOSCALE: {action}")
+        state_results = apply_states(auto_states)
+        payload.setdefault("autoscale", {})["results"] = state_results
+        for state, ok in state_results.items():
+            if not ok:
+                details.append(f"AUTOSCALE: state.apply {state} failed")
+        autoscale_payload = payload.get("autoscale", {}).copy()
+        autoscale_payload["actions"] = auto_actions
+        autoscale_payload["results"] = state_results
+        log_to_file("AUTOSCALE", "saltgoat/autoscale", autoscale_payload)
+        message = "[SaltGoat] Autoscale executed\n" + "\n".join(f" - {action}" for action in auto_actions)
+        telegram_notify("saltgoat/autoscale", message, autoscale_payload)
 
     if severity in {"WARNING", "CRITICAL"}:
         lines = [
