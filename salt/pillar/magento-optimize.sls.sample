@@ -3,10 +3,30 @@
 
 magento_optimize:
   profile: auto
+  auto_detect_sites: true  # 置空 sites 时自动扫描 /var/www/*/app/etc/env.php
+  php_pool_defaults:
+    memory_limit: 2048M
+    max_requests: 1500
+    process_idle_timeout: 60s
+    reserve_mb: 4096
   sites:
     site1:
       env_path: /var/www/site1/app/etc/env.php
       site_root: /var/www/site1
+      php_pool:
+        pool_name: magento-site1
+        role: frontend  # 仅用于文档注释
+        weight: 1
+        # 可选覆盖:
+        # max_children: 12
+        # start_servers: 10
+        # min_spare_servers: 6
+        # max_spare_servers: 12
+        # memory_limit: 2048M
     site2:
       env_path: /var/www/site2/app/etc/env.php
       site_root: /var/www/site2
+      php_pool:
+        pool_name: magento-site2
+        role: frontend  # 仅用于文档注释
+        weight: 1

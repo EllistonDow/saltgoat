@@ -13,6 +13,7 @@ import shutil
 import socket
 import subprocess
 import sys
+from collections import defaultdict
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -28,6 +29,7 @@ LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
 TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 PHP_FPM_CONFIG = Path("/etc/php/8.3/fpm/pool.d/www.conf")
+PHP_FPM_POOL_DIR = PHP_FPM_CONFIG.parent
 DEFAULT_THRESHOLDS = {
     "memory": {"notice": 78.0, "warning": 85.0, "critical": 92.0},
     "disk": {"notice": 80.0, "warning": 90.0, "critical": 95.0},
@@ -132,27 +134,95 @@ def service_status(services: Iterable[str]) -> Dict[str, bool]:
     return result
 
 
-def php_fpm_max_children(conf_path: Path = PHP_FPM_CONFIG) -> Optional[int]:
-    if not shell_exists(conf_path):
-        return None
+def php_fpm_pool_configs(pool_dir: Path = PHP_FPM_POOL_DIR) -> Dict[str, Dict[str, Any]]:
+    configs: Dict[str, Dict[str, Any]] = {}
+    if not shell_exists(pool_dir):
+        return configs
+    for conf_path in sorted(pool_dir.glob("*.conf")):
+        try:
+            with conf_path.open("r", encoding="utf-8") as fh:
+                current_pool: Optional[str] = None
+                pool_data: Dict[str, Any] = {}
+                for raw_line in fh:
+                    line = raw_line.strip()
+                    if not line or line.startswith(("#", ";")):
+                        continue
+                    if line.startswith("[") and line.endswith("]"):
+                        if current_pool and pool_data:
+                            pool_data["path"] = str(conf_path)
+                            configs[current_pool] = pool_data
+                        current_pool = line[1:-1].strip() or conf_path.stem
+                        pool_data = {}
+                        continue
+                    if "=" not in line:
+                        continue
+                    key, value = [segment.strip() for segment in line.split("=", 1)]
+                    if key == "pm.max_children":
+                        try:
+                            pool_data["max_children"] = int(value)
+                        except ValueError:
+                            continue
+                    elif key == "pm":
+                        pool_data["pm"] = value
+                    elif key == "listen":
+                        pool_data["listen"] = value
+                    elif key.startswith("php_admin_value[") and key.endswith("]"):
+                        inner = key[len("php_admin_value[") : -1]
+                        admin = pool_data.setdefault("php_admin_value", {})
+                        admin[inner] = value
+                    elif key.startswith("php_value[") and key.endswith("]"):
+                        inner = key[len("php_value[") : -1]
+                        php_values = pool_data.setdefault("php_value", {})
+                        php_values[inner] = value
+                if current_pool:
+                    pool_data["path"] = str(conf_path)
+                    configs[current_pool] = pool_data
+        except (OSError, ValueError):
+            continue
+    if not configs and shell_exists(PHP_FPM_CONFIG):
+        # fallback 单池场景
+        max_children = php_fpm_pool_configs_from_file(PHP_FPM_CONFIG)
+        if max_children:
+            configs = max_children
+    return configs
+
+
+def php_fpm_pool_configs_from_file(path: Path) -> Dict[str, Dict[str, Any]]:
     try:
-        with open(conf_path, "r", encoding="utf-8") as fh:
-            for line in fh:
-                if "pm.max_children" not in line:
+        with path.open("r", encoding="utf-8") as fh:
+            data: Dict[str, Any] = {}
+            pool_name = path.stem
+            for raw_line in fh:
+                line = raw_line.strip()
+                if not line or line.startswith(("#", ";")):
                     continue
-                parts = line.strip().split("=", 1)
-                if len(parts) != 2:
+                if line.startswith("[") and line.endswith("]"):
+                    pool_name = line[1:-1].strip() or pool_name
                     continue
-                try:
-                    return int(parts[1].strip())
-                except ValueError:
-                    return None
-    except (FileNotFoundError, PermissionError):
-        return None
-    return None
+                if "=" not in line:
+                    continue
+                key, value = [segment.strip() for segment in line.split("=", 1)]
+                if key == "pm.max_children":
+                    try:
+                        data["max_children"] = int(value)
+                    except ValueError:
+                        continue
+                elif key == "pm":
+                    data["pm"] = value
+                elif key == "listen":
+                    data["listen"] = value
+                elif key.startswith("php_admin_value[") and key.endswith("]"):
+                    inner = key[len("php_admin_value[") : -1]
+                    admin = data.setdefault("php_admin_value", {})
+                    admin[inner] = value
+            data["path"] = str(path)
+            return {pool_name: data}
+    except (OSError, ValueError):
+        pass
+    return {}
 
 
-def php_fpm_children_count() -> Optional[int]:
+def php_fpm_children_by_pool() -> Dict[str, int]:
     try:
         output = subprocess.check_output(
             ["ps", "-o", "cmd=", "-C", "php-fpm8.3"],
@@ -160,12 +230,15 @@ def php_fpm_children_count() -> Optional[int]:
             stderr=subprocess.DEVNULL,
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
-    count = 0
+        return {}
+    counts: Dict[str, int] = defaultdict(int)
     for line in output.splitlines():
-        if "php-fpm: pool" in line and "master process" not in line:
-            count += 1
-    return count
+        if "php-fpm: pool" not in line or "master process" in line:
+            continue
+        pool = line.split("php-fpm: pool", 1)[-1].strip()
+        if pool:
+            counts[pool] += 1
+    return dict(counts)
 
 
 def hostname() -> str:
@@ -338,33 +411,73 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
     else:
         details.append("All critical services running.")
 
-    fpm_info: Dict[str, Any] = {}
-    max_children = php_fpm_max_children()
-    current_children = php_fpm_children_count()
-    if max_children is not None:
-        fpm_info["max_children"] = max_children
-    if current_children is not None:
-        fpm_info["children"] = current_children
-    if max_children and current_children is not None and max_children > 0:
-        usage = current_children / max_children
-        fpm_info["utilization"] = round(usage, 4)
-        if usage >= 1.0:
-            bump("CRITICAL", "PHP-FPM capacity")
-            details.append(f"PHP-FPM pool saturated: {current_children}/{max_children} workers in use.")
-        elif usage >= FPM_WARNING_RATIO:
+    fpm_info: Dict[str, Any] = {"pools": {}}
+    pool_configs = php_fpm_pool_configs()
+    pool_children = php_fpm_children_by_pool()
+    if pool_configs:
+        total_children = 0
+        for pool_name, config in sorted(pool_configs.items()):
+            entry: Dict[str, Any] = {}
+            max_children = config.get("max_children")
+            current_children = pool_children.get(pool_name, 0)
+            total_children += current_children
+            entry["children"] = current_children
+            if max_children is not None:
+                entry["max_children"] = max_children
+            listen = config.get("listen")
+            if listen:
+                entry["listen"] = listen
+            pm_mode = config.get("pm")
+            if pm_mode:
+                entry["pm"] = pm_mode
+            admin_values = config.get("php_admin_value")
+            if isinstance(admin_values, dict):
+                memory_limit = admin_values.get("memory_limit")
+                if memory_limit:
+                    entry["memory_limit"] = memory_limit
+            if max_children:
+                usage = current_children / max_children if max_children else 0
+                entry["utilization"] = round(usage, 4)
+                if usage >= 1.0:
+                    bump("CRITICAL", "PHP-FPM capacity")
+                    details.append(
+                        f"PHP-FPM pool '{pool_name}' saturated: "
+                        f"{current_children}/{max_children} workers in use."
+                    )
+                elif usage >= FPM_WARNING_RATIO:
+                    bump("WARNING", "PHP-FPM capacity")
+                    details.append(
+                        "PHP-FPM pool '{pool}' near capacity: "
+                        "{current}/{max} workers ({ratio:.1f}%).".format(
+                            pool=pool_name,
+                            current=current_children,
+                            max=max_children,
+                            ratio=usage * 100,
+                        )
+                    )
+                elif usage >= FPM_NOTICE_RATIO:
+                    bump("NOTICE", "PHP-FPM capacity")
+                    details.append(
+                        "PHP-FPM pool '{pool}' warming up: "
+                        "{current}/{max} workers ({ratio:.1f}%).".format(
+                            pool=pool_name,
+                            current=current_children,
+                            max=max_children,
+                            ratio=usage * 100,
+                        )
+                    )
+            fpm_info["pools"][pool_name] = entry
+        extra_pools = {pool: cnt for pool, cnt in pool_children.items() if pool not in fpm_info["pools"]}
+        for pool_name, count in extra_pools.items():
+            fpm_info["pools"][pool_name] = {"children": count}
+        fpm_info["children_total"] = total_children
+        if total_children == 0:
             bump("WARNING", "PHP-FPM capacity")
-            details.append(
-                "PHP-FPM pool near capacity: "
-                f"{current_children}/{max_children} workers ({usage*100:.1f}%)."
-            )
-        elif usage >= FPM_NOTICE_RATIO:
-            bump("NOTICE", "PHP-FPM capacity")
-            details.append(
-                "PHP-FPM pool warming up: "
-                f"{current_children}/{max_children} workers ({usage*100:.1f}%)."
-            )
-    elif max_children and current_children is None:
-        details.append(f"PHP-FPM worker count unavailable; configured max_children={max_children}.")
+            details.append("PHP-FPM pools discovered but no worker processes are running.")
+    elif pool_children:
+        # 没有解析到配置但存在进程
+        fpm_info["children_total"] = sum(pool_children.values())
+        fpm_info["pools"] = {pool: {"children": count} for pool, count in pool_children.items()}
 
     payload = {
         "host": hostname(),

@@ -4,8 +4,10 @@
 - **PWA Studio 分支固定**：脚本默认使用 `release/14.3.1`，与 Magento 2.4.8-p3 (MOS) 匹配，避免安装到不兼容的开发分支。
 - **高速权限修复**：`fast_fix_magento_permissions_local` 抽象后被 RabbitMQ、PWA 安装脚本共用，权限收敛耗时由分钟级降到秒级。
 - **GraphQL MOS 兼容补丁**：从构建流程中剔除 `is_confirmed`、`ProductAttributeMetadata`、`custom_attributes` 等 Commerce 专属字段，保持变体选择、迷你购物车正常工作。
+- **Checkout 支付 GraphQL 修正**：自动改写 `selected_payment_method`、`available_payment_methods` 片段，仅保留 MOS 可用字段，避免 “There was an error loading payments” 提示。
 - **PWA 环境默认值**：自动写入 `MAGENTO_BACKEND_EDITION=MOS`、`MAGENTO_EXPERIENCE_PLATFORM_ENABLED=false`、`MAGENTO_LIVE_SEARCH_ENABLED=false`，并同步 `.env` 至 `packages/venia-concept/.env`。
 - **系统服务自动化**：创建 `pwa-frontend-<site>.service` 并启停 `yarn buildpack serve`，集成到安装流程中。
+- **inotify 看门狗提升**：构建前自动将 `fs.inotify.max_user_watches` 提升至 524288，并写入 `/etc/sysctl.d/99-saltgoat-pwa.conf`，避免 Yarn watch 超出文件监控上限。
 - **覆盖脚本持久化**：`modules/pwa/overrides/` 中维护官方文件替换版，防止 `saltgoat pwa install` 还原 Commerce 逻辑。
 
 ## 🚧 进行中 / 待跟进

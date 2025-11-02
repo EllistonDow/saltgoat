@@ -1,5 +1,8 @@
 # PHP 8.3 安装和配置
 
+include:
+  - core.php-fpm-pools
+
 
 # 添加 PHP 仓库
 add_php_repository:

@@ -15,6 +15,11 @@
 {%- set access_log = site_cfg.get('access_log', settings_cfg.get('log_dir') + '/' + site_name + '.access.log') %}
 {%- set error_log = site_cfg.get('error_log', settings_cfg.get('log_dir') + '/' + site_name + '.error.log') %}
 {%- set php_cfg = site_cfg.get('php', {'enabled': True}) %}
+{%- set default_fastcgi = 'unix:/run/php/php8.3-fpm.sock' %}
+{%- if php_cfg.get('pool') %}
+  {%- set default_fastcgi = 'unix:/run/php/php8.3-fpm-' + php_cfg.get('pool') + '.sock' %}
+{%- endif %}
+{%- set fastcgi_pass_value = php_cfg.get('fastcgi_pass', default_fastcgi) %}
 {%- set fallback = site_cfg.get('fallback', '/index.php$is_args$args') %}
 {%- set fastcgi_snippet = php_cfg.get('snippet', '/etc/nginx/snippets/fastcgi-php.conf') %}
 {%- set has_fastcgi_snippet = salt['file.file_exists'](fastcgi_snippet) %}
@@ -110,7 +115,7 @@ server {
         {%- else %}
         include fastcgi_params;
         {%- endif %}
-        fastcgi_pass {{ php_cfg.get('fastcgi_pass', 'unix:/run/php/php8.3-fpm.sock') }};
+        fastcgi_pass {{ fastcgi_pass_value }};
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         {%- if has_fastcgi_snippet %}
         include fastcgi_params;

@@ -769,6 +769,212 @@ cleanup_package_lock() {
     fi
 }
 
+ensure_package_json_field() {
+    local package_json="$1"
+    local field="$2"
+    local package_name="$3"
+    local package_value="$4"
+
+    if [[ -z "$package_json" || -z "$field" || -z "$package_name" || -z "$package_value" ]]; then
+        return
+    fi
+    if [[ ! -f "$package_json" ]]; then
+        log_warning "未找到 package.json (${package_json})，跳过 ${package_name} 写入。"
+        return
+    fi
+
+    local changed
+    changed=$(sudo -u www-data -H python3 - "$package_json" "$field" "$package_name" "$package_value" <<'PY'
+import json
+import pathlib
+import sys
+
+pkg_path = pathlib.Path(sys.argv[1])
+field = sys.argv[2]
+name = sys.argv[3]
+value = sys.argv[4]
+data = json.loads(pkg_path.read_text(encoding="utf-8"))
+section = data.setdefault(field, {})
+if section.get(name) == value:
+    print("unchanged")
+else:
+    section[name] = value
+    pkg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    print("updated")
+PY
+)
+
+    if [[ "$changed" == "updated" ]]; then
+        sudo chown www-data:www-data "$package_json"
+        log_info "已在 ${package_json##*/} 中设置 ${field}.${package_name}=${package_value}"
+    fi
+}
+
+ensure_package_json_dev_dependency() {
+    ensure_package_json_field "$1" "devDependencies" "$2" "$3"
+}
+
+remove_package_json_field() {
+    local package_json="$1"
+    local field="$2"
+    local package_name="$3"
+
+    if [[ -z "$package_json" || -z "$field" || -z "$package_name" ]]; then
+        return
+    fi
+    if [[ ! -f "$package_json" ]]; then
+        return
+    fi
+
+    local changed
+    changed=$(sudo -u www-data -H python3 - "$package_json" "$field" "$package_name" <<'PY'
+import json
+import pathlib
+import sys
+
+pkg_path = pathlib.Path(sys.argv[1])
+field = sys.argv[2]
+name = sys.argv[3]
+data = json.loads(pkg_path.read_text(encoding="utf-8"))
+section = data.get(field)
+if not isinstance(section, dict) or name not in section:
+    print("absent")
+else:
+    section.pop(name, None)
+    if not section:
+        data.pop(field, None)
+    pkg_path.write_text(json.dumps(data, indent=2) + "\n", encoding='utf-8')
+    print("removed")
+PY
+)
+
+    if [[ "$changed" == "removed" ]]; then
+        sudo chown www-data:www-data "$package_json"
+        log_info "已从 ${package_json##*/} 移除 ${field}.${package_name}"
+    fi
+}
+
+remove_package_json_dependency() {
+    remove_package_json_field "$1" "dependencies" "$2"
+}
+
+prune_unused_pwa_extensions() {
+    if ! is_true "${PWA_WITH_FRONTEND:-false}"; then
+        return
+    fi
+    local extensions_dir="${PWA_STUDIO_DIR%/}/packages/extensions"
+    if [[ ! -d "$extensions_dir" ]]; then
+        return
+    fi
+
+    local live_search_enabled
+    live_search_enabled="$(read_pwa_env_value "MAGENTO_LIVE_SEARCH_ENABLED" 2>/dev/null || echo "false")"
+    local xp_enabled
+    xp_enabled="$(read_pwa_env_value "MAGENTO_EXPERIENCE_PLATFORM_ENABLED" 2>/dev/null || echo "false")"
+
+    local unused_packages=(
+        "experience-platform-connector"
+        "venia-pwa-live-search"
+        "venia-sample-backends"
+        "venia-sample-eventing"
+        "venia-sample-language-packs"
+        "venia-sample-payments-cashondelivery"
+        "venia-sample-payments-checkmo"
+        "venia-product-recommendations"
+    )
+
+    local concept_package="${PWA_STUDIO_DIR%/}/packages/venia-concept/package.json"
+    if [[ -n "$concept_package" ]]; then
+        if ! is_true "$xp_enabled"; then
+            remove_package_json_dependency "$concept_package" "@magento/experience-platform-connector"
+        fi
+        remove_package_json_dependency "$concept_package" "@magento/venia-product-recommendations"
+    fi
+
+    local package
+    for package in "${unused_packages[@]}"; do
+        case "$package" in
+            "experience-platform-connector")
+                if is_true "$xp_enabled"; then
+                    continue
+                fi
+                ;;
+            "venia-pwa-live-search")
+                if is_true "$live_search_enabled"; then
+                    continue
+                fi
+                ;;
+        esac
+
+        local path="${extensions_dir}/${package}"
+        if [[ -d "$path" ]]; then
+            log_info "移除未使用的 PWA 扩展 (${package})"
+            sudo rm -rf "$path"
+        fi
+    done
+}
+
+ensure_pwa_root_peer_dependencies() {
+    if ! is_true "${PWA_WITH_FRONTEND:-false}"; then
+        return
+    fi
+    local package_json="${PWA_STUDIO_DIR%/}/package.json"
+    local deps=(
+        "@apollo/client|~3.5.0"
+        "@babel/core|~7.15.0"
+        "@babel/plugin-proposal-class-properties|~7.14.5"
+        "@babel/plugin-proposal-object-rest-spread|~7.14.7"
+        "@babel/plugin-proposal-optional-chaining|~7.16.0"
+        "@babel/plugin-proposal-private-property-in-object|~7.16.7"
+        "@babel/plugin-syntax-dynamic-import|~7.8.3"
+        "@babel/plugin-syntax-jsx|~7.2.0"
+        "@babel/plugin-transform-react-jsx|~7.14.9"
+        "@babel/preset-env|~7.16.0"
+        "@babel/runtime|~7.15.3"
+        "@graphql-inspector/config|2.1.0"
+        "@graphql-inspector/loaders|2.1.0"
+        "@graphql-tools/utils|6.0.0"
+        "@octokit/core|^3.6.0"
+        "apollo-cache-persist|~0.1.1"
+        "babel-loader|~8.0.5"
+        "babel-plugin-react-remove-properties|~0.3.0"
+        "compression|~1.7.4"
+        "css-loader|~5.2.7"
+        "express|^4.18.2"
+        "informed|~3.29.0"
+        "jarallax|~1.11.1"
+        "load-google-maps-api|~2.0.1"
+        "lodash.escape|~4.0.1"
+        "node-fetch|~2.3.0"
+        "postcss|~8.3.6"
+        "postcss-loader|~4.3.0"
+        "react|~17.0.2"
+        "braintree-web-drop-in|~1.43.0"
+        "react-dom|~17.0.2"
+        "react-intl|~5.20.0"
+        "react-redux|~7.2.2"
+        "react-refresh|0.8.3"
+        "react-router-dom|~5.2.0"
+        "react-slick|~0.28.0"
+        "react-tabs|~3.1.0"
+        "redux|~4.0.5"
+        "redux-actions|~2.6.5"
+        "redux-thunk|~2.3.0"
+        "terser-webpack-plugin|~1.2.3"
+        "typescript|~4.3.5"
+        "webpack|~4.46.0"
+        "workbox-webpack-plugin|~6.2.4"
+        "yargs|15.3.1"
+    )
+
+    local item name version
+    for item in "${deps[@]}"; do
+        name="${item%%|*}"
+        version="${item#*|}"
+        ensure_package_json_dev_dependency "$package_json" "$name" "$version"
+    done
+}
+
 check_single_react_version() {
     local result
     result=$(python3 - "${PWA_STUDIO_DIR%/}" <<'PY'
@@ -1074,6 +1280,80 @@ if updated != text:
 PY
     fi
 
+    sanitize_checkout_graphql() {
+        local target_file="$1"
+        if [[ ! -f "$target_file" ]]; then
+            return
+        fi
+
+        local patch_result=""
+        patch_result=$(sudo -u www-data -H python3 - "$target_file" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding='utf-8')
+lines = text.splitlines()
+result = []
+i = 0
+modified = False
+fields_to_sanitize = {
+    'selected_payment_method': ['__typename', 'code', 'title'],
+    'available_payment_methods': ['__typename', 'code', 'title']
+}
+
+while i < len(lines):
+    line = lines[i]
+    stripped = line.strip()
+    matched_field = None
+    for field in fields_to_sanitize:
+        if (
+            field in stripped
+            and f'{field}s' not in stripped  # avoid plural forms
+            and '{' in line
+            and stripped.startswith(field)
+        ):
+            matched_field = field
+            break
+
+    if matched_field:
+        block_lines = [line]
+        depth = line.count('{') - line.count('}')
+        i += 1
+        while i < len(lines) and depth > 0:
+            block_lines.append(lines[i])
+            depth += lines[i].count('{') - lines[i].count('}')
+            i += 1
+        if any('... on ' in blk for blk in block_lines[1:]):
+            indent = line[: len(line) - len(line.lstrip())]
+            result.append(f"{indent}{matched_field} {{")
+            for field_line in fields_to_sanitize[matched_field]:
+                result.append(f"{indent}    {field_line}")
+            result.append(f"{indent}}}")
+            modified = True
+        else:
+            result.extend(block_lines)
+        continue
+    result.append(line)
+    i += 1
+
+if modified:
+    new_text = '\n'.join(result).rstrip() + '\n'
+    path.write_text(new_text, encoding='utf-8')
+    print("changed")
+else:
+    print("unchanged")
+PY
+        )
+
+        if [[ "$patch_result" == "changed" ]]; then
+            log_info "裁剪 checkout GraphQL 片段 (${target_file##*/})，移除 Commerce 专属支付字段"
+        fi
+    }
+
+    sanitize_checkout_graphql "${PWA_STUDIO_DIR%/}/packages/venia-ui/lib/components/CheckoutPage/PaymentInformation/paymentInformation.gql.js"
+    sanitize_checkout_graphql "${PWA_STUDIO_DIR%/}/packages/venia-ui/lib/components/CheckoutPage/checkoutPage.gql.js"
+
     local cart_fragment="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/Header/cartTriggerFragments.gql.js"
     if [[ -f "$cart_fragment" && -n "$(grep -F 'total_summary_quantity_including_config' "$cart_fragment" || true)" ]]; then
         log_info "移除 MOS 不支持的购物车统计字段"
@@ -1137,6 +1417,30 @@ guard = "module.exports = targets => {\n    if (process.env.MAGENTO_LIVE_SEARCH_
 if text.startswith("module.exports = targets => {\n") and guard not in text:
     text = text.replace("module.exports = targets => {\n", guard, 1)
     path.write_text(text, encoding='utf-8')
+PY
+    fi
+
+    local webpack_config="${PWA_STUDIO_DIR%/}/packages/venia-concept/webpack.config.js"
+    if [[ -f "$webpack_config" && -z "$(grep -F 'config.performance.hints = false' "$webpack_config" || true)" ]]; then
+        log_info "调整 webpack 配置，禁用性能提示告警"
+        sudo -u www-data -H python3 - "$webpack_config" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding='utf-8')
+marker = "    return [config];"
+snippet = (
+    "    config.performance = config.performance || {};\n"
+    "    config.performance.hints = false;\n"
+    "    config.performance.maxEntrypointSize = 1200 * 1024;\n"
+    "    config.performance.maxAssetSize = 800 * 1024;\n"
+)
+
+if "config.performance.hints = false" not in text and marker in text:
+    updated = text.replace(marker, snippet + "\n" + marker)
+    if updated != text:
+        path.write_text(updated, encoding='utf-8')
 PY
     fi
 }
@@ -1328,11 +1632,38 @@ prepare_yarn_environment() {
     chown -R www-data:www-data "$workdir"
 }
 
+ensure_inotify_limits() {
+    local min_watches="${PWA_INOTIFY_MIN_WATCHES:-524288}"
+    local current
+    current=$(sysctl -n fs.inotify.max_user_watches 2>/dev/null || echo "")
+    if [[ -z "$current" ]]; then
+        return
+    fi
+    if (( current >= min_watches )); then
+        return
+    fi
+
+    if sysctl -w "fs.inotify.max_user_watches=${min_watches}" >/dev/null 2>&1; then
+        log_info "提升 fs.inotify.max_user_watches=${min_watches}"
+        local sysctl_dir="/etc/sysctl.d"
+        local sysctl_conf="${sysctl_dir}/99-saltgoat-pwa.conf"
+        if [[ -d "$sysctl_dir" && -w "$sysctl_dir" ]]; then
+            if [[ ! -f "$sysctl_conf" || -z "$(grep -F 'fs.inotify.max_user_watches' "$sysctl_conf" 2>/dev/null)" ]]; then
+                printf "fs.inotify.max_user_watches = %s\n" "$min_watches" >>"$sysctl_conf"
+                log_info "已写入 ${sysctl_conf}，重启后自动恢复该限制。"
+            fi
+        fi
+    else
+        log_warning "无法提升 fs.inotify.max_user_watches=${min_watches}，如需 yarn watch 请手动调整。"
+    fi
+}
+
 run_yarn_task() {
     local command="$1"
     if [[ -z "$command" ]]; then
         return
     fi
+    ensure_inotify_limits
     prepare_yarn_environment "$PWA_STUDIO_DIR"
     local yarn_cache_dir="${PWA_STUDIO_DIR}/.cache/yarn"
     local yarn_global_dir="${PWA_STUDIO_DIR}/.yarn-global"
@@ -1365,6 +1696,7 @@ build_pwa_frontend() {
     prepare_pwa_repo
     apply_mos_graphql_fixes
     prepare_pwa_env
+    prune_unused_pwa_extensions
     cleanup_package_lock
     ensure_pwa_home_cms_page
     if ! ensure_pwa_env_vars; then
@@ -1374,6 +1706,7 @@ build_pwa_frontend() {
     if ! ensure_magento_graphql_ready; then
         return
     fi
+    ensure_pwa_root_peer_dependencies
     run_yarn_task "${PWA_STUDIO_INSTALL_COMMAND:-yarn install}"
     check_single_react_version
     run_yarn_task "${PWA_STUDIO_BUILD_COMMAND:-yarn build}"
@@ -1786,9 +2119,12 @@ sync_site_content() {
     if [[ -d "$PWA_STUDIO_DIR" ]]; then
         apply_mos_graphql_fixes
         prepare_pwa_env
+        prune_unused_pwa_extensions
         ensure_pwa_home_cms_page
         log_pwa_home_identifier_hint
         if is_true "$do_rebuild"; then
+            cleanup_package_lock
+            ensure_pwa_root_peer_dependencies
             if ensure_pwa_env_vars; then
                 run_yarn_task "${PWA_STUDIO_INSTALL_COMMAND:-yarn install}"
                 run_yarn_task "${PWA_STUDIO_BUILD_COMMAND:-yarn build}"

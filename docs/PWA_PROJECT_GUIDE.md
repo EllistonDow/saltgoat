@@ -101,6 +101,7 @@
 
 ## 5. 覆盖与模板管理
 - 对官方源码的替换仅保留必要的 intercept、GraphQL 片段（位于 `modules/pwa/overrides/`）。组件级别的扩展统一放在 `@saltgoat/venia-extension` workspace。
+- 安装流程会自动裁剪 checkout `selected_payment_method` / `available_payment_methods` GraphQL 片段，只保留 MOS 可用字段，防止支付方式接口报错。
 - 新增覆盖时：
   1. 优先考虑在 workspace 内编写组件/Hook，通过 intercept 注入；
   2. 若必须直接 patch 官方源码，放在 `modules/pwa/overrides`，并在 `apply_mos_graphql_fixes` 中写明操作逻辑；
@@ -111,6 +112,7 @@
 1. **首装**：`sudo saltgoat pwa install <site> --with-pwa`  
    - 完成后执行 `saltgoat pwa status` 验证服务，按需在 Magento 后台发布 PWA 专属页面。
 2. **日常同步**：内容或覆盖有更新时运行 `saltgoat pwa sync-content <site> --pull --rebuild`。
+   - 同步脚本会在构建前自动提升 `fs.inotify.max_user_watches` 至 524288，并在 `/etc/sysctl.d/99-saltgoat-pwa.conf` 记录，防止 Yarn watch 触发 “Too many open files”。
 3. **升级验收**：每次升级 PWA Studio 版本或脚本逻辑，需在预生产环境完整跑一遍安装 → 同步 → 构建流程，并记录在发布说明中。
 4. **回滚/卸载**：使用 `saltgoat pwa remove <site> --purge` 清理前端，必要时根据备份恢复 Page Builder 内容。
 5. **React/依赖检查**：每次 `sync-content --rebuild` 后，可执行 `yarn list --pattern react` 与浏览器 `window.__PWA_REACT_VERSION__`，确认没有多余的 React 副本。

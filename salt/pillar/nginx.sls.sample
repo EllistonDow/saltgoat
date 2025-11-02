@@ -21,7 +21,8 @@ nginx:
         - index.html
       php:
         enabled: true
-        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+        pool: magento-site1
+        # fastcgi_pass: unix:/run/php/php8.3-fpm-magento-site1.sock
       headers:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff

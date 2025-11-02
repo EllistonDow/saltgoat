@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.2.9] - 2025-11-02
+
+### Changes
+- 修改 14 个文件: docs/MAGENTO_PWA.md, docs/PWA_PROJECT_GUIDE.md, docs/pwa-todo.md, modules/monitoring/__pycache__/resource_alert.cpython-312.pyc, modules/monitoring/resource_alert.py 等
+
+
 ## [1.2.8] - 2025-11-01
 
 ### Changes

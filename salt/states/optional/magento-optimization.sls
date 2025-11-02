@@ -5,6 +5,8 @@
 {% set env_path = optimize_pillar.get('env_path', '') %}
 {% set site_root = optimize_pillar.get('site_root', '') %}
 {% set overrides = optimize_pillar.get('overrides', {}) or {} %}
+{% set dedicated_sites = optimize_pillar.get('sites', {}) or {} %}
+{% set has_dedicated_pools = dedicated_sites | length > 0 %}
 {% set mem_total_mb = salt['grains.get']('mem_total', 0) %}
 {% set mem_total_gb = (mem_total_mb / 1024) | int %}
 
@@ -283,6 +285,7 @@ php_fpm_conf_error_log_comment:
     - backup: True
     - ignore_if_missing: True
 
+{% if not has_dedicated_pools %}
 php_fpm_pool_memory_limit_cleanup:
   file.replace:
     - name: {{ php_pool_conf }}
@@ -304,6 +307,7 @@ php_fpm_pool_settings:
           pm.max_spare_servers: "{{ php_pool_config.get('max_spare', 20) }}"
     - require:
       - file: php_fpm_pool_memory_limit_cleanup
+{% endif %}
 
 php_ini_settings:
   ini.options_present:

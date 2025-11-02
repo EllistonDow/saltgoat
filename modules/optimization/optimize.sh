@@ -199,41 +199,100 @@ analyze_php() {
     echo "PHP-FPM 配置分析:"
     echo "----------------------------------------"
     
-    # 检查 PHP-FPM 配置
-    local php_config="/etc/php/8.3/fpm/pool.d/www.conf"
-    if [[ -f "$php_config" ]]; then
-        local current_pm
-        current_pm=$(salt-call --local cmd.run "grep 'pm =' $php_config" 2>/dev/null | awk '{print $3}')
-        local current_max_children
-        current_max_children=$(salt-call --local cmd.run "grep 'pm.max_children' $php_config" 2>/dev/null | awk '{print $3}')
-        
-        echo "  当前 pm 模式: $current_pm"
-        echo "  当前 pm.max_children: $current_max_children"
-        
-        # 优化建议
-        local optimal_pm="dynamic"
-        local optimal_max_children=$((cpu_cores * 2))
-        
-        if [[ $total_memory -lt 2048 ]]; then
-            optimal_pm="ondemand"
-        elif [[ $total_memory -gt 8192 ]]; then
-            optimal_pm="static"
-            optimal_max_children=$((cpu_cores * 4))
-        fi
-        
-        if [[ "$current_pm" != "$optimal_pm" ]]; then
-            echo "  建议: pm 模式设置为 $optimal_pm (当前: $current_pm)"
-        fi
-        
-        if [[ $current_max_children -lt $optimal_max_children ]]; then
-            echo "  建议: pm.max_children 设置为 $optimal_max_children (当前: $current_max_children)"
-        fi
-        
-        # 检查其他优化项
-        check_php_optimizations "$php_config"
-    else
-        echo "  WARN: PHP-FPM 配置文件未找到"
+    local pool_dir="/etc/php/8.3/fpm/pool.d"
+    if [[ ! -d "$pool_dir" ]]; then
+        echo "  WARN: PHP-FPM 池目录不存在 ($pool_dir)"
+        return
     fi
+
+    mapfile -t pool_files < <(find "$pool_dir" -maxdepth 1 -type f -name '*.conf' -print 2>/dev/null | sort)
+    if [[ ${#pool_files[@]} -eq 0 ]]; then
+        echo "  WARN: 未检测到任何 PHP-FPM 池配置"
+        return
+    fi
+
+    local reserve_mb=4096
+    if [[ $total_memory -lt $reserve_mb ]]; then
+        reserve_mb=$((total_memory / 2))
+    fi
+    local available_mb=$((total_memory - reserve_mb))
+    if [[ $available_mb -le 0 ]]; then
+        available_mb=$total_memory
+    fi
+    local pool_count=${#pool_files[@]}
+    if [[ $pool_count -eq 0 ]]; then
+        pool_count=1
+    fi
+    local per_pool_budget=$((available_mb / pool_count))
+    if [[ $per_pool_budget -le 0 ]]; then
+        per_pool_budget=$available_mb
+    fi
+
+    echo "  检测到 ${pool_count} 个 PHP-FPM 池 (可分配内存约 ${available_mb}MB)"
+
+    local recommended_pm="dynamic"
+    if [[ $total_memory -lt 2048 ]]; then
+        recommended_pm="ondemand"
+    fi
+
+    local conf
+    for conf in "${pool_files[@]}"; do
+        [[ -f "$conf" ]] || continue
+        local pool_name
+        pool_name=$(grep -E '^\s*\[.+\]' "$conf" | head -1 | tr -d '[][:space:]')
+        if [[ -z "$pool_name" ]]; then
+            pool_name=$(basename "$conf" .conf)
+        fi
+        local current_pm
+        current_pm=$(grep -E '^\s*pm\s*=' "$conf" | tail -1 | awk -F'= *' '{print $2}')
+        local current_max_children
+        current_max_children=$(grep -E '^\s*pm\.max_children' "$conf" | tail -1 | awk -F'= *' '{print $2}')
+        local memory_limit
+        memory_limit=$(grep -E '^\s*php_admin_value\[memory_limit\]' "$conf" | tail -1 | awk -F'= *' '{print $2}')
+
+        local estimated_child_mb=2048
+        if [[ -n "$memory_limit" && "$memory_limit" =~ ^([0-9]+)([mMgG])$ ]]; then
+            local mem_value=${BASH_REMATCH[1]}
+            local mem_unit=${BASH_REMATCH[2]}
+            if [[ "$mem_unit" == "g" || "$mem_unit" == "G" ]]; then
+                estimated_child_mb=$((mem_value * 1024))
+            else
+                estimated_child_mb=$mem_value
+            fi
+        fi
+
+        local cpu_cap=$(( (cpu_cores * 2) / pool_count ))
+        if [[ $cpu_cap -lt 1 ]]; then
+            cpu_cap=1
+        fi
+        local recommended_children=$((per_pool_budget / estimated_child_mb))
+        if [[ $recommended_children -lt 1 ]]; then
+            recommended_children=1
+        fi
+        if [[ $recommended_children -gt $cpu_cap ]]; then
+            recommended_children=$cpu_cap
+        fi
+
+        echo "  池 ${pool_name}:"
+        echo "    配置文件: $conf"
+        echo "    pm: ${current_pm:-unknown}"
+        echo "    pm.max_children: ${current_max_children:-unknown}"
+        echo "    memory_limit: ${memory_limit:-未设置} (估算单进程约 ${estimated_child_mb}MB)"
+
+        if [[ -n "$current_pm" && "$current_pm" != "$recommended_pm" ]]; then
+            echo "    建议: 将 pm 模式调整为 ${recommended_pm}（当前: $current_pm）"
+        fi
+
+        if [[ -n "$current_max_children" ]]; then
+            if [[ "$current_max_children" =~ ^[0-9]+$ && $current_max_children -lt $recommended_children ]]; then
+                echo "    建议: 将 pm.max_children 至少提升至 ${recommended_children}（当前: $current_max_children）"
+            fi
+        else
+            echo "    建议: 为该池显式设置 pm.max_children，推荐值 ≥ ${recommended_children}"
+        fi
+
+        check_php_optimizations "$conf"
+    done
 }
 
 # 检查 PHP 其他优化项
