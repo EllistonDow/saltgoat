@@ -69,7 +69,12 @@
   {% if pool_cfg is mapping %}
     {% set pool_name = pool_cfg.get('name') or pool_cfg.get('pool_name') or ('magento-' ~ site_id) %}
     {% set runtime_override = runtime_data.get(pool_name, {}) %}
-    {% set runtime_meta = runtime_override.get('__meta__', {}) %}
+    {% set runtime_meta_all = runtime_data.get('__meta__', {}) %}
+    {% if runtime_meta_all is mapping %}
+      {% set runtime_meta = runtime_meta_all.get(pool_name, {}) %}
+    {% else %}
+      {% set runtime_meta = {} %}
+    {% endif %}
     {% set runtime_cfg = runtime_override %}
     {% set pm_mode = pool_cfg.get('pm', pool_defaults.get('pm', 'dynamic')) %}
     {% set weight = pool_cfg.get('weight', 1) or 1 %}

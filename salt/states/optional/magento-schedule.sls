@@ -3,13 +3,15 @@
 
 {% set site_name = pillar.get('site_name', 'tank') %}
 {% set site_token = site_name | replace(' ', '_') | replace('-', '_') | lower %}
-{% set maintenance_cmd = pillar.get('magento_schedule', {}).get('maintenance_command', 'saltgoat magetools maintenance') %}
-{% set maintenance_extra_args = pillar.get('magento_schedule', {}).get('maintenance_extra_args', '') %}
-{% set daily_args = pillar.get('magento_schedule', {}).get('daily_args', '') %}
-{% set weekly_args = pillar.get('magento_schedule', {}).get('weekly_args', '') %}
-{% set monthly_args = pillar.get('magento_schedule', {}).get('monthly_args', '') %}
-{% set health_args = pillar.get('magento_schedule', {}).get('health_args', '') %}
-{% set all_dump_jobs = pillar.get('magento_schedule', {}).get('mysql_dump_jobs', []) %}
+{% set magento_schedule_cfg = pillar.get('magento_schedule', {}) %}
+{% set auto_schedule = pillar.get('auto_schedule', {}) %}
+{% set maintenance_cmd = magento_schedule_cfg.get('maintenance_command', 'saltgoat magetools maintenance') %}
+{% set maintenance_extra_args = magento_schedule_cfg.get('maintenance_extra_args', '') %}
+{% set daily_args = magento_schedule_cfg.get('daily_args', '') %}
+{% set weekly_args = magento_schedule_cfg.get('weekly_args', '') %}
+{% set monthly_args = magento_schedule_cfg.get('monthly_args', '') %}
+{% set health_args = magento_schedule_cfg.get('health_args', '') %}
+{% set all_dump_jobs = auto_schedule.get('mysql_dump_jobs', magento_schedule_cfg.get('mysql_dump_jobs', [])) %}
 {% set dump_jobs = namespace(items=[]) %}
 {% for dump_job in all_dump_jobs %}
   {% if not dump_job.get('name') %}
@@ -27,7 +29,7 @@
 {% endfor %}
 {% set mysql_dump_jobs = dump_jobs.items %}
 
-{% set all_api_watchers = pillar.get('magento_schedule', {}).get('api_watchers', []) %}
+{% set all_api_watchers = auto_schedule.get('api_watchers', magento_schedule_cfg.get('api_watchers', [])) %}
 {% set api_watchers_ns = namespace(items=[]) %}
 {% for watcher in all_api_watchers %}
   {% if not watcher.get('name') %}
@@ -44,7 +46,7 @@
   {% do api_watchers_ns.items.append(watcher) %}
 {% endfor %}
 {% set api_watchers = api_watchers_ns.items %}
-{% set all_stats_jobs = pillar.get('magento_schedule', {}).get('stats_jobs', []) %}
+{% set all_stats_jobs = auto_schedule.get('stats_jobs', magento_schedule_cfg.get('stats_jobs', [])) %}
 {% set stats_jobs_ns = namespace(items=[]) %}
 {% for stats_job in all_stats_jobs %}
   {% if not stats_job.get('name') %}

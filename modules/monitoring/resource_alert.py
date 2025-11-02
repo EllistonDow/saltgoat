@@ -477,6 +477,9 @@ def autoscale_mysql(metrics: Dict[str, Any], auto_ctx: Dict[str, Any]) -> None:
     auto_ctx["actions"].append(
         f"Autoscaled MySQL max_connections {max_connections} -> {new_max}."
     )
+    states = auto_ctx.get("states")
+    if isinstance(states, set):
+        states.add("optional.magento-optimization")
     try:
         subprocess.run(
             ["mysql", "-e", f"SET GLOBAL max_connections = {new_max};"],
@@ -523,6 +526,9 @@ def autoscale_valkey(metrics: Dict[str, Any], auto_ctx: Dict[str, Any]) -> None:
     auto_ctx["actions"].append(
         f"Autoscaled Valkey maxmemory {maxmemory // (1024 * 1024)}mb -> {new_value_mb}mb."
     )
+    states = auto_ctx.get("states")
+    if isinstance(states, set):
+        states.add("optional.magento-optimization")
     if isinstance(cli, str):
         password = metrics.get("password")
         try:
@@ -581,24 +587,41 @@ def load_thresholds(cpu_count: int) -> Dict[str, float]:
     return base
 
 
-def log_to_file(label: str, tag: str, payload: Dict[str, Any]) -> None:
-    if not shell_exists(LOGGER_SCRIPT):
-        return
+def _append_alert_log(label: str, tag: str, payload: Dict[str, Any]) -> None:
     try:
-        subprocess.run(
-            [
-                sys.executable,
-                str(LOGGER_SCRIPT),
-                label,
-                str(ALERT_LOG),
-                tag,
-                json.dumps(payload, ensure_ascii=False),
-            ],
-            check=False,
-            timeout=5,
-        )
+        ALERT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "label": label,
+            "tag": tag,
+            "host": hostname(),
+            "payload": payload,
+        }
+        with ALERT_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     except Exception:
         pass
+
+
+def log_to_file(label: str, tag: str, payload: Dict[str, Any]) -> None:
+    if shell_exists(LOGGER_SCRIPT):
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(LOGGER_SCRIPT),
+                    label,
+                    str(ALERT_LOG),
+                    tag,
+                    json.dumps(payload, ensure_ascii=False),
+                ],
+                check=False,
+                timeout=5,
+            )
+            return
+        except Exception:
+            pass
+    _append_alert_log(label, tag, payload)
 
 
 def telegram_notify(tag: str, message: str, payload: Dict[str, Any]) -> None:
@@ -860,7 +883,7 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         },
         "autoscale": {"actions": list(auto_ctx["actions"])},
     }
-    auto_ctx["states"] = list(auto_ctx["states"])
+    auto_ctx["states"] = sorted(auto_ctx["states"])
     return severity, details, payload, triggers, auto_ctx
 
 
@@ -887,16 +910,22 @@ def main() -> None:
             print(f"[AUTOSCALE] {action}")
             details.append(f"AUTOSCALE: {action}")
         state_results = apply_states(auto_states)
-        payload.setdefault("autoscale", {})["results"] = state_results
+        autoscale_section = payload.setdefault("autoscale", {})
+        autoscale_section["states"] = auto_states
+        autoscale_section["results"] = state_results
         for state, ok in state_results.items():
             if not ok:
                 details.append(f"AUTOSCALE: state.apply {state} failed")
-        autoscale_payload = payload.get("autoscale", {}).copy()
-        autoscale_payload["actions"] = auto_actions
-        autoscale_payload["results"] = state_results
+        autoscale_payload = {
+            "host": payload.get("host", hostname()),
+            "actions": auto_actions,
+            "states": auto_states,
+            "results": state_results,
+        }
         log_to_file("AUTOSCALE", "saltgoat/autoscale", autoscale_payload)
         message = "[SaltGoat] Autoscale executed\n" + "\n".join(f" - {action}" for action in auto_actions)
         telegram_notify("saltgoat/autoscale", message, autoscale_payload)
+        emit_salt_event("saltgoat/autoscale", autoscale_payload)
 
     if severity in {"WARNING", "CRITICAL"}:
         lines = [

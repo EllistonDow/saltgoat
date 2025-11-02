@@ -196,18 +196,22 @@
 {% set valkey_runtime_file = runtime_dir + '/valkey-autotune.json' %}
 {% if salt['file.file_exists'](mysql_runtime_file) %}
   {% set mysql_runtime_all = salt['slsutil.deserialize']('json', salt['file.read'](mysql_runtime_file)) %}
-  {% set mysql_runtime = mysql_runtime_all.get('mysql', {}) %}
-  {% if mysql_runtime %}
-    {% set profile_config = salt['slsutil.merge'](profile_config, {'mysql': mysql_runtime}, strategy='recurse', merge_lists=False) %}
-    {% set mysql_config = profile_config.get('mysql', {}) %}
+  {% if mysql_runtime_all is mapping %}
+    {% set mysql_runtime = mysql_runtime_all.get('mysql', {}) %}
+    {% if mysql_runtime %}
+      {% set profile_config = salt['slsutil.merge'](profile_config, {'mysql': mysql_runtime}, strategy='recurse', merge_lists=False) %}
+      {% set mysql_config = profile_config.get('mysql', {}) %}
+    {% endif %}
   {% endif %}
 {% endif %}
 {% if salt['file.file_exists'](valkey_runtime_file) %}
   {% set valkey_runtime_all = salt['slsutil.deserialize']('json', salt['file.read'](valkey_runtime_file)) %}
-  {% set valkey_runtime = valkey_runtime_all.get('valkey', {}) %}
-  {% if valkey_runtime %}
-    {% set profile_config = salt['slsutil.merge'](profile_config, {'valkey': valkey_runtime}, strategy='recurse', merge_lists=False) %}
-    {% set valkey_config = profile_config.get('valkey', {}) %}
+  {% if valkey_runtime_all is mapping %}
+    {% set valkey_runtime = valkey_runtime_all.get('valkey', {}) %}
+    {% if valkey_runtime %}
+      {% set profile_config = salt['slsutil.merge'](profile_config, {'valkey': valkey_runtime}, strategy='recurse', merge_lists=False) %}
+      {% set valkey_config = profile_config.get('valkey', {}) %}
+    {% endif %}
   {% endif %}
 {% endif %}
 
@@ -231,6 +235,28 @@ magento_env_missing_warning:
 {# Already handled above #}
 {% else %}
 
+set_inotify_max_user_instances:
+  sysctl.present:
+    - name: fs.inotify.max_user_instances
+    - value: 1024
+    - config: /etc/sysctl.d/60-saltgoat-inotify.conf
+
+set_inotify_max_user_watches:
+  sysctl.present:
+    - name: fs.inotify.max_user_watches
+    - value: 1048576
+    - config: /etc/sysctl.d/60-saltgoat-inotify.conf
+    - require:
+      - sysctl: set_inotify_max_user_instances
+
+set_inotify_max_queued_events:
+  sysctl.present:
+    - name: fs.inotify.max_queued_events
+    - value: 32768
+    - config: /etc/sysctl.d/60-saltgoat-inotify.conf
+    - require:
+      - sysctl: set_inotify_max_user_watches
+
 optimize_nginx_worker_connections:
   file.replace:
     - name: {{ nginx_ns.conf }}
@@ -241,21 +267,45 @@ optimize_nginx_worker_connections:
     - flags:
       - MULTILINE
 
-optimize_nginx_http_block:
-  file.blockreplace:
+optimize_nginx_client_body_size:
+  file.replace:
     - name: {{ nginx_ns.conf }}
-    - marker_start: '    # BEGIN SaltGoat Magento HTTP tuning'
-    - marker_end: '    # END SaltGoat Magento HTTP tuning'
-    - append_if_not_found: True
-    - content: |
-        client_max_body_size {{ nginx_config.get("client_max_body_size", "64M") }};
-        gzip on;
-        gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;
-        gzip_disable "msie6";
-        gzip_buffers 16 8k;
-        gzip_http_version 1.1;
+    - pattern: r'^\s*client_max_body_size\s+\S+;'
+    - repl: '  client_max_body_size {{ nginx_config.get("client_max_body_size", "64M") }};'
+    - count: 1
+    - flags:
+      - MULTILINE
     - require:
       - file: optimize_nginx_worker_connections
+
+optimize_nginx_gzip_types:
+  file.replace:
+    - name: {{ nginx_ns.conf }}
+    - pattern: r'^\s*gzip_types\s+.*;'
+    - repl: '  gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml application/xml+rss application/atom+xml image/svg+xml;'
+    - count: 1
+    - flags:
+      - MULTILINE
+    - require:
+      - file: optimize_nginx_client_body_size
+
+ensure_nginx_gzip_buffers:
+  file.line:
+    - name: {{ nginx_ns.conf }}
+    - mode: ensure
+    - content: '  gzip_buffers 16 8k;'
+    - after: 'gzip_comp_level'
+    - require:
+      - file: optimize_nginx_gzip_types
+
+ensure_nginx_gzip_http_version:
+  file.line:
+    - name: {{ nginx_ns.conf }}
+    - mode: ensure
+    - content: '  gzip_http_version 1.1;'
+    - after: 'gzip_buffers'
+    - require:
+      - file: ensure_nginx_gzip_buffers
 
 # 测试 Nginx 配置
 test_nginx_config:
@@ -269,7 +319,7 @@ test_nginx_config:
           echo "未检测到 nginx 可执行文件，跳过配置测试"
         fi
     - require:
-      - file: optimize_nginx_http_block
+      - file: ensure_nginx_gzip_http_version
 
 # 重新加载 Nginx
 reload_nginx:
@@ -569,7 +619,7 @@ magento_optimization_complete:
     - name: |
         echo "Magento 优化完成。生效档位: {{ meta.get('effective_profile', 'unknown') }}。报告位于: {{ report_path }}"
     - require:
-      - file: optimize_nginx_http_block
+      - file: ensure_nginx_gzip_http_version
 {% if php_ns.version %}
       - ini: php_ini_settings
       - ini: php_fpm_pool_settings
@@ -585,3 +635,6 @@ magento_optimization_complete:
       - file: optimize_opensearch_config
       - file: optimize_rabbitmq_config
       - file: generate_magento_optimization_report
+      - sysctl: set_inotify_max_user_instances
+      - sysctl: set_inotify_max_user_watches
+      - sysctl: set_inotify_max_queued_events

@@ -24,7 +24,11 @@ def __virtual__():
 def _has_schedule():
     try:
         jobs = __salt__["schedule.list"]()  # type: ignore[union-attr]
-        return isinstance(jobs, dict)
+        if isinstance(jobs, dict):
+            return True
+        if isinstance(jobs, str) and jobs.strip():
+            return True
+        return False
     except Exception:  # noqa: BLE001
         return False
 
@@ -56,6 +60,90 @@ def _schedule_entries() -> Optional[Dict[str, Any]]:
                 return data["schedule"]
             return data
     return None
+
+
+def _site_token(site: str) -> str:
+    site = site.strip()
+    token = site.lower().replace(" ", "_").replace("-", "_")
+    return token or site
+
+
+def _site_label(site: str) -> str:
+    return site.replace("/", "-")
+
+
+def _default_backup_dir(site: str) -> str:
+    user = os.environ.get("SUDO_USER") or os.environ.get("USER") or "root"
+    home_candidate = Path("/home") / user
+    label = _site_label(site)
+    dropbox_path = home_candidate / "Dropbox" / label / "databases"
+    if dropbox_path.parent.exists():
+        return str(dropbox_path)
+    default_root = Path("/var/backups/saltgoat")
+    return str(default_root / label)
+
+
+def _default_mysql_dump_job(site: str) -> Dict[str, Any]:
+    token = _site_token(site)
+    return {
+        "name": f"{token}mage-dump-hourly",
+        "cron": "0 * * * *",
+        "database": f"{token}mage",
+        "backup_dir": _default_backup_dir(site),
+        "repo_owner": os.environ.get("SUDO_USER") or os.environ.get("USER") or "root",
+        "site": site,
+    }
+
+
+def _default_api_watch_job(site: str) -> Dict[str, Any]:
+    label = _site_label(site)
+    return {
+        "name": f"{label}-api-watch",
+        "cron": "*/5 * * * *",
+        "site": site,
+        "kinds": ["orders", "customers"],
+    }
+
+
+def _default_stats_jobs(site: str) -> List[Dict[str, Any]]:
+    token = _site_token(site)
+    checksum = sum(ord(char) for char in token)
+    offset = checksum % 10
+    daily_minute = 6 + offset
+    weekly_minute = 16 + offset
+    monthly_minute = 22 + offset
+    label = _site_label(site)
+    return [
+        {
+            "name": f"{label}-stats-daily",
+            "cron": f"{daily_minute} 6 * * *",
+            "site": site,
+            "period": "daily",
+        },
+        {
+            "name": f"{label}-stats-weekly",
+            "cron": f"{weekly_minute} 6 * * 1",
+            "site": site,
+            "period": "weekly",
+            "no_telegram": True,
+        },
+        {
+            "name": f"{label}-stats-monthly",
+            "cron": f"{monthly_minute} 6 1 * *",
+            "site": site,
+            "period": "monthly",
+        },
+    ]
+
+
+def _job_matches_site(job: Dict[str, Any], site: str) -> bool:
+    job_site = job.get("site")
+    job_sites = job.get("sites")
+    if job_site and job_site != site:
+        return False
+    if isinstance(job_sites, (list, tuple, set)) and site not in job_sites:
+        return False
+    return True
 
 
 def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
@@ -90,95 +178,90 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
         f"magento_{site_token}_health": f"{maintenance_cmd} {site} health {maintenance_extra_args} {health_args} >> /var/log/magento-health.log 2>&1",
     }
 
-    dump_jobs_config = config.get("mysql_dump_jobs", []) or []
+    raw_dump_jobs = config.get("mysql_dump_jobs", []) or []
+    dump_jobs_config = [job for job in raw_dump_jobs if isinstance(job, dict)]
+    if not any(_job_matches_site(job, site) for job in dump_jobs_config):
+        dump_jobs_config.append(_default_mysql_dump_job(site))
     dump_jobs: Dict[str, str] = {}
-    if isinstance(dump_jobs_config, list):
-        for dump_job in dump_jobs_config:
-            if not isinstance(dump_job, dict):
-                continue
-            name = dump_job.get("name")
-            if not name:
-                continue
-            job_site = dump_job.get("site")
-            job_sites = dump_job.get("sites")
-            if job_site and job_site != site:
-                continue
-            if job_sites and site not in job_sites:
-                continue
-            command = ["saltgoat", "magetools", "xtrabackup", "mysql", "dump"]
-            if dump_job.get("database"):
-                command += ["--database", str(dump_job["database"])]
-            if dump_job.get("backup_dir"):
-                command += ["--backup-dir", str(dump_job["backup_dir"])]
-            if dump_job.get("repo_owner"):
-                command += ["--repo-owner", str(dump_job["repo_owner"])]
-            if dump_job.get("no_compress"):
-                command.append("--no-compress")
-            dump_jobs[name] = " ".join(command)
+    for dump_job in dump_jobs_config:
+        name = dump_job.get("name")
+        if not name:
+            continue
+        if not _job_matches_site(dump_job, site):
+            continue
+        command = ["saltgoat", "magetools", "xtrabackup", "mysql", "dump"]
+        if dump_job.get("database"):
+            command += ["--database", str(dump_job["database"])]
+        if dump_job.get("backup_dir"):
+            command += ["--backup-dir", str(dump_job["backup_dir"])]
+        if dump_job.get("repo_owner"):
+            command += ["--repo-owner", str(dump_job["repo_owner"])]
+        if dump_job.get("no_compress"):
+            command.append("--no-compress")
+        dump_jobs[name] = " ".join(command)
 
-    api_watchers_config = config.get("api_watchers", []) or []
+    raw_api_watchers = config.get("api_watchers", []) or []
+    api_watchers_config = [watcher for watcher in raw_api_watchers if isinstance(watcher, dict)]
+    if not any(_job_matches_site(watcher, site) for watcher in api_watchers_config):
+        api_watchers_config.append(_default_api_watch_job(site))
     api_watchers: Dict[str, str] = {}
-    if isinstance(api_watchers_config, list):
-        for watcher in api_watchers_config:
-            if not isinstance(watcher, dict):
-                continue
-            name = watcher.get("name")
-            if not name:
-                continue
-            job_site = watcher.get("site")
-            job_sites = watcher.get("sites")
-            if job_site and job_site != site:
-                continue
-            if job_sites and site not in job_sites:
-                continue
-            kinds = watcher.get("kinds") or []
-            if isinstance(kinds, (list, tuple, set)):
-                kinds_list = ",".join(str(kind) for kind in kinds)
-            elif kinds:
-                kinds_list = str(kinds)
-            else:
-                kinds_list = "orders,customers"
-            api_watchers[name] = f"saltgoat magetools api watch --site {site} --kinds {kinds_list}"
+    for watcher in api_watchers_config:
+        name = watcher.get("name")
+        if not name:
+            continue
+        if not _job_matches_site(watcher, site):
+            continue
+        kinds = watcher.get("kinds") or []
+        if isinstance(kinds, (list, tuple, set)):
+            kinds_list = ",".join(str(kind) for kind in kinds)
+        elif kinds:
+            kinds_list = str(kinds)
+        else:
+            kinds_list = "orders,customers"
+        api_watchers[name] = f"saltgoat magetools api watch --site {site} --kinds {kinds_list}"
 
-    stats_jobs_config = config.get("stats_jobs", []) or []
+    raw_stats_jobs = config.get("stats_jobs", []) or []
+    stats_jobs_config = [job for job in raw_stats_jobs if isinstance(job, dict)]
+    if not any(_job_matches_site(job, site) for job in stats_jobs_config):
+        stats_jobs_config.extend(_default_stats_jobs(site))
     stats_jobs: Dict[str, str] = {}
-    if isinstance(stats_jobs_config, list):
-        for stats_job in stats_jobs_config:
-            if not isinstance(stats_job, dict):
-                continue
-            name = stats_job.get("name")
-            if not name:
-                continue
-            job_site = stats_job.get("site")
-            job_sites = stats_job.get("sites")
-            if job_site and job_site != site:
-                continue
-            if job_sites and site not in job_sites:
-                continue
-            period = str(stats_job.get("period", "daily")).lower()
-            args: List[str] = [
-                "saltgoat",
-                "magetools",
-                "stats",
-                "--site",
-                site,
-                "--period",
-                period,
-            ]
-            page_size = stats_job.get("page_size")
-            if page_size:
-                args.extend(["--page-size", str(page_size)])
-            if stats_job.get("no_telegram"):
-                args.append("--no-telegram")
-            if stats_job.get("quiet"):
-                args.append("--quiet")
-            extra_args = stats_job.get("extra_args")
-            if extra_args:
-                if isinstance(extra_args, str):
-                    args.extend(shlex.split(extra_args))
-                elif isinstance(extra_args, (list, tuple, set)):
-                    args.extend(str(part) for part in extra_args)
-            stats_jobs[name] = " ".join(shlex.quote(arg) for arg in args)
+    for stats_job in stats_jobs_config:
+        name = stats_job.get("name")
+        if not name:
+            continue
+        if not _job_matches_site(stats_job, site):
+            continue
+        period = str(stats_job.get("period", "daily")).lower()
+        args: List[str] = [
+            "saltgoat",
+            "magetools",
+            "stats",
+            "--site",
+            site,
+            "--period",
+            period,
+        ]
+        page_size = stats_job.get("page_size")
+        if page_size:
+            args.extend(["--page-size", str(page_size)])
+        if stats_job.get("no_telegram"):
+            args.append("--no-telegram")
+        if stats_job.get("quiet"):
+            args.append("--quiet")
+        extra_args = stats_job.get("extra_args")
+        if extra_args:
+            if isinstance(extra_args, str):
+                args.extend(shlex.split(extra_args))
+            elif isinstance(extra_args, (list, tuple, set)):
+                args.extend(str(part) for part in extra_args)
+        stats_jobs[name] = " ".join(shlex.quote(arg) for arg in args)
+
+    auto_schedule_raw = {
+        "mysql_dump_jobs": dump_jobs_config,
+        "api_watchers": api_watchers_config,
+        "stats_jobs": stats_jobs_config,
+    }
+    auto_schedule = json.loads(json.dumps(auto_schedule_raw))
 
     expected_commands: Dict[str, str] = {}
     expected_commands.update(base_jobs)
@@ -188,42 +271,48 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
 
     state_result = __salt__["state.apply"](
         "optional.magento-schedule",
-        pillar={"site_name": site},
+        pillar={
+            "site_name": site,
+            "auto_schedule": auto_schedule,
+        },
     )
     ret["changes"] = state_result
 
-    if _has_schedule():
+    schedule_entries = _schedule_entries()
+    if isinstance(schedule_entries, dict) and schedule_entries:
+        ret["mode"] = "schedule"
         ret["comment"] = (
             "Salt Schedule entries rendered; ensure salt-minion service is running."
         )
-        schedule_entries = _schedule_entries()
 
         removed: List[str] = []
-        if isinstance(schedule_entries, dict):
-            for job_name, details in schedule_entries.items():
-                if job_name in expected_commands:
-                    continue
-                if not isinstance(details, dict):
-                    continue
-                args = details.get("args") or details.get("job_args")
-                command = ""
-                if isinstance(args, list) and args:
-                    command = " ".join(str(item) for item in args)
-                elif isinstance(args, str):
-                    command = args
-                if not command:
-                    continue
-                if (
-                    f"--site {site}" in command
-                    or f"/var/www/{site}" in command
-                    or (command.strip().startswith("saltgoat magetools xtrabackup mysql dump") and site in command)
-                    or any(command.strip() == expected.strip() for expected in expected_commands.values())
-                ):
-                    try:
-                        if __salt__["schedule.delete"](job_name):
-                            removed.append(job_name)
-                    except Exception:  # noqa: BLE001
-                        pass
+        for job_name, details in schedule_entries.items():
+            if job_name in expected_commands:
+                continue
+            if not isinstance(details, dict):
+                continue
+            args = details.get("args") or details.get("job_args")
+            command = ""
+            if isinstance(args, list) and args:
+                command = " ".join(str(item) for item in args)
+            elif isinstance(args, str):
+                command = args
+            if not command:
+                continue
+            if (
+                f"--site {site}" in command
+                or f"/var/www/{site}" in command
+                or (
+                    command.strip().startswith("saltgoat magetools xtrabackup mysql dump")
+                    and site in command
+                )
+                or any(command.strip() == expected.strip() for expected in expected_commands.values())
+            ):
+                try:
+                    if __salt__["schedule.delete"](job_name):
+                        removed.append(job_name)
+                except Exception:  # noqa: BLE001
+                    pass
         if removed:
             ret.setdefault("changes", {}).setdefault("removed_extra", removed)
     else:

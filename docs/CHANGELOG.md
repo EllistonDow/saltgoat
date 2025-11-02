@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.3.0] - 2025-11-02
+
+### Changes
+- 修改 11 个文件: docs/MAGENTO_MAINTENANCE.md, lib/help.sh, modules/magetools/__pycache__/magento-schedule.cpython-312.pyc, modules/magetools/magento-schedule.py, modules/magetools/magetools.sh 等
+
+
 ## [1.2.10] - 2025-11-02
 
 ### Changes

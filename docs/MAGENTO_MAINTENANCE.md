@@ -219,7 +219,7 @@ magento_schedule:
       no_compress: true
       site: bank
 ```
-建议复制 `salt/pillar/magento-schedule.sls.sample` 为实际文件后再写入上述配置；执行 `sudo saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule（若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`）。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。
+建议复制 `salt/pillar/magento-schedule.sls.sample` 为实际文件后再写入上述配置；执行 `sudo saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule（若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`）。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。日常也可以直接运行 `sudo saltgoat magetools schedule auto`，脚本会自动发现 `/var/www/*` 下所有 Magento 站点并调用 `magento_schedule_install`，缺失任务将补齐，已存在的任务会做幂等校验。若 Pillar 未声明 `mysql_dump_jobs` / `api_watchers` / `stats_jobs`，工具会按默认策略回填：数据库 `<site>mage` 每小时导出到 `/var/backups/saltgoat/<site>`（若检测到 `~/Dropbox/<site>/databases` 则优先使用）、API Watch 以 `*/5 * * * *` 轮询订单与会员、统计任务在 06:00 附近错峰生成日/周/月报，周报默认不推送 Telegram，可在 Pillar 中覆盖。
 
 ### 业务事件通知（API Watchers）
 SaltGoat 现在可以轮询 Magento REST API，将“新订单 / 新用户”推送到 Telegram。

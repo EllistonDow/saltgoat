@@ -198,6 +198,10 @@ magetools_handler() {
             # 调用 Salt Schedule 管理脚本
             "${SCRIPT_DIR}/modules/magetools/magento-salt-schedule.sh" "$2" "$3"
             ;;
+        "schedule")
+            shift
+            "${SCRIPT_DIR}/modules/magetools/magento-schedule.py" "$@"
+            ;;
         "pwa")
             shift
             log_warning "命令已迁移至 'saltgoat pwa'，当前调用将继续执行但建议尽快使用新命名空间"
