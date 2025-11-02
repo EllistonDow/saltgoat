@@ -31,6 +31,7 @@ magento_schedule:
       cron: '5 6 * * *'
       site: site1
       period: daily
+      telegram_thread: 2
       # 可选：关闭 Telegram 推送，仅生成日志
       no_telegram: false
     - name: site2-stats-weekly

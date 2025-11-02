@@ -366,20 +366,59 @@ def telegram_broadcast(tag: str, message: str, payload: Dict[str, Any]) -> None:
 
 
 def build_message(kind: str, site: str, payload: Dict[str, Any]) -> str:
-    lines = [f"[SaltGoat] NEW {kind} {site}"]
-    for key, label in [
-        ("order", "Order"),
-        ("total", "Total"),
-        ("status", "Status"),
-        ("customer", "Customer"),
-        ("email", "Email"),
-        ("created_at", "Created"),
-        ("customer_group", "Group"),
-        ("id", "ID"),
-    ]:
-        value = payload.get(key)
-        if value:
-            lines.append(f"{label}: {value}")
+    site_label = site.upper()
+    if kind == "order":
+        underline = "=" * 30
+        lines = [
+            f"{underline}",
+            f"NEW ORDER ({site_label})",
+            f"{underline}",
+        ]
+        order_id = payload.get("order")
+        if order_id:
+            lines.append(f"Order    : {order_id}")
+        total = payload.get("total")
+        if total:
+            lines.append(f"Total    : {total}")
+        status = payload.get("status")
+        if status:
+            lines.append(f"Status   : {status}")
+        customer = payload.get("customer")
+        if customer:
+            lines.append(f"Customer : {customer}")
+        email = payload.get("email")
+        if email:
+            lines.append(f"Email    : {email}")
+        created = payload.get("created_at")
+        if created:
+            lines.append(f"Created  : {created}")
+    elif kind == "customer":
+        underline = "=" * 30
+        lines = [
+            f"{underline}",
+            f"NEW CUSTOMER ({site_label})",
+            f"{underline}",
+        ]
+        name = payload.get("customer")
+        if name:
+            lines.append(f"Name     : {name}")
+        email = payload.get("email")
+        if email:
+            lines.append(f"Email    : {email}")
+        customer_id = payload.get("id")
+        if customer_id not in (None, ""):
+            lines.append(f"ID       : {customer_id}")
+        group = payload.get("customer_group")
+        if group not in (None, ""):
+            lines.append(f"Group    : {group}")
+        created = payload.get("created_at")
+        if created:
+            lines.append(f"Created  : {created}")
+    else:
+        underline = "=" * 30
+        lines = [underline, f"{kind.upper()} ({site_label})", underline]
+        for key, value in payload.items():
+            lines.append(f"{key.title():<8}: {value}")
     return "\n".join(lines)
 
 

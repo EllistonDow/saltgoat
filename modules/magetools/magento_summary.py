@@ -46,6 +46,12 @@ def parse_args() -> argparse.Namespace:
         help="仅输出，不发送 Telegram",
     )
     parser.add_argument(
+        "--telegram-thread",
+        type=int,
+        default=None,
+        help="Telegram 线程 ID，传递给 reactor 进行话题分流",
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="不在控制台打印总结",
@@ -208,10 +214,12 @@ def main() -> None:
         customer_count = summarise_customers(customers)
 
         lines = [
-            f"[SaltGoat] Magento {label} Summary ({site})",
-            f"Range: {start_str} -> {end_str}",
-            f"Orders: {order_count} (total {format_totals(totals)})",
-            f"Customers: {customer_count}",
+            f"[INFO] {label} Summary",
+            f"[site]: {site.upper()}",
+            f"[window]: {start_str} -> {end_str}",
+            f"[orders]: {order_count}",
+            f"[revenue]: {format_totals(totals)}",
+            f"[customers]: {customer_count}",
         ]
         message = "\n".join(lines)
         payload = {
@@ -222,6 +230,8 @@ def main() -> None:
             "customers": {"count": customer_count},
             "range": {"start": start_str, "end": end_str},
         }
+        if args.telegram_thread is not None:
+            payload["telegram_thread"] = int(args.telegram_thread)
 
         log_to_file("SUMMARY", tag_base, payload)
         emit_event(tag_base, payload)

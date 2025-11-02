@@ -318,8 +318,9 @@ PHP-FPM (php8.3-fpm/www-data)
          site: tank
          period: monthly
          page_size: 500           # 可选：自定义分页
+         telegram_thread: 3       # 可选：自定义 Telegram 线程
    ```
-   支持 `site` 或 `sites` 字段筛选多个站点；`period` 可选 `daily` / `weekly` / `monthly`；`page_size`、`no_telegram`、`quiet`、`extra_args` 均为可选参数。
+   支持 `site` 或 `sites` 字段筛选多个站点；`period` 可选 `daily` / `weekly` / `monthly`；`page_size`、`telegram_thread`、`no_telegram`、`quiet`、`extra_args` 均为可选参数。
 
 2. **安装计划**：执行 `sudo saltgoat magetools cron <site> install`，新任务会与维护/备份计划一起下发到 Salt Schedule（或自动回退 `/etc/cron.d/`）。
 

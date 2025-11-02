@@ -4,6 +4,7 @@ Lightweight tests for modules/magetools/magento_api_watch.py.
 """
 
 import os
+import sys
 import tempfile
 import unittest
 import urllib.request
@@ -11,6 +12,10 @@ from pathlib import Path
 
 # 启用测试模式，跳过 root / Salt 依赖
 os.environ.setdefault("MAGENTO_WATCHER_TEST_MODE", "1")
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "modules" / "magetools"))
 
 from modules.magetools import magento_api_watch as watcher_mod  # noqa: E402
 

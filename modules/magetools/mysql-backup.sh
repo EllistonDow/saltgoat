@@ -68,20 +68,20 @@ except Exception as exc:  # pylint: disable=broad-except
 log_path = "/var/log/saltgoat/alerts.log"
 tag = f"saltgoat/backup/mysql_dump/{status}"
 
+level = "INFO" if status == "success" else "ERROR"
 lines = [
-    f"[SaltGoat] {status.upper()} backup mysql_dump",
-    f"Host: {host}",
-    f"Repository/File: {path or 'n/a'}",
+    f"[{level}] MySQL Dump Backup",
+    f"[host]: {host}",
+    f"[status]: {status.upper()}",
+    f"[file]: {path or 'n/a'}",
+    f"[return_code]: {return_code}",
 ]
-if path:
-    lines.append(f"Log: {path}")
 if path and size and size.lower() != "unknown":
-    lines.append(f"Archive: {path} ({size})")
+    lines.append(f"[size]: {size}")
 if database:
-    lines.append(f"Database: {database}")
+    lines.append(f"[database]: {database}")
 if reason:
-    lines.append(f"Reason: {reason}")
-lines.append(f"Return code: {return_code}")
+    lines.append(f"[reason]: {reason}")
 message = "\n".join(lines)
 
 def log(kind, payload_obj):

@@ -244,6 +244,9 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
         page_size = stats_job.get("page_size")
         if page_size:
             args.extend(["--page-size", str(page_size)])
+        thread_id = stats_job.get("telegram_thread")
+        if thread_id is not None:
+            args.extend(["--telegram-thread", str(thread_id)])
         if stats_job.get("no_telegram"):
             args.append("--no-telegram")
         if stats_job.get("quiet"):

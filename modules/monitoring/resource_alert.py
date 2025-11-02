@@ -1258,7 +1258,13 @@ def main() -> None:
             "results": state_results,
         }
         log_to_file("AUTOSCALE", "saltgoat/autoscale", autoscale_payload)
-        message = "[SaltGoat] Autoscale executed\n" + "\n".join(f" - {action}" for action in auto_actions)
+        host_id = autoscale_payload["host"]
+        lines = ["[INFO] Autoscale Actions", f"[host]: {host_id}"]
+        for action in auto_actions:
+            lines.append(f"[action]: {action}")
+        if auto_states:
+            lines.append(f"[states]: {', '.join(auto_states)}")
+        message = "\n".join(lines)
         telegram_notify("saltgoat/autoscale", message, autoscale_payload)
         emit_salt_event("saltgoat/autoscale", autoscale_payload)
 
@@ -1302,12 +1308,19 @@ def main() -> None:
             save_service_heal_map(heal_map)
 
     if severity in {"WARNING", "CRITICAL"}:
+        trigger_text = ", ".join(triggers) if triggers else "load"
         lines = [
-            f"[SaltGoat] {severity} resource alert",
-            f"Host: {payload['host']}",
-            f"Triggered: {', '.join(triggers) if triggers else 'Load'}",
+            f"[{severity}] Resource Alert",
+            f"[host]: {payload['host']}",
+            f"[trigger]: {trigger_text}",
         ]
-        lines.extend(f" - {detail}" for detail in details)
+        for detail in details:
+            parts = str(detail).splitlines()
+            if not parts:
+                continue
+            lines.append(f"[detail]: {parts[0]}")
+            for extra in parts[1:]:
+                lines.append(f"  {extra}")
         message = "\n".join(lines)
         tag = f"saltgoat/monitor/resources/{severity.lower()}"
         augmented = payload | {"details": details, "tag": tag}

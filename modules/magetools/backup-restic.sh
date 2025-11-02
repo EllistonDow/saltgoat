@@ -280,21 +280,22 @@ if not payload["paths"]:
 if not payload["tags"]:
     payload.pop("tags")
 
-severity = "SUCCESS" if status == "success" else "FAILURE"
+level = "INFO" if status == "success" else "ERROR"
 lines = [
-    f"[SaltGoat] {severity} backup restic",
-    f"Host: {payload.get('host') or 'ns510140'}",
-    f"Repository/File: {repo or 'n/a'}",
+    f"[{level}] Restic Backup",
+    f"[host]: {payload.get('host') or 'ns510140'}",
+    f"[status]: {status.upper()}",
+    f"[repo]: {repo or 'n/a'}",
+    f"[return_code]: {rc}",
 ]
-if log_file:
-    lines.append(f"Log: {log_file}")
 if site:
-    lines.append(f"Site: {site}")
+    lines.append(f"[site]: {site}")
+if log_file:
+    lines.append(f"[log]: {log_file}")
 if payload.get("paths"):
-    lines.append(f"Paths: {payload['paths']}")
+    lines.append(f"[paths]: {payload['paths']}")
 if payload.get("tags"):
-    lines.append(f"Tags: {payload['tags']}")
-lines.append(f"Return code: {rc}")
+    lines.append(f"[tags]: {payload['tags']}")
 message = "\n".join(lines)
 
 tag_base = f"saltgoat/backup/restic/{status}"
