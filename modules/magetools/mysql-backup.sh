@@ -54,6 +54,7 @@ notify_dump_telegram() {
 
     python3 - "$status" "$database" "$path" "$size" "$reason" "$return_code" "$compressed" "$site" "$HOST_ID" "$SCRIPT_DIR" <<'PY'
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -63,7 +64,8 @@ from html import escape
 status, database, path, size, reason, return_code, compressed, site, host, repo_root = sys.argv[1:11]
 site = (site or database or host or "default").lower().replace(" ", "-").replace("/", "-")
 
-sys.path.insert(0, "/opt/saltgoat-reactor")
+reactor_dir = os.environ.get("SALTGOAT_REACTOR_DIR", "/opt/saltgoat-reactor")
+sys.path.insert(0, reactor_dir)
 try:
     import reactor_common  # pylint: disable=import-error
 except Exception as exc:  # pylint: disable=broad-except
@@ -80,7 +82,8 @@ if repo_root:
         sys.stderr.write(f"Failed to import modules.lib.notification: {exc}\n")
         notif = None
 
-log_path = "/var/log/saltgoat/alerts.log"
+log_path = os.environ.get("SALTGOAT_ALERT_LOG", "/var/log/saltgoat/alerts.log")
+telegram_config = os.environ.get("SALTGOAT_TELEGRAM_CONFIG", "/etc/saltgoat/telegram.json")
 tag = f"saltgoat/backup/mysql_dump/{site}"
 
 level = "INFO" if status == "success" else "ERROR"
@@ -132,7 +135,7 @@ if notif and not notif.should_send(tag, level, site):
     log("skip", {"reason": "filtered", "severity": level, "site": site})
     raise SystemExit(0)
 
-profiles = reactor_common.load_telegram_profiles("/etc/saltgoat/telegram.json", log)
+profiles = reactor_common.load_telegram_profiles(telegram_config, log)
 if not profiles:
     log("skip", {"reason": "no_profiles"})
     raise SystemExit(0)
@@ -499,6 +502,11 @@ EOF
 }
 
 ACTION="${1:-}"
+
+if [[ "${SALTGOAT_UNIT_TEST:-0}" == "1" && "${BASH_SOURCE[0]}" != "$0" ]]; then
+    return 0
+fi
+
 case "$ACTION" in
     install|apply)
         shift || true

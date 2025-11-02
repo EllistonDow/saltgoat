@@ -48,6 +48,10 @@ INSTALL_SERVICE_USER=""
 INSTALL_REPO_OWNER=""
 SITE_METADATA_DIR="/etc/restic/sites.d"
 
+if [[ "${SALTGOAT_UNIT_TEST:-0}" == "1" && "${BASH_SOURCE[0]}" != "$0" ]]; then
+    return 0
+fi
+
 sanitize_site_token() {
     local raw="$1"
     echo "$raw" \
@@ -231,10 +235,11 @@ send_direct_notification() {
     local rc="$7"
     local origin="$8"
     local host="$9"
-    local config="/etc/saltgoat/telegram.json"
-    local logger="/opt/saltgoat-reactor/logger.py"
-    local helpers="/opt/saltgoat-reactor/reactor_common.py"
-    local log_path="/var/log/saltgoat/alerts.log"
+    local reactor_dir="${SALTGOAT_REACTOR_DIR:-/opt/saltgoat-reactor}"
+    local config="${SALTGOAT_TELEGRAM_CONFIG:-/etc/saltgoat/telegram.json}"
+    local logger="${reactor_dir}/logger.py"
+    local helpers="${reactor_dir}/reactor_common.py"
+    local log_path="${SALTGOAT_ALERT_LOG:-/var/log/saltgoat/alerts.log}"
 
     [[ -f "$config" ]] || return 0
     [[ -f "$logger" ]] || return 0
@@ -242,6 +247,7 @@ send_direct_notification() {
 
     python3 - "$status" "$repo" "$site" "$log_file" "$paths" "$tags" "$rc" "$origin" "$host" "$config" "$logger" "$log_path" "$SCRIPT_DIR" <<'PY'
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -255,7 +261,8 @@ rc = int(rc or 0)
 paths_list = [item for item in (paths or "").split(",") if item]
 tags_list = [item for item in (tags or "").split(",") if item]
 
-helpers = pathlib.Path("/opt/saltgoat-reactor/reactor_common.py")
+reactor_dir = os.environ.get("SALTGOAT_REACTOR_DIR", "/opt/saltgoat-reactor")
+helpers = pathlib.Path(reactor_dir) / "reactor_common.py"
 if not helpers.exists():
     sys.exit(0)
 

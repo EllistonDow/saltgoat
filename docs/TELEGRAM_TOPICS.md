@@ -99,3 +99,18 @@ SaltGoat 现已将话题与 Pillar 配置串联进日常运维脚本：
 > 3. 使用 `./scripts/setup-telegram-topics.py --dry-run` 查看 Telegram 话题差异，确认无误后正式应用。
 
 以上步骤将站点、计划任务、通知话题联动起来，新建或扩容站点时只需运行自动化命令即可完成监控/通知闭环。
+
+## 新站点通知接入流程
+
+1. 在 `/var/www/<site>` 或部署流程中创建站点目录与 `app/etc/env.php`，确保 `monitor auto-sites` 能识别。若使用 Symlink (`current/`)，同样会自动跟踪。
+2. 配置 Nginx（`/etc/nginx/sites-enabled/<site>`）并包含正确的 `root` / `server_name`。自动生成的健康检查 URL 将以第一个域名为基准；未匹配时默认回落到 `http://127.0.0.1/<site>/`。
+3. 运行 `sudo saltgoat monitor auto-sites`（或依赖 Deployment Pipeline 自动调用），它会：
+   - 更新 `salt/pillar/monitoring.sls`、备份旧版本。
+   - 触发 `scripts/setup-telegram-topics.py` 为新站点补齐 `orders/customers/summary/mysql-backup/restic-backup` 等话题。
+   - 刷新 Pillar / 启用 Beacon（测试环境可通过 `SALTGOAT_SKIP_REFRESH=1` 跳过）。
+4. 执行 `sudo saltgoat magetools schedule auto` 让 Salt Schedule 与 Telegram 话题保持一致，确保 API Watch / 备份 / 健康检查都启用。
+5. 在 Telegram 群里确认生成的新话题是否就绪；如需预览，可运行 `sudo python3 scripts/setup-telegram-topics.py --dry-run` 查看差异。
+6. 验证通知：
+   - `sudo python3 modules/monitoring/resource_alert.py`（触发资源巡检、自愈与告警）。
+   - `sudo saltgoat magetools maintenance <site> health` 或下单测试，确认订单/备份通知命中正确话题。
+7. 收尾：将更新同步进版本库（`salt/pillar/monitoring.sls` 等），并记录在变更文档/变更单中。

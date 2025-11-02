@@ -834,10 +834,17 @@ from collections import OrderedDict
 from pathlib import Path
 
 SCRIPT_DIR = Path(os.environ.get("SCRIPT_DIR", Path(__file__).resolve().parents[2]))
-MONITOR_FILE = SCRIPT_DIR / "salt/pillar/monitoring.sls"
+SITE_ROOT = Path(os.environ.get("SALTGOAT_SITE_ROOT", "/var/www"))
+NGINX_DIR = Path(os.environ.get("SALTGOAT_NGINX_DIR", "/etc/nginx/sites-enabled"))
+MONITOR_FILE_OVERRIDE = os.environ.get("SALTGOAT_MONITOR_FILE")
+MONITOR_FILE = Path(MONITOR_FILE_OVERRIDE) if MONITOR_FILE_OVERRIDE else SCRIPT_DIR / "salt/pillar/monitoring.sls"
+SKIP_SALT_CALL = os.environ.get("SALTGOAT_SKIP_SALT_CALL", "0").lower() in {"1", "true", "yes"}
+SKIP_SYSTEMCTL = os.environ.get("SALTGOAT_SKIP_SYSTEMCTL", "0").lower() in {"1", "true", "yes"}
 
 
 def service_exists(name: str) -> bool:
+    if SKIP_SYSTEMCTL:
+        return False
     try:
         proc = subprocess.run(
             ["systemctl", "show", f"{name}.service", "--property", "LoadState"],
@@ -854,6 +861,8 @@ def service_exists(name: str) -> bool:
 
 
 def load_existing() -> OrderedDict:
+    if SKIP_SALT_CALL:
+        return OrderedDict()
     if not MONITOR_FILE.exists():
         return OrderedDict()
     try:
@@ -886,7 +895,7 @@ def to_ordered_dict(value):
 
 
 def detect_sites():
-    base = Path("/var/www")
+    base = SITE_ROOT
     sites = []
     if not base.exists():
         return sites
@@ -905,7 +914,7 @@ def detect_sites():
     if not sites:
         return []
 
-    conf_dir = Path("/etc/nginx/sites-enabled")
+    conf_dir = NGINX_DIR
     if conf_dir.exists():
         for conf in conf_dir.glob("*"):
             try:
@@ -1112,7 +1121,7 @@ def main():
     if updates:
         print("UPDATED " + ", ".join(updates))
     else:
-    print("UPDATED NONE")
+        print("UPDATED NONE")
 
 
 if __name__ == "__main__":
@@ -1126,7 +1135,9 @@ PY
     echo "$monitor_output"
 
     local topics_script="${SCRIPT_DIR}/scripts/setup-telegram-topics.py"
-    if [[ -x "$topics_script" ]]; then
+    if [[ "${SALTGOAT_SKIP_TELEGRAM:-0}" == "1" ]]; then
+        log_info "跳过 Telegram 话题同步（SALTGOAT_SKIP_TELEGRAM=1）"
+    elif [[ -x "$topics_script" ]]; then
         log_highlight "同步站点相关的 Telegram 话题..."
         if topics_output=$(sudo python3 "$topics_script" 2>&1); then
             printf '%s\n' "$topics_output"
@@ -1136,9 +1147,13 @@ PY
         fi
     fi
 
-    log_info "刷新 Pillar 并启用 Beacon..."
-    sudo saltgoat pillar refresh >/dev/null 2>&1 || true
-    sudo saltgoat monitor enable-beacons >/dev/null 2>&1 || true
+    if [[ "${SALTGOAT_SKIP_REFRESH:-0}" == "1" ]]; then
+        log_info "跳过 Pillar 刷新与 Beacon 更新（SALTGOAT_SKIP_REFRESH=1）"
+    else
+        log_info "刷新 Pillar 并启用 Beacon..."
+        sudo saltgoat pillar refresh >/dev/null 2>&1 || true
+        sudo saltgoat monitor enable-beacons >/dev/null 2>&1 || true
+    fi
     log_success "站点健康检查配置已更新"
 }
 

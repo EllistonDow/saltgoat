@@ -129,6 +129,27 @@ sudo saltgoat magetools varnish disable bank
 - 停用命令会恢复备份文件、删除临时配置、将 Magento 缓存改回 Built-in，并停止 Varnish 服务。
 - HTTPS/TLS 与 Certbot 流程保持由 Nginx 承担，`.well-known/acme-challenge` 会自动直通。
 
+### 多站点管理（实验性）
+```bash
+# 创建多站点（默认配置），dry-run 预览
+sudo saltgoat magetools multisite create --site bank --code duobank --domain duobank.magento.tattoogoat.com --dry-run
+
+# 实际创建
+sudo saltgoat magetools multisite create --site bank --code duobank --domain duobank.magento.tattoogoat.com
+
+# 查看状态
+sudo saltgoat magetools multisite status --site bank --code duobank --domain duobank.magento.tattoogoat.com
+
+# 回滚
+sudo saltgoat magetools multisite rollback --site bank --code duobank --domain duobank.magento.tattoogoat.com
+```
+
+- 默认会完成 Magento website/group/store 创建、调用 `saltgoat nginx create` + `add-ssl` 搭建虚拟主机与证书，并复用 `/var/www/<site>/pub` 作为根目录。
+- 会自动探测 `bin/magento` 是否提供 `store:website|group|store:create`，缺失时改用 PHP API 创建并设置默认组/门店，确保兼容 Magento 2.4.x。
+- 若已有自定义配置，可使用 `--skip-nginx` 或 `--skip-ssl` 跳过自动化；`--ssl-email`/`--nginx-site` 可分别覆盖证书邮箱与 Nginx 站点标识。
+- 建议先在 staging 环境执行 `--dry-run` 观察计划，再按需在生产运行；创建/回滚后仍需人工确认监控、通知等配套配置。
+- 默认会调用 `saltgoat magetools varnish diagnose` 进行健康检查，如无需自动检测可追加 `--skip-varnish`。
+
 ### Restic 备份（可选模块）
 
 ```bash

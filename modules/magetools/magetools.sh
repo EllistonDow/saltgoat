@@ -202,6 +202,10 @@ magetools_handler() {
             shift
             "${SCRIPT_DIR}/modules/magetools/magento-schedule.py" "$@"
             ;;
+        "multisite")
+            shift
+            "${SCRIPT_DIR}/modules/magetools/multisite.sh" "$@"
+            ;;
         "pwa")
             shift
             log_warning "命令已迁移至 'saltgoat pwa'，当前调用将继续执行但建议尽快使用新命名空间"
