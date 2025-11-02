@@ -824,7 +824,7 @@ monitor_auto_sites() {
     log_highlight "自动生成站点健康检查配置..."
 
     local monitor_output
-    monitor_output=$(SCRIPT_DIR="$SCRIPT_DIR" python3 <<'PY'
+    if ! monitor_output=$(SCRIPT_DIR="$SCRIPT_DIR" python3 <<'PY'
 import json
 import os
 import re
@@ -1112,17 +1112,14 @@ def main():
     if updates:
         print("UPDATED " + ", ".join(updates))
     else:
-        print("UPDATED NONE")
+    print("UPDATED NONE")
 
 
 if __name__ == "__main__":
     main()
 PY
-    )
-
-    if [[ $? -ne 0 ]]; then
+    ); then
         log_error "生成站点健康检查配置失败"
-        echo "$monitor_output"
         return 1
     fi
 

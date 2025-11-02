@@ -52,14 +52,15 @@ notify_dump_telegram() {
     local compressed="${7:-1}"
     local site="$8"
 
-    python3 - "$status" "$database" "$path" "$size" "$reason" "$return_code" "$compressed" "$site" "$HOST_ID" <<'PY'
+    python3 - "$status" "$database" "$path" "$size" "$reason" "$return_code" "$compressed" "$site" "$HOST_ID" "$SCRIPT_DIR" <<'PY'
 import json
 import subprocess
 import sys
+from pathlib import Path
 from datetime import datetime, timezone
 from html import escape
 
-status, database, path, size, reason, return_code, compressed, site, host = sys.argv[1:10]
+status, database, path, size, reason, return_code, compressed, site, host, repo_root = sys.argv[1:11]
 site = (site or database or host or "default").lower().replace(" ", "-").replace("/", "-")
 
 sys.path.insert(0, "/opt/saltgoat-reactor")
@@ -68,6 +69,16 @@ try:
 except Exception as exc:  # pylint: disable=broad-except
     sys.stderr.write(f"Failed to import reactor_common: {exc}\n")
     raise SystemExit(0)
+
+notif = None
+if repo_root:
+    repo_path = Path(repo_root)
+    sys.path.insert(0, str(repo_path))
+    try:
+        from modules.lib import notification as notif  # type: ignore
+    except Exception as exc:  # pylint: disable=broad-except
+        sys.stderr.write(f"Failed to import modules.lib.notification: {exc}\n")
+        notif = None
 
 log_path = "/var/log/saltgoat/alerts.log"
 tag = f"saltgoat/backup/mysql_dump/{site}"
@@ -116,14 +127,26 @@ def log(kind, payload_obj):
     except Exception:  # pylint: disable=broad-except
         pass
 
+parse_mode = notif.get_parse_mode() if notif else "HTML"
+if notif and not notif.should_send(tag, level, site):
+    log("skip", {"reason": "filtered", "severity": level, "site": site})
+    raise SystemExit(0)
+
 profiles = reactor_common.load_telegram_profiles("/etc/saltgoat/telegram.json", log)
 if not profiles:
     log("skip", {"reason": "no_profiles"})
     raise SystemExit(0)
 
-context = {"database": database, "status": status, "size": size, "compressed": compressed, "site": site}
+context = {
+    "database": database,
+    "status": status,
+    "size": size,
+    "compressed": compressed,
+    "site": site,
+    "severity": level,
+}
 log("context", context)
-reactor_common.broadcast_telegram(message, profiles, log, tag=tag, parse_mode="HTML")
+reactor_common.broadcast_telegram(message, profiles, log, tag=tag, parse_mode=parse_mode)
 PY
 }
 

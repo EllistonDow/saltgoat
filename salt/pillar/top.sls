@@ -48,4 +48,5 @@ base:
     - salt-beacons
     - backup-restic
     - mysql-backup
+    - notifications
     - telegram-topics

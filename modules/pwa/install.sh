@@ -1184,7 +1184,7 @@ PY
         log_info "应用内置 useProductFullDetail.js 覆盖"
         sudo cp "${overrides_dir}/useProductFullDetail.js" "$product_talon"
         sudo chown www-data:www-data "$product_talon"
-    elif [[ -f "$product_talon" && -n "$(grep -F \"attribute1['attribute_metadata']\" "$product_talon" || true)" ]]; then
+    elif [[ -f "$product_talon" ]] && grep -Fq -- "attribute1['attribute_metadata']" "$product_talon"; then
         log_info "调整 ProductFullDetail talon，兼容缺失的 custom_attributes 元数据"
         sudo python3 - "$product_talon" <<'PY'
 from pathlib import Path
@@ -1648,7 +1648,7 @@ ensure_inotify_limits() {
         local sysctl_dir="/etc/sysctl.d"
         local sysctl_conf="${sysctl_dir}/99-saltgoat-pwa.conf"
         if [[ -d "$sysctl_dir" && -w "$sysctl_dir" ]]; then
-            if [[ ! -f "$sysctl_conf" || -z "$(grep -F 'fs.inotify.max_user_watches' "$sysctl_conf" 2>/dev/null)" ]]; then
+            if [[ ! -f "$sysctl_conf" ]] || ! grep -Fq -- 'fs.inotify.max_user_watches' "$sysctl_conf" 2>/dev/null; then
                 printf "fs.inotify.max_user_watches = %s\n" "$min_watches" >>"$sysctl_conf"
                 log_info "已写入 ${sysctl_conf}，重启后自动恢复该限制。"
             fi

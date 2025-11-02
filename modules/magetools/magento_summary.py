@@ -17,6 +17,7 @@ from magento_api_watch import (
     telegram_broadcast,
     log_to_file,
 )
+from modules.lib import notification as notif  # type: ignore
 
 PERIOD_CHOICES = {"daily", "weekly", "monthly"}
 
@@ -251,6 +252,7 @@ def main() -> None:
             "orders": {"count": order_count, "totals": totals},
             "customers": {"count": customer_count},
             "range": {"start": start_str, "end": end_str},
+            "severity": "INFO",
         }
         if args.telegram_thread is not None:
             payload["telegram_thread"] = int(args.telegram_thread)
@@ -260,8 +262,19 @@ def main() -> None:
 
         if not args.no_telegram:
             telegram_tag = f"saltgoat/business/summary/{site_slug}"
-            payload["tag"] = telegram_tag
-            telegram_broadcast(telegram_tag, message, payload)
+            if notif.should_send(telegram_tag, payload["severity"], site_slug):
+                payload["tag"] = telegram_tag
+                telegram_broadcast(telegram_tag, message, payload)
+            else:
+                log_to_file(
+                    "SUMMARY",
+                    f"{telegram_tag} skip",
+                    {
+                        "reason": "filtered",
+                        "severity": payload["severity"],
+                        "site": site_slug,
+                    },
+                )
 
         if not args.quiet:
             print(plain_text)

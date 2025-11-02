@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.3.8] - 2025-11-02
+
+### Changes
+- 修改 16 个文件: modules/lib/__init__.py, modules/lib/__pycache__/__init__.cpython-312.pyc, modules/lib/notification.py, modules/magetools/__pycache__/magento_api_watch.cpython-312.pyc, modules/magetools/__pycache__/magento_summary.cpython-312.pyc 等
+
+
 ## [1.3.7] - 2025-11-02
 
 ### Changes

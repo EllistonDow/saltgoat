@@ -55,6 +55,7 @@ PHP
 }
 
 magento_list_websites() {
+    # shellcheck disable=SC2016
     magento_php '
 $storeManager = $objectManager->get(\Magento\Store\Model\StoreManagerInterface::class);
 foreach ($storeManager->getWebsites() as $website) {
@@ -67,6 +68,7 @@ foreach ($storeManager->getWebsites() as $website) {
 }
 
 magento_list_stores() {
+    # shellcheck disable=SC2016
     magento_php '
 $storeManager = $objectManager->get(\Magento\Store\Model\StoreManagerInterface::class);
 foreach ($storeManager->getStores() as $store) {
@@ -140,6 +142,7 @@ PY
 
 magento_base_domains() {
     [[ -f "$APP_BOOTSTRAP" ]] || return
+    # shellcheck disable=SC2016
     magento_php '
 $storeManager = $objectManager->get(\Magento\Store\Model\StoreManagerInterface::class);
 $domains = [];
@@ -486,7 +489,7 @@ remove_backend_config() {
 }
 
 nginx_reload() {
-    if ! sudo nginx -t >/tmp/nginx-test.log 2>&1; then
+    if ! sudo bash -c 'nginx -t > /tmp/nginx-test.log 2>&1'; then
         log_error "nginx -t 失败："
         cat /tmp/nginx-test.log
         exit 1
@@ -497,7 +500,7 @@ nginx_reload() {
 
 apply_varnish_state() {
     log_info "应用 Varnish Salt 状态"
-    sudo salt-call --local state.apply optional.varnish >/tmp/varnish-state.log 2>&1 || {
+    sudo bash -c 'salt-call --local state.apply optional.varnish > /tmp/varnish-state.log 2>&1' || {
         log_error "应用 optional.varnish 状态失败，详情："
         cat /tmp/varnish-state.log
         exit 1

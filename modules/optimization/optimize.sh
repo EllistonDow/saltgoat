@@ -239,7 +239,7 @@ analyze_php() {
     for conf in "${pool_files[@]}"; do
         [[ -f "$conf" ]] || continue
         local pool_name
-        pool_name=$(grep -E '^\s*\[.+\]' "$conf" | head -1 | tr -d '[][:space:]')
+        pool_name=$(grep -E '^\s*\[.+\]' "$conf" | head -1 | tr -d '[:space:]\[\]')
         if [[ -z "$pool_name" ]]; then
             pool_name=$(basename "$conf" .conf)
         fi

@@ -47,6 +47,9 @@ RECENT_IDS_LIMIT = 256
 ADMIN_TOKEN_CACHE_FILE = "admin_token.json"
 ADMIN_TOKEN_EXPIRY_BUFFER = 300
 
+sys.path.insert(0, str(REPO_ROOT))
+from modules.lib import notification as notif  # type: ignore
+
 def safe_exists(path: Path) -> bool:
     try:
         path.stat()
@@ -342,6 +345,21 @@ def log_to_file(label: str, tag: str, payload: Dict[str, Any]) -> None:
 
 
 def telegram_broadcast(tag: str, message: str, payload: Dict[str, Any]) -> None:
+    severity = str(payload.get("severity", "INFO")).upper()
+    payload["severity"] = severity
+    site_hint = payload.get("site") or payload.get("site_slug")
+    if not notif.should_send(tag, severity, site_hint):
+        log_to_file(
+            "TELEGRAM",
+            f"{tag} skip",
+            {
+                "reason": "filtered",
+                "severity": severity,
+                "site": site_hint,
+            },
+        )
+        return
+
     if not TELEGRAM_AVAILABLE:
         return
 
@@ -360,6 +378,7 @@ def telegram_broadcast(tag: str, message: str, payload: Dict[str, Any]) -> None:
 
     _log("profile_summary", {"count": len(profiles)})
     thread_id = payload.get("telegram_thread")
+    parse_mode = notif.get_parse_mode()
     try:
         reactor_common.broadcast_telegram(
             message,
@@ -367,7 +386,7 @@ def telegram_broadcast(tag: str, message: str, payload: Dict[str, Any]) -> None:
             _log,
             tag=tag,
             thread_id=thread_id,
-            parse_mode="HTML",
+            parse_mode=parse_mode,
         )
     except Exception as exc:  # pragma: no cover
         _log("error", {"message": str(exc)})
@@ -375,22 +394,8 @@ def telegram_broadcast(tag: str, message: str, payload: Dict[str, Any]) -> None:
 
 def build_message(kind: str, site: str, payload: Dict[str, Any]) -> str:
     def format_block(title: str, subtitle: str, fields: List[Tuple[str, Optional[str]]]) -> str:
-        underline = "=" * 30
-        entries: List[Tuple[str, str]] = []
-        for label, value in fields:
-            if value in (None, ""):
-                continue
-            entries.append((label, str(value)))
-        lines = [underline, f"{title} ({subtitle})", underline]
-        if entries:
-            width = max(len(label) for label, _ in entries)
-            for label, text in entries:
-                parts = text.splitlines() or [""]
-                lines.append(f"{label.ljust(width)} : {parts[0]}")
-                for extra in parts[1:]:
-                    lines.append(f"{' ' * width}   {extra}")
-        body = "\n".join(lines)
-        return f"<pre>{html.escape(body)}</pre>"
+        _, html_block = notif.format_pre_block(title, subtitle, fields)
+        return html_block
 
     site_label = site.upper()
     if kind == "order":
@@ -854,6 +859,7 @@ class MagentoWatcher:
                 "created_at": created_at,
                 "customer": customer,
                 "email": email,
+                "severity": "INFO",
             }
             telegram_tag = f"saltgoat/business/order/{self.site_topic}"
             event_data["tag"] = telegram_tag
@@ -945,6 +951,7 @@ class MagentoWatcher:
                 "created_at": created_at,
                 "group_id": group_id,
                 "customer_id": item.get("id"),
+                "severity": "INFO",
             }
             telegram_tag = f"saltgoat/business/customer/{self.site_topic}"
             event_data["tag"] = telegram_tag

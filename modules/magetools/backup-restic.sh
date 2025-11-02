@@ -240,7 +240,7 @@ send_direct_notification() {
     [[ -f "$logger" ]] || return 0
     [[ -f "$helpers" ]] || helpers=""
 
-    python3 - "$status" "$repo" "$site" "$log_file" "$paths" "$tags" "$rc" "$origin" "$host" "$config" "$logger" "$log_path" <<'PY'
+    python3 - "$status" "$repo" "$site" "$log_file" "$paths" "$tags" "$rc" "$origin" "$host" "$config" "$logger" "$log_path" "$SCRIPT_DIR" <<'PY'
 import json
 import pathlib
 import subprocess
@@ -249,7 +249,7 @@ from datetime import datetime, timezone
 from html import escape
 from typing import Dict, Any
 
-status, repo, site, log_file, paths, tags, rc, origin, host_hint, config_path, logger_path, log_path = sys.argv[1:]
+status, repo, site, log_file, paths, tags, rc, origin, host_hint, config_path, logger_path, log_path, repo_root = sys.argv[1:]
 
 rc = int(rc or 0)
 paths_list = [item for item in (paths or "").split(",") if item]
@@ -258,6 +258,16 @@ tags_list = [item for item in (tags or "").split(",") if item]
 helpers = pathlib.Path("/opt/saltgoat-reactor/reactor_common.py")
 if not helpers.exists():
     sys.exit(0)
+
+notif = None
+if repo_root:
+    repo_path = pathlib.Path(repo_root)
+    sys.path.insert(0, str(repo_path))
+    try:
+        from modules.lib import notification as notif  # type: ignore
+    except Exception as exc:  # pylint: disable=broad-except
+        sys.stderr.write(f"Failed to import modules.lib.notification: {exc}\n")
+        notif = None
 
 sys.path.insert(0, str(helpers.parent))
 import reactor_common  # pylint: disable=import-error
@@ -271,6 +281,7 @@ payload: Dict[str, Any] = {
     "tags": ", ".join(tags_list),
     "return_code": rc,
     "origin": origin or "manual",
+    "severity": "INFO" if status == "success" else "ERROR",
 }
 
 if not site:
@@ -326,6 +337,12 @@ def log(label, data):
         timeout=5,
     )
 
+parse_mode = notif.get_parse_mode() if notif else "HTML"
+severity = payload.get("severity", "INFO")
+if notif and not notif.should_send(tag_base, severity, topic_site):
+    log("skip", {"reason": "filtered", "severity": severity, "site": topic_site})
+    sys.exit(0)
+
 profiles = reactor_common.load_telegram_profiles(config_path, log)
 if not profiles:
     log("skip", {"reason": "no_profiles"})
@@ -339,7 +356,7 @@ try:
         log,
         tag=tag_base,
         thread_id=payload.get("telegram_thread"),
-        parse_mode="HTML",
+        parse_mode=parse_mode,
     )
 except Exception as exc:  # pylint: disable=broad-except
     log("error", {"message": str(exc)})
