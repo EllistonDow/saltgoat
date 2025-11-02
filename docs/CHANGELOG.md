@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.3.9] - 2025-11-02
+
+### Changes
+- 修改 14 个文件: .github/workflows/code-review.yml, AGENTS.md, README.md, docs/BACKUP_RESTIC.md, docs/MAGENTO_MAINTENANCE.md 等
+
+
 ## [1.3.8] - 2025-11-02
 
 ### Changes

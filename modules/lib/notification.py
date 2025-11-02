@@ -163,5 +163,3 @@ def format_pre_block(title: str, subtitle: str, fields: List[Tuple[str, Optional
             lines.append(f"{' ' * width}   {extra}")
     plain = "\n".join(lines)
     return plain, f"<pre>{html.escape(plain)}</pre>"
-
-*** End Patch

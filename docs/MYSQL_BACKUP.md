@@ -277,7 +277,7 @@ magento_schedule:
 | 问题 | 解决方法 |
 |------|----------|
 | `xtrabackup` 命令不存在 | 确认已安装 `percona-xtrabackup-84`，必要时运行 `apt-cache policy percona-xtrabackup-84` |
-| 备份失败 `access denied` | 检查 `mysql_backup` Pillar 中的 `mysql_password` 是否与 `mysql.user` 中一致；必要时重新生成并 `install` | 
+| 备份失败 `access denied` | 检查 `mysql_backup` Pillar 中的 `mysql_password` 是否与 `mysql.user` 中一致；必要时重新生成并 `install` |
 | systemd 服务一直失败 | 查看 `sudo saltgoat magetools xtrabackup mysql logs`，常见原因是目录权限或 MySQL 账号缺失 |
 | 如何归档/远程存储 | 可将备份输出目录加入 Restic `paths`，或编写脚本上传至 S3/OSS |
 | 如何执行增量备份 | 可在 `extra_args` 中添加 `--incremental-basedir=/path/to/full` + `timer` 定制；目前示例默认为全量 |

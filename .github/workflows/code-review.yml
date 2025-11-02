@@ -46,12 +46,22 @@ EOF
     - name: Install code review tools
       run: |
         sudo apt update
-        sudo apt install -y shellcheck shfmt python3-yaml
+        sudo apt install -y shellcheck shfmt python3-yaml jq
         
     - name: Make scripts executable
       run: |
         chmod +x scripts/*.sh
-        
+        chmod +x scripts/check-docs.py
+
+    - name: Documentation lint
+      run: |
+        python3 scripts/check-docs.py --json | tee docs-report.json
+        jq -r '.issues[] | "::warning ::\(.path):\(.line) - \(.message)"' docs-report.json || true
+        if [ "$(jq '.issue_count' docs-report.json)" -ne 0 ]; then
+          echo "Documentation lint failed"
+          exit 1
+        fi
+
     - name: Run SaltGoat code review
       run: |
         ./scripts/salt-code-review.sh -a -c -v

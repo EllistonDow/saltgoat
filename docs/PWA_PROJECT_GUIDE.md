@@ -109,7 +109,7 @@
 - Page Builder 模板保持在 `modules/pwa/templates/`，同步逻辑由 CLI 负责。带版本的模板需注明适用的 Magento/PWA Studio 版本。
 
 ## 6. 运维与日常流程
-1. **首装**：`sudo saltgoat pwa install <site> --with-pwa`  
+1. **首装**：`sudo saltgoat pwa install <site> --with-pwa`
    - 完成后执行 `saltgoat pwa status` 验证服务，按需在 Magento 后台发布 PWA 专属页面。
 2. **日常同步**：内容或覆盖有更新时运行 `saltgoat pwa sync-content <site> --pull --rebuild`。
    - 同步脚本会在构建前自动提升 `fs.inotify.max_user_watches` 至 524288，并在 `/etc/sysctl.d/99-saltgoat-pwa.conf` 记录，防止 Yarn watch 触发 “Too many open files”。

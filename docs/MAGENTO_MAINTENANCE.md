@@ -162,7 +162,7 @@ sudo saltgoat magetools cron tank uninstall
 2. 索引状态巡检 + 全量重建（保障一周一次的干净基线）
 3. 日志轮换（>100MB 文件 truncate）
 4. 队列消费者列表、cron 可用性、FPC 模式等运行时检查
-5. 归档备份（仅在提供 `--backup-dir` 时启用；推荐以 Restic/XtraBackup 为主）  
+5. 归档备份（仅在提供 `--backup-dir` 时启用；推荐以 Restic/XtraBackup 为主）
 6. 可选 Restic 快照（`--trigger-restic`，可叠加 `--restic-site/--restic-backup-dir/--restic-extra-path`）
 7. 可选 Valkey 清空（`--allow-valkey-flush`）
 8. 依赖巡检 `n98-magerun2 sys:check` / `composer outdated --no-dev`

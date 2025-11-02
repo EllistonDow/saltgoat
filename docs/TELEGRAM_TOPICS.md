@@ -83,3 +83,19 @@ saltgoat:
 3. **Pillar 配置**：在 `salt/pillar/chatops.sls` 或新的通知配置中维护话题映射，方便环境迁移时统一管理。
 
 完成以上改造后，所有通知即可根据事件类型自动路由到指定话题，实现 Telegram 群内的可视化分类。
+
+## 自动化维护流程
+
+SaltGoat 现已将话题与 Pillar 配置串联进日常运维脚本：
+
+- `saltgoat monitor auto-sites` 自动生成站点健康检查配置，同时触发 `scripts/setup-telegram-topics.py`，为新站点创建 `${site}-{orders,customers,summary,mysql-backup,restic-backup}` 等话题；注销站点时会同步清理。
+- `saltgoat magetools schedule auto` 安装/验收站点 Salt Schedule，复用同一话题命名规范，确保巡检、备份、自愈通知均落在对应分组。
+- `scripts/setup-telegram-topics.py` 会落盘 `/etc/saltgoat/telegram.json` 与 `salt/pillar/telegram-topics.sls`，并支持幂等更新。推荐在变更群组或站点后运行一次（被上述命令自动调用）。
+- 通知过滤规则统一写入 `salt/pillar/notifications.sls`，通过 `notifications:telegram:{min_severity,disabled_tags,site_overrides}` 控制推送级别；所有脚本改用 `modules.lib.notification` 的 `should_send` / `format_pre_block`。
+
+> 验证流程建议：
+> 1. 调整站点池或资源触发一次自愈（`sudo python3 modules/monitoring/resource_alert.py`）。
+> 2. 执行 `saltgoat monitor auto-sites`、`saltgoat magetools schedule auto` 检查 Pillar 与话题是否同步。
+> 3. 使用 `./scripts/setup-telegram-topics.py --dry-run` 查看 Telegram 话题差异，确认无误后正式应用。
+
+以上步骤将站点、计划任务、通知话题联动起来，新建或扩容站点时只需运行自动化命令即可完成监控/通知闭环。

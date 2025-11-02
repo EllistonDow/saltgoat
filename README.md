@@ -207,7 +207,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 ## 🧪 测试与代码质量
 
 ```bash
-bash scripts/code-review.sh -a        # shfmt + ShellCheck
+bash scripts/code-review.sh -a        # shfmt + ShellCheck + docs lint
 bash tests/consistency-test.sh        # 基础一致性检测
 bash tests/test_magento_optimization.sh   # Magento 优化 dry-run
 ```

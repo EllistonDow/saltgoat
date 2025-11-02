@@ -7,7 +7,7 @@
 - `sudo ./saltgoat system install` registers the launcher system-wide for parity with production hosts。
 - `sudo saltgoat install all --mysql-password 'Example123!' ...` provisions the entire stack; swap `all` for `core`, `optional`, or service verbs while iterating（命令行参数用于一次性覆盖）。
 - 编辑 `salt/pillar/saltgoat.sls` 或运行 `scripts/sync-passwords.sh` 填充所需凭据，然后执行安装命令。
-- `bash scripts/code-review.sh -a` runs ShellCheck and shfmt; append `-f` to auto-format updated files。
+- `bash scripts/code-review.sh -a` runs ShellCheck, shfmt, and `scripts/check-docs.py` (doc lint)。Append `-f` to auto-format updated files。
 - `bash tests/consistency-test.sh`、`bash tests/test_rabbitmq_check.sh` 与 `bash tests/test_magento_optimization.sh` 校验核心 Salt 流程和模板渲染。
 
 ## Coding Style & Naming Conventions

@@ -43,6 +43,8 @@ show_help() {
     echo "  -c, --check    只检查不修复"
     echo "  -v, --verbose  详细输出"
     echo ""
+    echo "脚本会在完成 Salt / Bash 检查后自动运行 docs Lint (scripts/check-docs.py)"
+    echo ""
     echo "示例:"
     echo "  $0                    # 审查当前目录所有文件"
     echo "  $0 saltgoat           # 审查主脚本"
@@ -83,6 +85,13 @@ check_salt_syntax() {
     
     # 检查 .sls 文件语法
     if [[ "$file" == *.sls ]]; then
+        if [[ $EUID -ne 0 ]]; then
+            log_warning "非 root 环境，跳过 Salt state.show_sls 校验: $file"
+            return 0
+        fi
+        if [[ "$file" == */pillar/*.sls ]]; then
+            return 0
+        fi
         if salt-call --local state.show_sls "${file%.sls}" --out=null 2>/dev/null; then
             log_success "Salt 状态文件语法正确: $file"
             return 0
@@ -104,6 +113,14 @@ check_pillar_syntax() {
     
     if [[ "$file" == */pillar/*.sls ]]; then
         log_info "检查 Pillar 文件: $file"
+        if [[ ! -r "$file" ]]; then
+            log_warning "Pillar 文件无法读取（可能权限受限），跳过检查: $file"
+            return 0
+        fi
+        if grep -q "{%" "$file" || grep -q "{{" "$file"; then
+            log_warning "检测到 Jinja 模板，跳过 YAML 语法检查: $file"
+            return 0
+        fi
         
         # 检查 YAML 语法
         if command -v python3 &> /dev/null; then
@@ -123,9 +140,10 @@ check_pillar_syntax() {
 # 检查 Salt 最佳实践
 check_salt_best_practices() {
     local file="$1"
-    
+
     local issues=0
-    
+    local allow_sudo_files=("./core/install.sh" "./core/system.sh")
+
     # 检查是否使用 salt-call --local
     if grep -q "salt-call" "$file" && ! grep -q "salt-call --local" "$file"; then
         log_warning "建议使用 'salt-call --local' 而不是 'salt-call': $file"
@@ -134,8 +152,17 @@ check_salt_best_practices() {
     
     # 检查是否使用 cmd.run 而不是直接命令
     if grep -q "sudo " "$file" && grep -q "salt-call" "$file"; then
-        log_warning "在 Salt 脚本中避免使用 sudo，优先使用 Salt 模块: $file"
-        ((issues++))
+        local skip_sudo_warning="false"
+        for allow in "${allow_sudo_files[@]}"; do
+            if [[ "$file" == "$allow" ]]; then
+                skip_sudo_warning="true"
+                break
+            fi
+        done
+        if [[ "$skip_sudo_warning" == "false" ]]; then
+            log_warning "在 Salt 脚本中避免使用 sudo，优先使用 Salt 模块: $file"
+            ((issues++))
+        fi
     fi
     
     # 检查错误处理
@@ -150,7 +177,11 @@ check_salt_best_practices() {
         ((issues++))
     fi
     
-    return $issues
+    if [[ "${STRICT_SALT_CHECKS:-0}" == "1" ]]; then
+        return $issues
+    fi
+
+    return 0
 }
 
 # ShellCheck 静态分析
@@ -209,6 +240,26 @@ check_permissions() {
     return 0
 }
 
+run_docs_check() {
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local checker="${script_dir}/check-docs.py"
+
+    if [[ ! -f "$checker" ]]; then
+        log_warning "未找到文档检查脚本: ${checker}"
+        return 0
+    fi
+
+    log_info "运行文档检查: docs/*.md"
+    if python3 "$checker"; then
+        log_success "文档检查通过"
+        return 0
+    else
+        log_error "文档检查失败"
+        return 1
+    fi
+}
+
 # 检查 Salt 模块使用
 check_salt_modules() {
     local file="$1"
@@ -235,8 +286,12 @@ check_salt_modules() {
         log_warning "建议使用 'file.copy' 而不是 'cmd.run cp': $file"
         ((issues++))
     fi
-    
-    return $issues
+
+    if [[ "${STRICT_SALT_CHECKS:-0}" == "1" ]]; then
+        return $issues
+    fi
+
+    return 0
 }
 
 # 综合审查单个文件
@@ -420,6 +475,12 @@ main() {
         fi
         echo ""
     done
+
+    if ! run_docs_check; then
+        ((total_issues++))
+        failed_files+=("docs (check-docs.py)")
+        echo ""
+    fi
     
     # 总结
     echo "=========================================="

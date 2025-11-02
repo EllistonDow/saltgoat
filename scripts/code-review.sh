@@ -41,6 +41,8 @@ show_help() {
     echo "  -c, --check    只检查不修复"
     echo "  -v, --verbose  详细输出"
     echo ""
+    echo "脚本会在 Shell 检查后自动运行 docs Lint (scripts/check-docs.py)"
+    echo ""
     echo "示例:"
     echo "  $0                    # 审查当前目录所有脚本"
     echo "  $0 saltgoat           # 审查主脚本"
@@ -160,6 +162,26 @@ check_shebang() {
     fi
     
     return 0
+}
+
+run_docs_check() {
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local checker="${script_dir}/check-docs.py"
+
+    if [[ ! -f "$checker" ]]; then
+        log_warning "未找到文档检查脚本: ${checker}"
+        return 0
+    fi
+
+    log_info "运行文档检查: docs/*.md"
+    if python3 "$checker"; then
+        log_success "文档检查通过"
+        return 0
+    else
+        log_error "文档检查失败"
+        return 1
+    fi
 }
 
 # 综合审查单个文件
@@ -289,6 +311,12 @@ main() {
         fi
         echo ""
     done
+
+    if ! run_docs_check; then
+        ((total_issues++))
+        failed_files+=("docs (check-docs.py)")
+        echo ""
+    fi
     
     # 总结
     echo "=========================================="

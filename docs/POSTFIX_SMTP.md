@@ -4,13 +4,13 @@ SaltGoat 允许在同一套 Pillar 中维护多组外发 SMTP 凭据，并可通
 
 ## 1. 准备工作
 
-1. **生成或更新 Pillar**  
+1. **生成或更新 Pillar**
    运行 `sudo saltgoat pillar init` 会写出一个支持多账号的基本结构；已有环境可直接编辑 `salt/pillar/saltgoat.sls`（或你的私有 Pillar）。
    > 提示：`salt/pillar/lemp.sls` 仍然是示例模板，真实环境下请把敏感凭据写入 `salt/pillar/saltgoat.sls` 或你的外部机密仓库。
-2. **账号凭据**  
-   - 每个账号需要 `host`、`port`、`user`、`password`、`from_email`、`from_name` 字段。  
+2. **账号凭据**
+   - 每个账号需要 `host`、`port`、`user`、`password`、`from_email`、`from_name` 字段。
    - Gmail 需启用应用专用密码；Microsoft 365 默认只允许发件人 = 登录用户，使用别名需在 Exchange 管理中心授予 “Send As” 权限。
-3. **Postfix 安装（可选）**  
+3. **Postfix 安装（可选）**
    `mail.postfix.enabled` 默认为 `false`。若希望本机直接通过 Postfix relaying，先执行 `sudo apt-get install postfix` 或 `salt-call --local state.apply optional.postfix` 并将 `enabled` 设为 `true`。
 
 ## 2. Pillar 结构示例
@@ -92,7 +92,7 @@ sudo ./saltgoat postfix --smtp gmail --disable
 
 ## 4. 验证方式
 
-1. **快速脚本**（仅测试 SMTP 登录与发信）：  
+1. **快速脚本**（仅测试 SMTP 登录与发信）：
    ```bash
    python3 - <<'PY'
    import smtplib, yaml
@@ -112,7 +112,7 @@ sudo ./saltgoat postfix --smtp gmail --disable
    ```
    若返回 `SendAsDenied`，说明当前登录账户没有“代表地址发信”的权限。
 
-2. **查看 Postfix 状态**（启用时）  
+2. **查看 Postfix 状态**（启用时）
    ```bash
    sudo postconf relayhost myorigin
    sudo tail -f /var/log/mail.log
@@ -130,7 +130,7 @@ sudo ./saltgoat postfix --smtp gmail --disable
 
 - 将真实密码保存在私有 Pillar 或外部机密仓库，Git 版本库中仅留占位符。
 - 切换至 CI/CD 环境时，配合 `pillar_roots` 或 Vault 方案存储凭据。
-- 如不再使用 Postfix，可将 `mail.postfix.enabled` 设为 `false` 并运行：  
+- 如不再使用 Postfix，可将 `mail.postfix.enabled` 设为 `false` 并运行：
   `sudo salt-call --local state.apply optional.postfix`，公式会移除配置与服务。
 
 ---
