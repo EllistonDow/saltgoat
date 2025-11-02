@@ -65,7 +65,7 @@
 {% set stats_jobs = stats_jobs_ns.items %}
 {% macro shquote(val) -%}'{{ val | replace("'", "'\\''") }}'{%- endmacro %}
 {% macro build_dump_cmd(job) -%}
-saltgoat magetools xtrabackup mysql dump{% if job.get('database') %} --database {{ shquote(job.database) }}{% endif %}{% if job.get('backup_dir') %} --backup-dir {{ shquote(job.backup_dir) }}{% endif %}{% if job.get('repo_owner') %} --repo-owner {{ shquote(job.repo_owner) }}{% endif %}{% if job.get('no_compress', False) %} --no-compress{% endif %}
+saltgoat magetools xtrabackup mysql dump{% if job.get('database') %} --database {{ shquote(job.database) }}{% endif %}{% if job.get('backup_dir') %} --backup-dir {{ shquote(job.backup_dir) }}{% endif %}{% if job.get('repo_owner') %} --repo-owner {{ shquote(job.repo_owner) }}{% endif %} --site {{ shquote(site_name) }}{% if job.get('no_compress', False) %} --no-compress{% endif %}
 {%- endmacro %}
 {% macro build_stats_cmd(job) -%}
 saltgoat magetools stats --site {{ site_name }}{% if job.get('period') %} --period {{ job.period }}{% else %} --period daily{% endif %}{% if job.get('page_size') %} --page-size {{ job.page_size }}{% endif %}{% if job.get('telegram_thread') is not none %} --telegram-thread {{ job.telegram_thread }}{% endif %}{% if job.get('no_telegram', False) %} --no-telegram{% endif %}{% if job.get('quiet', False) %} --quiet{% endif %}{% set job_extra = job.get('extra_args') %}{% if job_extra %}{% if job_extra is string %} {{ job_extra }}{% elif job_extra is sequence %}{% for arg in job_extra %} {{ arg }}{% endfor %}{% else %} {{ job_extra }}{% endif %}{% endif %}

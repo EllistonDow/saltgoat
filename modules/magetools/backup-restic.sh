@@ -273,8 +273,6 @@ payload: Dict[str, Any] = {
     "origin": origin or "manual",
 }
 
-payload["telegram_thread"] = 5
-
 if not site:
     payload.pop("site")
 if not payload["paths"]:
@@ -310,7 +308,8 @@ for label, value in entries:
         lines.append(f"{' ' * width}   {extra}")
 message = f"<pre>{escape('\n'.join(lines))}</pre>"
 
-tag_base = f"saltgoat/backup/restic/{status}"
+topic_site = (site or "global").lower().replace(" ", "-").replace("/", "-")
+tag_base = f"saltgoat/backup/restic/{topic_site}"
 payload["tag"] = tag_base
 
 def log(label, data):

@@ -24,6 +24,7 @@ except Exception:  # pragma: no cover - PyYAML 可能未安装
 
 BASE_DIR = Path("/var/www")
 CRON_DIR = Path("/etc/cron.d")
+SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 ENV = os.environ.copy()
 ENV.setdefault("PYTHONWARNINGS", "ignore")
 
@@ -128,6 +129,28 @@ def load_pillar_config() -> Dict[str, object]:
 
 def site_label(name: str) -> str:
     return name.replace("/", "-")
+
+
+def base_site_name(name: str) -> str:
+    return site_label(name).split("-")[0]
+
+
+def ensure_telegram_topics(sites: Iterable[str]) -> None:
+    script = SCRIPTS_DIR / "setup-telegram-topics.py"
+    site_list = sorted({site for site in sites if site})
+    if not site_list:
+        return
+    if not script.exists():
+        warning(f"未找到 Telegram 话题脚本: {script}")
+        return
+    cmd = ["sudo", "python3", str(script), "--sites", ",".join(site_list)]
+    result = subprocess.run(cmd, text=True, capture_output=True, env=ENV)
+    if result.returncode != 0:
+        warning(f"创建 Telegram 话题失败: {result.stderr.strip() or result.stdout.strip()}")
+    else:
+        for line in result.stdout.splitlines():
+            if line:
+                info(f"  [topics] {line}")
 
 
 def _job_applies(job: Dict[str, object], site: str) -> bool:
@@ -320,6 +343,7 @@ def run_auto(
     failures = 0
     cron_candidates: List[SiteRecord] = []
     results: List[str] = []
+    topic_sites: Set[str] = set()
 
     for record in sites:
         info(f"处理站点: {record.site}")
@@ -346,9 +370,11 @@ def run_auto(
         if comment:
             info(f"  备注: {comment}")
         results.append(record.site)
+        topic_sites.add(base_site_name(record.site))
 
     print()
     success(f"已处理站点: {', '.join(results)}")
+    ensure_telegram_topics(topic_sites)
     refreshed_map = fetch_schedule_jobs()
 
     existing_tokens = {record.token for record in sites}

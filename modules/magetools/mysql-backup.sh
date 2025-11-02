@@ -50,15 +50,17 @@ notify_dump_telegram() {
     local reason="${5:-}"
     local return_code="${6:-0}"
     local compressed="${7:-1}"
+    local site="$8"
 
-    python3 - "$status" "$database" "$path" "$size" "$reason" "$return_code" "$compressed" "$HOST_ID" <<'PY'
+    python3 - "$status" "$database" "$path" "$size" "$reason" "$return_code" "$compressed" "$site" "$HOST_ID" <<'PY'
 import json
 import subprocess
 import sys
 from datetime import datetime, timezone
 from html import escape
 
-status, database, path, size, reason, return_code, compressed, host = sys.argv[1:9]
+status, database, path, size, reason, return_code, compressed, site, host = sys.argv[1:10]
+site = (site or database or host or "default").lower().replace(" ", "-").replace("/", "-")
 
 sys.path.insert(0, "/opt/saltgoat-reactor")
 try:
@@ -68,7 +70,7 @@ except Exception as exc:  # pylint: disable=broad-except
     raise SystemExit(0)
 
 log_path = "/var/log/saltgoat/alerts.log"
-tag = f"saltgoat/backup/mysql_dump/{status}"
+tag = f"saltgoat/backup/mysql_dump/{site}"
 
 level = "INFO" if status == "success" else "ERROR"
 timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -76,6 +78,7 @@ header = "=" * 30
 entries = [
     ("Level", level),
     ("Host", host),
+    ("Site", site),
     ("Status", status.upper()),
     ("File", path or "n/a"),
     ("Return", return_code),
@@ -118,9 +121,9 @@ if not profiles:
     log("skip", {"reason": "no_profiles"})
     raise SystemExit(0)
 
-context = {"database": database, "status": status, "size": size, "compressed": compressed}
+context = {"database": database, "status": status, "size": size, "compressed": compressed, "site": site}
 log("context", context)
-reactor_common.broadcast_telegram(message, profiles, log, tag=tag, thread_id=4, parse_mode="HTML")
+reactor_common.broadcast_telegram(message, profiles, log, tag=tag, parse_mode="HTML")
 PY
 }
 
@@ -240,6 +243,7 @@ dump_database() {
     local backup_dir=""
     local repo_owner=""
     local compress=1
+    local site_name=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -267,6 +271,14 @@ dump_database() {
                 fi
                 shift 2
                 ;;
+            --site)
+                site_name="${2:-}"
+                if [[ -z "$site_name" ]]; then
+                    log_error "--site 需要一个站点名称"
+                    exit 1
+                fi
+                shift 2
+                ;;
             --no-compress)
                 compress=0
                 shift
@@ -278,12 +290,14 @@ dump_database() {
       --database <name> \
       [--backup-dir <path>] \
       [--repo-owner <user>] \
+      [--site <site>] \
       [--no-compress]
 
 说明:
   --database     必填，指定要导出的数据库名称
   --backup-dir   备份输出目录（默认 /var/backups/mysql/dumps）
   --repo-owner   备份文件最终属主（默认读取 mysql-backup.env 内的 MYSQL_BACKUP_REPO_OWNER）
+  --site         绑定站点名称，用于通知分流（默认尝试根据数据库推断）
   --no-compress  关闭 gzip 压缩，输出 .sql 文件
 EOF
                 return 0
@@ -311,6 +325,16 @@ EOF
     local mysql_socket="${MYSQL_BACKUP_SOCKET:-}"
     local default_repo_owner="${MYSQL_BACKUP_REPO_OWNER:-${MYSQL_BACKUP_SERVICE_USER:-root}}"
 
+    if [[ -z "$site_name" ]]; then
+        site_name="$database"
+        site_name="${site_name%mage}"
+        if [[ -z "$site_name" ]]; then
+            site_name="$database"
+        fi
+    fi
+    site_name="${site_name,,}"
+    site_name="${site_name//\//-}"
+
     if [[ -z "$backup_dir" ]]; then
         backup_dir="$DUMP_DEFAULT_DIR"
     fi
@@ -327,9 +351,10 @@ EOF
             "status=failure" \
             "origin=dump" \
             "database=${database}" \
+            "site=${site_name}" \
             "reason=missing_mysqldump" \
             "return_code=1"
-        notify_dump_telegram "failure" "$database" "" "unknown" "missing_mysqldump" "1" "$compress" || true
+        notify_dump_telegram "failure" "$database" "" "unknown" "missing_mysqldump" "1" "$compress" "$site_name" || true
         log_error "未找到 mysqldump，请先安装 mysql-client 或 percona 客户端工具"
         exit 1
     fi
@@ -371,9 +396,10 @@ EOF
             "status=failure" \
             "origin=dump" \
             "database=${database}" \
+            "site=${site_name}" \
             "reason=missing_password" \
             "return_code=1"
-        notify_dump_telegram "failure" "$database" "" "unknown" "missing_password" "1" "$compress" || true
+        notify_dump_telegram "failure" "$database" "" "unknown" "missing_password" "1" "$compress" "$site_name" || true
         log_error "无法从 $MYSQL_ENV 读取 MYSQL_BACKUP_PASSWORD，无法继续"
         exit 1
     fi
@@ -401,11 +427,12 @@ EOF
             "status=failure" \
             "origin=dump" \
             "database=${database}" \
+            "site=${site_name}" \
             "reason=mysqldump_exit_${dump_rc}" \
             "return_code=${dump_rc}" \
             "file=${output_path}" \
             "path=${output_path}"
-        notify_dump_telegram "failure" "$database" "$output_path" "unknown" "mysqldump_exit_${dump_rc}" "${dump_rc}" "$compress" || true
+        notify_dump_telegram "failure" "$database" "$output_path" "unknown" "mysqldump_exit_${dump_rc}" "${dump_rc}" "$compress" "$site_name" || true
         log_error "mysqldump 失败，请检查数据库名称或备份账号权限"
         exit "$dump_rc"
     fi
@@ -438,13 +465,14 @@ EOF
         "status=success" \
         "origin=dump" \
         "database=${database}" \
+        "site=${site_name}" \
         "file=${output_path}" \
         "path=${output_path}" \
         "size=${size:-unknown}" \
         "return_code=0" \
         "timestamp=${ts}" \
         "compressed=${compress}"
-    notify_dump_telegram "success" "$database" "$output_path" "$size" "" "0" "$compress" || true
+    notify_dump_telegram "success" "$database" "$output_path" "$size" "" "0" "$compress" "$site_name" || true
 }
 
 ACTION="${1:-}"

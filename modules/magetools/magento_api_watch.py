@@ -430,6 +430,7 @@ class MagentoWatcher:
         max_pages: int = 25,
     ):
         self.site = site
+        self.site_topic = site.replace("/", "-").lower()
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.kinds = kinds
@@ -844,6 +845,7 @@ class MagentoWatcher:
 
             event_data = {
                 "site": self.site,
+                "site_slug": self.site_topic,
                 "entity_id": entity_id,
                 "increment_id": increment_id,
                 "grand_total": total,
@@ -853,8 +855,8 @@ class MagentoWatcher:
                 "customer": customer,
                 "email": email,
             }
-            event_data["tag"] = "saltgoat/business/order"
-            event_data["telegram_thread"] = 2
+            telegram_tag = f"saltgoat/business/order/{self.site_topic}"
+            event_data["tag"] = telegram_tag
             emit_event("saltgoat/business/order", event_data)
             message = build_message(
                 "order",
@@ -868,7 +870,7 @@ class MagentoWatcher:
                     "created_at": created_at,
                 },
             )
-            telegram_broadcast("saltgoat/business/order", message, event_data)
+            telegram_broadcast(telegram_tag, message, event_data)
         self._save_last_id("orders", max_id, new_ids, state=state)
         if result["truncated"]:
             LOG(f"[WARNING] {self.site} 订单存在超过 {self.max_pages * self.page_size} 条新纪录，已仅推送最近 {len(items)} 条。")
@@ -933,8 +935,10 @@ class MagentoWatcher:
             email = item.get("email") or ""
             created_at = item.get("created_at") or ""
             group_id = item.get("group_id")
+
             event_data = {
                 "site": self.site,
+                "site_slug": self.site_topic,
                 "entity_id": entity_id,
                 "name": name,
                 "email": email,
@@ -942,8 +946,8 @@ class MagentoWatcher:
                 "group_id": group_id,
                 "customer_id": item.get("id"),
             }
-            event_data["tag"] = "saltgoat/business/customer"
-            event_data["telegram_thread"] = 3
+            telegram_tag = f"saltgoat/business/customer/{self.site_topic}"
+            event_data["tag"] = telegram_tag
             emit_event("saltgoat/business/customer", event_data)
             message = build_message(
                 "customer",
@@ -956,7 +960,7 @@ class MagentoWatcher:
                     "customer_group": group_id,
                 },
             )
-            telegram_broadcast("saltgoat/business/customer", message, event_data)
+            telegram_broadcast(telegram_tag, message, event_data)
         self._save_last_id("customers", max_id, new_ids, state=state)
         if result["truncated"]:
             LOG(f"[WARNING] {self.site} 用户存在超过 {self.max_pages * self.page_size} 条新纪录，已仅推送最近 {len(items)} 条。")

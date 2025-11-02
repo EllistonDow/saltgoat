@@ -196,11 +196,13 @@ def main() -> None:
     start_local, end_local, label = period_range(args.period)
     start_str = fmt_ts(start_local)
     end_str = fmt_ts(end_local)
-    tag_base = f"saltgoat/business/summary/{args.period.lower()}"
+    event_tag = f"saltgoat/business/summary/{args.period.lower()}"
 
     for site in sites:
         base_url, token = load_credentials(site)
         watcher = MagentoWatcher(site, base_url, token, ["orders"], page_size=args.page_size)
+        site_slug = site.replace("/", "-").lower()
+        display_site = site.replace("/", " / ").upper()
 
         orders = list(fetch_entities(watcher, "/rest/V1/orders", "entity_id", start_local, end_local))
         customers = list(
@@ -240,9 +242,10 @@ def main() -> None:
             ("Customers", str(customer_count)),
             ("Generated", generated),
         ]
-        plain_text, message = format_block(f"{label.upper()} SUMMARY", site.upper(), rows)
+        plain_text, message = format_block(f"{label.upper()} SUMMARY", display_site, rows)
         payload = {
             "site": site,
+            "site_slug": site_slug,
             "period": args.period.lower(),
             "label": label,
             "orders": {"count": order_count, "totals": totals},
@@ -252,11 +255,13 @@ def main() -> None:
         if args.telegram_thread is not None:
             payload["telegram_thread"] = int(args.telegram_thread)
 
-        log_to_file("SUMMARY", tag_base, payload)
-        emit_event(tag_base, payload)
+        log_to_file("SUMMARY", event_tag, payload)
+        emit_event(event_tag, payload)
 
         if not args.no_telegram:
-            telegram_broadcast(tag_base, message, payload)
+            telegram_tag = f"saltgoat/business/summary/{site_slug}"
+            payload["tag"] = telegram_tag
+            telegram_broadcast(telegram_tag, message, payload)
 
         if not args.quiet:
             print(plain_text)

@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.3.6] - 2025-11-02
+
+### Changes
+- 修改 8 个文件: modules/magetools/backup-restic.sh, modules/magetools/magento-schedule.py, modules/magetools/magento_api_watch.py, modules/magetools/magento_summary.py, modules/magetools/mysql-backup.sh 等
+
+
 ## [1.3.5] - 2025-11-02
 
 ### Changes
