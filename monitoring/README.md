@@ -119,13 +119,29 @@ saltgoat:
           interval: 20
         php8.3-fpm:
           interval: 20
-  reactor:
-    autorestart_services:
-      services:
-        - nginx
-        - php8.3-fpm
-    resource_alerts:
-      log_path: /var/log/saltgoat/alerts.log
+    reactor:
+      autorestart_services:
+        services:
+          - nginx
+          - php8.3-fpm
+          - varnish
+      resource_alerts:
+        log_path: /var/log/saltgoat/alerts.log
+
+saltgoat:
+  monitor:
+    sites:
+      - name: tank-frontend
+        url: "https://tank.example.com/"
+        timeout: 6
+        expect: 200
+        timeout_services:
+          - php8.3-fpm
+        server_error_services:
+          - php8.3-fpm
+          - nginx
+
+上述 `monitor.sites` 配置会被 `modules/monitoring/resource_alert.py` 读取：脚本会按时间间隔拉取页面并写入 `alerts.log`；若状态码异常或请求超时，将自动重启对应服务（示例中 502/503/504 会重启 PHP-FPM，系统检测到 Varnish 正在使用时也会一并拉起）。可通过 `failure_services`/`server_error_services` 字段自定义不同错误场景下的自愈策略。
 ```
 
 更新 Pillar 后，可用 `sudo salt-call --local pillar.items saltgoat` 验证数据，再执行 `sudo saltgoat monitor enable-beacons` 重新加载。

@@ -10,11 +10,14 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import shutil
 import socket
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from collections import defaultdict
 from argparse import ArgumentParser
 from pathlib import Path
@@ -60,6 +63,8 @@ MYSQL_AUTOSCALE_MIN_STEP = 20
 VALKEY_AUTOSCALE_STEP_RATIO = 0.2
 VALKEY_AUTOSCALE_MIN_STEP_MB = 256
 VALKEY_AUTOSCALE_MAX_RATIO = 0.75
+
+_SERVICE_CACHE: Dict[str, bool] = {}
 
 
 def shell_exists(path: Path) -> bool:
@@ -146,15 +151,41 @@ def disk_usage(paths: Iterable[Path]) -> Dict[str, float]:
     return stats
 
 
+def service_exists(name: str) -> bool:
+    if name in _SERVICE_CACHE:
+        return _SERVICE_CACHE[name]
+    try:
+        proc = subprocess.run(
+            ["systemctl", "show", f"{name}.service", "--property", "LoadState"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        exists = proc.returncode == 0 and "not-found" not in proc.stdout
+    except FileNotFoundError:
+        exists = False
+    _SERVICE_CACHE[name] = exists
+    return exists
+
+
 def service_status(services: Iterable[str]) -> Dict[str, bool]:
     result: Dict[str, bool] = {}
     for svc in services:
-        ok = subprocess.call(
-            ["systemctl", "is-active", "--quiet", svc],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        ) == 0
-        result[svc] = ok
+        if not service_exists(svc):
+            continue
+        try:
+            proc = subprocess.run(
+                ["systemctl", "is-active", "--quiet", svc],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if proc.returncode == 4 and proc.stderr and "could not be found" in proc.stderr.lower():
+                continue
+            result[svc] = proc.returncode == 0
+        except FileNotFoundError:
+            continue
     return result
 
 
@@ -563,6 +594,174 @@ def apply_states(states: Iterable[str]) -> Dict[str, bool]:
         results[state] = success
     return results
 
+
+def restart_services(services: Iterable[str]) -> Dict[str, bool]:
+    results: Dict[str, bool] = {}
+    for service in services:
+        if not service_exists(service):
+            continue
+        cmd = ["systemctl", "restart", service]
+        try:
+            proc = subprocess.run(
+                cmd,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            results[service] = proc.returncode == 0
+        except FileNotFoundError:
+            results[service] = False
+    return results
+
+
+def default_timeout_services() -> List[str]:
+    services = ["php8.3-fpm"]
+    if service_exists("varnish"):
+        services.append("varnish")
+    return services
+
+
+def default_server_error_services() -> List[str]:
+    services = ["php8.3-fpm", "nginx"]
+    if service_exists("varnish"):
+        services.append("varnish")
+    return services
+
+
+def default_failure_services() -> List[str]:
+    services = ["php8.3-fpm", "nginx"]
+    if service_exists("varnish"):
+        services.append("varnish")
+    return services
+
+
+def normalize_services(value: Any) -> List[str]:
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value if str(item).strip()]
+    if value:
+        return [str(value)]
+    return []
+
+
+def _command_from_details(details: Dict[str, Any]) -> str:
+    args = details.get("args") or details.get("job_args")
+    if isinstance(args, list) and args:
+        return " ".join(str(item) for item in args)
+    if isinstance(args, str):
+        return args
+    return ""
+
+
+def _sites_in_command(command: str) -> Set[str]:
+    sites: Set[str] = set()
+    match = re.search(r"--site\s+([\w\-/]+)", command)
+    if match:
+        sites.add(match.group(1))
+    for path_match in re.findall(r"/var/www/([\w\-]+)", command):
+        sites.add(path_match)
+    return sites
+
+
+def load_site_checks() -> List[Dict[str, Any]]:
+    if Caller is None:
+        return []
+    try:
+        caller = Caller()  # type: ignore[call-arg]
+        sites = caller.cmd("pillar.get", "saltgoat:monitor:sites", [])
+        if isinstance(sites, list):
+            return [site for site in sites if isinstance(site, dict) and site.get("url")]
+    except Exception:
+        return []
+    return []
+
+
+def check_sites(
+    sites: List[Dict[str, Any]],
+    details: List[str],
+    auto_ctx: Dict[str, Any],
+    bump: Any,
+) -> List[Dict[str, Any]]:
+    results: List[Dict[str, Any]] = []
+    for site in sites:
+        url = str(site.get("url", ""))
+        if not url:
+            continue
+        name = str(site.get("name") or url)
+        timeout = float(site.get("timeout", 5.0) or 5.0)
+        expected = int(site.get("expect", 200) or 200)
+        headers = site.get("headers") if isinstance(site.get("headers"), dict) else {}
+        req = urllib.request.Request(url, headers={"User-Agent": "SaltGoatHealth/1.0", **headers})
+        start = time.time()
+        status: Optional[int] = None
+        body_snippet = ""
+        error_msg: Optional[str] = None
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                status = resp.getcode()
+                try:
+                    body_snippet = resp.read(256).decode("utf-8", errors="ignore")
+                except Exception:
+                    body_snippet = ""
+        except urllib.error.HTTPError as exc:
+            status = exc.code
+            try:
+                body_snippet = exc.read(256).decode("utf-8", errors="ignore")
+            except Exception:
+                body_snippet = ""
+        except Exception as exc:
+            error_msg = str(exc)
+        duration = time.time() - start
+        site_result = {
+            "name": name,
+            "url": url,
+            "status": status,
+            "expected": expected,
+            "duration": round(duration, 3),
+        }
+        if error_msg:
+            site_result["error"] = error_msg
+        if body_snippet:
+            site_result["body"] = body_snippet
+        results.append(site_result)
+
+        failure_defaults = default_failure_services()
+        timeout_defaults = default_timeout_services()
+        server_error_defaults = default_server_error_services()
+
+        if error_msg:
+            bump("CRITICAL", f"Site {name}")
+            details.append(f"Site check failed: {name} ({error_msg})")
+            auto_ctx.setdefault("services", set()).update(
+                normalize_services(site.get("failure_services", failure_defaults))
+            )
+            continue
+
+        if status is None:
+            bump("CRITICAL", f"Site {name}")
+            details.append(f"Site check failed: {name} returned no status")
+            auto_ctx.setdefault("services", set()).update(
+                normalize_services(site.get("failure_services", failure_defaults))
+            )
+            continue
+
+        details.append(f"Site {name}: HTTP {status} ({duration:.2f}s)")
+        if status != expected:
+            if status >= 500:
+                bump("CRITICAL", f"Site {name}")
+            else:
+                bump("WARNING", f"Site {name}")
+
+            if status in {502, 503, 504}:
+                services = normalize_services(site.get("timeout_services", timeout_defaults))
+            elif status >= 500:
+                services = normalize_services(site.get("server_error_services", server_error_defaults))
+            else:
+                services = normalize_services(site.get("failure_services", failure_defaults))
+            auto_ctx.setdefault("services", set()).update(services)
+        elif status >= 400:
+            bump("WARNING", f"Site {name}")
+
+    return results
 def hostname() -> str:
     return HOSTNAME or run_cmd(["hostname"]) or "localhost"
 
@@ -677,7 +876,7 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
     severity = "INFO"
     details: List[str] = []
     triggers: List[str] = []
-    auto_ctx: Dict[str, Any] = {"actions": [], "states": set()}
+    auto_ctx: Dict[str, Any] = {"actions": [], "states": set(), "services": set()}
 
     def bump(level: str, reason: str) -> None:
         nonlocal severity
@@ -743,7 +942,10 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
             details.append(f"Disk notice: {mount} usage >= {disk_notice:.1f}%")
 
     # Services
-    services = service_status(["nginx", "php8.3-fpm", "mysql", "valkey", "rabbitmq", "salt-minion"])
+    core_services = ["nginx", "php8.3-fpm", "mysql", "valkey", "rabbitmq", "salt-minion"]
+    if service_exists("varnish"):
+        core_services.append("varnish")
+    services = service_status(core_services)
     failing = [svc for svc, ok in services.items() if not ok]
     if failing:
         bump("CRITICAL", "Services")
@@ -863,6 +1065,12 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
             elif ratio >= VALKEY_WARNING_RATIO:
                 bump("WARNING", "Valkey memory")
 
+    site_payload: List[Dict[str, Any]] = []
+    sites_config = load_site_checks()
+    if sites_config:
+        site_results = check_sites(sites_config, details, auto_ctx, bump)
+        site_payload.extend(site_results)
+
     payload = {
         "host": hostname(),
         "severity": severity,
@@ -873,6 +1081,7 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         "php_fpm": fpm_info,
         "mysql": mysql_info,
         "valkey": valkey_info,
+        "sites": site_payload,
         "thresholds": {
             "load": thresholds,
             "memory": {"notice": mem_notice, "warning": mem_warn, "critical": mem_crit},
@@ -884,6 +1093,7 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         "autoscale": {"actions": list(auto_ctx["actions"])},
     }
     auto_ctx["states"] = sorted(auto_ctx["states"])
+    auto_ctx["services"] = sorted(auto_ctx.get("services", []))
     return severity, details, payload, triggers, auto_ctx
 
 
@@ -905,6 +1115,7 @@ def main() -> None:
 
     auto_actions: List[str] = auto_ctx.get("actions", []) if isinstance(auto_ctx, dict) else []
     auto_states = auto_ctx.get("states", []) if isinstance(auto_ctx, dict) else []
+    auto_services = auto_ctx.get("services", []) if isinstance(auto_ctx, dict) else []
     if auto_actions:
         for action in auto_actions:
             print(f"[AUTOSCALE] {action}")
@@ -926,6 +1137,15 @@ def main() -> None:
         message = "[SaltGoat] Autoscale executed\n" + "\n".join(f" - {action}" for action in auto_actions)
         telegram_notify("saltgoat/autoscale", message, autoscale_payload)
         emit_salt_event("saltgoat/autoscale", autoscale_payload)
+
+    if auto_services:
+        service_results = restart_services(auto_services)
+        payload.setdefault("autoscale", {})["services"] = service_results
+        for service, ok in service_results.items():
+            if ok:
+                details.append(f"AUTOSCALE: restarted service {service}")
+            else:
+                details.append(f"AUTOSCALE: restart service {service} failed")
 
     if severity in {"WARNING", "CRITICAL"}:
         lines = [

@@ -257,6 +257,33 @@ install_all() {
 	log_highlight "服务账户密码"
 	show_passwords
 
+	if command -v saltgoat >/dev/null 2>&1; then
+		log_highlight "自动规划 Magento Salt Schedule..."
+		if schedule_output=$(sudo saltgoat magetools schedule auto 2>&1); then
+			log_success "Magento Salt Schedule 已收敛"
+			printf '%s\n' "$schedule_output"
+		else
+			log_warning "自动规划 Salt Schedule 失败，可稍后手动执行 'sudo saltgoat magetools schedule auto'"
+			printf '%s\n' "$schedule_output"
+		fi
+	else
+		log_info "提示: 安装完成后可运行 'sudo saltgoat magetools schedule auto' 规划 Magento Salt Schedule"
+	fi
+
+	if command -v saltgoat >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1 \
+		&& systemctl list-unit-files | grep -q '^salt-minion\\.service'; then
+		log_highlight "启用 Salt Beacons/Reactors..."
+		if beacon_output=$(sudo saltgoat monitor enable-beacons 2>&1); then
+			log_success "Salt Beacons/Reactors 已启用"
+			printf '%s\n' "$beacon_output"
+		else
+			log_warning "自动启用 Salt Beacons 失败，可稍后手动执行 'sudo saltgoat monitor enable-beacons'"
+			printf '%s\n' "$beacon_output"
+		fi
+	else
+		log_info "提示: 安装 salt-minion 后可执行 'sudo saltgoat monitor enable-beacons' 启用事件驱动自动化"
+	fi
+
 	if [[ "$OPTIMIZE_MAGENTO_ENABLED" == true ]]; then
 		log_highlight "应用 Magento 优化..."
 		local optimize_args=()

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -137,6 +138,25 @@ def _job_applies(job: Dict[str, object], site: str) -> bool:
     if isinstance(job_sites, (list, tuple, set)) and site not in job_sites:
         return False
     return True
+
+
+def _command_from_details(details: Dict[str, object]) -> str:
+    args = details.get("args") or details.get("job_args")
+    if isinstance(args, list) and args:
+        return " ".join(str(item) for item in args)
+    if isinstance(args, str):
+        return args
+    return ""
+
+
+def _sites_in_command(command: str) -> Set[str]:
+    sites: Set[str] = set()
+    match = re.search(r"--site\s+([\w\-/]+)", command)
+    if match:
+        sites.add(match.group(1))
+    for path_match in re.findall(r"/var/www/([\w\-]+)", command):
+        sites.add(path_match)
+    return sites
 
 
 def expected_job_names(site: SiteRecord, config: Dict[str, object]) -> Set[str]:
@@ -330,6 +350,45 @@ def run_auto(
     print()
     success(f"已处理站点: {', '.join(results)}")
     refreshed_map = fetch_schedule_jobs()
+
+    existing_tokens = {record.token for record in sites}
+    existing_names = {record.site for record in sites}
+
+    expected_all: Set[str] = set()
+    for record in sites:
+        expected_all.update(expected_job_names(record, config))
+
+    removed_jobs: List[str] = []
+    for job_name, details in list(refreshed_map.items()):
+        if job_name in expected_all:
+            continue
+        command = _command_from_details(details if isinstance(details, dict) else {})
+        sites_in_cmd = _sites_in_command(command)
+        if not sites_in_cmd:
+            if job_name.startswith("magento_"):
+                token_part = job_name.split("_", 2)[1] if "_" in job_name else ""
+                if token_part and token_part not in existing_tokens:
+                    if run_salt(["schedule.delete", job_name])[0] == 0:
+                        removed_jobs.append(job_name)
+            continue
+        orphan = all(site not in existing_names for site in sites_in_cmd)
+        if orphan:
+            if run_salt(["schedule.delete", job_name])[0] == 0:
+                removed_jobs.append(job_name)
+
+    if removed_jobs:
+        warning(
+            "清理遗留 Salt Schedule 任务: " + ", ".join(sorted(set(removed_jobs)))
+        )
+
+    for cron_file in CRON_DIR.glob("magento-maintenance-*"):
+        token = cron_file.name.replace("magento-maintenance-", "")
+        if token not in existing_tokens:
+            try:
+                cron_file.unlink()
+                warning(f"已移除失效的 Cron 计划: {cron_file}")
+            except OSError:
+                warning(f"无法删除 {cron_file}，请手动清理")
 
     cron_confirmed = []
     for record in cron_candidates:
