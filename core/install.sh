@@ -6,6 +6,8 @@
 export PYTHONWARNINGS="ignore::DeprecationWarning"
 export PYTHONPATH="/usr/local/lib/python3.12/dist-packages:$PYTHONPATH"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 # 创建临时的 Python 警告过滤器
 python3 -c "
 import warnings
@@ -267,14 +269,25 @@ install_all() {
 			printf '%s\n' "$schedule_output"
 		fi
 
-		log_highlight "生成站点健康检查配置..."
-		if monitor_output=$(sudo saltgoat monitor auto-sites 2>&1); then
-			log_success "站点健康检查已自动配置"
-			printf '%s\n' "$monitor_output"
-		else
-			log_warning "站点健康检查自动配置失败，可稍后手动执行 'sudo saltgoat monitor auto-sites'"
-			printf '%s\n' "$monitor_output"
-		fi
+        log_highlight "生成站点健康检查配置..."
+        if monitor_output=$(sudo saltgoat monitor auto-sites 2>&1); then
+            log_success "站点健康检查已自动配置"
+            printf '%s\n' "$monitor_output"
+        else
+            log_warning "站点健康检查自动配置失败，可稍后手动执行 'sudo saltgoat monitor auto-sites'"
+            printf '%s\n' "$monitor_output"
+        fi
+
+        local topics_script="${SCRIPT_DIR}/scripts/setup-telegram-topics.py"
+        if [[ -x "$topics_script" ]]; then
+            log_highlight "同步 Telegram 话题映射..."
+            if topics_output=$(sudo python3 "$topics_script" 2>&1); then
+                printf '%s\n' "$topics_output"
+            else
+                log_warning "Telegram 话题同步失败，可稍后运行 'sudo python3 scripts/setup-telegram-topics.py'"
+                printf '%s\n' "$topics_output"
+            fi
+        fi
 	else
 		log_info "提示: 安装完成后可运行 'sudo saltgoat magetools schedule auto' 规划 Magento Salt Schedule"
 	fi

@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
+import socket
 
 try:
     import yaml  # type: ignore
@@ -21,12 +22,18 @@ except Exception:  # pragma: no cover - PyYAML may be missing
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = Path("/etc/saltgoat/telegram.json")
 PILLAR_PATH = REPO_ROOT / "salt" / "pillar" / "magento-schedule.sls"
-DEFAULT_CATEGORIES: Dict[str, Tuple[str, str]] = {
+PILLAR_TOPICS_PATH = REPO_ROOT / "salt" / "pillar" / "telegram-topics.sls"
+SITE_CATEGORIES: Dict[str, Tuple[str, str]] = {
     "orders": ("saltgoat/business/order/{site}", "{site}-orders"),
     "customers": ("saltgoat/business/customer/{site}", "{site}-customers"),
     "summary": ("saltgoat/business/summary/{site}", "{site}-summary"),
     "mysql-backup": ("saltgoat/backup/mysql_dump/{site}", "{site}-mysql-backup"),
     "restic-backup": ("saltgoat/backup/restic/{site}", "{site}-restic-backup"),
+}
+
+HOST_CATEGORIES: Dict[str, Tuple[str, str]] = {
+    "resources": ("saltgoat/monitor/resources/{site}", "{site}-resources"),
+    "autoscale": ("saltgoat/autoscale/{site}", "{site}-autoscale"),
 }
 
 
@@ -179,6 +186,25 @@ def ensure_topics(config: Dict[str, object], profile: Dict[str, object], sites: 
     return updated
 
 
+def write_pillar_topics(profile: Dict[str, object], dry_run: bool = False) -> None:
+    topics = profile.get("topics")
+    if not isinstance(topics, dict) or not topics:
+        return
+    sorted_topics = dict(sorted(topics.items()))
+    if yaml is not None:
+        content = yaml.safe_dump({"telegram_topics": sorted_topics}, allow_unicode=True, sort_keys=True)
+    else:
+        lines = ["telegram_topics:"]
+        for tag, thread in sorted_topics.items():
+            lines.append(f"  '{tag}': {thread}")
+        content = "\n".join(lines) + "\n"
+    if dry_run:
+        print(f"[INFO] dry-run: would write {PILLAR_TOPICS_PATH}\n{content}")
+        return
+    PILLAR_TOPICS_PATH.write_text(content, encoding="utf-8")
+    print(f"[SUCCESS] {PILLAR_TOPICS_PATH} 已更新")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Setup Telegram topics per Magento site")
     parser.add_argument("--sites", help="逗号分隔的站点列表，未提供时自动探测")
@@ -196,15 +222,28 @@ def main() -> None:
 
     config = load_config()
     profile = resolve_primary_profile(config, args.profile)
-    categories = DEFAULT_CATEGORIES
-    if ensure_topics(config, profile, sites, categories, dry_run=args.dry_run):
-        if args.dry_run:
+    categories = SITE_CATEGORIES
+    updated = ensure_topics(config, profile, sites, categories, dry_run=args.dry_run)
+
+    host_name = socket.getfqdn() or socket.gethostname()
+    host_slug = _normalize_site(host_name)
+    if host_slug:
+        if ensure_topics(config, profile, [host_slug], HOST_CATEGORIES, dry_run=args.dry_run):
+            updated = True
+
+    if args.dry_run:
+        if updated:
             print("[INFO] dry-run 模式，未写入配置。")
         else:
+            print("[INFO] 已存在对应话题，无需更新。")
+        write_pillar_topics(profile, dry_run=True)
+    else:
+        if updated:
             write_config(config)
             print("[SUCCESS] telegram.json 已更新")
-    else:
-        print("[INFO] 已存在对应话题，无需更新。")
+        else:
+            print("[INFO] 已存在对应话题，无需更新。")
+        write_pillar_topics(profile, dry_run=False)
 
 
 if __name__ == "__main__":

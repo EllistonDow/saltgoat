@@ -1128,6 +1128,17 @@ PY
 
     echo "$monitor_output"
 
+    local topics_script="${SCRIPT_DIR}/scripts/setup-telegram-topics.py"
+    if [[ -x "$topics_script" ]]; then
+        log_highlight "同步站点相关的 Telegram 话题..."
+        if topics_output=$(sudo python3 "$topics_script" 2>&1); then
+            printf '%s\n' "$topics_output"
+        else
+            log_warning "Telegram 话题同步失败，可稍后运行 'sudo python3 scripts/setup-telegram-topics.py'"
+            printf '%s\n' "$topics_output"
+        fi
+    fi
+
     log_info "刷新 Pillar 并启用 Beacon..."
     sudo saltgoat pillar refresh >/dev/null 2>&1 || true
     sudo saltgoat monitor enable-beacons >/dev/null 2>&1 || true

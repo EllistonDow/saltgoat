@@ -18,6 +18,23 @@
 | New Customers | `3` | Magento 新客户事件 (`saltgoat/business/customer`) |
 | Xtrabackups | `4` | XtraBackup 安装 / 任务状态、备份完成/失败通知 |
 | Restic Backups | `5` | Restic 备份结果、仓库检查、告警 |
+| bank-orders | `2639` | `saltgoat/business/order/bank`（BANK 站点事件） |
+| bank-customers | `2640` | `saltgoat/business/customer/bank` |
+| bank-summary | `2634` | `saltgoat/business/summary/bank` |
+| bank-mysql-backup | `2641` | `saltgoat/backup/mysql_dump/bank` |
+| bank-restic-backup | `2642` | `saltgoat/backup/restic/bank` |
+| pwas-orders | `2643` | `saltgoat/business/order/pwas` |
+| pwas-customers | `2644` | `saltgoat/business/customer/pwas` |
+| pwas-summary | `2635` | `saltgoat/business/summary/pwas` |
+| pwas-mysql-backup | `2645` | `saltgoat/backup/mysql_dump/pwas` |
+| pwas-restic-backup | `2646` | `saltgoat/backup/restic/pwas` |
+| tank-orders | `2647` | `saltgoat/business/order/tank` |
+| tank-customers | `2648` | `saltgoat/business/customer/tank` |
+| tank-summary | `2636` | `saltgoat/business/summary/tank` |
+| tank-mysql-backup | `2649` | `saltgoat/backup/mysql_dump/tank` |
+| tank-restic-backup | `2650` | `saltgoat/backup/restic/tank` |
+| ns510140…-resources | `2658` | `saltgoat/monitor/resources/ns510140…`（主机级资源告警） |
+| ns510140…-autoscale | `2659` | `saltgoat/autoscale/ns510140…`（主机级自愈动作） |
 
 > 获取方式：
 > ```bash
@@ -33,12 +50,13 @@
 | `saltgoat/business/customer` | New Customers (`thread_id=3`) | 新会员注册、激活状态变化 |
 | `saltgoat/backup/xtrabackup/*` | Xtrabackups (`thread_id=4`) | XtraBackup 运行成功/失败、定时器状态 |
 | `saltgoat/backup/restic/*` | Restic Backups (`thread_id=5`) | Restic 任务结果、仓库健康、锁文件告警 |
-| `saltgoat/monitor/resources`、`saltgoat/monitor/daily` | General | 资源告警、每日摘要，供全员快速查看 |
+| `saltgoat/monitor/resources/<host>` | `<host>-resources` | 主机维度资源告警 |
+| `saltgoat/autoscale/<host>` | `<host>-autoscale` | 自愈动作、自动扩容日志 |
 | 其它（密码同步、部署流程） | General 或按需新建话题 | 可继续扩展如 `Deployments`、`Security Alerts` 等 |
 
 ## Pillar 配置示例
 
-在 `salt/pillar/salt-beacons.sls` 中的 `telegram_bot_msg` 段落追加 `topics` 映射，Salt 会自动生成包含话题信息的 `/etc/saltgoat/telegram.json`：
+`scripts/setup-telegram-topics.py` 会自动生成 `/etc/saltgoat/telegram.json` 与 `salt/pillar/telegram-topics.sls`。若需手动维护，可参考以下结构：
 
 ```yaml
 saltgoat:

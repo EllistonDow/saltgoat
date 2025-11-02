@@ -1287,7 +1287,10 @@ def main() -> None:
         if auto_states:
             fields.append(("States", ", ".join(auto_states)))
         _, html_block = format_html_block("AUTOSCALE ACTIONS", fields)
-        telegram_notify("saltgoat/autoscale", html_block, autoscale_payload)
+        host_slug = host_id.replace(".", "-").lower()
+        telegram_tag = f"saltgoat/autoscale/{host_slug}"
+        autoscale_payload["tag"] = telegram_tag
+        telegram_notify(telegram_tag, html_block, autoscale_payload)
         emit_salt_event("saltgoat/autoscale", autoscale_payload)
 
     if auto_services:
@@ -1332,8 +1335,10 @@ def main() -> None:
     if severity in {"WARNING", "CRITICAL"}:
         trigger_text = ", ".join(triggers) if triggers else "load"
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        host_value = payload.get("host", hostname())
+        host_slug = host_value.replace(".", "-").lower()
         fields: List[Tuple[str, str]] = [
-            ("Host", payload["host"]),
+            ("Host", host_value),
             ("Trigger", trigger_text),
             ("Time", timestamp),
         ]
@@ -1342,11 +1347,12 @@ def main() -> None:
                 continue
             fields.append(("Detail", str(detail)))
         plain_block, html_block = format_html_block(f"{severity} RESOURCE ALERT", fields)
-        tag = f"saltgoat/monitor/resources/{severity.lower()}"
-        augmented = payload | {"details": details, "tag": tag}
-        log_to_file("RESOURCE", tag, augmented)
-        telegram_notify("saltgoat/monitor/resources", html_block, augmented)
-        emit_salt_event(tag, payload)
+        event_tag = f"saltgoat/monitor/resources/{severity.lower()}"
+        telegram_tag = f"saltgoat/monitor/resources/{host_slug}"
+        augmented = payload | {"details": details, "tag": telegram_tag, "severity": severity}
+        log_to_file("RESOURCE", event_tag, augmented)
+        telegram_notify(telegram_tag, html_block, augmented)
+        emit_salt_event(event_tag, payload)
         print(plain_block)
     else:
         print("Resources within normal range; no alert issued.")

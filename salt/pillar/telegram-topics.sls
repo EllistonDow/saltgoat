@@ -1,0 +1,22 @@
+telegram_topics:
+  saltgoat/autoscale/ns510140.ip-192-99-45.net: 2659
+  saltgoat/backup/mysql_dump/bank: 2641
+  saltgoat/backup/mysql_dump/pwas: 2645
+  saltgoat/backup/mysql_dump/tank: 2649
+  saltgoat/backup/restic: 5
+  saltgoat/backup/restic/bank: 2642
+  saltgoat/backup/restic/pwas: 2646
+  saltgoat/backup/restic/tank: 2650
+  saltgoat/backup/xtrabackup: 4
+  saltgoat/business/customer: 3
+  saltgoat/business/customer/bank: 2640
+  saltgoat/business/customer/pwas: 2644
+  saltgoat/business/customer/tank: 2648
+  saltgoat/business/order: 2
+  saltgoat/business/order/bank: 2639
+  saltgoat/business/order/pwas: 2643
+  saltgoat/business/order/tank: 2647
+  saltgoat/business/summary/bank: 2634
+  saltgoat/business/summary/pwas: 2635
+  saltgoat/business/summary/tank: 2636
+  saltgoat/monitor/resources/ns510140.ip-192-99-45.net: 2658
