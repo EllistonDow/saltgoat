@@ -625,11 +625,6 @@ else:
     root = default_root
 snippet_pattern = re.compile(r'^\s*include\s+/etc/nginx/snippets/varnish-frontend-.*?\.conf;\s*$', re.MULTILINE)
 data = snippet_pattern.sub(f'    include {root}/nginx.conf.sample;', data)
-map_var_pattern = re.compile(r'^\s*set\s+\$MAGE_(?:RUN_TYPE|RUN_CODE|MODE)\s+\$mage_[^\s;]+;\s*$', re.MULTILINE)
-data = map_var_pattern.sub('', data)
-data = re.sub(r'\n{3,}', '\n\n', data)
-if f'include {root}/nginx.conf.sample;' not in data:
-    data = data.rstrip() + f'\n    include {root}/nginx.conf.sample;\n'
 sys.stdout.write(data)
 PY
 }
@@ -706,33 +701,6 @@ remove_map_config() {
     if [[ -f "$map_path" ]]; then
         sudo rm -f "$map_path"
     fi
-}
-
-other_varnish_sites_exist() {
-    local current_snippet current_backend current_map path
-    current_snippet="$(frontend_snippet)"
-    current_backend="$(backend_conf)"
-    current_map="$(map_config_path)"
-
-    for path in /etc/nginx/snippets/varnish-frontend-*.conf; do
-        [[ -e "$path" ]] || continue
-        [[ "$path" == "$current_snippet" ]] && continue
-        return 0
-    done
-
-    for path in /etc/nginx/sites-available/*-backend; do
-        [[ -e "$path" ]] || continue
-        [[ "$path" == "$current_backend" ]] && continue
-        return 0
-    done
-
-    for path in /etc/nginx/conf.d/varnish-run-*.conf; do
-        [[ -e "$path" ]] || continue
-        [[ "$path" == "$current_map" ]] && continue
-        return 0
-    done
-
-    return 1
 }
 
 write_frontend_snippet() {
@@ -980,10 +948,6 @@ configure_magento_varnish() {
 }
 
 configure_magento_builtin() {
-    if other_varnish_sites_exist; then
-        log_info "检测到其他站点仍启用 Varnish，保留 Magento 缓存设置为 Varnish"
-        return
-    fi
     log_info "恢复 Magento 缓存为 Built-in"
     run_magento config:set system/full_page_cache/caching_application 1 >/dev/null
     run_magento cache:flush >/dev/null
@@ -1123,7 +1087,7 @@ disable_varnish() {
     done
     sudo rm -f "$(frontend_snippet)"
     remove_backend_config
-    remove_map_config
+    write_map_config
     nginx_reload
     configure_magento_builtin
     log_success "站点 ${SITE} 已恢复为原始 Nginx/PHP 模式"

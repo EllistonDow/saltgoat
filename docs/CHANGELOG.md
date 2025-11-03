@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.3.15] - 2025-11-03
+
+### Changes
+- 修改 1 个文件: modules/magetools/varnish.sh
+
+
 ## [1.3.14] - 2025-11-03
 
 ### Changes
