@@ -154,3 +154,33 @@ nginx:
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
+    treebank:
+      enabled: true
+      server_name:
+      - treebank.magento.tattoogoat.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/bank
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      magento_run:
+        type: store
+        code: treebank
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/treebank.magento.tattoogoat.com/fullchain.pem
+        key: /etc/letsencrypt/live/treebank.magento.tattoogoat.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+  ssl_email: ssl@tschenfeng.com

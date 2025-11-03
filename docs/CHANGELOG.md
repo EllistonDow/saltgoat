@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.3.12] - 2025-11-03
+
+### Changes
+- 修改 2 个文件: salt/pillar/monitoring.sls, salt/pillar/nginx.sls
+
+
 ## [1.3.11] - 2025-11-03
 
 ### Changes
