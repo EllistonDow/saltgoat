@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.3.11] - 2025-11-03
+
+### Changes
+- 修改 10 个文件: docs/magento-multisite-plan.md, modules/magetools/README.md, modules/magetools/backup-restic.sh, modules/magetools/multisite.sh, modules/magetools/mysql-backup.sh 等
+
+
 ## [1.3.10] - 2025-11-02
 
 ### Changes

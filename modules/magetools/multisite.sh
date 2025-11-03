@@ -26,8 +26,10 @@ SKIP_NGINX=0
 SKIP_SSL=0
 NGINX_SITE=""
 SSL_EMAIL=""
+RUN_DEPLOY=0
 
 SALTGOAT_BIN="${SCRIPT_DIR}/saltgoat"
+MONITORING_PILLAR_FILE="${SCRIPT_DIR}/salt/pillar/monitoring.sls"
 
 usage() {
     cat <<'EOF'
@@ -52,6 +54,7 @@ Magento 多站点自动化
   --skip-ssl                 跳过自动申请/续期 SSL 证书
   --ssl-email <email>        指定证书申请邮箱（缺省时尝试从 Pillar 获取）
   --nginx-site <name>        自定义 Nginx 站点标识（默认同 --code）
+  --run-deploy               创建完成后执行 Magento 部署流程（静态资源/索引等）
   --skip-pillar              (兼容参数) 等同 --skip-nginx
   -h, --help                 显示帮助
 
@@ -155,6 +158,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-ssl)
             SKIP_SSL=1
+            shift
+            ;;
+        --run-deploy)
+            RUN_DEPLOY=1
             shift
             ;;
         --ssl-email)
@@ -350,6 +357,131 @@ ssl_cert_path() {
 
 ssl_cert_exists() {
     [[ -f "$(ssl_cert_path)" ]]
+}
+
+update_monitoring_pillar() {
+    if [[ ! -f "$MONITORING_PILLAR_FILE" ]]; then
+        log_warning "未找到监控 Pillar 文件: ${MONITORING_PILLAR_FILE}，已跳过。"
+        return
+    fi
+    if (( DRY_RUN )); then
+        log_info "[dry-run] 更新监控 Pillar: 追加站点 ${STORE_CODE} (${DOMAIN})."
+        return
+    fi
+    sudo python3 - "$MONITORING_PILLAR_FILE" "$STORE_CODE" "$DOMAIN" <<'PY'
+import sys, yaml
+path, site, domain = sys.argv[1:4]
+
+domain = domain.strip()
+if not domain:
+    sys.exit(0)
+url = f"https://{domain.rstrip('/')}/"
+
+with open(path, encoding='utf-8') as fh:
+    data = yaml.safe_load(fh) or {}
+
+saltgoat = data.setdefault('saltgoat', {})
+monitor = saltgoat.setdefault('monitor', {})
+sites = monitor.setdefault('sites', [])
+
+entry = {
+    'name': site,
+    'url': url,
+    'timeout': 6,
+    'retries': 2,
+    'expect': 200,
+    'tls_warn_days': 14,
+    'tls_critical_days': 7,
+    'timeout_services': ['php8.3-fpm', 'varnish'],
+    'server_error_services': ['php8.3-fpm', 'nginx', 'varnish'],
+    'failure_services': ['php8.3-fpm', 'nginx', 'varnish'],
+    'auto': True,
+}
+
+updated = False
+for idx, item in enumerate(sites):
+    if isinstance(item, dict) and item.get('name') == site:
+        sites[idx] = entry
+        updated = True
+        break
+
+if not updated:
+    sites.append(entry)
+
+with open(path, 'w', encoding='utf-8') as fh:
+    yaml.safe_dump(data, fh, allow_unicode=True, sort_keys=False)
+PY
+    log_success "监控 Pillar 已更新: ${STORE_CODE} -> https://${DOMAIN}/"
+}
+
+remove_monitoring_entry() {
+    if [[ ! -f "$MONITORING_PILLAR_FILE" ]]; then
+        return
+    fi
+    if (( DRY_RUN )); then
+        log_info "[dry-run] 从监控 Pillar 移除站点 ${STORE_CODE}."
+        return
+    fi
+    sudo python3 - "$MONITORING_PILLAR_FILE" "$STORE_CODE" <<'PY'
+import sys, yaml
+path, site = sys.argv[1:3]
+with open(path, encoding='utf-8') as fh:
+    data = yaml.safe_load(fh) or {}
+
+monitor = ((data.get('saltgoat') or {}).get('monitor') or {})
+sites = monitor.get('sites')
+if not isinstance(sites, list):
+    sys.exit(0)
+
+new_sites = [item for item in sites if not (isinstance(item, dict) and item.get('name') == site)]
+if len(new_sites) == len(sites):
+    sys.exit(0)
+
+monitor['sites'] = new_sites
+with open(path, 'w', encoding='utf-8') as fh:
+    yaml.safe_dump(data, fh, allow_unicode=True, sort_keys=False)
+PY
+    log_info "监控 Pillar 中已移除站点 ${STORE_CODE}."
+}
+
+magento_cli() {
+    local desc="$1"
+    shift
+    local cmd="$*"
+    if (( DRY_RUN )); then
+        log_info "[dry-run] ${desc}: ${cmd}"
+        return
+    fi
+    run_cli_command "$desc" sudo -u www-data -H bash -lc "cd '${MAGENTO_CURRENT}' && ${cmd}"
+}
+
+run_deploy_tasks() {
+    if (( RUN_DEPLOY == 0 )); then
+        log_info "未启用部署流程 (--run-deploy 未设置)。"
+        return
+    fi
+
+    local jobs
+    jobs=$(nproc 2>/dev/null || echo 2)
+
+    magento_cli "启用维护模式" "php bin/magento maintenance:enable"
+
+    if (( ! DRY_RUN )); then
+        run_cli_command "清理缓存目录" sudo bash -lc "cd '${MAGENTO_CURRENT}' && find var/cache var/page_cache var/view_preprocessed generated -mindepth 1 -delete"
+        run_cli_command "清理静态目录" sudo bash -lc "cd '${MAGENTO_CURRENT}' && find pub/static -mindepth 1 ! -path '*/.htaccess' -delete"
+        run_cli_command "清理媒体缓存" sudo bash -lc "cd '${MAGENTO_CURRENT}' && find pub/media/catalog/product/cache -mindepth 1 -delete"
+        run_cli_command "重建 generated 目录" sudo bash -lc "cd '${MAGENTO_CURRENT}' && mkdir -p generated"
+        run_cli_command "修正目录权限" sudo chown -R www-data:www-data "${MAGENTO_CURRENT}/generated" "${MAGENTO_CURRENT}/var" "${MAGENTO_CURRENT}/pub/static"
+    else
+        log_info "[dry-run] 清理缓存/静态/媒体目录"
+    fi
+
+    magento_cli "执行 setup:upgrade" "php bin/magento setup:upgrade"
+    magento_cli "编译依赖注入" "php bin/magento setup:di:compile"
+    magento_cli "部署静态资源" "php bin/magento setup:static-content:deploy -f en_US --jobs ${jobs}"
+    magento_cli "重建索引" "php bin/magento indexer:reindex"
+    magento_cli "关闭维护模式" "php bin/magento maintenance:disable"
+    magento_cli "清理缓存" "php bin/magento cache:clean"
 }
 
 provision_nginx_and_ssl() {
@@ -808,6 +940,8 @@ create_multisite() {
     run_magento_cmd "刷新缓存" cache:flush
 
     provision_nginx_and_ssl
+    update_monitoring_pillar
+    run_deploy_tasks
 
     if (( DRY_RUN == 0 )); then
         log_success "多站点基础配置完成。"
@@ -873,6 +1007,7 @@ rollback_multisite() {
     run_magento_cmd "刷新缓存" cache:flush
 
     cleanup_nginx_site
+    remove_monitoring_entry
 
     if (( DRY_RUN == 0 )); then
         log_success "多站点已回滚。"

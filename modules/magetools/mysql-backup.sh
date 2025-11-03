@@ -113,12 +113,14 @@ for label, value in entries:
         lines.append(f"{' ' * width}   {extra}")
 message = f"<pre>{escape('\n'.join(lines))}</pre>"
 
+logger_script = Path(reactor_dir) / "logger.py"
+
 def log(kind, payload_obj):
     try:
         subprocess.run(
             [
                 "python3",
-                "/opt/saltgoat-reactor/logger.py",
+                str(logger_script),
                 "TELEGRAM",
                 log_path,
                 f"{tag} {kind}",

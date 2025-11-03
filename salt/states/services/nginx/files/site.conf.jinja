@@ -91,6 +91,14 @@ server {
     add_header Content-Security-Policy {{ "'" ~ site_cfg['security']['content_security_policy'] ~ "'" }} always;
 {%- endif %}
 
+{%- set magento_run = site_cfg.get('magento_run', {}) %}
+{%- if magento_run %}
+    {%- set mage_mode_value = magento_run.get('mode', 'production') %}
+    set $MAGE_RUN_TYPE {{ magento_run.get('type', 'store') }};
+    set $MAGE_RUN_CODE {{ magento_run.get('code', site_name) }};
+    set $MAGE_MODE {{ mage_mode_value }};
+{%- endif %}
+
 {%- if is_magento and has_magento_sample %}
     set $MAGE_ROOT {{ root_path }};
     include {{ sample_path }};
@@ -117,6 +125,11 @@ server {
         {%- endif %}
         fastcgi_pass {{ fastcgi_pass_value }};
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        {%- if magento_run %}
+        fastcgi_param MAGE_RUN_TYPE {{ magento_run.get('type', 'store') }};
+        fastcgi_param MAGE_RUN_CODE {{ magento_run.get('code', site_name) }};
+        fastcgi_param MAGE_MODE {{ magento_run.get('mode', 'production') }};
+        {%- endif %}
         {%- if has_fastcgi_snippet %}
         include fastcgi_params;
 {%- endif %}

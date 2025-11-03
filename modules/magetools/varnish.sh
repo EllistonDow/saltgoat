@@ -13,6 +13,21 @@ SITE="${2:-}"
 APP_DIR=""
 APP_BOOTSTRAP=""
 MAGENTO_OFFLOADER_CONFIG="web/secure/offloader_header"
+RUN_CONTEXT_TYPE=""
+RUN_CONTEXT_CODE=""
+RUN_CONTEXT_MODE=""
+DEFAULT_RUN_TYPE=""
+DEFAULT_RUN_CODE=""
+DEFAULT_RUN_MODE=""
+SANITIZED_SITE=""
+MAP_VAR_TYPE=""
+MAP_VAR_CODE=""
+MAP_VAR_MODE=""
+declare -a SERVER_NAMES=()
+declare -a HOST_RUN_ORDER=()
+declare -A HOST_RUN_TYPE=()
+declare -A HOST_RUN_CODE=()
+declare -A HOST_RUN_MODE=()
 
 require_site() {
     if [[ -z "${SITE}" ]]; then
@@ -29,6 +44,8 @@ require_site() {
     fi
     APP_DIR="/var/www/${SITE}"
     APP_BOOTSTRAP="${APP_DIR}/app/bootstrap.php"
+    SANITIZED_SITE="$(echo "${SITE}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g')"
+    [[ -n "$SANITIZED_SITE" ]] || SANITIZED_SITE="${SITE}"
 }
 
 run_magento() {
@@ -117,6 +134,52 @@ backend_symlink() {
     echo "/etc/nginx/sites-enabled/${SITE}-backend"
 }
 
+map_config_path() {
+    local ident="${SANITIZED_SITE}"
+    [[ -n "$ident" ]] || ident="$(echo "${SITE}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g')"
+    [[ -n "$ident" ]] || ident="${SITE}"
+    echo "/etc/nginx/conf.d/varnish-run-${ident}.conf"
+}
+
+load_run_context() {
+    local pillar_file="${SCRIPT_DIR}/salt/pillar/nginx.sls"
+    RUN_CONTEXT_TYPE=""
+    RUN_CONTEXT_CODE=""
+    RUN_CONTEXT_MODE=""
+    if [[ -f "$pillar_file" ]]; then
+        while IFS='=' read -r key value; do
+            case "$key" in
+                type) RUN_CONTEXT_TYPE="$value" ;;
+                code) RUN_CONTEXT_CODE="$value" ;;
+                mode) RUN_CONTEXT_MODE="$value" ;;
+            esac
+        done < <(sudo python3 - "$pillar_file" "$SITE" <<'PY'
+import sys, yaml
+path, site = sys.argv[1:3]
+try:
+    with open(path, encoding="utf-8") as fh:
+        data = yaml.safe_load(fh) or {}
+except FileNotFoundError:
+    data = {}
+sites = ((data.get("nginx") or {}).get("sites") or {})
+run_cfg = sites.get(site, {}).get("magento_run") or {}
+if isinstance(run_cfg, dict):
+    default_type = run_cfg.get("type") or ""
+    default_code = run_cfg.get("code") or ""
+    default_mode = run_cfg.get("mode") or ""
+else:
+    default_type = default_code = default_mode = ""
+print(f"type={default_type}")
+print(f"code={default_code}")
+print(f"mode={default_mode}")
+PY
+)
+    fi
+    [[ -z "$RUN_CONTEXT_TYPE" ]] && RUN_CONTEXT_TYPE="store"
+    [[ -z "$RUN_CONTEXT_CODE" ]] && RUN_CONTEXT_CODE="$SITE"
+    [[ -z "$RUN_CONTEXT_MODE" ]] && RUN_CONTEXT_MODE="production"
+}
+
 collect_server_names() {
     sudo python3 - "$SITE" <<'PY'
 import sys
@@ -173,6 +236,115 @@ foreach (array_keys($domains) as $host) {
     echo $host, "|", implode(",", $codes), PHP_EOL;
 }
 ' 2>/dev/null
+}
+
+build_run_contexts() {
+    local -a server_names=()
+    local -a config_hosts=()
+    local -A seen=()
+    local -A config_seen=()
+    local -A host_to_store=()
+    local name
+    load_run_context
+    HOST_RUN_ORDER=()
+    HOST_RUN_TYPE=()
+    HOST_RUN_CODE=()
+    HOST_RUN_MODE=()
+    [[ -n "$SANITIZED_SITE" ]] || SANITIZED_SITE="$(echo "${SITE}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g')"
+    local prefix="mage_${SANITIZED_SITE}"
+    MAP_VAR_TYPE="\$${prefix}_run_type"
+    MAP_VAR_CODE="\$${prefix}_run_code"
+    MAP_VAR_MODE="\$${prefix}_run_mode"
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        if [[ -z "${config_seen[$name]:-}" ]]; then
+            config_hosts+=("$name")
+            config_seen[$name]=1
+        fi
+        if [[ -z "${seen[$name]:-}" ]]; then
+            server_names+=("$name")
+            seen[$name]=1
+        fi
+    done < <(collect_server_names 2>/dev/null || true)
+    while IFS='|' read -r name store_codes; do
+        [[ -z "$name" ]] && continue
+        local cleaned="${store_codes//,/ }"
+        if [[ -n "$cleaned" ]]; then
+            local existing="${host_to_store[$name]:-}"
+            if [[ -n "$existing" ]]; then
+                for code in $cleaned; do
+                    [[ -z "$code" ]] && continue
+                    if [[ " $existing " != *" $code "* ]]; then
+                        existing="$existing $code"
+                    fi
+                done
+                host_to_store[$name]="$(echo "$existing" | xargs)"
+            else
+                host_to_store[$name]="$(echo "$cleaned" | xargs)"
+            fi
+        fi
+        if [[ -z "${seen[$name]:-}" ]]; then
+            server_names+=("$name")
+            seen[$name]=1
+        fi
+    done < <(magento_base_domains 2>/dev/null || true)
+    if [[ ${#server_names[@]} -eq 0 ]]; then
+        server_names=("${SITE}")
+    fi
+    if (( ${#config_hosts[@]} > 0 )); then
+        log_info "继承站点 server_name: ${config_hosts[*]}"
+    fi
+    if (( ${#host_to_store[@]} > 0 )); then
+        log_info "Magento store Base URL 域名映射:"
+        for name in "${server_names[@]}"; do
+            local stores="${host_to_store[$name]:-}"
+            [[ -z "$stores" ]] && continue
+            log_info "  - ${name} (stores: ${stores})"
+        done
+    fi
+    local default_host="${server_names[0]}"
+    local default_run_type="${RUN_CONTEXT_TYPE}"
+    local default_run_code="${RUN_CONTEXT_CODE}"
+    local default_run_mode="${RUN_CONTEXT_MODE}"
+    local stores_for_default="${host_to_store[$default_host]}"
+    if [[ ( -z "$RUN_CONTEXT_CODE" || "$RUN_CONTEXT_CODE" == "$SITE" ) && -n "$stores_for_default" ]]; then
+        read -r default_run_code _ <<<"$stores_for_default"
+        default_run_type="store"
+    fi
+    if [[ -z "$default_run_type" ]]; then
+        default_run_type="store"
+    fi
+    if [[ -z "$default_run_code" ]]; then
+        default_run_code="$SITE"
+    fi
+    if [[ -z "$default_run_mode" ]]; then
+        default_run_mode="production"
+    fi
+    for name in "${server_names[@]}"; do
+        local host_run_type="$default_run_type"
+        local host_run_code="$default_run_code"
+        local host_run_mode="$default_run_mode"
+        local stores="${host_to_store[$name]}"
+        if [[ -n "$stores" ]]; then
+            read -r first_store _ <<<"$stores"
+            if [[ -n "$first_store" ]]; then
+                host_run_type="store"
+                host_run_code="$first_store"
+            fi
+        fi
+        if [[ "$name" == "$default_host" ]]; then
+            default_run_type="$host_run_type"
+            default_run_code="$host_run_code"
+        fi
+        HOST_RUN_TYPE["$name"]="$host_run_type"
+        HOST_RUN_CODE["$name"]="$host_run_code"
+        HOST_RUN_MODE["$name"]="$host_run_mode"
+    done
+    DEFAULT_RUN_TYPE="$default_run_type"
+    DEFAULT_RUN_CODE="$default_run_code"
+    DEFAULT_RUN_MODE="$default_run_mode"
+    SERVER_NAMES=("${server_names[@]}")
+    HOST_RUN_ORDER=("${server_names[@]}")
 }
 
 detect_admin_prefix() {
@@ -251,6 +423,80 @@ path.write_text(data, encoding="utf-8")
 PY
 }
 
+write_map_config() {
+    build_run_contexts
+    local map_path
+    map_path="$(map_config_path)"
+    local default_run_type="$DEFAULT_RUN_TYPE"
+    local default_run_code="$DEFAULT_RUN_CODE"
+    local default_run_mode="$DEFAULT_RUN_MODE"
+    local map_run_type="$MAP_VAR_TYPE"
+    local map_run_code="$MAP_VAR_CODE"
+    local map_run_mode="$MAP_VAR_MODE"
+    local host
+    local -A printed=()
+
+    {
+        echo "# Auto-generated by SaltGoat varnish enable"
+        echo "map \$http_host ${map_run_type} {"
+        echo "    default ${default_run_type};"
+        printed=()
+        for host in "${HOST_RUN_ORDER[@]}"; do
+            [[ -z "$host" ]] && continue
+            if [[ ! "$host" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                continue
+            fi
+            if [[ -n "${printed[$host]:-}" ]]; then
+                continue
+            fi
+            printed[$host]=1
+            echo "    ${host} ${HOST_RUN_TYPE[$host]:-${default_run_type}};"
+        done
+        echo "}"
+        echo ""
+        echo "map \$http_host ${map_run_code} {"
+        echo "    default ${default_run_code};"
+        printed=()
+        for host in "${HOST_RUN_ORDER[@]}"; do
+            [[ -z "$host" ]] && continue
+            if [[ ! "$host" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                continue
+            fi
+            if [[ -n "${printed[$host]:-}" ]]; then
+                continue
+            fi
+            printed[$host]=1
+            echo "    ${host} ${HOST_RUN_CODE[$host]:-${default_run_code}};"
+        done
+        echo "}"
+        echo ""
+        echo "map \$http_host ${map_run_mode} {"
+        echo "    default ${default_run_mode};"
+        printed=()
+        for host in "${HOST_RUN_ORDER[@]}"; do
+            [[ -z "$host" ]] && continue
+            if [[ ! "$host" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                continue
+            fi
+        if [[ -n "${printed[$host]:-}" ]]; then
+            continue
+        fi
+        printed[$host]=1
+        echo "    ${host} ${HOST_RUN_MODE[$host]:-${default_run_mode}};"
+    done
+    echo "}"
+} | sudo tee "$map_path" >/dev/null
+    log_info "更新运行上下文 map: ${map_path}"
+}
+
+remove_map_config() {
+    local map_path
+    map_path="$(map_config_path)"
+    if [[ -f "$map_path" ]]; then
+        sudo rm -f "$map_path"
+    fi
+}
+
 write_frontend_snippet() {
     local snippet admin_prefix extra_admin_block
     admin_prefix="$(detect_admin_prefix)"
@@ -285,8 +531,21 @@ location ^~ /admin/ {
 EOADMIN
 )"
     fi
+    build_run_contexts
+    local default_run_type="$DEFAULT_RUN_TYPE"
+    local default_run_code="$DEFAULT_RUN_CODE"
+    local default_run_mode="$DEFAULT_RUN_MODE"
+    local map_run_type="$MAP_VAR_TYPE"
+    local map_run_code="$MAP_VAR_CODE"
+    local map_run_mode="$MAP_VAR_MODE"
     sudo tee "$snippet" >/dev/null <<EOF
 # Auto-generated by SaltGoat varnish enable
+set \$MAGE_RUN_TYPE ${default_run_type};
+set \$MAGE_RUN_CODE ${default_run_code};
+set \$MAGE_MODE ${default_run_mode};
+set \$MAGE_RUN_TYPE ${map_run_type};
+set \$MAGE_RUN_CODE ${map_run_code};
+set \$MAGE_MODE ${map_run_mode};
 proxy_hide_header Content-Security-Policy;
 proxy_hide_header Content-Security-Policy-Report-Only;
 add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://assets.adobedtm.com; style-src 'self' 'unsafe-inline'" always;
@@ -408,61 +667,19 @@ EOF
 write_backend_config() {
     local backend
     backend="$(backend_conf)"
-    local -a server_names=()
-    local -a config_hosts=()
-    local -A seen=()
-    local -A config_seen=()
-    local -A host_to_store=()
-    local name
-    while IFS= read -r name; do
-        [[ -z "$name" ]] && continue
-        if [[ -z "${config_seen[$name]:-}" ]]; then
-            config_hosts+=("$name")
-            config_seen[$name]=1
-        fi
-        if [[ -z "${seen[$name]:-}" ]]; then
-            server_names+=("$name")
-            seen[$name]=1
-        fi
-    done < <(collect_server_names 2>/dev/null || true)
-    while IFS='|' read -r name store_codes; do
-        [[ -z "$name" ]] && continue
-        local cleaned="${store_codes//,/ }"
-        if [[ -n "$cleaned" ]]; then
-            local existing="${host_to_store[$name]:-}"
-            if [[ -n "$existing" ]]; then
-                for code in $cleaned; do
-                    [[ -z "$code" ]] && continue
-                    if [[ " $existing " != *" $code "* ]]; then
-                        existing="$existing $code"
-                    fi
-                done
-                host_to_store[$name]="$(echo "$existing" | xargs)"
-            else
-                host_to_store[$name]="$(echo "$cleaned" | xargs)"
-            fi
-        fi
-        if [[ -z "${seen[$name]:-}" ]]; then
-            server_names+=("$name")
-            seen[$name]=1
-        fi
-    done < <(magento_base_domains 2>/dev/null || true)
-    if [[ ${#server_names[@]} -eq 0 ]]; then
-        server_names=("${SITE}")
+    build_run_contexts
+    local default_run_type="$DEFAULT_RUN_TYPE"
+    local default_run_code="$DEFAULT_RUN_CODE"
+    local default_run_mode="$DEFAULT_RUN_MODE"
+    local map_run_type="$MAP_VAR_TYPE"
+    local map_run_code="$MAP_VAR_CODE"
+    local map_run_mode="$MAP_VAR_MODE"
+    local server_name_line="${SERVER_NAMES[*]}"
+    if [[ -z "$server_name_line" ]]; then
+        server_name_line="${SITE}"
     fi
-    if [[ ${#config_hosts[@]} -gt 0 ]]; then
-        log_info "继承站点 server_name: ${config_hosts[*]}"
-    fi
-    if (( ${#host_to_store[@]} > 0 )); then
-        log_info "Magento store Base URL 域名映射:"
-        for name in "${server_names[@]}"; do
-            local stores="${host_to_store[$name]:-}"
-            [[ -z "$stores" ]] && continue
-            log_info "  - ${name} (stores: ${stores})"
-        done
-    fi
-    log_info "backend server_name 已设置为: ${server_names[*]}"
-    local server_name_line="${server_names[*]}"
+    log_info "backend server_name 已设置为: ${server_name_line}"
+
     sudo tee "$backend" >/dev/null <<EOF
 # Auto-generated by SaltGoat varnish enable
 server {
@@ -470,6 +687,12 @@ server {
     server_name ${server_name_line};
 
     set \$MAGE_ROOT /var/www/${SITE};
+    set \$MAGE_RUN_TYPE ${default_run_type};
+    set \$MAGE_RUN_CODE ${default_run_code};
+    set \$MAGE_MODE ${default_run_mode};
+    set \$MAGE_RUN_TYPE ${map_run_type};
+    set \$MAGE_RUN_CODE ${map_run_code};
+    set \$MAGE_MODE ${map_run_mode};
     include /var/www/${SITE}/nginx.conf.sample;
 }
 EOF
@@ -529,11 +752,12 @@ diagnose_varnish() {
     log_highlight "诊断站点 ${SITE} 的 Varnish 集成"
 
     local -i checks=0 failures=0
-    local snippet backend vcl_path value
+    local snippet backend map_path vcl_path value
     local -a server_names=() domains=()
 
     snippet="$(frontend_snippet)"
     backend="$(backend_conf)"
+    map_path="$(map_config_path)"
     vcl_path="${SCRIPT_DIR}/salt/states/optional/varnish.vcl"
 
     ((++checks))
@@ -563,6 +787,14 @@ diagnose_varnish() {
         fi
     else
         log_error "缺少 backend 配置: ${backend}"
+        ((++failures))
+    fi
+
+    ((++checks))
+    if [[ -f "$map_path" ]]; then
+        log_success "运行上下文 map 存在: ${map_path}"
+    else
+        log_error "缺少运行上下文 map: ${map_path}"
         ((++failures))
     fi
 
@@ -624,6 +856,7 @@ diagnose_varnish() {
 enable_varnish() {
     log_highlight "为站点 ${SITE} 启用 Varnish"
     ensure_backup
+    write_map_config
     write_frontend_snippet
     replace_include "$(frontend_snippet)"
     write_backend_config
@@ -640,6 +873,7 @@ disable_varnish() {
     restore_include_sample
     sudo rm -f "$(frontend_snippet)"
     remove_backend_config
+    remove_map_config
     nginx_reload
     configure_magento_builtin
     log_success "站点 ${SITE} 已恢复为原始 Nginx/PHP 模式"

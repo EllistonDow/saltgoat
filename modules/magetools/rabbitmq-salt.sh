@@ -24,6 +24,8 @@ SERVICE_USER="www-data"
 PHP_MEMORY_LIMIT="2G"
 CPU_QUOTA=""
 NICE_VALUE=""
+SITE_PATH_OVERRIDE=""
+SITE_PATH=""
 
 usage() {
     cat <<EOF
@@ -46,6 +48,7 @@ mode: all | smart
   --php-memory STR     PHP 内存限制（默认 2G）
   --cpu-quota PCT      CPU 配额（例如 50%），默认 50%
   --nice N             nice 值(-20..19，正数更"温和")，默认 10
+  --site-path PATH     指定 Magento 根目录（默认 /var/www/<site>）
   --mode all|smart     覆盖模式（仅在 check 时有用；配置时由第一个位置参数决定）
   -h, --help           显示帮助
 EOF
@@ -57,6 +60,102 @@ load_env_defaults() {
     local pillar_password
     pillar_password=$(get_local_pillar_value rabbitmq_password)
     AMQP_PASSWORD="${AMQP_PASSWORD:-${pillar_password:-$AMQP_PASSWORD}}"
+}
+
+normalize_path() {
+    local target="$1"
+    [[ -z "$target" ]] && return 1
+    sudo python3 - "$target" <<'PY'
+import os, sys
+path = sys.argv[1]
+print(os.path.realpath(path))
+PY
+}
+
+resolve_site_path() {
+    if [[ "$SITE_NAME" == "__ALL__" ]]; then
+        SITE_PATH=""
+        return
+    fi
+    local resolved="${SITE_PATH_OVERRIDE}"
+    if [[ -z "$resolved" ]]; then
+        local candidates=("/var/www/${SITE_NAME}" "/var/www/${SITE_NAME}/current")
+        local candidate
+        for candidate in "${candidates[@]}"; do
+            if sudo test -d "$candidate"; then
+                resolved="$candidate"
+                break
+            fi
+        done
+        if [[ -z "$resolved" ]]; then
+            local nginx_conf="/etc/nginx/sites-available/${SITE_NAME}"
+            if sudo test -f "$nginx_conf"; then
+                local root
+                root=$(sudo python3 - "$nginx_conf" <<'PY'
+import pathlib, re, sys
+conf_path = pathlib.Path(sys.argv[1])
+data = conf_path.read_text(encoding='utf-8', errors='ignore')
+mage_root = None
+root_value = None
+for line in data.splitlines():
+    line = line.strip()
+    if not line or line.startswith('#'):
+        continue
+    m = re.match(r"set\s+\$MAGE_ROOT\s+([^;]+);", line)
+    if m:
+        mage_root = m.group(1).strip().rstrip('/')
+        continue
+    m = re.match(r"root\s+([^;]+);", line)
+    if m and root_value is None:
+        value = m.group(1).strip()
+        if value.startswith('$MAGE_ROOT') and mage_root:
+            suffix = value[len('$MAGE_ROOT'):]
+            value = mage_root + suffix
+        root_value = value
+        break
+
+if root_value is None and mage_root is not None:
+    root_value = mage_root + '/pub'
+
+if root_value:
+    print(root_value)
+PY
+)
+                if [[ -n "$root" ]]; then
+                    root=${root%/}
+                    if [[ "$root" == */pub ]]; then
+                        root=${root%/pub}
+                    fi
+                    if sudo test -d "$root"; then
+                        resolved="$root"
+                    fi
+                fi
+            fi
+        fi
+    fi
+
+    if [[ -z "$resolved" ]]; then
+        abort "无法推导站点目录，请使用 --site-path 明确指定。"
+    fi
+
+    resolved=$(normalize_path "$resolved") || abort "无法解析站点目录: $resolved"
+    resolved=${resolved%/}
+    if [[ "$resolved" == */current ]]; then
+        resolved=${resolved%/current}
+    fi
+
+    if ! sudo test -d "$resolved"; then
+        abort "站点目录不存在: $resolved"
+    fi
+
+    SITE_PATH="$resolved"
+
+    local canonical
+    canonical=$(basename "$SITE_PATH")
+    if [[ "$canonical" != "$SITE_NAME" ]]; then
+        log_warning "检测到站点 ${SITE_NAME} 实际目录归属 ${canonical} (路径: ${SITE_PATH})"
+        abort "请使用 '--site ${canonical}' 或通过 '--site-path' 指定正确目录。"
+    fi
 }
 
 auto_detect_threads() {
@@ -178,6 +277,11 @@ parse_args() {
                 NICE_VALUE="${1#*=}"; shift ;;
             --php-memory=*)
                 PHP_MEMORY_LIMIT="${1#*=}"; shift ;;
+            --site-path)
+                val="${2-}"; [[ -z "$val" ]] && abort "--site-path 需要一个值";
+                SITE_PATH_OVERRIDE="$val"; shift 2 ;;
+            --site-path=*)
+                SITE_PATH_OVERRIDE="${1#*=}"; shift ;;
             -h|--help) usage; exit 0 ;;
             *) abort "未知参数: $1" ;;
         esac
@@ -205,7 +309,7 @@ parse_args() {
 
 build_pillar_json() {
     PILLAR_SITE_NAME="$SITE_NAME" \
-    PILLAR_SITE_PATH="/var/www/${SITE_NAME}" \
+    PILLAR_SITE_PATH="$SITE_PATH" \
     PILLAR_MODE="$RMQ_MODE" \
     PILLAR_THREADS="$THREADS" \
     PILLAR_AMQP_HOST="$AMQP_HOST" \
@@ -240,7 +344,7 @@ PY
 
 build_remove_pillar_json() {
     PILLAR_SITE_NAME="$SITE_NAME" \
-    PILLAR_SITE_PATH="/var/www/${SITE_NAME}" \
+    PILLAR_SITE_PATH="$SITE_PATH" \
     PILLAR_SERVICE_USER="$SERVICE_USER" \
     python3 - <<'PY'
 import json, os
@@ -293,6 +397,10 @@ apply_state() {
 
 main() {
     parse_args "$@"
+    if [[ "$SITE_NAME" != "__ALL__" ]]; then
+        resolve_site_path
+        log_info "使用站点目录: ${SITE_PATH}"
+    fi
     if [[ "$ACTION" == "check" && "$THREADS_OVERRIDE" -eq 0 ]]; then
         auto_detect_threads
     fi

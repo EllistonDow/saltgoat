@@ -67,15 +67,15 @@ nginx:
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
-    duobank:
+    bank:
       enabled: true
       server_name:
-      - duobank.magento.tattoogoat.com
+      - bank.magento.tattoogoat.com
       listen:
       - port: 80
       - port: 443
         ssl: true
-      root: /var/www/bank/pub
+      root: /var/www/bank
       index:
       - index.php
       - index.html
@@ -86,10 +86,71 @@ nginx:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
       magento: true
+      magento_run:
+        type: store
+        code: default
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/bank.magento.tattoogoat.com/fullchain.pem
+        key: /etc/letsencrypt/live/bank.magento.tattoogoat.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    duobank:
+      enabled: true
+      server_name:
+      - duobank.magento.tattoogoat.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/bank
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      magento_run:
+        type: store
+        code: duobank
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
       ssl:
         enabled: true
         cert: /etc/letsencrypt/live/duobank.magento.tattoogoat.com/fullchain.pem
         key: /etc/letsencrypt/live/duobank.magento.tattoogoat.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    tank:
+      enabled: true
+      server_name:
+      - tank.magento.tattoogoat.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/tank
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      magento: true
+      magento_run:
+        type: store
+        code: en
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/tank.magento.tattoogoat.com/fullchain.pem
+        key: /etc/letsencrypt/live/tank.magento.tattoogoat.com/privkey.pem
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true

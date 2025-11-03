@@ -334,7 +334,7 @@ def log(label, data):
     subprocess.run(
         [
             "python3",
-            logger_path,
+            str(logger_path),
             "TELEGRAM",
             log_path,
             f"{tag_base} {label}",

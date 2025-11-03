@@ -111,6 +111,7 @@ sudo saltgoat magetools rabbitmq-salt remove tank
 - `list all` 会列出整台主机上所有 `magento-consumer@*.service`，便于排查残留实例。
 - `remove <site>` 不仅停用 systemd unit，还会将该站点 `app/etc/env.php` 中的 `queue.amqp` 配置清空，方便重新部署。
 - 默认 AMQP 凭据来自 `salt/pillar/saltgoat.sls` 的 `rabbitmq_password`，也可通过 `--amqp-password` 覆盖。
+- 多站点复用同一代码目录时，请以主目录名执行（例如 `bank`）；若确需自定义路径，可追加 `--site-path /var/www/bank`。
 
 ### Varnish 一键切换
 ```bash
@@ -137,6 +138,9 @@ sudo saltgoat magetools multisite create --site bank --code duobank --domain duo
 # 实际创建
 sudo saltgoat magetools multisite create --site bank --code duobank --domain duobank.magento.tattoogoat.com
 
+# 带部署流程（静态资源/索引等）
+sudo saltgoat magetools multisite create --site bank --code duobank --domain duobank.magento.tattoogoat.com --run-deploy
+
 # 查看状态
 sudo saltgoat magetools multisite status --site bank --code duobank --domain duobank.magento.tattoogoat.com
 
@@ -146,6 +150,7 @@ sudo saltgoat magetools multisite rollback --site bank --code duobank --domain d
 
 - 默认会完成 Magento website/group/store 创建、调用 `saltgoat nginx create` + `add-ssl` 搭建虚拟主机与证书，并复用 `/var/www/<site>/pub` 作为根目录。
 - 会自动探测 `bin/magento` 是否提供 `store:website|group|store:create`，缺失时改用 PHP API 创建并设置默认组/门店，确保兼容 Magento 2.4.x。
+- 将新域名同步写入 `salt/pillar/monitoring.sls`，便于运维监控覆盖多站点。
 - 若已有自定义配置，可使用 `--skip-nginx` 或 `--skip-ssl` 跳过自动化；`--ssl-email`/`--nginx-site` 可分别覆盖证书邮箱与 Nginx 站点标识。
 - 建议先在 staging 环境执行 `--dry-run` 观察计划，再按需在生产运行；创建/回滚后仍需人工确认监控、通知等配套配置。
 - 默认会调用 `saltgoat magetools varnish diagnose` 进行健康检查，如无需自动检测可追加 `--skip-varnish`。

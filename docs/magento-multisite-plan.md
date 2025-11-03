@@ -46,6 +46,7 @@
 - [ ] 自动诊断命令：`status` 输出 store 列表、Nginx server、Varnish snippet/back-end 状态。
 - [ ] 测试与验证：编写 staging 演练步骤、回滚演练脚本。
 - [ ] 文档补充：更新 README 或新增操作手册，写明限制与常见问题。
+- [x] RabbitMQ 检测/部署脚本自动识别站点目录，并提示使用主目录名或 `--site-path`。
 
 ## 7. 脚本总体设计
 ### 7.1 CLI 入口
