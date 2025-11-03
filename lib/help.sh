@@ -544,6 +544,11 @@ show_magetools_help() {
     help_note "Valkey/RabbitMQ 凭据来自 Pillar，可通过 \`saltgoat passwords\` 查看。"
     echo ""
 
+    help_subtitle "主题管理"
+    help_command "reset-theme <site> [locale ...]" "卸载自定义主题/模块并恢复官方主题（默认自动检测语言）"
+    help_note "自动禁用 Codazon_* 及引用其类的模块、移除 app/code|app/design|vendor 目录并清理数据库引用，重新编译静态资源并 reload PHP-FPM；可追加语言，如 reset-theme tank ja_JP。"
+    echo ""
+
     help_subtitle "备份"
     help_command "backup restic install"       "应用 Restic 可选模块（需在 Pillar 配置 backup.restic）"
     help_command "backup restic run"           "立即触发一次 Restic 备份"

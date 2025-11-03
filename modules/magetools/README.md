@@ -130,6 +130,18 @@ sudo saltgoat magetools varnish disable bank
 - 停用命令会恢复备份文件、删除临时配置、将 Magento 缓存改回 Built-in，并停止 Varnish 服务。
 - HTTPS/TLS 与 Certbot 流程保持由 Nginx 承担，`.well-known/acme-challenge` 会自动直通。
 
+### 🎨 主题重置
+```bash
+sudo saltgoat magetools reset-theme tank             # 自动检测语言
+sudo saltgoat magetools reset-theme tank en_US ja_JP # 显式指定语言
+```
+
+- 卸载所有非官方前端主题（保留 `Magento/blank`、`Magento/luma`、`Magento/backend`），并自动 `module:disable --force --clear-static-content` 所有 `Codazon_*` 模块与引用 `Codazon\` 类的第三方模块（如 RLTSquare、Magefan 等依赖）。
+- 删除 `app/code/<Vendor>/`、`app/design/*/<Vendor>/`、`vendor/<vendor>*` 等目录，确保主题及其依赖的代码彻底移除。
+- 清理 `theme`、`design_config_grid`、`setup_module` 等表的 Codazon 记录，以及 `design/theme/%`、`codazon/%` 等配置项，避免残留引用。
+- 清空 `pub/static/`、`var/view_preprocessed/`、`generated/` 等目录，执行 `setup:upgrade`、`setup:di:compile` 并重新部署官方主题静态资源；未指定语言时会自动读取各 store 的 `general/locale/code`，必要时可手动追加多语言。
+- 最后会刷新缓存并自动 reload PHP-FPM，以释放 opcode cache 中的旧类引用，可直接配合 `varnish disable` 使用 Magento 内置缓存。
+
 ### 多站点管理（实验性）
 ```bash
 # 创建多站点（默认配置），dry-run 预览

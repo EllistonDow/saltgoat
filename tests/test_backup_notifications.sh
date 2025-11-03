@@ -56,6 +56,7 @@ run_mysql_notification() {
         source "${ROOT_DIR}/modules/magetools/mysql-backup.sh"
         notify_dump_telegram success bank /tmp/dump.sql 10MB "" 0 1 bank
     )
+    cat "${ALERT_LOG}"
     grep -q 'saltgoat/backup/mysql_dump/bank' "${ALERT_LOG}"
 }
 
@@ -67,6 +68,7 @@ run_restic_notification() {
         source "${ROOT_DIR}/modules/magetools/backup-restic.sh"
         send_direct_notification success /tmp/repo bank /tmp/log.txt data tag 0 manual host
     )
+    cat "${ALERT_LOG}"
     grep -q 'saltgoat/backup/restic/bank' "${ALERT_LOG}"
 }
 

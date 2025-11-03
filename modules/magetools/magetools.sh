@@ -216,6 +216,10 @@ magetools_handler() {
             shift
             "${SCRIPT_DIR}/modules/magetools/varnish.sh" "$@"
             ;;
+        "reset-theme")
+            shift
+            "${SCRIPT_DIR}/scripts/reset-theme.sh" "$@"
+            ;;
         "migrate")
             local site_path="$2"
             local site_name="$3"
