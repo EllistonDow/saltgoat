@@ -28,29 +28,38 @@ declare -a HOST_RUN_ORDER=()
 declare -A HOST_RUN_TYPE=()
 declare -A HOST_RUN_CODE=()
 declare -A HOST_RUN_MODE=()
+declare -a RELATED_SITES=()
+declare -A SITE_ROOTS=()
 
 require_site() {
     if [[ -z "${SITE}" ]]; then
         log_error "请提供站点名称: saltgoat magetools varnish <enable|disable> <site>"
         exit 1
     fi
-    if [[ ! -d "/var/www/${SITE}" ]]; then
-        log_error "站点目录不存在: /var/www/${SITE}"
-        exit 1
-    fi
     if [[ ! -f "/etc/nginx/sites-available/${SITE}" ]]; then
         log_error "Nginx 站点配置不存在: /etc/nginx/sites-available/${SITE}"
         exit 1
     fi
-    APP_DIR="/var/www/${SITE}"
+    local resolved_root
+    resolved_root="$(site_root_path "${SITE}")"
+    if [[ -n "$resolved_root" ]]; then
+        APP_DIR="$resolved_root"
+    else
+        APP_DIR="/var/www/${SITE}"
+    fi
+    if [[ ! -d "$APP_DIR" ]]; then
+        log_error "站点目录不存在: ${APP_DIR}"
+        exit 1
+    fi
     APP_BOOTSTRAP="${APP_DIR}/app/bootstrap.php"
     SANITIZED_SITE="$(echo "${SITE}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g')"
     [[ -n "$SANITIZED_SITE" ]] || SANITIZED_SITE="${SITE}"
+    discover_related_sites
 }
 
 run_magento() {
     local args=("$@")
-    sudo -u www-data -H bash -lc "cd /var/www/${SITE} && php bin/magento ${args[*]}"
+    sudo -u www-data -H bash -lc "cd '${APP_DIR}' && php bin/magento ${args[*]}"
 }
 
 magento_php() {
@@ -338,7 +347,7 @@ build_run_contexts() {
         fi
         HOST_RUN_TYPE["$name"]="$host_run_type"
         HOST_RUN_CODE["$name"]="$host_run_code"
-        HOST_RUN_MODE["$name"]="$host_run_mode"
+    HOST_RUN_MODE["$name"]="$host_run_mode"
     done
     DEFAULT_RUN_TYPE="$default_run_type"
     DEFAULT_RUN_CODE="$default_run_code"
@@ -347,8 +356,129 @@ build_run_contexts() {
     HOST_RUN_ORDER=("${server_names[@]}")
 }
 
+site_root_path() {
+    local site="$1"
+    python3 - "$site" <<'PY'
+import sys, pathlib, re
+
+site = sys.argv[1]
+path = pathlib.Path("/etc/nginx/sites-available") / site
+try:
+    data = path.read_text(encoding="utf-8")
+except FileNotFoundError:
+    print("")
+    sys.exit(0)
+
+patterns = [
+    re.compile(r'set\s+\$MAGE_ROOT\s+([^;]+);', re.IGNORECASE),
+    re.compile(r'root\s+([^;]+);', re.IGNORECASE),
+]
+
+for pattern in patterns:
+    match = pattern.search(data)
+    if match:
+        value = match.group(1).strip().strip('"\'')
+        print(value)
+        sys.exit(0)
+
+print("")
+PY
+}
+
+discover_related_sites() {
+    RELATED_SITES=("$SITE")
+    SITE_ROOTS=()
+    local root="$APP_DIR"
+    SITE_ROOTS["$SITE"]="$root"
+
+    local pillar_file="${SCRIPT_DIR}/salt/pillar/nginx.sls"
+    if [[ -f "$pillar_file" ]]; then
+        while IFS= read -r sibling; do
+            [[ -z "$sibling" ]] && continue
+            if [[ ! -f "/etc/nginx/sites-available/${sibling}" ]]; then
+                continue
+            fi
+            RELATED_SITES+=("$sibling")
+        done < <(python3 - "$pillar_file" "$root" "$SITE" <<'PY'
+import sys, yaml, pathlib
+pillar_path, target_root, current_site = sys.argv[1:4]
+try:
+    data = yaml.safe_load(open(pillar_path, encoding="utf-8")) or {}
+except FileNotFoundError:
+    data = {}
+sites = ((data.get("nginx") or {}).get("sites") or {})
+results = []
+for name, cfg in sites.items():
+    root = cfg.get("root")
+    if not root:
+        default_root = f"/var/www/{name}"
+        if cfg.get("magento"):
+            root = default_root
+    if root and root == target_root:
+        results.append(name)
+for name in sorted(set(results)):
+    if name != current_site:
+        print(name)
+PY
+)
+    fi
+
+    while IFS= read -r sibling; do
+        [[ -z "$sibling" ]] && continue
+        if [[ ! -f "/etc/nginx/sites-available/${sibling}" ]]; then
+            continue
+        fi
+        RELATED_SITES+=("$sibling")
+    done < <(python3 - "$root" "$SITE" <<'PY'
+import sys, pathlib, re
+root, current_site = sys.argv[1:3]
+sites_dir = pathlib.Path("/etc/nginx/sites-available")
+pattern = re.compile(r'set\s+\$MAGE_ROOT\s+([^;]+);', re.IGNORECASE)
+names = set()
+for entry in sites_dir.iterdir():
+    if not entry.is_file():
+        continue
+    try:
+        data = entry.read_text(encoding="utf-8")
+    except Exception:
+        continue
+    match = pattern.search(data)
+    if match and match.group(1).strip().strip('"\'') == root:
+        names.add(entry.name)
+for name in sorted(names):
+    if name != current_site:
+        print(name)
+PY
+)
+
+    local -A seen=()
+    local filtered=()
+    local site
+    for site in "${RELATED_SITES[@]}"; do
+        if [[ -n "${seen[$site]:-}" ]]; then
+            continue
+        fi
+        seen["$site"]=1
+        filtered+=("$site")
+    done
+    RELATED_SITES=("${filtered[@]}")
+
+    for site in "${RELATED_SITES[@]}"; do
+        local sibling_root
+        sibling_root="$(site_root_path "$site")"
+        if [[ -z "$sibling_root" ]]; then
+            sibling_root="/var/www/${site}"
+        fi
+        SITE_ROOTS["$site"]="$sibling_root"
+    done
+
+    if (( ${#RELATED_SITES[@]} > 1 )); then
+        log_info "发现与 ${SITE} 共享代码目录的关联站点: ${RELATED_SITES[*]}"
+    fi
+}
+
 detect_admin_prefix() {
-    local env_file="/var/www/${SITE}/app/etc/env.php"
+    local env_file="${APP_DIR}/app/etc/env.php"
     if [[ ! -f "$env_file" ]]; then
         echo "admin"
         return
@@ -363,66 +493,77 @@ detect_admin_prefix() {
 }
 
 ensure_backup() {
-    local dir file tmp
+    local dir file tmp site
     dir="$(backup_dir)"
-    file="${dir}/${SITE}.conf.orig"
     sudo mkdir -p "$dir"
-    tmp="$(mktemp)"
-    if ! sanitize_site_config >"$tmp"; then
-        rm -f "$tmp"
-        log_error "无法生成 ${SITE} 的非 Varnish 配置快照"
-        exit 1
-    fi
-    if [[ ! -s "$tmp" ]]; then
-        rm -f "$tmp"
-        log_error "非 Varnish 配置快照为空，放弃继续操作"
-        exit 1
-    fi
-    if [[ -f "$file" ]]; then
-        if cmp -s "$tmp" "$file"; then
+    for site in "${RELATED_SITES[@]}"; do
+        file="${dir}/${site}.conf.orig"
+        tmp="$(mktemp)"
+        if ! sanitize_site_config_for "$site" >"$tmp"; then
             rm -f "$tmp"
-            return
+            log_error "无法生成 ${site} 的非 Varnish 配置快照"
+            exit 1
         fi
-        log_info "更新 ${file} 以匹配当前原始配置"
-    else
-        log_info "备份原始 Nginx 配置到 ${file}"
-    fi
-    sudo cp "$tmp" "$file"
-    rm -f "$tmp"
+        if [[ ! -s "$tmp" ]]; then
+            rm -f "$tmp"
+            log_error "${site} 的非 Varnish 配置快照为空，放弃继续操作"
+            exit 1
+        fi
+        if [[ -f "$file" ]]; then
+            if cmp -s "$tmp" "$file"; then
+                rm -f "$tmp"
+                continue
+            fi
+            log_info "更新 ${file} 以匹配当前原始配置"
+        else
+            log_info "备份原始 Nginx 配置到 ${file}"
+        fi
+        sudo cp "$tmp" "$file"
+        rm -f "$tmp"
+    done
 }
 
 restore_backup() {
-    local file target tmp
-    file="$(backup_dir)/${SITE}.conf.orig"
-    target="/etc/nginx/sites-available/${SITE}"
-    if [[ -f "$file" ]]; then
-        log_info "恢复原始 Nginx 配置"
-        sudo cp "$file" "$target"
-        return
-    fi
-    log_warning "未找到备份文件，尝试基于当前配置回滚 Varnish 变更"
-    tmp="$(mktemp)"
-    if ! sanitize_site_config >"$tmp"; then
+    local dir file target tmp site
+    dir="$(backup_dir)"
+    for site in "${RELATED_SITES[@]}"; do
+        file="${dir}/${site}.conf.orig"
+        target="/etc/nginx/sites-available/${site}"
+        if [[ -f "$file" ]]; then
+            log_info "恢复 ${site} 原始 Nginx 配置"
+            sudo cp "$file" "$target"
+            continue
+        fi
+        log_warning "未找到 ${site} 的备份文件，尝试基于当前配置回滚 Varnish 变更"
+        tmp="$(mktemp)"
+        if ! sanitize_site_config_for "$site" >"$tmp"; then
+            rm -f "$tmp"
+            log_error "无法构造 ${site} 的回滚配置，请先执行 'sudo salt-call --local state.apply core.nginx'"
+            exit 1
+        fi
+        sudo cp "$tmp" "$target"
         rm -f "$tmp"
-        log_error "无法构造回滚配置，请先执行 'sudo salt-call --local state.apply core.nginx'"
-        exit 1
-    fi
-    sudo cp "$tmp" "$target"
-    rm -f "$tmp"
+    done
 }
 
-replace_include() {
-    local target="$1"
-    sudo python3 - "$SITE" "$target" <<'PY'
+replace_include_for() {
+    local site="$1"
+    local target="$2"
+    local root="${SITE_ROOTS[$site]}"
+    if [[ -z "$root" ]]; then
+        root="/var/www/${site}"
+    fi
+    sudo python3 - "$site" "$target" "$root" <<'PY'
 import sys, pathlib, re
 site = sys.argv[1]
 target = sys.argv[2]
+root = sys.argv[3]
 path = pathlib.Path("/etc/nginx/sites-available") / site
 data = path.read_text(encoding="utf-8")
 snippet_line = f'    include {target};'
 if snippet_line in data:
     sys.exit(0)
-sample_pattern = re.compile(r'^\s*include\s+/var/www/' + re.escape(site) + r'/nginx\.conf\.sample;\s*$', re.MULTILINE)
+sample_pattern = re.compile(r'^\s*include\s+' + re.escape(root) + r'/nginx\.conf\.sample;\s*$', re.MULTILINE)
 if sample_pattern.search(data):
     data = sample_pattern.sub(snippet_line, data, count=1)
 else:
@@ -437,21 +578,36 @@ path.write_text(data, encoding="utf-8")
 PY
 }
 
-restore_include_sample() {
-    sudo python3 - "$SITE" <<'PY'
+replace_include() {
+    replace_include_for "$SITE" "$1"
+}
+
+restore_include_sample_for() {
+    local site="$1"
+    local root="${SITE_ROOTS[$site]}"
+    if [[ -z "$root" ]]; then
+        root="/var/www/${site}"
+    fi
+    sudo python3 - "$site" "$root" <<'PY'
 import sys, pathlib, re
 site = sys.argv[1]
+root = sys.argv[2]
 path = pathlib.Path("/etc/nginx/sites-available") / site
 data = path.read_text(encoding="utf-8")
-snippet_pattern = re.compile(r'^\s*include\s+/etc/nginx/snippets/varnish-frontend-' + re.escape(site) + r'\.conf;\s*$', re.MULTILINE)
+snippet_pattern = re.compile(r'^\s*include\s+/etc/nginx/snippets/varnish-frontend-.*?\.conf;\s*$', re.MULTILINE)
 if snippet_pattern.search(data):
-    data = snippet_pattern.sub(f'    include /var/www/{site}/nginx.conf.sample;', data, count=1)
+    data = snippet_pattern.sub(f'    include {root}/nginx.conf.sample;', data, count=1)
 path.write_text(data, encoding="utf-8")
 PY
 }
 
-sanitize_site_config() {
-    python3 - "$SITE" <<'PY'
+restore_include_sample() {
+    restore_include_sample_for "$SITE"
+}
+
+sanitize_site_config_for() {
+    local site="$1"
+    python3 - "$site" <<'PY'
 import sys, pathlib, re
 site = sys.argv[1]
 path = pathlib.Path("/etc/nginx/sites-available") / site
@@ -460,62 +616,21 @@ try:
 except FileNotFoundError:
     sys.stderr.write(f"[sanitize] missing nginx config: {path}\n")
     sys.exit(1)
-snippet_pattern = re.compile(r'^\s*include\s+/etc/nginx/snippets/varnish-frontend-' + re.escape(site) + r'\.conf;\s*$', re.MULTILINE)
-data = snippet_pattern.sub(f'    include /var/www/{site}/nginx.conf.sample;', data)
-sys.stdout.write(data)
-PY
-}
-
-ensure_direct_run_context() {
-    build_run_contexts
-    local config="/etc/nginx/sites-available/${SITE}"
-    local default_run_type="$DEFAULT_RUN_TYPE"
-    local default_run_code="$DEFAULT_RUN_CODE"
-    local default_run_mode="$DEFAULT_RUN_MODE"
-    local map_run_type="$MAP_VAR_TYPE"
-    local map_run_code="$MAP_VAR_CODE"
-    local map_run_mode="$MAP_VAR_MODE"
-    sudo python3 - "$config" "$default_run_type" "$default_run_code" "$default_run_mode" "$map_run_type" "$map_run_code" "$map_run_mode" <<'PY'
-import sys, pathlib, re
-
-config_path = pathlib.Path(sys.argv[1])
-default_run_type, default_run_code, default_run_mode, map_run_type, map_run_code, map_run_mode = sys.argv[2:]
-
-try:
-    data = config_path.read_text(encoding="utf-8")
-except FileNotFoundError:
-    sys.stderr.write(f"[direct-run] missing nginx config: {config_path}\n")
-    sys.exit(1)
-
-set_block_pattern = re.compile(r'^\s*set\s+\$MAGE_(?:RUN_TYPE|RUN_CODE|MODE)\s+.*?;$', re.MULTILINE)
-data = set_block_pattern.sub('', data)
-
-block_lines = [
-    f'    set $MAGE_RUN_TYPE {default_run_type};',
-    f'    set $MAGE_RUN_CODE {default_run_code};',
-    f'    set $MAGE_MODE {default_run_mode};',
-]
-
-map_lines = []
-if map_run_type and map_run_code and map_run_mode:
-    map_lines = [
-        f'    set $MAGE_RUN_TYPE {map_run_type};',
-        f'    set $MAGE_RUN_CODE {map_run_code};',
-        f'    set $MAGE_MODE {map_run_mode};',
-    ]
-
-block = "\n".join(block_lines + map_lines) + "\n"
-
-root_pattern = re.compile(r'(set\s+\$MAGE_ROOT\s+[^\n]+;\s*)', re.IGNORECASE)
-match = root_pattern.search(data)
-if match:
-    insert_pos = match.end()
-    data = data[:insert_pos] + "\n" + block + data[insert_pos:]
+root_pattern = re.compile(r'set\s+\$MAGE_ROOT\s+([^;]+);', re.IGNORECASE)
+root_match = root_pattern.search(data)
+if root_match:
+    root = root_match.group(1).strip().strip('"\'')
 else:
-    data = block + "\n" + data
-
+    default_root = f"/var/www/{site}"
+    root = default_root
+snippet_pattern = re.compile(r'^\s*include\s+/etc/nginx/snippets/varnish-frontend-.*?\.conf;\s*$', re.MULTILINE)
+data = snippet_pattern.sub(f'    include {root}/nginx.conf.sample;', data)
+map_var_pattern = re.compile(r'^\s*set\s+\$MAGE_(?:RUN_TYPE|RUN_CODE|MODE)\s+\$mage_[^\s;]+;\s*$', re.MULTILINE)
+data = map_var_pattern.sub('', data)
 data = re.sub(r'\n{3,}', '\n\n', data)
-config_path.write_text(data.strip() + "\n", encoding="utf-8")
+if f'include {root}/nginx.conf.sample;' not in data:
+    data = data.rstrip() + f'\n    include {root}/nginx.conf.sample;\n'
+sys.stdout.write(data)
 PY
 }
 
@@ -674,7 +789,7 @@ proxy_hide_header Content-Security-Policy-Report-Only;
 add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://assets.adobedtm.com; style-src 'self' 'unsafe-inline'" always;
 add_header Content-Security-Policy-Report-Only "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://assets.adobedtm.com; style-src 'self' 'unsafe-inline'" always;
 location ^~ /.well-known/acme-challenge/ {
-    root /var/www/${SITE}/pub;
+    root ${APP_DIR}/pub;
 }
 
 location ^~ /${admin_prefix}/ {
@@ -809,14 +924,14 @@ server {
     listen 127.0.0.1:8080;
     server_name ${server_name_line};
 
-    set \$MAGE_ROOT /var/www/${SITE};
+    set \$MAGE_ROOT ${APP_DIR};
     set \$MAGE_RUN_TYPE ${default_run_type};
     set \$MAGE_RUN_CODE ${default_run_code};
     set \$MAGE_MODE ${default_run_mode};
     set \$MAGE_RUN_TYPE ${map_run_type};
     set \$MAGE_RUN_CODE ${map_run_code};
     set \$MAGE_MODE ${map_run_mode};
-    include /var/www/${SITE}/nginx.conf.sample;
+    include ${APP_DIR}/nginx.conf.sample;
 }
 EOF
     sudo ln -sf "$backend" "$(backend_symlink)"
@@ -926,7 +1041,7 @@ diagnose_varnish() {
     fi
 
     ((++checks))
-    if [[ -f "$backend" ]] && grep -q 'include /var/www/.*/nginx.conf.sample' "$backend"; then
+    if [[ -f "$backend" ]] && grep -q "include ${APP_DIR}/nginx.conf.sample" "$backend"; then
         log_success "backend 继承 Magento 官方 nginx.conf.sample（包含必需 FastCGI 参数）"
     else
         log_warning "请确认 backend 使用 Magento 官方 nginx.conf.sample，以防遗漏 X-Magento-Vary 透传"
@@ -986,6 +1101,11 @@ enable_varnish() {
     write_map_config
     write_frontend_snippet
     replace_include "$(frontend_snippet)"
+    local sibling
+    for sibling in "${RELATED_SITES[@]}"; do
+        [[ "$sibling" == "$SITE" ]] && continue
+        replace_include_for "$sibling" "$(frontend_snippet)"
+    done
     write_backend_config
     nginx_reload
     apply_varnish_state
@@ -997,11 +1117,13 @@ enable_varnish() {
 disable_varnish() {
     log_highlight "为站点 ${SITE} 停用 Varnish"
     restore_backup
-    restore_include_sample
+    local sibling
+    for sibling in "${RELATED_SITES[@]}"; do
+        restore_include_sample_for "$sibling"
+    done
     sudo rm -f "$(frontend_snippet)"
     remove_backend_config
-    write_map_config
-    ensure_direct_run_context
+    remove_map_config
     nginx_reload
     configure_magento_builtin
     log_success "站点 ${SITE} 已恢复为原始 Nginx/PHP 模式"
