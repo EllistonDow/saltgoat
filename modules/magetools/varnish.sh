@@ -363,25 +363,52 @@ detect_admin_prefix() {
 }
 
 ensure_backup() {
-    local dir file
+    local dir file tmp
     dir="$(backup_dir)"
     file="${dir}/${SITE}.conf.orig"
     sudo mkdir -p "$dir"
-    if [[ ! -f "$file" ]]; then
-        log_info "备份原始 Nginx 配置到 ${file}"
-        sudo cp "/etc/nginx/sites-available/${SITE}" "$file"
+    tmp="$(mktemp)"
+    if ! sanitize_site_config >"$tmp"; then
+        rm -f "$tmp"
+        log_error "无法生成 ${SITE} 的非 Varnish 配置快照"
+        exit 1
     fi
+    if [[ ! -s "$tmp" ]]; then
+        rm -f "$tmp"
+        log_error "非 Varnish 配置快照为空，放弃继续操作"
+        exit 1
+    fi
+    if [[ -f "$file" ]]; then
+        if cmp -s "$tmp" "$file"; then
+            rm -f "$tmp"
+            return
+        fi
+        log_info "更新 ${file} 以匹配当前原始配置"
+    else
+        log_info "备份原始 Nginx 配置到 ${file}"
+    fi
+    sudo cp "$tmp" "$file"
+    rm -f "$tmp"
 }
 
 restore_backup() {
-    local file
+    local file target tmp
     file="$(backup_dir)/${SITE}.conf.orig"
+    target="/etc/nginx/sites-available/${SITE}"
     if [[ -f "$file" ]]; then
         log_info "恢复原始 Nginx 配置"
-        sudo cp "$file" "/etc/nginx/sites-available/${SITE}"
-    else
-        log_warning "未找到备份文件，跳过恢复"
+        sudo cp "$file" "$target"
+        return
     fi
+    log_warning "未找到备份文件，尝试基于当前配置回滚 Varnish 变更"
+    tmp="$(mktemp)"
+    if ! sanitize_site_config >"$tmp"; then
+        rm -f "$tmp"
+        log_error "无法构造回滚配置，请先执行 'sudo salt-call --local state.apply core.nginx'"
+        exit 1
+    fi
+    sudo cp "$tmp" "$target"
+    rm -f "$tmp"
 }
 
 replace_include() {
@@ -420,6 +447,75 @@ snippet_pattern = re.compile(r'^\s*include\s+/etc/nginx/snippets/varnish-fronten
 if snippet_pattern.search(data):
     data = snippet_pattern.sub(f'    include /var/www/{site}/nginx.conf.sample;', data, count=1)
 path.write_text(data, encoding="utf-8")
+PY
+}
+
+sanitize_site_config() {
+    python3 - "$SITE" <<'PY'
+import sys, pathlib, re
+site = sys.argv[1]
+path = pathlib.Path("/etc/nginx/sites-available") / site
+try:
+    data = path.read_text(encoding="utf-8")
+except FileNotFoundError:
+    sys.stderr.write(f"[sanitize] missing nginx config: {path}\n")
+    sys.exit(1)
+snippet_pattern = re.compile(r'^\s*include\s+/etc/nginx/snippets/varnish-frontend-' + re.escape(site) + r'\.conf;\s*$', re.MULTILINE)
+data = snippet_pattern.sub(f'    include /var/www/{site}/nginx.conf.sample;', data)
+sys.stdout.write(data)
+PY
+}
+
+ensure_direct_run_context() {
+    build_run_contexts
+    local config="/etc/nginx/sites-available/${SITE}"
+    local default_run_type="$DEFAULT_RUN_TYPE"
+    local default_run_code="$DEFAULT_RUN_CODE"
+    local default_run_mode="$DEFAULT_RUN_MODE"
+    local map_run_type="$MAP_VAR_TYPE"
+    local map_run_code="$MAP_VAR_CODE"
+    local map_run_mode="$MAP_VAR_MODE"
+    sudo python3 - "$config" "$default_run_type" "$default_run_code" "$default_run_mode" "$map_run_type" "$map_run_code" "$map_run_mode" <<'PY'
+import sys, pathlib, re
+
+config_path = pathlib.Path(sys.argv[1])
+default_run_type, default_run_code, default_run_mode, map_run_type, map_run_code, map_run_mode = sys.argv[2:]
+
+try:
+    data = config_path.read_text(encoding="utf-8")
+except FileNotFoundError:
+    sys.stderr.write(f"[direct-run] missing nginx config: {config_path}\n")
+    sys.exit(1)
+
+set_block_pattern = re.compile(r'^\s*set\s+\$MAGE_(?:RUN_TYPE|RUN_CODE|MODE)\s+.*?;$', re.MULTILINE)
+data = set_block_pattern.sub('', data)
+
+block_lines = [
+    f'    set $MAGE_RUN_TYPE {default_run_type};',
+    f'    set $MAGE_RUN_CODE {default_run_code};',
+    f'    set $MAGE_MODE {default_run_mode};',
+]
+
+map_lines = []
+if map_run_type and map_run_code and map_run_mode:
+    map_lines = [
+        f'    set $MAGE_RUN_TYPE {map_run_type};',
+        f'    set $MAGE_RUN_CODE {map_run_code};',
+        f'    set $MAGE_MODE {map_run_mode};',
+    ]
+
+block = "\n".join(block_lines + map_lines) + "\n"
+
+root_pattern = re.compile(r'(set\s+\$MAGE_ROOT\s+[^\n]+;\s*)', re.IGNORECASE)
+match = root_pattern.search(data)
+if match:
+    insert_pos = match.end()
+    data = data[:insert_pos] + "\n" + block + data[insert_pos:]
+else:
+    data = block + "\n" + data
+
+data = re.sub(r'\n{3,}', '\n\n', data)
+config_path.write_text(data.strip() + "\n", encoding="utf-8")
 PY
 }
 
@@ -495,6 +591,33 @@ remove_map_config() {
     if [[ -f "$map_path" ]]; then
         sudo rm -f "$map_path"
     fi
+}
+
+other_varnish_sites_exist() {
+    local current_snippet current_backend current_map path
+    current_snippet="$(frontend_snippet)"
+    current_backend="$(backend_conf)"
+    current_map="$(map_config_path)"
+
+    for path in /etc/nginx/snippets/varnish-frontend-*.conf; do
+        [[ -e "$path" ]] || continue
+        [[ "$path" == "$current_snippet" ]] && continue
+        return 0
+    done
+
+    for path in /etc/nginx/sites-available/*-backend; do
+        [[ -e "$path" ]] || continue
+        [[ "$path" == "$current_backend" ]] && continue
+        return 0
+    done
+
+    for path in /etc/nginx/conf.d/varnish-run-*.conf; do
+        [[ -e "$path" ]] || continue
+        [[ "$path" == "$current_map" ]] && continue
+        return 0
+    done
+
+    return 1
 }
 
 write_frontend_snippet() {
@@ -742,6 +865,10 @@ configure_magento_varnish() {
 }
 
 configure_magento_builtin() {
+    if other_varnish_sites_exist; then
+        log_info "检测到其他站点仍启用 Varnish，保留 Magento 缓存设置为 Varnish"
+        return
+    fi
     log_info "恢复 Magento 缓存为 Built-in"
     run_magento config:set system/full_page_cache/caching_application 1 >/dev/null
     run_magento cache:flush >/dev/null
@@ -873,7 +1000,8 @@ disable_varnish() {
     restore_include_sample
     sudo rm -f "$(frontend_snippet)"
     remove_backend_config
-    remove_map_config
+    write_map_config
+    ensure_direct_run_context
     nginx_reload
     configure_magento_builtin
     log_success "站点 ${SITE} 已恢复为原始 Nginx/PHP 模式"
