@@ -1,3 +1,27 @@
+# [1.3.19] - 2025-11-04
+
+## [1.4.0] - 2025-11-04
+
+### Changes
+- 修改 57 个文件: README.md, docs/CHANGELOG.md, docs/OPS_TOOLING.md, lib/help.sh, modules/automation/automation.sh 等
+
+
+### Added
+- `modules/lib/monitor_auto_sites.py`, `modules/lib/salt_event.py`, `modules/lib/maintenance_pillar.py`, `modules/lib/automation_helpers.py` 以及配套单元测试，方便 CLI 与外部脚本直接复用 JSON/Pillar/事件逻辑。
+
+### Changed
+- `saltgoat monitor auto-sites` 仅在站点或 Beacon 发生变化时才会刷新 Pillar 与 Telegram 话题，并使用新的 Python helper 解析结果。
+- `modules/maintenance/backup.sh`、`modules/magetools/maintenance.sh`、`modules/automation/automation.sh` 均不再包含 heredoc Python，全部改为调用共享 helper。
+- README、`docs/OPS_TOOLING.md`、`lib/help.sh` 更新，记录所有新的 helper 与使用方法。
+
+# [1.3.18] - 2025-11-04
+
+### Added
+- 新增 `tests/test_varnish_regression.sh`、`scripts/health-panel.sh`、`tests/test_magento_cli_suite.sh`，分别用于 Varnish 回归、健康面板、Magento CLI 预检。
+- 新增 `modules/security/fail2ban_watch.py` 及 `optional.fail2ban-watch` state，自动部署 `saltgoat-fail2ban-watch.service` + `.timer` 推送 Telegram 告警。
+- 新增 `modules/fun/fun.sh` 并接入 `saltgoat fun <status|joke|tip|ascii>`。
+- 新文档 [`docs/OPS_TOOLING.md`](OPS_TOOLING.md) 汇总上述工具使用方式。
+
 # SaltGoat 更新日志
 
 ## [1.3.17] - 2025-11-04

@@ -1,0 +1,1 @@
+../../salt/states/templates/security/fail2ban_watch.py

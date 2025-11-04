@@ -47,6 +47,9 @@ show_help() {
         "analyse")
             show_analyse_help
             ;;
+        "fun")
+            show_fun_help
+            ;;
         "cockpit")
             show_cockpit_help
             ;;
@@ -114,6 +117,7 @@ show_main_help() {
     help_command "analyse"                         "部署网站分析与可观测组件"
     help_command "git"                             "Git 快速发布工具"
     help_command "postfix --smtp <名称> [--enable|--disable]" "切换 SMTP 帐号并可同步开启/关闭 Postfix"
+    help_command "fun <status|joke|tip>"            "健康面板 + 趣味命令（详见 docs/OPS_TOOLING.md）"
     echo ""
 
     help_subtitle "诊断与状态"
@@ -191,6 +195,18 @@ show_analyse_help() {
     echo ""
 
     help_note "Matomo 安装包含 PHP 依赖、Nginx 虚拟主机和文件权限；--with-db 可选地预建数据库及授权。"
+}
+
+show_fun_help() {
+    help_title "Fun 命令"
+    echo -e "用法: ${GREEN}saltgoat fun <command> [options]${NC}"
+    echo ""
+
+    help_command "fun status [sites...]" "调用 scripts/health-panel.sh，输出 systemd/HTTP/磁盘三合一健康面板"
+    help_command "fun joke"              "随机输出 SaltGoat 主题冷笑话（含 ASCII 山羊）"
+    help_command "fun ascii"             "打印 ASCII 山羊 + 鼓励提示"
+    help_command "fun tip"               "输出一个运维小贴士（提醒 varnish/backup/fail2ban 工具）"
+    help_note "更多运维工具详见 docs/OPS_TOOLING.md。"
 }
 
 # 安装帮助
@@ -587,7 +603,7 @@ show_magetools_help() {
     help_command "cron status|enable <site>"    "查看或启用 magento cron 计划"
     help_command "schedule list|auto"           "自动检测并安装 Salt Schedule（多站点智能处理）"
     help_note "auto 会为缺省站点补齐 cron/php/health、API Watch、mysqldump、stats 任务，可再用 Pillar 精细化覆盖"
-    help_command "monitor auto-sites"           "扫描 Magento 站点并写入 health check Pillar"
+    help_command "monitor auto-sites"           "扫描站点生成 health check Pillar，仅在变更时刷新 Pillar/Telegram"
     help_command "monitor quick-check"          "立即执行一次资源 & 站点巡检并打印结果"
     help_command "migrate-detect <path>"        "检测站点迁移风险与遗留配置"
     help_command "opensearch-auth <site>"       "修复 Magento ↔ OpenSearch 鉴权"

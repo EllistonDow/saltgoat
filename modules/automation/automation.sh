@@ -4,6 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+AUTOMATION_HELPER="${SCRIPT_DIR}/modules/lib/automation_helpers.py"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
@@ -41,42 +42,27 @@ salt_exec_json() {
 
 render_basic_result() {
     local json="$1"
-    JSON_PAYLOAD="$json" python3 - <<'PY'
-import json
-import os
-import sys
-
-payload = json.loads(os.environ["JSON_PAYLOAD"])
-result = next(iter(payload.values()))
-ok = bool(result.get("result", True))
-comment = result.get("comment") or ("操作完成" if ok else "操作失败")
-comment = comment.replace("\n", " ")
-if ok:
-    print(comment)
-else:
-    print(comment, file=sys.stderr)
-    sys.exit(1)
-PY
+    if [[ ! -x "$AUTOMATION_HELPER" ]]; then
+        log_error "缺少 automation helper: $AUTOMATION_HELPER"
+        exit 1
+    fi
+    local output=""
+    if output=$(python3 "$AUTOMATION_HELPER" render-basic --json "$json"); then
+        printf '%s\n' "$output"
+    else
+        local status=$?
+        printf '%s\n' "$output" >&2
+        return "$status"
+    fi
 }
 
 extract_field() {
     local key="$1"
     local json="$2"
-    JSON_PAYLOAD="$json" KEY_NAME="$key" python3 - <<'PY'
-import json
-import os
-import sys
-
-payload = json.loads(os.environ["JSON_PAYLOAD"])
-result = next(iter(payload.values()))
-value = result.get(os.environ["KEY_NAME"])
-if value is None:
-    sys.exit(1)
-if isinstance(value, bool):
-    print("true" if value else "false")
-else:
-    print(value)
-PY
+    if [[ ! -x "$AUTOMATION_HELPER" ]]; then
+        return 1
+    fi
+    python3 "$AUTOMATION_HELPER" extract-field "$key" --json "$json"
 }
 
 load_automation_paths() {
@@ -90,21 +76,13 @@ load_automation_paths() {
         exit 1
     fi
 
-    local parsed
-    if ! parsed=$(JSON_PAYLOAD="$json" python3 - <<'PY'
-import json
-import os
-import sys
+    if [[ ! -x "$AUTOMATION_HELPER" ]]; then
+        log_error "缺少 automation helper: $AUTOMATION_HELPER"
+        exit 1
+    fi
 
-payload = json.loads(os.environ["JSON_PAYLOAD"])
-result = next(iter(payload.values()))
-paths = result.get("paths") or {}
-print(paths.get("base_dir", ""))
-print(paths.get("scripts_dir", ""))
-print(paths.get("jobs_dir", ""))
-print(paths.get("logs_dir", ""))
-PY
-    ); then
+    local parsed
+    if ! parsed=$(python3 "$AUTOMATION_HELPER" parse-paths --json "$json"); then
         log_error "解析自动化目录信息失败。"
         exit 1
     fi

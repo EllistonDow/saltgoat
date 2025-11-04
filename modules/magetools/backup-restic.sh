@@ -235,140 +235,16 @@ send_direct_notification() {
     local rc="$7"
     local origin="$8"
     local host="$9"
-    local reactor_dir="${SALTGOAT_REACTOR_DIR:-/opt/saltgoat-reactor}"
-    local config="${SALTGOAT_TELEGRAM_CONFIG:-/etc/saltgoat/telegram.json}"
-    local logger="${reactor_dir}/logger.py"
-    local helpers="${reactor_dir}/reactor_common.py"
-    local log_path="${SALTGOAT_ALERT_LOG:-/var/log/saltgoat/alerts.log}"
-
-    [[ -f "$config" ]] || return 0
-    [[ -f "$logger" ]] || return 0
-    [[ -f "$helpers" ]] || helpers=""
-
-    python3 - "$status" "$repo" "$site" "$log_file" "$paths" "$tags" "$rc" "$origin" "$host" "$config" "$logger" "$log_path" "$SCRIPT_DIR" <<'PY'
-import json
-import os
-import pathlib
-import subprocess
-import sys
-from datetime import datetime, timezone
-from html import escape
-from typing import Dict, Any
-
-status, repo, site, log_file, paths, tags, rc, origin, host_hint, config_path, logger_path, log_path, repo_root = sys.argv[1:]
-
-rc = int(rc or 0)
-paths_list = [item for item in (paths or "").split(",") if item]
-tags_list = [item for item in (tags or "").split(",") if item]
-
-reactor_dir = os.environ.get("SALTGOAT_REACTOR_DIR", "/opt/saltgoat-reactor")
-helpers = pathlib.Path(reactor_dir) / "reactor_common.py"
-if not helpers.exists():
-    sys.exit(0)
-
-notif = None
-if repo_root:
-    repo_path = pathlib.Path(repo_root)
-    sys.path.insert(0, str(repo_path))
-    try:
-        from modules.lib import notification as notif  # type: ignore
-    except Exception as exc:  # pylint: disable=broad-except
-        sys.stderr.write(f"Failed to import modules.lib.notification: {exc}\n")
-        notif = None
-
-sys.path.insert(0, str(helpers.parent))
-import reactor_common  # pylint: disable=import-error
-
-payload: Dict[str, Any] = {
-    "host": host_hint or "",
-    "repo": repo or "n/a",
-    "site": site or "",
-    "log_file": log_file or "n/a",
-    "paths": ", ".join(paths_list),
-    "tags": ", ".join(tags_list),
-    "return_code": rc,
-    "origin": origin or "manual",
-    "severity": "INFO" if status == "success" else "ERROR",
-}
-
-if not site:
-    payload.pop("site")
-if not payload["paths"]:
-    payload.pop("paths")
-if not payload["tags"]:
-    payload.pop("tags")
-
-level = "INFO" if status == "success" else "ERROR"
-timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-underline = "=" * 30
-entries = [
-    ("Level", level),
-    ("Host", payload.get('host') or 'ns510140'),
-    ("Status", status.upper()),
-    ("Repo", repo or 'n/a'),
-    ("Return", rc),
-    ("Time", timestamp),
-]
-if site:
-    entries.append(("Site", site))
-if log_file:
-    entries.append(("Log", log_file))
-if payload.get("paths"):
-    entries.append(("Paths", payload['paths']))
-if payload.get("tags"):
-    entries.append(("Tags", payload['tags']))
-width = max(len(label) for label, _ in entries)
-lines = [underline, "RESTIC BACKUP", underline]
-for label, value in entries:
-    parts = str(value).splitlines() or [""]
-    lines.append(f"{label.ljust(width)} : {parts[0]}")
-    for extra in parts[1:]:
-        lines.append(f"{' ' * width}   {extra}")
-message = f"<pre>{escape('\n'.join(lines))}</pre>"
-
-topic_site = (site or "global").lower().replace(" ", "-").replace("/", "-")
-tag_base = f"saltgoat/backup/restic/{topic_site}"
-payload["tag"] = tag_base
-
-def log(label, data):
-    subprocess.run(
-        [
-            "python3",
-            str(logger_path),
-            "TELEGRAM",
-            log_path,
-            f"{tag_base} {label}",
-            json.dumps(data, ensure_ascii=False),
-        ],
-        check=False,
-        timeout=5,
-    )
-
-parse_mode = notif.get_parse_mode() if notif else "HTML"
-severity = payload.get("severity", "INFO")
-if notif and not notif.should_send(tag_base, severity, topic_site):
-    log("skip", {"reason": "filtered", "severity": severity, "site": topic_site})
-    sys.exit(0)
-
-profiles = reactor_common.load_telegram_profiles(config_path, log)
-if not profiles:
-    log("skip", {"reason": "no_profiles"})
-    sys.exit(0)
-
-try:
-    log("profile_summary", {"count": len(profiles)})
-    reactor_common.broadcast_telegram(
-        message,
-        profiles,
-        log,
-        tag=tag_base,
-        thread_id=payload.get("telegram_thread"),
-        parse_mode=parse_mode,
-    )
-except Exception as exc:  # pylint: disable=broad-except
-    log("error", {"message": str(exc)})
-    sys.exit(1)
-PY
+    python3 "${SCRIPT_DIR}/modules/lib/backup_notify.py" restic \
+        --status "$status" \
+        --repo "$repo" \
+        --site "$site" \
+        --log-file "$log_file" \
+        --paths "$paths" \
+        --tags "$tags" \
+        --return-code "$rc" \
+        --origin "$origin" \
+        --host "$host" || true
 }
 
 usage() {
@@ -453,11 +329,7 @@ add_run_path() {
 }
 
 generate_random_secret() {
-    python3 - <<'PY'
-import secrets, string
-alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
-print(''.join(secrets.choice(alphabet) for _ in range(24)))
-PY
+    python3 "${SCRIPT_DIR}/modules/lib/restic_helpers.py" random-secret
 }
 
 normalize_path() {
@@ -466,10 +338,7 @@ normalize_path() {
         echo ""
         return
     fi
-    python3 - <<'PY' "$raw"
-import os, sys
-print(os.path.abspath(os.path.expanduser(sys.argv[1])))
-PY
+    python3 "${SCRIPT_DIR}/modules/lib/restic_helpers.py" normalize-path "$raw"
 }
 
 add_install_path() {
@@ -854,132 +723,7 @@ summarize_sites() {
         log_warning "未找到任何站点记录，可通过 'saltgoat magetools backup restic install --site <name>' 初始化"
         return
     fi
-    sudo python3 - <<'PY'
-import json, subprocess, datetime
-from pathlib import Path
-
-SITE_DIR = Path('/etc/restic/sites.d')
-files = sorted(SITE_DIR.glob('*.env'))
-if not files:
-    print("暂无 Restic 站点记录")
-    raise SystemExit(0)
-
-def run_cmd(cmd: str):
-    return subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True)
-
-rows = []
-for file in files:
-    data = {}
-    for line in file.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith('#') or '=' not in line:
-            continue
-        k, v = line.split('=', 1)
-        data[k.strip()] = v.strip()
-
-    site = data.get('SITE') or file.stem
-    repo = data.get('REPO')
-    env_file = data.get('ENV_FILE', '/etc/restic/restic.env')
-    service = data.get('SERVICE_NAME', 'saltgoat-restic-backup.service')
-
-    latest_time = 'n/a'
-    snapshot_count = '0'
-    size_display = 'n/a'
-    svc_state = 'unknown'
-    svc_status = ''
-    last_run = 'n/a'
-
-    if repo:
-        snap_cmd = (
-            f"set -a; source '{env_file}' >/dev/null 2>&1; set +a; "
-            f"export RESTIC_REPOSITORY='{repo}'; "
-            f"/usr/bin/restic --json snapshots"
-        )
-        snap_proc = run_cmd(snap_cmd)
-        if snap_proc.returncode == 0 and snap_proc.stdout.strip():
-            try:
-                snapshots = json.loads(snap_proc.stdout)
-                if snapshots:
-                    snapshots.sort(key=lambda x: x.get('time', ''))
-                    snapshot_count = str(len(snapshots))
-                    latest = snapshots[-1].get('time')
-                    if latest:
-                        try:
-                            dt = datetime.datetime.fromisoformat(latest.replace('Z', '+00:00'))
-                            latest_time = dt.strftime('%Y-%m-%d %H:%M')
-                        except Exception:
-                            latest_time = latest
-            except json.JSONDecodeError:
-                latest_time = '解析失败'
-        else:
-            latest_time = f"错误({snap_proc.returncode})"
-
-        stats_cmd = (
-            f"set -a; source '{env_file}' >/dev/null 2>&1; set +a; "
-            f"export RESTIC_REPOSITORY='{repo}'; "
-            f"/usr/bin/restic stats --json latest"
-        )
-        stats_proc = run_cmd(stats_cmd)
-        if stats_proc.returncode == 0 and stats_proc.stdout.strip():
-            try:
-                stats = json.loads(stats_proc.stdout)
-                size_bytes = stats.get('total_size', 0)
-                if size_bytes >= 1024**3:
-                    size_display = f"{size_bytes / (1024**3):.1f}G"
-                else:
-                    size_display = f"{size_bytes / (1024**2):.1f}M"
-            except json.JSONDecodeError:
-                size_display = '解析失败'
-        elif stats_proc.returncode == 3:
-            size_display = '无快照'
-
-    svc_proc = subprocess.run(
-        ["systemctl", "show", service, "--property=ActiveState,SubState,ExecMainStatus"],
-        capture_output=True, text=True
-    )
-    if svc_proc.returncode == 0:
-        props = {}
-        for line in svc_proc.stdout.splitlines():
-            if '=' in line:
-                k, v = line.split('=', 1)
-                props[k] = v
-        svc_state = f"{props.get('ActiveState', '?')}/{props.get('SubState', '?')}"
-        svc_status = props.get('ExecMainStatus', '')
-
-    journal_proc = subprocess.run(
-        ["journalctl", "-u", service, "-n", "1", "--no-pager", "--output=json"],
-        capture_output=True, text=True
-    )
-    if journal_proc.returncode == 0 and journal_proc.stdout.strip():
-        try:
-            entry = json.loads(journal_proc.stdout.splitlines()[-1])
-            ts = int(entry.get('__REALTIME_TIMESTAMP', '0'))
-            if ts:
-                dt = datetime.datetime.fromtimestamp(ts / 1_000_000)
-                last_run = dt.strftime('%Y-%m-%d %H:%M:%S')
-        except Exception:
-            pass
-
-    rows.append({
-        'site': site,
-        'repo': repo or 'n/a',
-        'snapshots': snapshot_count,
-        'latest': latest_time,
-        'size': size_display,
-        'svc_state': svc_state,
-        'svc_status': svc_status,
-        'last_run': last_run,
-    })
-
-header = f"{'站点':<12} {'快照数':<6} {'最后备份':<17} {'容量':<8} {'服务状态':<20} {'最后执行':<19}"
-print(header)
-print('-' * len(header))
-for row in sorted(rows, key=lambda r: r['site']):
-    status = row['svc_state']
-    if row['svc_status']:
-        status = f"{status}({row['svc_status']})"
-    print(f"{row['site']:<12} {row['snapshots']:<6} {row['latest']:<17} {row['size']:<8} {status:<20} {row['last_run']:<19}")
-PY
+    sudo python3 "${SCRIPT_DIR}/modules/lib/restic_helpers.py" summarize-sites --metadata-dir "$SITE_METADATA_DIR"
 }
 
 run_manual_backup() {

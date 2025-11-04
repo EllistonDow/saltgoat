@@ -37,11 +37,12 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 ### 🛠 智能自愈与巡检
 
 - `sudo saltgoat magetools schedule auto`：扫描现有站点自动补齐 Magento cron/维护/API Watch/备份/统计任务，并清理已移除站点的残留计划任务。
-- `sudo saltgoat monitor auto-sites`：分析 `/var/www` 与 Nginx 配置生成 `salt/pillar/monitoring.sls`，内置 HTTP 健康检查、TLS 证书提前预警、以及针对 5xx/504 的 PHP-FPM/nginx/varnish 自愈策略。
+- `sudo saltgoat monitor auto-sites`：由 `modules/lib/monitor_auto_sites.py` 解析 `/var/www` 与 Nginx 配置生成 `salt/pillar/monitoring.sls`，只在检测到站点/Beacon 变更时自动刷新 Pillar 并触发 `scripts/setup-telegram-topics.py`，避免重复刷写。
 - `sudo saltgoat monitor quick-check`：即时执行一遍资源/站点巡检，将结果直接输出到终端（适合临时排查）。
 - `modules/monitoring/resource_alert.py`：定时评估资源与站点可用性，失败后记录 `systemctl` 与 `journalctl` 摘要、触发自愈并通过 Telegram/Salt Event 通知；内置重试与冷却窗口避免频繁重启。
 - `salt/states/optional/magento-schedule.sls` 默认下发每日 `saltgoat monitor report daily` 与 `saltgoat magetools schedule auto`，确保巡检与计划任务长期收敛。
 - `saltgoat pillar backup` 一键将 `salt/pillar` 打包到 `/var/lib/saltgoat/pillar-backups/`，配合版本库和外部存储实现配置留痕。
+- `modules/lib/salt_event.py`：统一封装 Salt Event 发送逻辑（`python3 modules/lib/salt_event.py send --tag saltgoat/test key=value`），shell 脚本会自动回落到 `salt-call event.send`，便于在没有 `salt.client` 的环境里保持行为一致。
 
 ---
 
@@ -86,7 +87,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    # 秘钥模板位于 salt/pillar/secret/*.sls.example，复制后填入真实密码
    # 其它 Pillar 也提供 *.sample 文件，可按需复制后修改
    ```
-   > ⚠️ **权限提示**  
+> ⚠️ **权限提示**  
    > 除 `help`、`git`、`lint`、`format` 等只读命令外，SaltGoat 会访问 `/etc`、`/var/lib/saltgoat` 以及 Salt Caller 接口。请默认使用 `sudo saltgoat …`，CLI 也会在需要时自动尝试用 sudo 重新执行。
 
 3. **执行安装**
@@ -102,6 +103,19 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    ```
 
 更多安装细节、Matomo 部署与 Pillar 示例请参考 [`docs/INSTALL.md`](docs/INSTALL.md)。
+
+---
+
+## 🔧 Helper Scripts
+
+| 脚本 | 作用 |
+|------|------|
+| `modules/lib/monitor_auto_sites.py` | 直接生成/更新 `salt/pillar/monitoring.sls`（例如 `python3 modules/lib/monitor_auto_sites.py --site-root /var/www --nginx-dir /etc/nginx/sites-enabled --monitor-file salt/pillar/monitoring.sls`）。CLI 会基于脚本输出自动刷新 Pillar 与 Telegram 话题。 |
+| `modules/lib/salt_event.py` | `send` 子命令优先尝试 `salt.client.Caller`，失败时输出 JSON 供 `salt-call event.send` 使用；`format` 子命令仅做 JSON 序列化，适合 CI 或自定义脚本。 |
+| `modules/lib/maintenance_pillar.py` | 把 `saltgoat magetools maintenance` 导出的环境变量整理成 Pillar JSON，既能被 CLI 使用，也方便排查：`SITE_NAME=bank SITE_PATH=/var/www/bank python3 modules/lib/maintenance_pillar.py`. |
+| `modules/lib/automation_helpers.py` | 为 `saltgoat automation` 系列脚本提供 `render-basic`、`extract-field`、`parse-paths` 等 JSON 解析工具，便于在其他 shell/CI 场景复用 Salt 返回值。 |
+
+所有 helper 都是独立 CLI，可在 CI 或临时脚本中直接调用。
 
 ---
 
@@ -201,6 +215,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - [`docs/MYSQL_BACKUP.md`](docs/MYSQL_BACKUP.md)：Percona XtraBackup 安装、巡检与恢复。
 - [`docs/SECRET_MANAGEMENT.md`](docs/SECRET_MANAGEMENT.md)：密钥模板、Pillar Secret 工作流与密码更新步骤。
 - [`docs/TELEGRAM_TOPICS.md`](docs/TELEGRAM_TOPICS.md)：Telegram 话题 `chat_id`/`message_thread_id` 对照表及通知分类建议。
+- [`docs/OPS_TOOLING.md`](docs/OPS_TOOLING.md)：Varnish 回归脚本、健康面板、Fail2ban Watcher、SaltGoat fun 命令等日常运维工具。
 - [`docs/CHANGELOG.md`](docs/CHANGELOG.md)：版本更新。
 
 ---

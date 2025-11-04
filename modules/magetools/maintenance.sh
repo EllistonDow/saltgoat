@@ -4,6 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+MAINTENANCE_PILLAR_HELPER="${SCRIPT_DIR}/modules/lib/maintenance_pillar.py"
 # shellcheck source=../../lib/logger.sh
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
@@ -165,55 +166,11 @@ if [[ -z "$SITE_PATH" ]]; then
 fi
 
 build_pillar_json() {
-    python3 - <<'PY'
-import json, os
-
-def truthy(envkey):
-    return os.environ.get(envkey, "0") == "1"
-
-data = {
-    "site_name": os.environ["SITE_NAME"],
-    "site_path": os.environ.get("SITE_PATH"),
-    "magento_user": os.environ.get("MAGENTO_USER"),
-    "php_bin": os.environ.get("PHP_BIN"),
-    "composer_bin": os.environ.get("COMPOSER_BIN"),
-    "valkey_cli": os.environ.get("VALKEY_CLI"),
-    "allow_valkey_flush": truthy("ALLOW_VALKEY_FLUSH"),
-    "valkey_password": os.environ.get("VALKEY_PASSWORD"),
-    "allow_setup_upgrade": truthy("ALLOW_SETUP_UPGRADE"),
-    "backup_target_dir": os.environ.get("BACKUP_TARGET_DIR"),
-    "backup_keep_days": os.environ.get("BACKUP_KEEP_DAYS"),
-    "mysql_database": os.environ.get("MYSQL_DATABASE"),
-    "mysql_user": os.environ.get("MYSQL_USER"),
-    "mysql_password": os.environ.get("MYSQL_PASSWORD"),
-    "trigger_restic": truthy("TRIGGER_RESTIC"),
-    "restic_site_override": os.environ.get("RESTIC_SITE_OVERRIDE"),
-    "restic_repo_override": os.environ.get("RESTIC_REPO_OVERRIDE"),
-    "static_languages": os.environ.get("STATIC_LANGS"),
-    "static_jobs": os.environ.get("STATIC_JOBS"),
-}
-
-# 清理空值 / 空字符串
-cleaned = {}
-for key, value in data.items():
-    if value in (None, "", "None"):
-        continue
-    if key in {"backup_keep_days", "static_jobs"}:
-        try:
-            cleaned[key] = int(value)
-        except ValueError:
-            continue
-    else:
-        cleaned[key] = value
-
-extra_paths = os.environ.get("RESTIC_EXTRA_PATHS")
-if extra_paths:
-    paths = [item.strip() for item in extra_paths.replace(";", ",").split(",") if item.strip()]
-    if paths:
-        cleaned["restic_extra_paths"] = paths
-
-print(json.dumps(cleaned))
-PY
+    if [[ ! -x "$MAINTENANCE_PILLAR_HELPER" ]]; then
+        log_error "缺少维护 Pillar 构建脚本: $MAINTENANCE_PILLAR_HELPER"
+        exit 1
+    fi
+    python3 "$MAINTENANCE_PILLAR_HELPER"
 }
 
 export SITE_NAME

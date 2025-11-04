@@ -15,6 +15,7 @@ base:
     - optional.rabbitmq
     - optional.varnish
     - optional.fail2ban
+    - optional.fail2ban-watch
     - optional.webmin
     - optional.phpmyadmin
     - optional.certbot

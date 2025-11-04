@@ -123,6 +123,7 @@ register_module "adminer" "${SCRIPT_DIR}/modules/adminer/adminer.sh"
 register_module "uptime-kuma" "${SCRIPT_DIR}/modules/uptime-kuma/uptime-kuma.sh"
 register_module "memory" "${SCRIPT_DIR}/monitoring/memory.sh"
 register_module "schedule" "${SCRIPT_DIR}/monitoring/schedule.sh"
+register_module "fun" "${SCRIPT_DIR}/modules/fun/fun.sh"
 
 # 显示横幅
 show_banner
@@ -1225,6 +1226,10 @@ case "$1" in
     "uptime-kuma")
         require_module "uptime-kuma"
         uptime_kuma_main "$2" "$3" "$4"
+        ;;
+    "fun")
+        require_module "fun"
+        fun_handler "${@:2}"
         ;;
     "help"|"--help"|"-h"|"")
         show_help "$2"

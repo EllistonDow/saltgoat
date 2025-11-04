@@ -1,0 +1,313 @@
+#!/usr/bin/env python3
+"""Utility helpers for SaltGoat Nginx/Magento context management."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import re
+import sys
+from typing import Iterable, List
+import os
+
+try:
+    import yaml  # type: ignore
+except ImportError as exc:  # pragma: no cover
+    sys.stderr.write(f"[nginx_context] Missing dependency: {exc}\n")
+    sys.exit(1)
+
+SITES_AVAILABLE = pathlib.Path(os.environ.get("SALTGOAT_SITES_AVAILABLE", "/etc/nginx/sites-available"))
+
+
+def _load_yaml(path: pathlib.Path) -> dict:
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as fh:
+        data = yaml.safe_load(fh) or {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def cmd_run_context(args: argparse.Namespace) -> None:
+    data = _load_yaml(args.pillar)
+    sites = ((data.get("nginx") or {}).get("sites") or {})
+    run_cfg = (sites.get(args.site, {}) or {}).get("magento_run") or {}
+    if not isinstance(run_cfg, dict):
+        run_cfg = {}
+    values = {
+        "type": str(run_cfg.get("type") or ""),
+        "code": str(run_cfg.get("code") or ""),
+        "mode": str(run_cfg.get("mode") or ""),
+    }
+    if args.format == "env":
+        for key, value in values.items():
+            print(f"{key}={value}")
+    else:
+        print(json.dumps(values))
+
+
+def _read_site_config(site: str) -> tuple[pathlib.Path, str]:
+    path = SITES_AVAILABLE / site
+    if not path.exists():
+        return path, ""
+    return path, path.read_text(encoding="utf-8")
+
+
+def cmd_server_names(args: argparse.Namespace) -> None:
+    _, data = _read_site_config(args.site)
+    if not data:
+        return
+    pattern = re.compile(r"server_name\s+([^;]+);", re.IGNORECASE)
+    seen = set()
+    for match in pattern.finditer(data):
+        for token in match.group(1).split():
+            token = token.strip()
+            if token and token not in seen:
+                seen.add(token)
+                print(token)
+
+
+_ROOT_PATTERNS = [
+    re.compile(r"set\s+\$MAGE_ROOT\s+([^;]+);", re.IGNORECASE),
+    re.compile(r"root\s+([^;]+);", re.IGNORECASE),
+]
+
+
+def _extract_root(data: str, default: str) -> str:
+    for pattern in _ROOT_PATTERNS:
+        match = pattern.search(data)
+        if match:
+            return match.group(1).strip().strip("\"'")
+    return default
+
+
+def cmd_site_root(args: argparse.Namespace) -> None:
+    path, data = _read_site_config(args.site)
+    _ = path  # unused, but kept for clarity
+    if not data:
+        print("")
+        return
+    default_root = f"/var/www/{args.site}"
+    print(_extract_root(data, default_root))
+
+
+def _discover_sites_from_pillar(pillar_path: pathlib.Path, root: str, current_site: str) -> List[str]:
+    if not pillar_path.exists():
+        return []
+    data = _load_yaml(pillar_path)
+    sites = ((data.get("nginx") or {}).get("sites") or {})
+    results: set[str] = set()
+    for name, cfg in sites.items():
+        if not isinstance(cfg, dict):
+            continue
+        site_root = cfg.get("root")
+        if not site_root and cfg.get("magento"):
+            site_root = f"/var/www/{name}"
+        if site_root and site_root == root:
+            results.add(name)
+    results.discard(current_site)
+    return sorted(results)
+
+
+def _discover_sites_from_configs(root: str, current_site: str) -> List[str]:
+    results: set[str] = set()
+    if not SITES_AVAILABLE.exists():
+        return []
+    pattern = re.compile(r"set\s+\$MAGE_ROOT\s+([^;]+);", re.IGNORECASE)
+    for entry in SITES_AVAILABLE.iterdir():
+        if not entry.is_file():
+            continue
+        try:
+            data = entry.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        match = pattern.search(data)
+        if match and match.group(1).strip().strip("\"'") == root:
+            results.add(entry.name)
+    results.discard(current_site)
+    return sorted(results)
+
+
+def cmd_related_sites(args: argparse.Namespace) -> None:
+    items: List[str] = []
+    if args.mode in {"pillar", "both"}:
+        items.extend(_discover_sites_from_pillar(args.pillar, args.root, args.site))
+    if args.mode in {"config", "both"}:
+        items.extend(_discover_sites_from_configs(args.root, args.site))
+    seen = set()
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            print(item)
+
+
+def cmd_replace_include(args: argparse.Namespace) -> None:
+    path, data = _read_site_config(args.site)
+    if not data:
+        sys.exit(1)
+    snippet_line = f"    include {args.target};"
+    if snippet_line in data:
+        return
+    sample_pattern = re.compile(r"^\s*include\s+" + re.escape(args.root) + r"/nginx\.conf\.sample;\s*$", re.MULTILINE)
+    if sample_pattern.search(data):
+        data = sample_pattern.sub(snippet_line, data, count=1)
+    else:
+        mage_pattern = re.compile(r"^\s*set\s+\$MAGE_ROOT.*$", re.MULTILINE)
+        match = mage_pattern.search(data)
+        if match:
+            idx = match.end()
+            data = data[:idx] + "\n" + snippet_line + data[idx:]
+        else:
+            data += "\n" + snippet_line + "\n"
+    path.write_text(data, encoding="utf-8")
+
+
+def cmd_restore_include(args: argparse.Namespace) -> None:
+    path, data = _read_site_config(args.site)
+    if not data:
+        return
+    snippet_pattern = re.compile(r"^\s*include\s+/etc/nginx/snippets/varnish-frontend-.*?\.conf;\s*$", re.MULTILINE)
+    if snippet_pattern.search(data):
+        data = snippet_pattern.sub(f"    include {args.root}/nginx.conf.sample;", data, count=1)
+        path.write_text(data, encoding="utf-8")
+
+
+def _collect_run_context_from_snippet(snippet_path: pathlib.Path) -> List[str]:
+    try:
+        snippet_lines = snippet_path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return []
+    result: List[str] = []
+    for line in snippet_lines:
+        stripped = line.strip()
+        if stripped.startswith("set $MAGE_RUN_TYPE") or stripped.startswith("set $MAGE_RUN_CODE") or stripped.startswith("set $MAGE_MODE"):
+            result.append(stripped)
+    return result
+
+
+def cmd_sanitize_config(args: argparse.Namespace) -> None:
+    path, data = _read_site_config(args.site)
+    if not data:
+        sys.exit(1)
+    root = _extract_root(data, f"/var/www/{args.site}")
+    snippet_pattern = re.compile(r"^(\s*)include\s+(/etc/nginx/snippets/varnish-frontend-[^;]+);\s*$", re.MULTILINE)
+    has_run_context = bool(re.search(r"\$MAGE_RUN_(?:TYPE|CODE|MODE)", data))
+
+    def replacer(match: re.Match[str]) -> str:
+        indent = match.group(1)
+        snippet = pathlib.Path(match.group(2))
+        lines: List[str] = []
+        nonlocal has_run_context
+        if not has_run_context:
+            snippet_lines = _collect_run_context_from_snippet(snippet)
+            if snippet_lines:
+                lines.extend(f"{indent}{line}" for line in snippet_lines)
+            else:
+                lines.extend(
+                    [
+                        indent + "set $MAGE_RUN_TYPE store;",
+                        indent + f"set $MAGE_RUN_CODE {args.site};",
+                        indent + "set $MAGE_MODE production;",
+                    ]
+                )
+            has_run_context = True
+        lines.append(f"{indent}include {root}/nginx.conf.sample;")
+        return "\n".join(lines)
+
+    new_data = snippet_pattern.sub(replacer, data)
+    sys.stdout.write(new_data)
+
+
+def cmd_ensure_run_context(args: argparse.Namespace) -> None:
+    config_path = pathlib.Path(args.config)
+    if not config_path.exists():
+        return
+    data = config_path.read_text(encoding="utf-8")
+    if re.search(r"\$MAGE_RUN_(?:TYPE|CODE|MODE)", data):
+        return
+    pattern = re.compile(r"^(\s*)include\s+([^;]*nginx\.conf\.sample);\s*$", re.MULTILINE)
+    map_prefix = f"mage_{args.ident}"
+
+    def replacer(match: re.Match[str]) -> str:
+        indent = match.group(1)
+        include_target = match.group(2).strip()
+        lines = [
+            f"{indent}set $MAGE_RUN_TYPE {args.type};",
+            f"{indent}set $MAGE_RUN_CODE {args.code};",
+            f"{indent}set $MAGE_MODE {args.mode};",
+            f"{indent}set $MAGE_RUN_TYPE ${map_prefix}_run_type;",
+            f"{indent}set $MAGE_RUN_CODE ${map_prefix}_run_code;",
+            f"{indent}set $MAGE_MODE ${map_prefix}_run_mode;",
+            f"{indent}include {include_target};",
+        ]
+        return "\n".join(lines)
+
+    new_data, count = pattern.subn(replacer, data, count=1)
+    if count:
+        if not new_data.endswith("\n"):
+            new_data += "\n"
+        config_path.write_text(new_data, encoding="utf-8")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="SaltGoat Nginx context helpers")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    run_ctx = sub.add_parser("run-context", help="Emit run context for a site")
+    run_ctx.add_argument("--pillar", type=pathlib.Path, required=True)
+    run_ctx.add_argument("--site", required=True)
+    run_ctx.add_argument("--format", choices=["env", "json"], default="env")
+    run_ctx.set_defaults(func=cmd_run_context)
+
+    server = sub.add_parser("server-names", help="List server_name entries")
+    server.add_argument("--site", required=True)
+    server.set_defaults(func=cmd_server_names)
+
+    site_root = sub.add_parser("site-root", help="Detect Magento root path")
+    site_root.add_argument("--site", required=True)
+    site_root.set_defaults(func=cmd_site_root)
+
+    related = sub.add_parser("related-sites", help="Discover related sites sharing root")
+    related.add_argument("--site", required=True)
+    related.add_argument("--root", required=True)
+    related.add_argument("--pillar", type=pathlib.Path, default=pathlib.Path("/etc/salt/pillar/nginx.sls"))
+    related.add_argument("--mode", choices=["pillar", "config", "both"], default="both")
+    related.set_defaults(func=cmd_related_sites)
+
+    repl = sub.add_parser("replace-include", help="Swap nginx.conf.sample include with snippet")
+    repl.add_argument("--site", required=True)
+    repl.add_argument("--target", required=True)
+    repl.add_argument("--root", required=True)
+    repl.set_defaults(func=cmd_replace_include)
+
+    restore = sub.add_parser("restore-include", help="Restore nginx.conf.sample include")
+    restore.add_argument("--site", required=True)
+    restore.add_argument("--root", required=True)
+    restore.set_defaults(func=cmd_restore_include)
+
+    sanitize = sub.add_parser("sanitize-config", help="Output sanitized config for rollback")
+    sanitize.add_argument("--site", required=True)
+    sanitize.set_defaults(func=cmd_sanitize_config)
+
+    ensure = sub.add_parser("ensure-run-context", help="Inject run context guards")
+    ensure.add_argument("--config", required=True)
+    ensure.add_argument("--type", required=True)
+    ensure.add_argument("--code", required=True)
+    ensure.add_argument("--mode", required=True)
+    ensure.add_argument("--ident", required=True)
+    ensure.set_defaults(func=cmd_ensure_run_context)
+
+    return parser
+
+
+def main(argv: Iterable[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    args.func(args)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

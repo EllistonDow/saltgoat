@@ -5,6 +5,7 @@
 set -euo pipefail
 
 : "${SCRIPT_DIR:=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+MONITORING_HELPER="${SCRIPT_DIR}/modules/lib/monitoring_sites.py"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
@@ -368,49 +369,14 @@ update_monitoring_pillar() {
         log_info "[dry-run] 更新监控 Pillar: 追加站点 ${STORE_CODE} (${DOMAIN})."
         return
     fi
-    sudo python3 - "$MONITORING_PILLAR_FILE" "$STORE_CODE" "$DOMAIN" <<'PY'
-import sys, yaml
-path, site, domain = sys.argv[1:4]
-
-domain = domain.strip()
-if not domain:
-    sys.exit(0)
-url = f"https://{domain.rstrip('/')}/"
-
-with open(path, encoding='utf-8') as fh:
-    data = yaml.safe_load(fh) or {}
-
-saltgoat = data.setdefault('saltgoat', {})
-monitor = saltgoat.setdefault('monitor', {})
-sites = monitor.setdefault('sites', [])
-
-entry = {
-    'name': site,
-    'url': url,
-    'timeout': 6,
-    'retries': 2,
-    'expect': 200,
-    'tls_warn_days': 14,
-    'tls_critical_days': 7,
-    'timeout_services': ['php8.3-fpm', 'varnish'],
-    'server_error_services': ['php8.3-fpm', 'nginx', 'varnish'],
-    'failure_services': ['php8.3-fpm', 'nginx', 'varnish'],
-    'auto': True,
-}
-
-updated = False
-for idx, item in enumerate(sites):
-    if isinstance(item, dict) and item.get('name') == site:
-        sites[idx] = entry
-        updated = True
-        break
-
-if not updated:
-    sites.append(entry)
-
-with open(path, 'w', encoding='utf-8') as fh:
-    yaml.safe_dump(data, fh, allow_unicode=True, sort_keys=False)
-PY
+    if [[ -z "$DOMAIN" ]]; then
+        log_warning "未提供 domain，跳过监控 Pillar 更新。"
+        return
+    fi
+    sudo python3 "$MONITORING_HELPER" upsert \
+        --file "$MONITORING_PILLAR_FILE" \
+        --site "$STORE_CODE" \
+        --domain "$DOMAIN"
     log_success "监控 Pillar 已更新: ${STORE_CODE} -> https://${DOMAIN}/"
 }
 
@@ -422,37 +388,26 @@ remove_monitoring_entry() {
         log_info "[dry-run] 从监控 Pillar 移除站点 ${STORE_CODE}."
         return
     fi
-    sudo python3 - "$MONITORING_PILLAR_FILE" "$STORE_CODE" <<'PY'
-import sys, yaml
-path, site = sys.argv[1:3]
-with open(path, encoding='utf-8') as fh:
-    data = yaml.safe_load(fh) or {}
-
-monitor = ((data.get('saltgoat') or {}).get('monitor') or {})
-sites = monitor.get('sites')
-if not isinstance(sites, list):
-    sys.exit(0)
-
-new_sites = [item for item in sites if not (isinstance(item, dict) and item.get('name') == site)]
-if len(new_sites) == len(sites):
-    sys.exit(0)
-
-monitor['sites'] = new_sites
-with open(path, 'w', encoding='utf-8') as fh:
-    yaml.safe_dump(data, fh, allow_unicode=True, sort_keys=False)
-PY
+    sudo python3 "$MONITORING_HELPER" remove \
+        --file "$MONITORING_PILLAR_FILE" \
+        --site "$STORE_CODE"
     log_info "监控 Pillar 中已移除站点 ${STORE_CODE}."
 }
 
 magento_cli() {
     local desc="$1"
     shift
-    local cmd="$*"
+    local cmd=("$@")
+    local cmd_str=""
+    if (( ${#cmd[@]} )); then
+        printf -v cmd_str '%q ' "${cmd[@]}"
+        cmd_str="${cmd_str% }"
+    fi
     if (( DRY_RUN )); then
-        log_info "[dry-run] ${desc}: ${cmd}"
+        log_info "[dry-run] ${desc}: ${cmd_str}"
         return
     fi
-    run_cli_command "$desc" sudo -u www-data -H bash -lc "cd '${MAGENTO_CURRENT}' && ${cmd}"
+    run_cli_command "$desc" sudo -u www-data -H bash -lc "cd '${MAGENTO_CURRENT}' && ${cmd_str}"
 }
 
 run_deploy_tasks() {

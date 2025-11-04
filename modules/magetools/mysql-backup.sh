@@ -52,107 +52,16 @@ notify_dump_telegram() {
     local compressed="${7:-1}"
     local site="$8"
 
-    python3 - "$status" "$database" "$path" "$size" "$reason" "$return_code" "$compressed" "$site" "$HOST_ID" "$SCRIPT_DIR" <<'PY'
-import json
-import os
-import subprocess
-import sys
-from pathlib import Path
-from datetime import datetime, timezone
-from html import escape
-
-status, database, path, size, reason, return_code, compressed, site, host, repo_root = sys.argv[1:11]
-site = (site or database or host or "default").lower().replace(" ", "-").replace("/", "-")
-
-reactor_dir = os.environ.get("SALTGOAT_REACTOR_DIR", "/opt/saltgoat-reactor")
-sys.path.insert(0, reactor_dir)
-try:
-    import reactor_common  # pylint: disable=import-error
-except Exception as exc:  # pylint: disable=broad-except
-    sys.stderr.write(f"Failed to import reactor_common: {exc}\n")
-    raise SystemExit(0)
-
-notif = None
-if repo_root:
-    repo_path = Path(repo_root)
-    sys.path.insert(0, str(repo_path))
-    try:
-        from modules.lib import notification as notif  # type: ignore
-    except Exception as exc:  # pylint: disable=broad-except
-        sys.stderr.write(f"Failed to import modules.lib.notification: {exc}\n")
-        notif = None
-
-log_path = os.environ.get("SALTGOAT_ALERT_LOG", "/var/log/saltgoat/alerts.log")
-telegram_config = os.environ.get("SALTGOAT_TELEGRAM_CONFIG", "/etc/saltgoat/telegram.json")
-tag = f"saltgoat/backup/mysql_dump/{site}"
-
-level = "INFO" if status == "success" else "ERROR"
-timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-header = "=" * 30
-entries = [
-    ("Level", level),
-    ("Host", host),
-    ("Site", site),
-    ("Status", status.upper()),
-    ("File", path or "n/a"),
-    ("Return", return_code),
-    ("Time", timestamp),
-]
-if path and size and size.lower() != "unknown":
-    entries.append(("Size", size))
-if database:
-    entries.append(("Database", database))
-if reason:
-    entries.append(("Reason", reason))
-width = max(len(label) for label, _ in entries)
-lines = [header, "MYSQL DUMP BACKUP", header]
-for label, value in entries:
-    parts = str(value).splitlines() or [""]
-    lines.append(f"{label.ljust(width)} : {parts[0]}")
-    for extra in parts[1:]:
-        lines.append(f"{' ' * width}   {extra}")
-message = f"<pre>{escape('\n'.join(lines))}</pre>"
-
-logger_script = Path(reactor_dir) / "logger.py"
-
-def log(kind, payload_obj):
-    try:
-        subprocess.run(
-            [
-                "python3",
-                str(logger_script),
-                "TELEGRAM",
-                log_path,
-                f"{tag} {kind}",
-                json.dumps(payload_obj, ensure_ascii=False),
-            ],
-            check=False,
-            timeout=5,
-        )
-    except Exception:  # pylint: disable=broad-except
-        pass
-
-parse_mode = notif.get_parse_mode() if notif else "HTML"
-if notif and not notif.should_send(tag, level, site):
-    log("skip", {"reason": "filtered", "severity": level, "site": site})
-    raise SystemExit(0)
-
-profiles = reactor_common.load_telegram_profiles(telegram_config, log)
-if not profiles:
-    log("skip", {"reason": "no_profiles"})
-    raise SystemExit(0)
-
-context = {
-    "database": database,
-    "status": status,
-    "size": size,
-    "compressed": compressed,
-    "site": site,
-    "severity": level,
-}
-log("context", context)
-reactor_common.broadcast_telegram(message, profiles, log, tag=tag, parse_mode=parse_mode)
-PY
+    python3 "${SCRIPT_DIR}/modules/lib/backup_notify.py" mysql \
+        --status "$status" \
+        --database "$database" \
+        --path "$path" \
+        --size "$size" \
+        --reason "$reason" \
+        --return-code "$return_code" \
+        --compressed "$compressed" \
+        --site "$site" \
+        --host "$HOST_ID" || true
 }
 
 usage() {

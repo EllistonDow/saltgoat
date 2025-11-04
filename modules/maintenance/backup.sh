@@ -2,6 +2,10 @@
 # 备份管理模块 - 完全 Salt 原生功能
 # services/backup.sh
 
+# shellcheck disable=SC2034
+: "${SCRIPT_DIR:=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+SALT_EVENT_HELPER="${SCRIPT_DIR}/modules/lib/salt_event.py"
+
 # 备份目录配置
 BACKUP_BASE_DIR="$HOME/saltgoat_backups"
 BACKUP_RETENTION_DAYS=30
@@ -11,58 +15,29 @@ emit_salt_event() {
     local tag="$1"
     shift || true
 
-    if ! command -v python3 >/dev/null 2>&1; then
+    if [[ ! -x "$SALT_EVENT_HELPER" ]]; then
+        log_warning "salt_event helper 未找到，跳过事件上报 ($SALT_EVENT_HELPER)"
         return 0
     fi
 
-    if python3 - "$tag" "$@" <<'PY'
-import sys
-try:
-    from salt.client import Caller
-except Exception:
-    sys.exit(1)
-
-tag = sys.argv[1]
-data = {}
-for arg in sys.argv[2:]:
-    if '=' not in arg:
-        continue
-    key, value = arg.split('=', 1)
-    data[key] = value
-
-try:
-    caller = Caller()
-except Exception:
-    sys.exit(1)
-
-try:
-    caller.cmd('event.send', tag, data)
-except Exception:
-    sys.exit(1)
-else:
-    sys.exit(0)
-PY
-    then
+    local helper_output=""
+    helper_output="$(python3 "$SALT_EVENT_HELPER" send --tag "$tag" "$@" 2> >(cat >&2))"
+    local status=$?
+    if (( status == 0 )); then
+        return 0
+    elif (( status == 2 )); then
+        if command -v salt-call >/dev/null 2>&1; then
+            salt-call --local event.send "$tag" "$helper_output" >/dev/null 2>&1 || true
+        fi
         return 0
     fi
 
     if command -v salt-call >/dev/null 2>&1; then
         local payload
-        payload="$(python3 - "$tag" "$@" <<'PY'
-import json
-import sys
-
-tag = sys.argv[1]
-data = {}
-for arg in sys.argv[2:]:
-    if '=' not in arg:
-        continue
-    key, value = arg.split('=', 1)
-    data[key] = value
-print(json.dumps(data, ensure_ascii=False))
-PY
-)"
-        salt-call --local event.send "$tag" "$payload" >/dev/null 2>&1 || true
+        payload="$(python3 "$SALT_EVENT_HELPER" format --tag "$tag" "$@" 2>/dev/null || true)"
+        if [[ -n "$payload" ]]; then
+            salt-call --local event.send "$tag" "$payload" >/dev/null 2>&1 || true
+        fi
     fi
 }
 

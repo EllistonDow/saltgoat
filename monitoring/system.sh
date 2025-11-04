@@ -10,6 +10,7 @@ MONITOR_THRESHOLD_MEMORY=85
 MONITOR_THRESHOLD_DISK=90
 RESOURCE_ALERT_SCRIPT="${SCRIPT_DIR}/modules/monitoring/resource_alert.py"
 DAILY_SUMMARY_SCRIPT="${SCRIPT_DIR}/modules/monitoring/daily_summary.py"
+AUTO_SITES_HELPER="${SCRIPT_DIR}/modules/lib/monitor_auto_sites.py"
 
 # 确保监控目录存在
 ensure_monitor_dirs() {
@@ -823,316 +824,51 @@ monitor_quick_check() {
 monitor_auto_sites() {
     log_highlight "自动生成站点健康检查配置..."
 
+    if [[ ! -x "$AUTO_SITES_HELPER" ]]; then
+        log_error "缺少自动生成脚本: $AUTO_SITES_HELPER"
+        return 1
+    fi
+
+    local monitor_file="${SALTGOAT_MONITOR_FILE:-${SCRIPT_DIR}/salt/pillar/monitoring.sls}"
+    local auto_args=(
+        --site-root "${SALTGOAT_SITE_ROOT:-/var/www}"
+        --nginx-dir "${SALTGOAT_NGINX_DIR:-/etc/nginx/sites-enabled}"
+        --monitor-file "$monitor_file"
+        --script-dir "$SCRIPT_DIR"
+    )
+    if [[ "${SALTGOAT_SKIP_SALT_CALL:-0}" =~ ^(1|true|TRUE)$ ]]; then
+        auto_args+=(--skip-salt-call)
+    fi
+    if [[ "${SALTGOAT_SKIP_SYSTEMCTL:-0}" =~ ^(1|true|TRUE)$ ]]; then
+        auto_args+=(--skip-systemctl)
+    fi
+
     local monitor_output
-    if ! monitor_output=$(SCRIPT_DIR="$SCRIPT_DIR" python3 <<'PY'
-import json
-import os
-import re
-import shutil
-import subprocess
-from collections import OrderedDict
-from pathlib import Path
-
-SCRIPT_DIR = Path(os.environ.get("SCRIPT_DIR", Path(__file__).resolve().parents[2]))
-SITE_ROOT = Path(os.environ.get("SALTGOAT_SITE_ROOT", "/var/www"))
-NGINX_DIR = Path(os.environ.get("SALTGOAT_NGINX_DIR", "/etc/nginx/sites-enabled"))
-MONITOR_FILE_OVERRIDE = os.environ.get("SALTGOAT_MONITOR_FILE")
-MONITOR_FILE = Path(MONITOR_FILE_OVERRIDE) if MONITOR_FILE_OVERRIDE else SCRIPT_DIR / "salt/pillar/monitoring.sls"
-SKIP_SALT_CALL = os.environ.get("SALTGOAT_SKIP_SALT_CALL", "0").lower() in {"1", "true", "yes"}
-SKIP_SYSTEMCTL = os.environ.get("SALTGOAT_SKIP_SYSTEMCTL", "0").lower() in {"1", "true", "yes"}
-
-
-def service_exists(name: str) -> bool:
-    if SKIP_SYSTEMCTL:
-        return False
-    try:
-        proc = subprocess.run(
-            ["systemctl", "show", f"{name}.service", "--property", "LoadState"],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if proc.returncode != 0:
-            return False
-        return "not-found" not in proc.stdout
-    except FileNotFoundError:
-        return False
-
-
-def load_existing() -> OrderedDict:
-    if SKIP_SALT_CALL:
-        return OrderedDict()
-    if not MONITOR_FILE.exists():
-        return OrderedDict()
-    try:
-        output = subprocess.check_output(
-            [
-                "salt-call",
-                "--local",
-                "--out=json",
-                "slsutil.deserialize",
-                "yaml",
-                f"file={MONITOR_FILE}",
-            ],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-        data = json.loads(output).get("local")
-        if isinstance(data, dict):
-            return to_ordered_dict(data)
-    except Exception:
-        pass
-    return OrderedDict()
-
-
-def to_ordered_dict(value):
-    if isinstance(value, dict):
-        return OrderedDict((k, to_ordered_dict(v)) for k, v in value.items())
-    if isinstance(value, list):
-        return [to_ordered_dict(v) for v in value]
-    return value
-
-
-def detect_sites():
-    base = SITE_ROOT
-    sites = []
-    if not base.exists():
-        return sites
-    for entry in sorted(base.iterdir()):
-        if not entry.is_dir():
-            continue
-        root = None
-        if (entry / "app/etc/env.php").is_file():
-            root = entry
-        elif (entry / "current/app/etc/env.php").is_file():
-            root = entry / "current"
-        if root is None:
-            continue
-        sites.append({"name": entry.name, "root": str(root)})
-
-    if not sites:
-        return []
-
-    conf_dir = NGINX_DIR
-    if conf_dir.exists():
-        for conf in conf_dir.glob("*"):
-            try:
-                text = conf.read_text()
-            except Exception:
-                continue
-            https = bool(re.search(r"listen\s+[^;]*443", text))
-            server_names = []
-            for match in re.findall(r"server_name\s+([^;]+);", text):
-                for part in match.split():
-                    part = part.strip()
-                    if part and part != "_":
-                        server_names.append(part)
-            for site in sites:
-                root = site["root"].rstrip("/")
-                parent = str(Path(root).parent).rstrip("/")
-                if root not in text and parent not in text:
-                    continue
-                if "url" not in site and server_names:
-                    domain = server_names[0].lstrip("*.")
-                    scheme = "https" if https else "http"
-                    site["url"] = f"{scheme}://{domain}/"
-    for site in sites:
-        if "url" not in site:
-            site["url"] = f"http://127.0.0.1/{site['name']}/"
-    return sites
-
-
-def ensure_structure(data: OrderedDict):
-    saltgoat = data.setdefault("saltgoat", OrderedDict())
-    monitor = saltgoat.setdefault("monitor", OrderedDict())
-    sites = monitor.setdefault("sites", [])
-    if not isinstance(sites, list):
-        monitor["sites"] = []
-        sites = monitor["sites"]
-    beacons = saltgoat.setdefault("beacons", OrderedDict())
-    service = beacons.setdefault("service", OrderedDict())
-    services = service.setdefault("services", OrderedDict())
-    if not isinstance(services, dict):
-        service["services"] = OrderedDict()
-        services = service["services"]
-    return sites, services
-
-
-def format_scalar(value):
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return str(value)
-    if value is None:
-        return "null"
-    text = str(value)
-    if text == "" or re.search(r"[\s:#]", text):
-        return json.dumps(text, ensure_ascii=False)
-    return text
-
-
-def dump_yaml(obj, indent=0, lines=None):
-    if lines is None:
-        lines = []
-    if isinstance(obj, dict):
-        for key, value in obj.items():
-            lines.append(" " * indent + f"{key}:")
-            dump_yaml(value, indent + 2, lines)
-    elif isinstance(obj, list):
-        if not obj:
-            lines.append(" " * indent + "[]")
-        for item in obj:
-            if isinstance(item, (dict, list)):
-                lines.append(" " * indent + "-")
-                dump_yaml(item, indent + 2, lines)
-            else:
-                lines.append(" " * indent + "- " + format_scalar(item))
-    else:
-        lines.append(" " * indent + format_scalar(obj))
-    return lines
-
-
-def main():
-    sites_detected = detect_sites()
-    data = load_existing()
-    new_entries = []
-    removed_entries = []
-
-    sites_list, beacon_services = ensure_structure(data)
-
-    varnish_exists = service_exists("varnish")
-
-    detected_map = {site["name"].lower(): site for site in sites_detected}
-
-    updated_sites = []
-    manual_entries = []
-    manual_names = set()
-    manual_urls = set()
-
-    for entry in list(sites_list):
-        if not isinstance(entry, dict):
-            continue
-        name_value = entry.get("name")
-        name_lower = str(name_value or "").lower()
-        url_lower = str(entry.get("url", "")).rstrip("/").lower()
-        is_auto = entry.get("auto")
-        if is_auto is None and all(key in entry for key in ("timeout", "retries", "failure_services")):
-            entry["auto"] = True
-            is_auto = True
-
-        if is_auto:
-            site_info = detected_map.pop(name_lower, None)
-            if site_info:
-                entry["name"] = site_info["name"]
-                entry["url"] = site_info["url"]
-                entry["timeout"] = 6
-                entry["retries"] = 2
-                entry["expect"] = 200
-                entry["tls_warn_days"] = 14
-                entry["tls_critical_days"] = 7
-                timeout_services = ["php8.3-fpm"]
-                if varnish_exists:
-                    timeout_services.append("varnish")
-                entry["timeout_services"] = timeout_services
-                server_error_services = ["php8.3-fpm", "nginx"]
-                if varnish_exists:
-                    server_error_services.append("varnish")
-                entry["server_error_services"] = server_error_services
-                failure_services = ["php8.3-fpm", "nginx"]
-                if varnish_exists:
-                    failure_services.append("varnish")
-                entry["failure_services"] = failure_services
-                entry["auto"] = True
-                updated_sites.append(entry)
-            else:
-                sites_list.remove(entry)
-                removed_entries.append(name_value or name_lower)
-        else:
-            if name_lower:
-                manual_names.add(name_lower)
-            if url_lower:
-                manual_urls.add(url_lower)
-            manual_entries.append(entry)
-
-    sites_list.clear()
-    sites_list.extend(updated_sites)
-    sites_list.extend(manual_entries)
-
-    for name_lower, site in detected_map.items():
-        url_lower = site["url"].rstrip("/").lower()
-        if name_lower in manual_names or url_lower in manual_urls:
-            continue
-        entry = OrderedDict()
-        entry["name"] = site["name"]
-        entry["url"] = site["url"]
-        entry["timeout"] = 6
-        entry["retries"] = 2
-        entry["expect"] = 200
-        entry["tls_warn_days"] = 14
-        entry["tls_critical_days"] = 7
-        timeout_services = ["php8.3-fpm"]
-        if varnish_exists:
-            timeout_services.append("varnish")
-        entry["timeout_services"] = timeout_services
-        server_error_services = ["php8.3-fpm", "nginx"]
-        if varnish_exists:
-            server_error_services.append("varnish")
-        entry["server_error_services"] = server_error_services
-        failure_services = ["php8.3-fpm", "nginx"]
-        if varnish_exists:
-            failure_services.append("varnish")
-        entry["failure_services"] = failure_services
-        entry["auto"] = True
-        sites_list.append(entry)
-        new_entries.append(site["name"])
-
-    updates = []
-    if varnish_exists:
-        services_dict = beacon_services
-        if not isinstance(services_dict, OrderedDict):
-            services_dict = OrderedDict(services_dict)
-            beacon_services.clear()
-            beacon_services.update(services_dict)
-        if "varnish" not in services_dict:
-            services_dict["varnish"] = OrderedDict([("interval", 20)])
-            updates.append("varnish-beacon")
-
-    ordered = to_ordered_dict(data)
-    ordered.setdefault("saltgoat", OrderedDict())
-
-    if MONITOR_FILE.exists():
-        backup = MONITOR_FILE.with_suffix(MONITOR_FILE.suffix + ".bak")
-        shutil.copy2(MONITOR_FILE, backup)
-
-    lines = dump_yaml(ordered)
-    MONITOR_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(MONITOR_FILE, "w", encoding="utf-8") as fp:
-        fp.write("\n".join(lines) + "\n")
-
-    if new_entries:
-        print("ADDED_SITES " + ", ".join(new_entries))
-    else:
-        print("ADDED_SITES NONE")
-    if removed_entries:
-        print("REMOVED_SITES " + ", ".join(removed_entries))
-    else:
-        print("REMOVED_SITES NONE")
-    if updates:
-        print("UPDATED " + ", ".join(updates))
-    else:
-        print("UPDATED NONE")
-
-
-if __name__ == "__main__":
-    main()
-PY
-    ); then
+    if ! monitor_output=$(python3 "$AUTO_SITES_HELPER" "${auto_args[@]}"); then
         log_error "生成站点健康检查配置失败"
         return 1
     fi
 
     echo "$monitor_output"
+
+    local added_sites removed_sites updated_items changed=0
+    added_sites="$(grep -E '^ADDED_SITES ' <<<"$monitor_output" | cut -d' ' -f2- | tr -d '\r')"
+    removed_sites="$(grep -E '^REMOVED_SITES ' <<<"$monitor_output" | cut -d' ' -f2- | tr -d '\r')"
+    updated_items="$(grep -E '^UPDATED ' <<<"$monitor_output" | cut -d' ' -f2- | tr -d '\r')"
+    if [[ -n "$added_sites" && "$added_sites" != "NONE" ]]; then
+        changed=1
+    fi
+    if [[ -n "$removed_sites" && "$removed_sites" != "NONE" ]]; then
+        changed=1
+    fi
+    if [[ -n "$updated_items" && "$updated_items" != "NONE" ]]; then
+        changed=1
+    fi
+
+    if (( changed == 0 )); then
+        log_info "站点配置未发生变化，跳过 Telegram 话题与 Pillar 刷新。"
+        return 0
+    fi
 
     local topics_script="${SCRIPT_DIR}/scripts/setup-telegram-topics.py"
     if [[ "${SALTGOAT_SKIP_TELEGRAM:-0}" == "1" ]]; then

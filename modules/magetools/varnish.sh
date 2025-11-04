@@ -5,6 +5,7 @@
 set -euo pipefail
 
 : "${SCRIPT_DIR:=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+NGINX_CONTEXT="${SCRIPT_DIR}/modules/lib/nginx_context.py"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
@@ -162,27 +163,7 @@ load_run_context() {
                 code) RUN_CONTEXT_CODE="$value" ;;
                 mode) RUN_CONTEXT_MODE="$value" ;;
             esac
-        done < <(sudo python3 - "$pillar_file" "$SITE" <<'PY'
-import sys, yaml
-path, site = sys.argv[1:3]
-try:
-    with open(path, encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
-except FileNotFoundError:
-    data = {}
-sites = ((data.get("nginx") or {}).get("sites") or {})
-run_cfg = sites.get(site, {}).get("magento_run") or {}
-if isinstance(run_cfg, dict):
-    default_type = run_cfg.get("type") or ""
-    default_code = run_cfg.get("code") or ""
-    default_mode = run_cfg.get("mode") or ""
-else:
-    default_type = default_code = default_mode = ""
-print(f"type={default_type}")
-print(f"code={default_code}")
-print(f"mode={default_mode}")
-PY
-)
+        done < <(sudo python3 "$NGINX_CONTEXT" run-context --pillar "$pillar_file" --site "$SITE" --format env)
     fi
     [[ -z "$RUN_CONTEXT_TYPE" ]] && RUN_CONTEXT_TYPE="store"
     [[ -z "$RUN_CONTEXT_CODE" ]] && RUN_CONTEXT_CODE="$SITE"
@@ -190,26 +171,7 @@ PY
 }
 
 collect_server_names() {
-    sudo python3 - "$SITE" <<'PY'
-import sys
-import pathlib
-import re
-
-site = sys.argv[1]
-path = pathlib.Path("/etc/nginx/sites-available") / site
-names = []
-if path.exists():
-    data = path.read_text(encoding="utf-8")
-    pattern = re.compile(r"server_name\s+([^;]+);", re.IGNORECASE)
-    for match in pattern.finditer(data):
-        tokens = match.group(1).split()
-        for token in tokens:
-            tok = token.strip()
-            if tok and tok not in names:
-                names.append(tok)
-for name in names:
-    print(name)
-PY
+    sudo python3 "$NGINX_CONTEXT" server-names --site "$SITE"
 }
 
 magento_base_domains() {
@@ -358,31 +320,7 @@ build_run_contexts() {
 
 site_root_path() {
     local site="$1"
-    python3 - "$site" <<'PY'
-import sys, pathlib, re
-
-site = sys.argv[1]
-path = pathlib.Path("/etc/nginx/sites-available") / site
-try:
-    data = path.read_text(encoding="utf-8")
-except FileNotFoundError:
-    print("")
-    sys.exit(0)
-
-patterns = [
-    re.compile(r'set\s+\$MAGE_ROOT\s+([^;]+);', re.IGNORECASE),
-    re.compile(r'root\s+([^;]+);', re.IGNORECASE),
-]
-
-for pattern in patterns:
-    match = pattern.search(data)
-    if match:
-        value = match.group(1).strip().strip('"\'')
-        print(value)
-        sys.exit(0)
-
-print("")
-PY
+    sudo python3 "$NGINX_CONTEXT" site-root --site "$site"
 }
 
 discover_related_sites() {
@@ -399,28 +337,7 @@ discover_related_sites() {
                 continue
             fi
             RELATED_SITES+=("$sibling")
-        done < <(python3 - "$pillar_file" "$root" "$SITE" <<'PY'
-import sys, yaml, pathlib
-pillar_path, target_root, current_site = sys.argv[1:4]
-try:
-    data = yaml.safe_load(open(pillar_path, encoding="utf-8")) or {}
-except FileNotFoundError:
-    data = {}
-sites = ((data.get("nginx") or {}).get("sites") or {})
-results = []
-for name, cfg in sites.items():
-    root = cfg.get("root")
-    if not root:
-        default_root = f"/var/www/{name}"
-        if cfg.get("magento"):
-            root = default_root
-    if root and root == target_root:
-        results.append(name)
-for name in sorted(set(results)):
-    if name != current_site:
-        print(name)
-PY
-)
+        done < <(sudo python3 "$NGINX_CONTEXT" related-sites --mode pillar --pillar "$pillar_file" --root "$root" --site "$SITE")
     fi
 
     while IFS= read -r sibling; do
@@ -429,27 +346,7 @@ PY
             continue
         fi
         RELATED_SITES+=("$sibling")
-    done < <(python3 - "$root" "$SITE" <<'PY'
-import sys, pathlib, re
-root, current_site = sys.argv[1:3]
-sites_dir = pathlib.Path("/etc/nginx/sites-available")
-pattern = re.compile(r'set\s+\$MAGE_ROOT\s+([^;]+);', re.IGNORECASE)
-names = set()
-for entry in sites_dir.iterdir():
-    if not entry.is_file():
-        continue
-    try:
-        data = entry.read_text(encoding="utf-8")
-    except Exception:
-        continue
-    match = pattern.search(data)
-    if match and match.group(1).strip().strip('"\'') == root:
-        names.add(entry.name)
-for name in sorted(names):
-    if name != current_site:
-        print(name)
-PY
-)
+    done < <(sudo python3 "$NGINX_CONTEXT" related-sites --mode config --root "$root" --site "$SITE")
 
     local -A seen=()
     local filtered=()
@@ -555,29 +452,7 @@ replace_include_for() {
     if [[ -z "$root" ]]; then
         root="/var/www/${site}"
     fi
-    sudo python3 - "$site" "$target" "$root" <<'PY'
-import sys, pathlib, re
-site = sys.argv[1]
-target = sys.argv[2]
-root = sys.argv[3]
-path = pathlib.Path("/etc/nginx/sites-available") / site
-data = path.read_text(encoding="utf-8")
-snippet_line = f'    include {target};'
-if snippet_line in data:
-    sys.exit(0)
-sample_pattern = re.compile(r'^\s*include\s+' + re.escape(root) + r'/nginx\.conf\.sample;\s*$', re.MULTILINE)
-if sample_pattern.search(data):
-    data = sample_pattern.sub(snippet_line, data, count=1)
-else:
-    mage_pattern = re.compile(r'^\s*set\s+\$MAGE_ROOT.*$', re.MULTILINE)
-    match = mage_pattern.search(data)
-    if match:
-        idx = match.end()
-        data = data[:idx] + "\n" + snippet_line + data[idx:]
-    else:
-        data += "\n" + snippet_line + "\n"
-path.write_text(data, encoding="utf-8")
-PY
+    sudo python3 "$NGINX_CONTEXT" replace-include --site "$site" --target "$target" --root "$root"
 }
 
 replace_include() {
@@ -590,17 +465,7 @@ restore_include_sample_for() {
     if [[ -z "$root" ]]; then
         root="/var/www/${site}"
     fi
-    sudo python3 - "$site" "$root" <<'PY'
-import sys, pathlib, re
-site = sys.argv[1]
-root = sys.argv[2]
-path = pathlib.Path("/etc/nginx/sites-available") / site
-data = path.read_text(encoding="utf-8")
-snippet_pattern = re.compile(r'^\s*include\s+/etc/nginx/snippets/varnish-frontend-.*?\.conf;\s*$', re.MULTILINE)
-if snippet_pattern.search(data):
-    data = snippet_pattern.sub(f'    include {root}/nginx.conf.sample;', data, count=1)
-path.write_text(data, encoding="utf-8")
-PY
+    sudo python3 "$NGINX_CONTEXT" restore-include --site "$site" --root "$root"
 }
 
 restore_include_sample() {
@@ -609,51 +474,7 @@ restore_include_sample() {
 
 sanitize_site_config_for() {
     local site="$1"
-    python3 - "$site" <<'PY'
-import sys, pathlib, re
-site = sys.argv[1]
-path = pathlib.Path("/etc/nginx/sites-available") / site
-try:
-    data = path.read_text(encoding="utf-8")
-except FileNotFoundError:
-    sys.stderr.write(f"[sanitize] missing nginx config: {path}\n")
-    sys.exit(1)
-root_pattern = re.compile(r'set\s+\$MAGE_ROOT\s+([^;]+);', re.IGNORECASE)
-root_match = root_pattern.search(data)
-if root_match:
-    root = root_match.group(1).strip().strip('"\'')
-else:
-    default_root = f"/var/www/{site}"
-    root = default_root
-snippet_pattern = re.compile(r'^(\s*)include\s+(/etc/nginx/snippets/varnish-frontend-[^;]+);\s*$', re.MULTILINE)
-has_run_context = [bool(re.search(r'\$MAGE_RUN_(?:TYPE|CODE|MODE)', data))]
-
-def replace_snippet(match):
-    indent = match.group(1)
-    snippet_path = pathlib.Path(match.group(2))
-    lines = []
-    if not has_run_context[0]:
-        try:
-            snippet_data = snippet_path.read_text(encoding="utf-8").splitlines()
-        except FileNotFoundError:
-            snippet_data = []
-        for line in snippet_data:
-            stripped = line.strip()
-            if stripped.startswith("set $MAGE_RUN_TYPE") or stripped.startswith("set $MAGE_RUN_CODE") or stripped.startswith("set $MAGE_MODE"):
-                lines.append(indent + stripped)
-        if not lines:
-            lines.extend([
-                indent + "set $MAGE_RUN_TYPE store;",
-                indent + f"set $MAGE_RUN_CODE {site};",
-                indent + "set $MAGE_MODE production;",
-            ])
-        has_run_context[0] = True
-    lines.append(f"{indent}include {root}/nginx.conf.sample;")
-    return "\n".join(lines)
-
-data, _ = snippet_pattern.subn(replace_snippet, data)
-sys.stdout.write(data)
-PY
+    sudo python3 "$NGINX_CONTEXT" sanitize-config --site "$site"
 }
 
 ensure_run_context_for() {
@@ -677,39 +498,12 @@ ensure_run_context_for() {
     if [[ -z "$default_run_mode" ]]; then
         default_run_mode="$RUN_CONTEXT_MODE"
     fi
-    sudo python3 - "$target" "$default_run_type" "$default_run_code" "$default_run_mode" "$ident" <<'PY'
-import sys, pathlib, re
-config_path, default_type, default_code, default_mode, ident = sys.argv[1:6]
-path = pathlib.Path(config_path)
-try:
-    data = path.read_text(encoding="utf-8")
-except FileNotFoundError:
-    sys.exit(0)
-if re.search(r'\$MAGE_RUN_(?:TYPE|CODE|MODE)', data):
-    sys.exit(0)
-pattern = re.compile(r'^(\s*)include\s+([^;]*nginx\.conf\.sample);\s*$', re.MULTILINE)
-map_prefix = f"mage_{ident}"
-
-def replacer(match):
-    indent = match.group(1)
-    include_target = match.group(2).strip()
-    lines = [
-        f"{indent}set $MAGE_RUN_TYPE {default_type};",
-        f"{indent}set $MAGE_RUN_CODE {default_code};",
-        f"{indent}set $MAGE_MODE {default_mode};",
-        f"{indent}set $MAGE_RUN_TYPE ${map_prefix}_run_type;",
-        f"{indent}set $MAGE_RUN_CODE ${map_prefix}_run_code;",
-        f"{indent}set $MAGE_MODE ${map_prefix}_run_mode;",
-        f"{indent}include {include_target};",
-    ]
-    return "\n".join(lines)
-
-new_data, count = pattern.subn(replacer, data, count=1)
-if count:
-    if not new_data.endswith("\n"):
-        new_data += "\n"
-    path.write_text(new_data, encoding="utf-8")
-PY
+    sudo python3 "$NGINX_CONTEXT" ensure-run-context \
+        --config "$target" \
+        --type "$default_run_type" \
+        --code "$default_run_code" \
+        --mode "$default_run_mode" \
+        --ident "$ident"
 }
 
 write_map_config() {
