@@ -35,6 +35,7 @@ SITE_CATEGORIES: Dict[str, Tuple[str, str]] = {
 HOST_CATEGORIES: Dict[str, Tuple[str, str]] = {
     "resources": ("saltgoat/monitor/resources/{site}", "{site}-resources"),
     "autoscale": ("saltgoat/autoscale/{site}", "{site}-autoscale"),
+    "doctor": ("saltgoat/doctor/{site}", "{site}-doctor"),
 }
 
 

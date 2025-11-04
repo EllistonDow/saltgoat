@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import html
+import io
 import json
 import subprocess
 import sys
@@ -239,21 +242,34 @@ def loop(
             clear_screen()
         print(header)
         print("=" * 50)
+        captured_output = ""
         try:
             services = gather_services()
             sites = gather_sites()
             varnish_data = varnish_stats()
             fail2ban_data = fail2ban_summary()
-            print_services(services)
-            print_sites(sites)
-            print_varnish(varnish_data)
-            print_fail2ban(fail2ban_data)
+            if capture is not None:
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    print_services(services)
+                    print_sites(sites)
+                    print_varnish(varnish_data)
+                    print_fail2ban(fail2ban_data)
+                captured_output = buf.getvalue()
+                print(captured_output, end="")
+            else:
+                print_services(services)
+                print_sites(sites)
+                print_varnish(varnish_data)
+                print_fail2ban(fail2ban_data)
             if metrics_file:
                 write_metrics(metrics_file, services, sites, varnish_data, fail2ban_data[0])
         except KeyboardInterrupt:
             break
         if capture is not None:
-            capture.append(header)
+            if captured_output:
+                block.append(captured_output.rstrip("\n"))
+            capture.append("\n".join(block))
         if once:
             break
         time.sleep(interval)
@@ -304,7 +320,13 @@ def send_telegram(text: str, config_path: Path) -> None:
                 break
     if not token or not chat_id:
         return
-    payload = {"chat_id": chat_id, "text": f"[INFO] Goat Pulse Digest\n{text}", "disable_web_page_preview": True}
+    escaped = html.escape(text)
+    payload = {
+        "chat_id": chat_id,
+        "text": f"<b>[INFO] Goat Pulse Digest</b>\n<pre>{escaped}</pre>",
+        "disable_web_page_preview": True,
+        "parse_mode": "HTML",
+    }
     import urllib.parse
     import urllib.request
 

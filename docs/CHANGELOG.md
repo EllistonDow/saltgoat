@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.4.5] - 2025-11-04
+
+### Changes
+- 修改 5 个文件: salt/pillar/telegram-topics.sls, scripts/__pycache__/goat_pulse.cpython-312.pyc, scripts/goat_pulse.py, scripts/setup-telegram-topics.py, scripts/smoke-suite.sh
+
+
 ## [1.4.4] - 2025-11-04
 
 ### Changes
