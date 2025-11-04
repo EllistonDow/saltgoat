@@ -8,7 +8,7 @@ import json
 import pathlib
 import re
 import sys
-from typing import Iterable, List
+from typing import Dict, Iterable, List
 import os
 
 try:
@@ -28,6 +28,17 @@ def _load_yaml(path: pathlib.Path) -> dict:
     if not isinstance(data, dict):
         return {}
     return data
+
+
+def _server_names_from_config(data: str) -> List[str]:
+    pattern = re.compile(r"server_name\s+([^;]+);", re.IGNORECASE)
+    names: List[str] = []
+    for match in pattern.finditer(data):
+        for token in match.group(1).split():
+            token = token.strip()
+            if token and token not in names:
+                names.append(token)
+    return names
 
 
 def cmd_run_context(args: argparse.Namespace) -> None:
@@ -59,14 +70,8 @@ def cmd_server_names(args: argparse.Namespace) -> None:
     _, data = _read_site_config(args.site)
     if not data:
         return
-    pattern = re.compile(r"server_name\s+([^;]+);", re.IGNORECASE)
-    seen = set()
-    for match in pattern.finditer(data):
-        for token in match.group(1).split():
-            token = token.strip()
-            if token and token not in seen:
-                seen.add(token)
-                print(token)
+    for name in _server_names_from_config(data):
+        print(name)
 
 
 _ROOT_PATTERNS = [
@@ -187,6 +192,33 @@ def _collect_run_context_from_snippet(snippet_path: pathlib.Path) -> List[str]:
     return result
 
 
+RUNTIME_POOLS_PATH = pathlib.Path("/etc/saltgoat/runtime/php-fpm-pools.json")
+
+
+def _load_runtime_pools() -> list[dict]:
+    try:
+        data = json.loads(RUNTIME_POOLS_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError):
+        return []
+    pools = data.get("pools") if isinstance(data, dict) else None
+    if isinstance(pools, list):
+        return [p for p in pools if isinstance(p, dict)]
+    return []
+
+
+def _normalize_fastcgi_socket(value: str) -> str:
+    if not value:
+        return ""
+    value = value.strip()
+    if not value:
+        return ""
+    if value.startswith("unix:") or value.startswith("unix:/"):
+        return value
+    if value.startswith("/"):
+        return f"unix:{value}"
+    return value
+
+
 def cmd_sanitize_config(args: argparse.Namespace) -> None:
     path, data = _read_site_config(args.site)
     if not data:
@@ -217,6 +249,22 @@ def cmd_sanitize_config(args: argparse.Namespace) -> None:
         return "\n".join(lines)
 
     new_data = snippet_pattern.sub(replacer, data)
+    socket = _normalize_fastcgi_socket(getattr(args, "pool_socket", ""))
+    if socket:
+        fastcgi_pass_pattern = re.compile(r"(\bfastcgi_pass\s+)(fastcgi_backend)(\s*;)", re.IGNORECASE)
+        upstream_pattern = re.compile(
+            r"(upstream\s+fastcgi_backend\s*\{[^}]*?server\s+)([^;\s]+)(\s*;)",
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        def pass_replacer(match: re.Match[str]) -> str:
+            return f"{match.group(1)}{socket}{match.group(3)}"
+
+        def upstream_replacer(match: re.Match[str]) -> str:
+            return f"{match.group(1)}{socket}{match.group(3)}"
+
+        new_data = fastcgi_pass_pattern.sub(pass_replacer, new_data)
+        new_data = upstream_pattern.sub(upstream_replacer, new_data)
     sys.stdout.write(new_data)
 
 
@@ -249,6 +297,69 @@ def cmd_ensure_run_context(args: argparse.Namespace) -> None:
         if not new_data.endswith("\n"):
             new_data += "\n"
         config_path.write_text(new_data, encoding="utf-8")
+
+
+def get_site_metadata(site: str, pillar_path: pathlib.Path) -> dict:
+    path, data = _read_site_config(site)
+    default_root = f"/var/www/{site}"
+    root = _extract_root(data, default_root)
+    server_names = _server_names_from_config(data)
+    https_enabled = bool(re.search(r"listen\s+[^;]*443", data, re.IGNORECASE)) if data else False
+    snippet = pathlib.Path(f"/etc/nginx/snippets/varnish-frontend-{site}.conf")
+    metadata: Dict[str, object] = {
+        "site": site,
+        "config_path": str(path),
+        "exists": bool(data),
+        "root": root,
+        "server_names": server_names,
+        "https_enabled": https_enabled,
+        "varnish_snippet": str(snippet),
+        "varnish_enabled": snippet.exists(),
+        "run_context": {},
+        "magento": False,
+        "related_sites": [],
+    }
+    if pillar_path.exists():
+        pillar = _load_yaml(pillar_path)
+        site_cfg = ((pillar.get("nginx") or {}).get("sites") or {}).get(site, {})
+        if isinstance(site_cfg, dict):
+            metadata["magento"] = bool(site_cfg.get("magento"))
+            if site_cfg.get("root"):
+                metadata["root"] = str(site_cfg.get("root"))
+            run_ctx = site_cfg.get("magento_run") or {}
+            if isinstance(run_ctx, dict):
+                metadata["run_context"] = {
+                    "type": run_ctx.get("type"),
+                    "code": run_ctx.get("code"),
+                    "mode": run_ctx.get("mode"),
+                }
+        metadata["related_sites"] = _discover_sites_from_pillar(pillar_path, metadata["root"], site)
+    pools = _load_runtime_pools()
+    pool_info = None
+    for pool in pools:
+        if pool.get("site_id") == site:
+            pool_info = pool
+            break
+    if pool_info is None:
+        for pool in pools:
+            if pool.get("site_root") == metadata["root"]:
+                pool_info = pool
+                break
+    if pool_info:
+        listen = str(pool_info.get("listen") or "")
+        metadata["fpm_pool"] = {
+            "name": pool_info.get("pool_name"),
+            "listen": listen,
+            "socket": _normalize_fastcgi_socket(pool_info.get("fastcgi_pass") or listen),
+        }
+    else:
+        metadata["fpm_pool"] = None
+    return metadata
+
+
+def cmd_site_metadata(args: argparse.Namespace) -> None:
+    data = get_site_metadata(args.site, args.pillar)
+    print(json.dumps(data, ensure_ascii=False))
 
 
 def _load_env_json(var_name: str) -> dict:
@@ -324,6 +435,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sanitize = sub.add_parser("sanitize-config", help="Output sanitized config for rollback")
     sanitize.add_argument("--site", required=True)
+    sanitize.add_argument("--pool-socket", default="", help="fastcgi socket to enforce (e.g. unix:/run/php/php8.3-fpm-magento-bank.sock)")
     sanitize.set_defaults(func=cmd_sanitize_config)
 
     ensure = sub.add_parser("ensure-run-context", help="Inject run context guards")
@@ -339,6 +451,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     modsec_status = sub.add_parser("modsecurity-status", help="打印 ModSecurity 状态")
     modsec_status.set_defaults(func=cmd_modsecurity_status)
+
+    metadata = sub.add_parser("site-metadata", help="输出站点元数据 JSON")
+    metadata.add_argument("--site", required=True)
+    metadata.add_argument("--pillar", type=pathlib.Path, default=pathlib.Path("/etc/salt/pillar/nginx.sls"))
+    metadata.set_defaults(func=cmd_site_metadata)
 
     return parser
 

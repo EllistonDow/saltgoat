@@ -29,6 +29,10 @@ ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
 LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
 TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from modules.lib import notification as notif  # type: ignore
 
 
 def path_exists(path: Path) -> bool:
@@ -159,7 +163,9 @@ def log_to_file(label: str, tag: str, payload: Dict[str, Any]) -> None:
         pass
 
 
-def telegram_notify(tag: str, message: str, payload: Dict[str, Any]) -> None:
+def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_message: Optional[str] = None) -> None:
+    plain_block = plain_message or message
+    notif.dispatch_webhooks(tag, str(payload.get("severity", "INFO")), payload.get("site"), plain_block, message, payload)
     if not TELEGRAM_AVAILABLE:
         return
 
@@ -272,7 +278,8 @@ def main() -> None:
     log_to_file("REPORT", tag, payload_with_tag)
     emit_event(tag, payload)
     if not args.no_telegram:
-        telegram_notify(tag, summary_text, payload_with_tag)
+        payload_with_tag.setdefault("severity", "INFO")
+        telegram_notify(tag, summary_text, payload_with_tag, summary_text)
     if not args.quiet:
         print(summary_text)
 

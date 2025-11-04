@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import html
+import json
 import os
+import re
+import urllib.request
 from typing import Dict, List, Optional, Tuple
 
 try:
@@ -21,6 +24,7 @@ _LEVELS = {
 
 _CALLER: Optional[Caller] = None
 _CACHE: Optional[Dict[str, object]] = None
+_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def _get_caller() -> Optional[Caller]:
@@ -95,6 +99,28 @@ def load_config(reload: bool = False) -> Dict[str, object]:
                 override["disabled_tags"] = [str(tag) for tag in disabled]
             site_overrides[slug] = override
 
+    webhooks: List[Dict[str, object]] = []
+    webhook_cfg = data.get("webhook", {})
+    if isinstance(webhook_cfg, dict) and webhook_cfg.get("enabled", False):
+        endpoints = webhook_cfg.get("endpoints", [])
+        if isinstance(endpoints, list):
+            for entry in endpoints:
+                if not isinstance(entry, dict):
+                    continue
+                url = entry.get("url")
+                if not url:
+                    continue
+                headers = entry.get("headers", {})
+                if not isinstance(headers, dict):
+                    headers = {}
+                webhooks.append(
+                    {
+                        "name": entry.get("name") or url,
+                        "url": url,
+                        "headers": {str(k): str(v) for k, v in headers.items()},
+                    }
+                )
+
     _CACHE = {
         "enabled": enabled,
         "min_level": min_level,
@@ -102,6 +128,7 @@ def load_config(reload: bool = False) -> Dict[str, object]:
         "parse_mode": parse_mode,
         "disabled_tags": disabled_tags,
         "site_overrides": site_overrides,
+        "webhooks": webhooks,
     }
     return _CACHE
 
@@ -163,3 +190,47 @@ def format_pre_block(title: str, subtitle: str, fields: List[Tuple[str, Optional
             lines.append(f"{' ' * width}   {extra}")
     plain = "\n".join(lines)
     return plain, f"<pre>{html.escape(plain)}</pre>"
+
+
+def html_to_plain(content: str) -> str:
+    if not content:
+        return ""
+    return html.unescape(_TAG_RE.sub("", content))
+
+
+def dispatch_webhooks(
+    tag: str,
+    severity: str,
+    site: Optional[str],
+    plain_message: str,
+    html_message: str,
+    payload: Optional[Dict[str, object]] = None,
+) -> int:
+    config = load_config()
+    endpoints = config.get("webhooks") or []
+    if not endpoints:
+        return 0
+    body = {
+        "tag": tag,
+        "severity": severity,
+        "site": site,
+        "plain": plain_message,
+        "html": html_message,
+        "payload": payload or {},
+    }
+    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    delivered = 0
+    for entry in endpoints:
+        try:
+            req = urllib.request.Request(entry["url"], data=data, method="POST")
+            headers = entry.get("headers") or {}
+            if isinstance(headers, dict):
+                for key, value in headers.items():
+                    req.add_header(str(key), str(value))
+            if "Content-Type" not in req.headers:
+                req.add_header("Content-Type", "application/json; charset=utf-8")
+            urllib.request.urlopen(req, timeout=10)  # nosec B310
+            delivered += 1
+        except Exception:
+            continue
+    return delivered

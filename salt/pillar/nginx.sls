@@ -15,7 +15,7 @@ nginx:
       - index.html
       php:
         enabled: true
-        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+        pool: magento-pwas
       headers:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
@@ -81,7 +81,7 @@ nginx:
       - index.html
       php:
         enabled: true
-        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+        pool: magento-bank
       headers:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
@@ -110,7 +110,7 @@ nginx:
       - index.html
       php:
         enabled: true
-        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+        pool: magento-bank
       magento_run:
         type: store
         code: duobank
@@ -139,7 +139,7 @@ nginx:
       - index.html
       php:
         enabled: true
-        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+        pool: magento-tank
       magento: true
       magento_run:
         type: store
@@ -168,7 +168,7 @@ nginx:
       - index.html
       php:
         enabled: true
-        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+        pool: magento-bank
       headers:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff

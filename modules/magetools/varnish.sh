@@ -7,6 +7,7 @@ set -euo pipefail
 
 : "${SCRIPT_DIR:=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 NGINX_CONTEXT="${SCRIPT_DIR}/modules/lib/nginx_context.py"
+NGINX_PILLAR="${SCRIPT_DIR}/salt/pillar/nginx.sls"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
 
@@ -32,6 +33,8 @@ declare -A HOST_RUN_CODE=()
 declare -A HOST_RUN_MODE=()
 declare -a RELATED_SITES=()
 declare -A SITE_ROOTS=()
+declare -A POOL_SOCKET_CACHE=()
+PHP_VERSION_CACHE=""
 
 require_site() {
     if [[ -z "${SITE}" ]]; then
@@ -153,7 +156,7 @@ map_config_path() {
 }
 
 load_run_context() {
-    local pillar_file="${SCRIPT_DIR}/salt/pillar/nginx.sls"
+    local pillar_file="${NGINX_PILLAR}"
     RUN_CONTEXT_TYPE=""
     RUN_CONTEXT_CODE=""
     RUN_CONTEXT_MODE=""
@@ -172,7 +175,27 @@ load_run_context() {
 }
 
 collect_server_names() {
-    sudo python3 "$NGINX_CONTEXT" server-names --site "$SITE"
+    local json output
+    if ! json=$(sudo python3 "$NGINX_CONTEXT" site-metadata --site "$SITE" --pillar "$NGINX_PILLAR" 2>/dev/null); then
+        mapfile -t SERVER_NAMES < <(sudo python3 "$NGINX_CONTEXT" server-names --site "$SITE")
+        return
+    fi
+    mapfile -t SERVER_NAMES < <(SALTGOAT_JSON="$json" python3 - <<'PY'
+import json
+import os
+
+raw = os.environ.get("SALTGOAT_JSON", "").strip()
+if not raw:
+    raise SystemExit
+try:
+    data = json.loads(raw)
+except json.JSONDecodeError:
+    raise SystemExit
+for name in data.get("server_names") or []:
+    if name:
+        print(name)
+PY
+)
 }
 
 magento_base_domains() {
@@ -375,6 +398,146 @@ discover_related_sites() {
     fi
 }
 
+normalize_fastcgi_socket() {
+    local value="$1"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    if [[ -z "$value" ]]; then
+        echo ""
+        return
+    fi
+    if [[ "$value" == unix:* ]]; then
+        echo "$value"
+        return
+    fi
+    if [[ "$value" == /* ]]; then
+        echo "unix:${value}"
+        return
+    fi
+    echo "$value"
+}
+
+detect_php_version() {
+    if [[ -n "$PHP_VERSION_CACHE" ]]; then
+        echo "$PHP_VERSION_CACHE"
+        return
+    fi
+    local version
+    version="$(python3 - <<'PY'
+import os
+import re
+
+base = "/etc/php"
+if not os.path.isdir(base):
+    print("8.3")
+    raise SystemExit
+entries = [
+    name for name in os.listdir(base)
+    if re.fullmatch(r"[0-9]+\\.[0-9]+", name)
+]
+if not entries:
+    print("8.3")
+    raise SystemExit
+entries.sort(key=lambda item: tuple(int(part) for part in item.split(".")), reverse=True)
+print(entries[0])
+PY
+)"
+    version="$(echo "$version" | tr -d '[:space:]')"
+    if [[ -z "$version" ]]; then
+        version="8.3"
+    fi
+    PHP_VERSION_CACHE="$version"
+    echo "$version"
+}
+
+read_pool_listen_from_conf() {
+    local conf="$1"
+    if [[ ! -f "$conf" ]]; then
+        return
+    fi
+    sudo awk '
+        BEGIN { FS="=" }
+        /^[[:space:]]*listen[[:space:]]*=/ {
+            sub(/^[[:space:]]+/, "", $2)
+            sub(/[[:space:]]+$/, "", $2)
+            print $2
+            exit 0
+        }
+    ' "$conf" 2>/dev/null
+}
+
+derive_pool_socket_from_root() {
+    local site="$1"
+    local root="${SITE_ROOTS[$site]}"
+    local slug
+    if [[ -n "$root" ]]; then
+        slug="$(basename "$root")"
+    else
+        slug="$site"
+    fi
+    slug="$(echo "$slug" | tr '[:upper:]' '[:lower:]')"
+    slug="$(echo "$slug" | sed -E 's/[^a-z0-9]+/-/g')"
+    slug="${slug##-}"
+    slug="${slug%%-}"
+    local php_version
+    php_version="$(detect_php_version)"
+    local -a candidates=()
+    if [[ -n "$slug" ]]; then
+        candidates+=("magento-${slug}")
+        candidates+=("$slug")
+    fi
+    local conf socket
+    for candidate in "${candidates[@]}"; do
+        conf="/etc/php/${php_version}/fpm/pool.d/${candidate}.conf"
+        socket="$(read_pool_listen_from_conf "$conf")"
+        socket="$(normalize_fastcgi_socket "$socket")"
+        if [[ -n "$socket" ]]; then
+            echo "$socket"
+            return
+        fi
+    done
+    echo "unix:/run/php/php${php_version}-fpm.sock"
+}
+
+pool_socket_for() {
+    local site="$1"
+    if [[ -n "${POOL_SOCKET_CACHE[$site]:-}" ]]; then
+        echo "${POOL_SOCKET_CACHE[$site]}"
+        return
+    fi
+    local metadata socket=""
+    metadata="$(sudo python3 "$NGINX_CONTEXT" site-metadata --site "$site" 2>/dev/null || true)"
+    if [[ -n "$metadata" ]]; then
+        socket="$(SALTGOAT_META="$metadata" python3 - <<'PY'
+import json
+import os
+
+raw = os.environ.get("SALTGOAT_META", "").strip()
+if not raw:
+    raise SystemExit
+try:
+    data = json.loads(raw)
+except json.JSONDecodeError:
+    raise SystemExit
+if not isinstance(data, dict):
+    raise SystemExit
+pool = data.get("fpm_pool")
+if not isinstance(pool, dict):
+    raise SystemExit
+socket = pool.get("socket") or pool.get("listen")
+if isinstance(socket, str) and socket.strip():
+    print(socket.strip())
+PY
+)"
+    fi
+    socket="$(normalize_fastcgi_socket "$socket")"
+    if [[ -z "$socket" ]]; then
+        socket="$(derive_pool_socket_from_root "$site")"
+    fi
+    POOL_SOCKET_CACHE["$site"]="$socket"
+    echo "$socket"
+}
+
 detect_admin_prefix() {
     local env_file="${APP_DIR}/app/etc/env.php"
     if [[ ! -f "$env_file" ]]; then
@@ -475,7 +638,13 @@ restore_include_sample() {
 
 sanitize_site_config_for() {
     local site="$1"
-    sudo python3 "$NGINX_CONTEXT" sanitize-config --site "$site"
+    local socket
+    socket="$(pool_socket_for "$site")"
+    if [[ -n "$socket" ]]; then
+        sudo python3 "$NGINX_CONTEXT" sanitize-config --site "$site" --pool-socket "$socket"
+    else
+        sudo python3 "$NGINX_CONTEXT" sanitize-config --site "$site"
+    fi
 }
 
 ensure_run_context_for() {

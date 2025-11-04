@@ -1240,6 +1240,9 @@ case "$1" in
     "gitops-watch")
         bash "${SCRIPT_DIR}/scripts/gitops-watch.sh"
         ;;
+    "smoke-suite")
+        bash "${SCRIPT_DIR}/scripts/smoke-suite.sh"
+        ;;
     "doctor")
         bash "${SCRIPT_DIR}/scripts/doctor.sh"
         ;;

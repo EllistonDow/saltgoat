@@ -59,10 +59,12 @@ SaltGoat 现在自带几套易用的小工具，方便在排障或上线演练�
 -  python3 scripts/goat_pulse.py --once --plain > /tmp/goat-pulse.txt
 -  ```
 - **提示**：默认输出包含 ANSI 清屏控制符，需落盘/嵌入其他脚本时可追加 `--plain`；`--metrics-file` 会同步写入 Prometheus textfile 指标（配合 node_exporter textfile collector），一次命令即可兼顾终端巡检与监控采集。
+- **自动化**：`sudo salt-call state.apply optional.goat-pulse` 会安装 `/opt/saltgoat-monitoring/goat_pulse.py` 与 `saltgoat-goatpulse.service/timer`，每小时将 `--plain --telegram` 摘要推送到 Telegram 并维护 `/var/lib/saltgoat/goat-pulse.prom` 指标文件。
 
 ## 快速自检（Verify / Doctor）
 - **`saltgoat verify` / `scripts/verify.sh`**：一次性运行 `bash scripts/code-review.sh -a` 与 `python3 -m unittest`，在提交前或 CI 流水线中快速确认 Shell 风格与 Python 单元测试通过。
 - **`saltgoat doctor` / `scripts/doctor.sh`**：调用 Goat Pulse（自动加 `--plain --once`）、磁盘/进程摘要、最近 `alerts.log`，并支持 `--format text|json|markdown`，用于粘贴、自动化采集或生成富文本报告。
+- **`saltgoat smoke-suite` / `scripts/smoke-suite.sh`**：一次性执行 `verify`、`monitor auto-sites --dry-run`、`monitor quick-check` 与 `doctor --format markdown`，并将体检报告保存到 `/tmp/saltgoat-doctor-*.md`，适合上线前的人工冒烟。
 - **示例**：
   ```bash
   sudo saltgoat verify
@@ -82,6 +84,8 @@ SaltGoat 现在自带几套易用的小工具，方便在排障或上线演练�
 
 ## Pillar / Event Helper
 - `modules/lib/monitor_auto_sites.py`：独立执行站点探测与 `salt/pillar/monitoring.sls` 生成任务，支持 `--site-root`、`--nginx-dir`、`--monitor-file`、`--skip-systemctl` 等参数；CLI `saltgoat monitor auto-sites` 正是调用此脚本完成检测。
+- `modules/lib/nginx_context.py site-metadata`：统一输出站点元数据（root/server_name/Varnish/HTTPS/run context），现已被 `monitor auto-sites` 与 `magetools varnish` 消费，也方便第三方脚本直接解析。
+- `notifications.webhook` Pillar 字段允许声明 `endpoints: [{name,url,headers}]`，Pipe 会在 `magento_api_watch`、`magento_summary`、`resource_alert`、`backup_notify`、每日巡检等动作触发时，同步向 HTTP Endpoint POST JSON（与 Telegram 内容一致）。
 - `modules/lib/salt_event.py`：`send` 子命令优先通过 `salt.client.Caller` 发送事件，失败时会将 JSON payload 写到 STDOUT 并以退出码 `2` 提示 shell 走 `salt-call event.send` 兜底；`format` 子命令可单独渲染 JSON。
 - `modules/lib/maintenance_pillar.py`：将 `saltgoat magetools maintenance` 的环境变量转换成 Pillar JSON，方便调试或直接喂给 `salt-call`. 示例：`SITE_NAME=bank SITE_PATH=/var/www/bank python3 modules/lib/maintenance_pillar.py`.
 - `modules/lib/automation_helpers.py`：统一解析 `saltgoat automation_*` 返回的 JSON，提供 `render-basic`（输出 comment 并携带退出码）、`extract-field <name>`、`parse-paths` 三个子命令，在 shell 脚本中可复用与 Salt CLI 相同的解析逻辑。

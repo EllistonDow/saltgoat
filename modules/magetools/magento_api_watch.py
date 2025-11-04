@@ -344,7 +344,12 @@ def log_to_file(label: str, tag: str, payload: Dict[str, Any]) -> None:
         pass
 
 
-def telegram_broadcast(tag: str, message: str, payload: Dict[str, Any]) -> None:
+def telegram_broadcast(
+    tag: str,
+    message: str,
+    payload: Dict[str, Any],
+    plain_message: Optional[str] = None,
+) -> None:
     severity = str(payload.get("severity", "INFO")).upper()
     payload["severity"] = severity
     site_hint = payload.get("site") or payload.get("site_slug")
@@ -359,6 +364,9 @@ def telegram_broadcast(tag: str, message: str, payload: Dict[str, Any]) -> None:
             },
         )
         return
+
+    plain_block = plain_message or notif.html_to_plain(message)
+    notif.dispatch_webhooks(tag, severity, site_hint, plain_block, message, payload)
 
     if not TELEGRAM_AVAILABLE:
         return
@@ -392,10 +400,11 @@ def telegram_broadcast(tag: str, message: str, payload: Dict[str, Any]) -> None:
         _log("error", {"message": str(exc)})
 
 
-def build_message(kind: str, site: str, payload: Dict[str, Any]) -> str:
-    def format_block(title: str, subtitle: str, fields: List[Tuple[str, Optional[str]]]) -> str:
-        _, html_block = notif.format_pre_block(title, subtitle, fields)
-        return html_block
+def build_message(kind: str, site: str, payload: Dict[str, Any]) -> Tuple[str, str]:
+    def format_block(
+        title: str, subtitle: str, fields: List[Tuple[str, Optional[str]]]
+    ) -> Tuple[str, str]:
+        return notif.format_pre_block(title, subtitle, fields)
 
     site_label = site.upper()
     if kind == "order":
@@ -864,7 +873,7 @@ class MagentoWatcher:
             telegram_tag = f"saltgoat/business/order/{self.site_topic}"
             event_data["tag"] = telegram_tag
             emit_event("saltgoat/business/order", event_data)
-            message = build_message(
+            plain_block, message = build_message(
                 "order",
                 self.site,
                 {
@@ -876,7 +885,7 @@ class MagentoWatcher:
                     "created_at": created_at,
                 },
             )
-            telegram_broadcast(telegram_tag, message, event_data)
+            telegram_broadcast(telegram_tag, message, event_data, plain_block)
         self._save_last_id("orders", max_id, new_ids, state=state)
         if result["truncated"]:
             LOG(f"[WARNING] {self.site} 订单存在超过 {self.max_pages * self.page_size} 条新纪录，已仅推送最近 {len(items)} 条。")
@@ -956,7 +965,7 @@ class MagentoWatcher:
             telegram_tag = f"saltgoat/business/customer/{self.site_topic}"
             event_data["tag"] = telegram_tag
             emit_event("saltgoat/business/customer", event_data)
-            message = build_message(
+            plain_block, message = build_message(
                 "customer",
                 self.site,
                 {
@@ -967,7 +976,7 @@ class MagentoWatcher:
                     "customer_group": group_id,
                 },
             )
-            telegram_broadcast(telegram_tag, message, event_data)
+            telegram_broadcast(telegram_tag, message, event_data, plain_block)
         self._save_last_id("customers", max_id, new_ids, state=state)
         if result["truncated"]:
             LOG(f"[WARNING] {self.site} 用户存在超过 {self.max_pages * self.page_size} 条新纪录，已仅推送最近 {len(items)} 条。")

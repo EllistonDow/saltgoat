@@ -157,6 +157,19 @@
     {% set max_requests = runtime_cfg.get('max_requests') if runtime_cfg.get('max_requests') is not none else pool_cfg.get('max_requests', pool_defaults.get('max_requests', 1500)) %}
     {% set idle_timeout = runtime_cfg.get('process_idle_timeout') if runtime_cfg.get('process_idle_timeout') is not none else pool_cfg.get('process_idle_timeout', pool_defaults.get('process_idle_timeout', '60s')) %}
     {% set listen = runtime_cfg.get('listen') or pool_cfg.get('listen', '/run/php/php{}-fpm-{}.sock'.format(php_version, pool_name)) %}
+    {% set site_root = site_cfg.get('site_root') or '/var/www/' ~ site_id %}
+    {% if listen %}
+      {% set fastcgi_tmp = listen %}
+      {% if fastcgi_tmp.startswith('unix:') %}
+        {% set fastcgi_pass_value = fastcgi_tmp %}
+      {% elif fastcgi_tmp.startswith('/') %}
+        {% set fastcgi_pass_value = 'unix:' ~ fastcgi_tmp %}
+      {% else %}
+        {% set fastcgi_pass_value = fastcgi_tmp %}
+      {% endif %}
+    {% else %}
+      {% set fastcgi_pass_value = '' %}
+    {% endif %}
     {% set php_admin_values = salt['slsutil.merge'](pool_cfg.get('php_admin_values', {}), {}, strategy='recurse') %}
     {% set php_admin_values = salt['slsutil.merge'](php_admin_values, {'memory_limit': runtime_cfg.get('memory_limit', pool_cfg.get('memory_limit', pool_defaults.get('memory_limit', '2048M')))}, strategy='recurse') %}
     {% if runtime_cfg.get('php_admin_values') %}
@@ -178,6 +191,8 @@
       'php_admin_values': php_admin_values,
       'php_values': php_values,
       'slowlog': slowlog,
+      'site_root': site_root,
+      'fastcgi_pass': fastcgi_pass_value,
       'extra_settings': pool_cfg.get('raw', []),
       'include': pool_cfg.get('include', []),
       'pm_status_path': pool_cfg.get('status_path'),
@@ -198,6 +213,14 @@
 {% set pool_items = ns_pools.items %}
 
 {% if pool_items %}
+{% set runtime_payload = {
+    "__meta__": {
+        "generated_by": "saltgoat.core.php-fpm-pools",
+        "php_version": php_version,
+    },
+    "pools": pool_items
+} %}
+{% set runtime_json = salt['slsutil.serialize']('json', runtime_payload, indent=2) %}
 
 ensure_saltgoat_runtime_dir:
   file.directory:
@@ -234,6 +257,47 @@ manage_php_pool_{{ pool.pool_name }}:
       - file: ensure_php_fpm_pool_dir
     - watch_in:
       - service: start_php_fpm
+{% endfor %}
+
+write_php_pool_runtime:
+  file.managed:
+    - name: {{ runtime_file }}
+    - user: root
+    - group: root
+    - mode: 0640
+    - makedirs: True
+    - contents: |
+{{ runtime_json | indent(8) }}
+    - require:
+      - file: ensure_saltgoat_runtime_dir
+
+{% set ns_samples = namespace(paths=[]) %}
+{% for pool in pool_items %}
+  {% if pool.site_root and pool.fastcgi_pass %}
+    {% set sample_path = pool.site_root.rstrip('/') + '/nginx.conf.sample' %}
+    {% if sample_path not in ns_samples.paths %}
+      {% set ns_samples.paths = ns_samples.paths + [sample_path] %}
+update_magento_sample_upstream_{{ pool.pool_name }}:
+  file.replace:
+    - name: {{ sample_path }}
+    - pattern: '^(\s*server\s+)(?:unix:)?/run/php/[^;]+;'
+    - repl: '\1{{ pool.fastcgi_pass }};'
+    - flags:
+      - MULTILINE
+    - show_changes: False
+    - onlyif: test -f {{ sample_path }}
+
+update_magento_sample_fastcgi_pass_{{ pool.pool_name }}:
+  file.replace:
+    - name: {{ sample_path }}
+    - pattern: 'fastcgi_pass\s+fastcgi_backend;'
+    - repl: 'fastcgi_pass {{ pool.fastcgi_pass }};'
+    - flags:
+      - MULTILINE
+    - show_changes: False
+    - onlyif: test -f {{ sample_path }}
+    {% endif %}
+  {% endif %}
 {% endfor %}
 
 {% endif %}

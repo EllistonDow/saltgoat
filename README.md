@@ -44,8 +44,10 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - `saltgoat pillar backup` 一键将 `salt/pillar` 打包到 `/var/lib/saltgoat/pillar-backups/`，配合版本库和外部存储实现配置留痕。
 - `saltgoat verify` 运行 `scripts/code-review.sh -a` 与 `python3 -m unittest`，适合作为本地 Git hook 或 CI 预检命令，确保脚本/单元测试通过后再发布。
 - `saltgoat gitops-watch` 在 Git hook 或 CI 中统一执行 `saltgoat verify` 与 `saltgoat monitor auto-sites --dry-run`，提前发现渲染/站点探测问题，避免把脏 Pillar 带入生产。
+- `saltgoat smoke-suite` 快速冒烟：依次执行 `verify`、`monitor auto-sites --dry-run`、`monitor quick-check` 与 `doctor --format markdown`，产出 `/tmp/saltgoat-doctor-*.md` 报告用于留痕。
 - `saltgoat doctor --format text|json|markdown` 输出 Goat Pulse + 磁盘/进程/告警快照，可直接生成 CLI 文本、JSON 供自动化消费，或 Markdown 片段方便贴到工单。
 - `scripts/goat_pulse.py --plain --metrics-file /var/lib/saltgoat/goat-pulse.prom` 既能在终端显示 ASCII 面板，也能禁用 ANSI 清屏供 `saltgoat doctor` / 日志抓取，同时导出 Prometheus 兼容指标。
+- `python3 modules/lib/nginx_context.py site-metadata --site <name> --pillar salt/pillar/nginx.sls` 输出站点根目录、server_name、Varnish/HTTPS 标记与 Magento run context，供 `monitor auto-sites`、`magetools varnish` 以及外部脚本统一解析。
 - `modules/lib/salt_event.py`：统一封装 Salt Event 发送逻辑（`python3 modules/lib/salt_event.py send --tag saltgoat/test key=value`），shell 脚本会自动回落到 `salt-call event.send`，便于在没有 `salt.client` 的环境里保持行为一致。
 
 ---
@@ -156,6 +158,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - `sudo saltgoat monitor system|services|resources|logs|security|performance`
 - `sudo saltgoat monitor report daily` 生成日报到 `/var/log/saltgoat/monitor/`
 - `sudo saltgoat monitor alert resources` 即时检查 CPU/内存/磁盘/关键服务并推送 Telegram 告警（触发 Salt 事件 `saltgoat/monitor/resources`）
+- Pillar `notifications.telegram` 决定最小级别/禁用 tag，`notifications.webhook` 则可配置多条 HTTP Endpoint，在 `magento_api_watch`、`resource_alert`、`backup_notify`、`monitor daily` 等脚本触发时同步推送 JSON。
 - `sudo saltgoat monitor report daily --no-telegram` 可生成日报而不推送；默认会写日志并发送 Telegram 摘要
 - `sudo saltgoat monitor enable-beacons`：启用 Beacon/Reactors；若缺少 `salt-minion` 会提示并降级。
 - `sudo saltgoat schedule enable`：下发 SaltGoat 自身任务（内存、日志清理等），同样支持自动降级到 cron。

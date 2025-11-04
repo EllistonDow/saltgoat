@@ -52,9 +52,8 @@ def _slug(value: str | None, fallback: str | None) -> str:
     return raw.replace(" ", "-").replace("/", "-") or "default"
 
 
-def _format_entries(title: str, subtitle: str, entries: Iterable[Tuple[str, str]]) -> str:
-    _, html = notif.format_pre_block(title, subtitle, list(entries))
-    return html
+def _format_entries(title: str, subtitle: str, entries: Iterable[Tuple[str, str]]) -> Tuple[str, str]:
+    return notif.format_pre_block(title, subtitle, list(entries))
 
 
 def _log(label: str, payload: Dict[str, object]) -> None:
@@ -77,7 +76,7 @@ def _log(label: str, payload: Dict[str, object]) -> None:
         pass
 
 
-def _send(tag: str, html: str, payload: Dict[str, object], site: str) -> None:
+def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str) -> None:
     severity = payload.get("severity", "INFO")
     if UNIT_TEST:
         print(json.dumps({"tag": tag, "payload": payload}, ensure_ascii=False))
@@ -85,6 +84,8 @@ def _send(tag: str, html: str, payload: Dict[str, object], site: str) -> None:
     if not notif.should_send(tag, severity, site):
         _log(f"{tag}/skip", {"reason": "filtered", "severity": severity})
         return
+    notif.dispatch_webhooks(tag, str(severity), site, plain, html, payload)
+
     if reactor_common is None or not _path_exists(TELEGRAM_CONFIG):
         _log(f"{tag}/skip", {"reason": "reactor_unavailable"})
         return
@@ -133,7 +134,7 @@ def handle_mysql(args: argparse.Namespace) -> None:
         entries.append(("Reason", args.reason))
     entries.append(("Time", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")))
 
-    html = _format_entries("MYSQL DUMP BACKUP", site_slug.upper(), entries)
+    plain, html = _format_entries("MYSQL DUMP BACKUP", site_slug.upper(), entries)
     payload = {
         "severity": "INFO" if args.status == "success" else "ERROR",
         "site": site_slug,
@@ -142,7 +143,7 @@ def handle_mysql(args: argparse.Namespace) -> None:
         "compressed": args.compressed,
     }
     tag = f"saltgoat/backup/mysql_dump/{site_slug}"
-    _send(tag, html, payload, site_slug)
+    _send(tag, plain, html, payload, site_slug)
 
 
 def handle_restic(args: argparse.Namespace) -> None:
@@ -163,7 +164,7 @@ def handle_restic(args: argparse.Namespace) -> None:
     entries.append(("Origin", args.origin))
     entries.append(("Time", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")))
 
-    html = _format_entries("RESTIC BACKUP", site_slug.upper(), entries)
+    plain, html = _format_entries("RESTIC BACKUP", site_slug.upper(), entries)
     payload = {
         "severity": "INFO" if args.status == "success" else "ERROR",
         "site": site_slug,
@@ -173,7 +174,7 @@ def handle_restic(args: argparse.Namespace) -> None:
         "origin": args.origin,
     }
     tag = f"saltgoat/backup/restic/{site_slug}"
-    _send(tag, html, payload, site_slug)
+    _send(tag, plain, html, payload, site_slug)
 
 
 def build_parser() -> argparse.ArgumentParser:

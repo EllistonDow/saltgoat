@@ -61,6 +61,36 @@ configure_php_fpm:
     - require:
       - pkg: install_php_fpm
 
+php_fpm_override_dir:
+  file.directory:
+    - name: /etc/systemd/system/php8.3-fpm.service.d
+    - user: root
+    - group: root
+    - mode: 0755
+
+php_fpm_override_conf:
+  file.managed:
+    - name: /etc/systemd/system/php8.3-fpm.service.d/override.conf
+    - user: root
+    - group: root
+    - mode: 0644
+    - contents: |
+        [Service]
+        Restart=on-failure
+        RestartSec=3s
+        MemoryMax=24G
+        LimitNOFILE=65536
+    - require:
+      - file: php_fpm_override_dir
+    - watch_in:
+      - service: start_php_fpm
+
+php_fpm_override_reload:
+  cmd.run:
+    - name: systemctl daemon-reload
+    - onchanges:
+      - file: php_fpm_override_conf
+
 # 启动 PHP-FPM 服务
 start_php_fpm:
   service.running:
@@ -69,6 +99,8 @@ start_php_fpm:
     - require:
       - file: configure_php
       - file: configure_php_fpm
+      - file: php_fpm_override_conf
+      - cmd: php_fpm_override_reload
 
 # 创建 PHP 测试文件
 create_php_test_file:

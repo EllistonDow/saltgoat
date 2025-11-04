@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from collections import OrderedDict
 from pathlib import Path
 from typing import Iterable, List, Tuple
@@ -17,6 +18,14 @@ try:
     import yaml  # type: ignore
 except ImportError as exc:  # pragma: no cover
     raise SystemExit(f"[monitor_auto_sites] Missing dependency: {exc}")
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from modules.lib import nginx_context  # type: ignore
+
+DEFAULT_NGINX_PILLAR = Path(os.environ.get("SALTGOAT_NGINX_PILLAR", "salt/pillar/nginx.sls"))
 
 
 def to_ordered(value):
@@ -54,7 +63,7 @@ def load_existing(path: Path, skip_salt_call: bool) -> OrderedDict:
     return to_ordered(data)
 
 
-def detect_sites(site_root: Path, nginx_dir: Path) -> List[dict]:
+def detect_sites(site_root: Path, nginx_dir: Path, pillar_file: Path = DEFAULT_NGINX_PILLAR) -> List[dict]:
     sites: List[dict] = []
     if not site_root.exists():
         return sites
@@ -94,7 +103,24 @@ def detect_sites(site_root: Path, nginx_dir: Path) -> List[dict]:
                     domain = server_names[0].lstrip("*.")
                     scheme = "https" if https else "http"
                     site["url"] = f"{scheme}://{domain}/"
+    pillar_exists = pillar_file.exists()
     for site in sites:
+        if pillar_exists:
+            try:
+                meta = nginx_context.get_site_metadata(site["name"], pillar_file)
+            except Exception:
+                meta = {}
+            else:
+                site.setdefault("metadata", meta)
+                varnish_flag = meta.get("varnish_enabled")
+                if varnish_flag is not None:
+                    site.setdefault("varnish", bool(varnish_flag))
+                server_names = meta.get("server_names")
+                https_flag = meta.get("https_enabled")
+                if server_names and not site.get("url"):
+                    scheme = "https" if https_flag else "http"
+                    domain = str(server_names[0]).lstrip("*.")
+                    site["url"] = f"{scheme}://{domain}/"
         site.setdefault("url", f"http://127.0.0.1/{site['name']}/")
     return sites
 
@@ -261,8 +287,9 @@ def run(args: argparse.Namespace) -> Tuple[List[str], List[str], List[str]]:
     site_root = Path(args.site_root)
     nginx_dir = Path(args.nginx_dir)
     monitor_file = Path(args.monitor_file)
+    pillar_file = Path(args.nginx_pillar)
     data = load_existing(monitor_file, args.skip_salt_call)
-    detected = detect_sites(site_root, nginx_dir)
+    detected = detect_sites(site_root, nginx_dir, pillar_file)
     varnish_exists = service_exists("varnish", args.skip_systemctl)
     new_entries, removed_entries, updates = reconcile_sites(data, detected, varnish_exists)
     write_monitor_file(monitor_file, data)
@@ -275,6 +302,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--nginx-dir",
         default=os.environ.get("SALTGOAT_NGINX_DIR", "/etc/nginx/sites-enabled"),
+    )
+    parser.add_argument(
+        "--nginx-pillar",
+        default=os.environ.get("SALTGOAT_NGINX_PILLAR", str(DEFAULT_NGINX_PILLAR)),
     )
     parser.add_argument(
         "--monitor-file",

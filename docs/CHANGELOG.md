@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.4.2] - 2025-11-04
+
+### Changes
+- 修改 29 个文件: README.md, docs/CHANGELOG.md, docs/OPS_TOOLING.md, lib/help.sh, modules/lib/__pycache__/notification.cpython-312.pyc 等
+
+
 ## [1.4.1] - 2025-11-04
 
 ### Changes
@@ -17,7 +23,10 @@
 - `scripts/goat_pulse.py --metrics-file` 与 `--plain` 选项，可将服务状态/HTTP 探活/Fail2ban 指标写入 Prometheus textfile，并在无 ANSI 控制符的模式下供 doctor/日志采集使用。
 - 新增 `saltgoat verify` / `scripts/verify.sh`，统一运行 `scripts/code-review.sh -a` 与 `python3 -m unittest` 作为本地或 CI 自检流程。
 - 新增 `saltgoat doctor` / `scripts/doctor.sh`，汇总 Goat Pulse、磁盘/进程摘要与最近的 alerts.log，支持 `--format text|json|markdown` 便于粘贴或被其他系统直接解析。
+- 新增 `saltgoat smoke-suite` / `scripts/smoke-suite.sh`，串行执行 verify、monitor auto-sites --dry-run、monitor quick-check 与 doctor markdown，输出 `/tmp/saltgoat-doctor-*.md` 冒烟报告。
+- `modules/lib/nginx_context.py` 新增 `site-metadata` 子命令，供 `monitor auto-sites`、`magetools varnish` 及外部脚本统一读取 root/server_name/Varnish/运行模式等信息。
 - `modules/monitoring/resource_alert.py` 现在会自动检测 RabbitMQ/Valkey systemd 状态并纳入 autoscale/self-heal 列表。
+- `magento_api_watch`、`magento_summary`、`backup_notify`、`resource_alert`、`monitoring/daily_summary` 等通知链路会在 Telegram 之外同步调用 `notifications.webhook` 中配置的 HTTP Endpoint，统一推送 JSON 事件。
 
 ### Changed
 - `saltgoat monitor auto-sites` 仅在站点或 Beacon 发生变化时才会刷新 Pillar 与 Telegram 话题，并使用新的 Python helper 解析结果。

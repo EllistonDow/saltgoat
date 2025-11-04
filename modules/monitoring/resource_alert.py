@@ -38,6 +38,10 @@ LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
 TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 PHP_FPM_CONFIG = Path("/etc/php/8.3/fpm/pool.d/www.conf")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from modules.lib import notification as notif  # type: ignore
 PHP_FPM_POOL_DIR = PHP_FPM_CONFIG.parent
 DEFAULT_THRESHOLDS = {
     "memory": {"notice": 78.0, "warning": 85.0, "critical": 92.0},
@@ -948,7 +952,9 @@ def log_to_file(label: str, tag: str, payload: Dict[str, Any]) -> None:
     _append_alert_log(label, tag, payload)
 
 
-def telegram_notify(tag: str, message: str, payload: Dict[str, Any]) -> None:
+def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_message: Optional[str] = None) -> None:
+    plain_block = plain_message or notif.html_to_plain(message)
+    notif.dispatch_webhooks(tag, str(payload.get("severity", "INFO")), payload.get("site"), plain_block, message, payload)
     if not TELEGRAM_AVAILABLE:
         return
 
@@ -1291,11 +1297,11 @@ def main() -> None:
             fields.append(("Action", action))
         if auto_states:
             fields.append(("States", ", ".join(auto_states)))
-        _, html_block = format_html_block("AUTOSCALE ACTIONS", fields)
+        plain_block, html_block = format_html_block("AUTOSCALE ACTIONS", fields)
         host_slug = host_id.replace(".", "-").lower()
         telegram_tag = f"saltgoat/autoscale/{host_slug}"
         autoscale_payload["tag"] = telegram_tag
-        telegram_notify(telegram_tag, html_block, autoscale_payload)
+        telegram_notify(telegram_tag, html_block, autoscale_payload, plain_block)
         emit_salt_event("saltgoat/autoscale", autoscale_payload)
 
     if auto_services:
@@ -1356,7 +1362,7 @@ def main() -> None:
         telegram_tag = f"saltgoat/monitor/resources/{host_slug}"
         augmented = payload | {"details": details, "tag": telegram_tag, "severity": severity}
         log_to_file("RESOURCE", event_tag, augmented)
-        telegram_notify(telegram_tag, html_block, augmented)
+        telegram_notify(telegram_tag, html_block, augmented, plain_block)
         emit_salt_event(event_tag, payload)
         print(plain_block)
     else:

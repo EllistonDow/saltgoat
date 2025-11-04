@@ -121,6 +121,7 @@ def broadcast_telegram(
     log=None,
     tag: Optional[str] = None,
     thread_id: Optional[Any] = None,
+    parse_mode: Optional[str] = None,
 ) -> None:
     if not message or not profiles:
         if log and not message:
@@ -158,6 +159,8 @@ def broadcast_telegram(
                 "text": message,
                 "disable_web_page_preview": True,
             }
+            if parse_mode:
+                params["parse_mode"] = parse_mode
             if effective_thread not in (None, "", 0, "0"):
                 params["message_thread_id"] = str(effective_thread)
             data = urllib.parse.urlencode(params).encode()

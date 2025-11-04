@@ -53,5 +53,66 @@ class NotificationFilterTests(unittest.TestCase):
         self.assertTrue(notification.should_send("saltgoat/alerts/pwas", "ERROR"))
 
 
+class NotificationWebhookTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.prev_pillar = notification.pillar_get
+        self.prev_urlopen = notification.urllib.request.urlopen
+
+        def fake_pillar(path: str, default=None):
+            if path == "notifications":
+                return {
+                    "telegram": {"enabled": True},
+                    "webhook": {
+                        "enabled": True,
+                        "endpoints": [
+                            {
+                                "name": "ops",
+                                "url": "https://example.com/hook",
+                                "headers": {"X-Test": "1"},
+                            }
+                        ],
+                    },
+                }
+            return default
+
+        notification.pillar_get = fake_pillar
+        notification._CACHE = None
+        self.calls = []
+
+        class DummyResponse:
+            def read(self):
+                return b""
+
+        def fake_urlopen(req, timeout=10):
+            self.calls.append(
+                {
+                    "url": req.full_url,
+                    "headers": dict(req.header_items()),
+                    "data": req.data.decode("utf-8"),
+                }
+            )
+            return DummyResponse()
+
+        notification.urllib.request.urlopen = fake_urlopen
+
+    def tearDown(self) -> None:
+        notification.pillar_get = self.prev_pillar
+        notification.urllib.request.urlopen = self.prev_urlopen
+        notification._CACHE = None
+
+    def test_dispatch_webhooks_posts_json(self) -> None:
+        sent = notification.dispatch_webhooks(
+            "saltgoat/test",
+            "INFO",
+            "bank",
+            "plain",
+            "<b>plain</b>",
+            {"foo": "bar"},
+        )
+        self.assertEqual(sent, 1)
+        self.assertEqual(self.calls[0]["url"], "https://example.com/hook")
+        self.assertIn('"foo": "bar"', self.calls[0]["data"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -136,6 +136,7 @@ show_main_help() {
     help_command "security-scan"                   "执行安全扫描与敏感文件检查"
     help_command "verify"                          "一键执行 scripts/code-review.sh 与 python3 -m unittest 自检"
     help_command "gitops-watch"                    "在 Git hook/CI 中运行 verify + monitor auto-sites --dry-run"
+    help_command "smoke-suite"                     "执行 verify / monitor auto-sites / quick-check / doctor 快速冒烟"
     help_command "monitoring <type>"               "Prometheus / Grafana 等监控集成"
     echo ""
 

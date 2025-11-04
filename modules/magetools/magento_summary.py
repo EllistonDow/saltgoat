@@ -264,7 +264,7 @@ def main() -> None:
             telegram_tag = f"saltgoat/business/summary/{site_slug}"
             if notif.should_send(telegram_tag, payload["severity"], site_slug):
                 payload["tag"] = telegram_tag
-                telegram_broadcast(telegram_tag, message, payload)
+                telegram_broadcast(telegram_tag, message, payload, plain_text)
             else:
                 log_to_file(
                     "SUMMARY",
