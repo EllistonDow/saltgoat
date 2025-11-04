@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.4.4] - 2025-11-04
+
+### Changes
+- 修改 4 个文件: salt/pillar/telegram-topics.sls, salt/states/reactor/backup_notification.sls, salt/states/templates/restic-backup.sh.jinja, salt/states/templates/security/fail2ban_watch.py
+
+
 ## [1.4.3] - 2025-11-04
 
 ### Changes

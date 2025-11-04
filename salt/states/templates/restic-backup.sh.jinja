@@ -199,8 +199,27 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
+
 sys.path.insert(0, "/opt/saltgoat-reactor")
 import reactor_common  # pylint: disable=import-error
+
+REPO_ROOT = os.environ.get("SALTGOAT_REPO_ROOT")
+if not REPO_ROOT:
+    for candidate in (
+        Path("/opt/saltgoat"),
+        Path("/srv/saltgoat"),
+        Path("/home/doge/saltgoat"),
+        Path(__file__).resolve().parents[2] / "..",
+    ):
+        candidate = candidate.resolve()
+        if (candidate / "modules" / "lib" / "notification.py").is_file():
+            REPO_ROOT = str(candidate)
+            break
+if not REPO_ROOT:
+    REPO_ROOT = str(Path(__file__).resolve().parents[2])
+sys.path.insert(0, REPO_ROOT)
+from modules.lib import notification as notif  # type: ignore
 
 status = os.environ.get("EVENT_STATUS", "success")
 repo = os.environ.get("RESTIC_REPOSITORY", "n/a")
@@ -235,8 +254,10 @@ message_lines.append(f"Return code: {rc}")
 message = "\n".join(message_lines)
 
 LOG_PATH = "/var/log/saltgoat/alerts.log"
-TAG = f"saltgoat/backup/restic/{status}"
-THREAD_ID = 5
+EVENT_TAG = f"saltgoat/backup/restic/{status}"
+SITE_TAG = f"saltgoat/backup/restic/{site}" if site else None
+TELEGRAM_TAG = SITE_TAG or EVENT_TAG
+THREAD_ID = notif.get_thread_id(TELEGRAM_TAG) or notif.get_thread_id("saltgoat/backup/restic")
 
 def log(label, payload):
     subprocess.run(
@@ -245,7 +266,7 @@ def log(label, payload):
             "/opt/saltgoat-reactor/logger.py",
             "TELEGRAM",
             LOG_PATH,
-            f"{TAG} {label}",
+            f"{TELEGRAM_TAG} {label}",
             json.dumps(payload, ensure_ascii=False),
         ],
         check=False,
@@ -259,7 +280,14 @@ if not profiles:
 
 try:
     log("profile_summary", {"count": len(profiles)})
-    reactor_common.broadcast_telegram(message, profiles, log, tag=TAG, thread_id=THREAD_ID)
+    reactor_common.broadcast_telegram(
+        message,
+        profiles,
+        log,
+        tag=TELEGRAM_TAG,
+        thread_id=THREAD_ID,
+        parse_mode="HTML",
+    )
 except Exception as exc:  # pylint: disable=broad-except
     log("error", {"message": str(exc)})
 PY

@@ -21,11 +21,23 @@ backup_event_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.', '
       - |-
         python3 - <<'PY'
         import json
+        import os
         import subprocess
         import sys
+        from pathlib import Path
 
         sys.path.insert(0, "/opt/saltgoat-reactor")
         import reactor_common  # pylint: disable=import-error
+
+        REPO_ROOT = os.environ.get("SALTGOAT_REPO_ROOT")
+        if not REPO_ROOT:
+            for candidate in (Path("/opt/saltgoat"), Path("/srv/saltgoat"), Path("/home/doge/saltgoat"), Path("/opt/saltgoat-reactor").resolve().parents[1]):
+                if (Path(candidate) / "modules" / "lib" / "notification.py").is_file():
+                    REPO_ROOT = str(candidate)
+                    break
+        if REPO_ROOT:
+            sys.path.insert(0, REPO_ROOT)
+        from modules.lib import notification as notif  # type: ignore
 
         payload = {{ data|json }}
         inner = payload.get("data") if isinstance(payload, dict) else None
@@ -39,8 +51,9 @@ backup_event_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.', '
         rc = payload.get("return_code", payload.get("retcode", 0))
 
         summary = []
-        if payload.get("site"):
-            summary.append(f"Site: {payload['site']}")
+        site = payload.get("site")
+        if site:
+            summary.append(f"Site: {site}")
         if payload.get("project"):
             summary.append(f"Project: {payload['project']}")
         if payload.get("paths"):
@@ -70,6 +83,8 @@ backup_event_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.', '
 
         LOG_PATH = "{{ log_path }}"
         TAG = "{{ tag }}"
+        SITE_TAG = f"saltgoat/backup/{kind}/{site}" if site else None
+        TELEGRAM_TAG = SITE_TAG or TAG
 
         def log(kind, payload_obj):
             try:
@@ -92,15 +107,9 @@ backup_event_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.', '
         if not profiles:
             log("skip", {"reason": "no_profiles"})
             raise SystemExit()
-
-        thread_map = {
-            "restic": 5,
-            "xtrabackup": 4,
-        }
-        thread_id = thread_map.get("{{ backup_kind }}")
-
+        thread_id = notif.get_thread_id(TELEGRAM_TAG) or notif.get_thread_id(f"saltgoat/backup/{kind}")
         try:
-            reactor_common.broadcast_telegram(message, profiles, log, tag=TAG, thread_id=thread_id)
+            reactor_common.broadcast_telegram(message, profiles, log, tag=TELEGRAM_TAG, thread_id=thread_id, parse_mode=notif.get_parse_mode())
         except Exception as exc:  # pylint: disable=broad-except
             log("error", {"message": str(exc)})
             raise

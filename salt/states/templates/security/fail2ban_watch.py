@@ -17,10 +17,19 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 BASE_DIR = Path(__file__).resolve().parent
-LIB_CANDIDATES = [BASE_DIR / "lib", BASE_DIR.parent / "modules", Path("/srv/saltgoat/modules"), Path("/home/doge/saltgoat/modules"), Path("/opt/saltgoat/modules")]
+LIB_CANDIDATES = [
+    BASE_DIR / "lib",
+    BASE_DIR.parent / "modules",
+    Path("/srv/saltgoat/modules"),
+    Path("/home/doge/saltgoat/modules"),
+    Path("/opt/saltgoat/modules"),
+]
 for candidate in LIB_CANDIDATES:
-    if candidate.exists() and str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
+    try:
+        if candidate.exists() and str(candidate) not in sys.path:
+            sys.path.insert(0, str(candidate))
+    except PermissionError:
+        continue
 
 from lib import notification as notif  # type: ignore
 
@@ -143,6 +152,9 @@ def send_telegram(tag: str, message: str, payload: Dict[str, object]) -> None:
         log_to_file(f"{tag}/skip", {"reason": "telegram_unavailable"})
         return
     parse_mode = notif.get_parse_mode()
+    thread_id = payload.get("telegram_thread") or notif.get_thread_id(tag)
+    if thread_id is not None:
+        payload["telegram_thread"] = thread_id
 
     def _log(label: str, extra: Dict[str, object]) -> None:
         log_to_file(f"{tag}/{label}", extra)
@@ -161,7 +173,7 @@ def send_telegram(tag: str, message: str, payload: Dict[str, object]) -> None:
             profiles,
             _log,
             tag=tag,
-            thread_id=None,
+            thread_id=thread_id,
             parse_mode=parse_mode,
         )
     except Exception as exc:

@@ -20,3 +20,4 @@ telegram_topics:
   saltgoat/business/summary/pwas: 2893
   saltgoat/business/summary/tank: 2898
   saltgoat/monitor/resources/ns510140.ip-192-99-45.net: 2901
+  saltgoat/security/fail2ban/sshd: 2916
