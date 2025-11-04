@@ -256,6 +256,10 @@ def main() -> None:
         }
         if args.telegram_thread is not None:
             payload["telegram_thread"] = int(args.telegram_thread)
+        elif "telegram_thread" not in payload:
+            thread = notif.get_thread_id(telegram_tag)
+            if thread is not None:
+                payload["telegram_thread"] = thread
 
         log_to_file("SUMMARY", event_tag, payload)
         emit_event(event_tag, payload)

@@ -279,6 +279,9 @@ def main() -> None:
     emit_event(tag, payload)
     if not args.no_telegram:
         payload_with_tag.setdefault("severity", "INFO")
+        thread_id = payload_with_tag.get("telegram_thread") or notif.get_thread_id(tag)
+        if thread_id is not None:
+            payload_with_tag["telegram_thread"] = thread_id
         telegram_notify(tag, summary_text, payload_with_tag, summary_text)
     if not args.quiet:
         print(summary_text)

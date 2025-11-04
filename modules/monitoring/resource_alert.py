@@ -1301,6 +1301,9 @@ def main() -> None:
         host_slug = host_id.replace(".", "-").lower()
         telegram_tag = f"saltgoat/autoscale/{host_slug}"
         autoscale_payload["tag"] = telegram_tag
+        thread_id = autoscale_payload.get("telegram_thread") or notif.get_thread_id(telegram_tag)
+        if thread_id is not None:
+            autoscale_payload["telegram_thread"] = thread_id
         telegram_notify(telegram_tag, html_block, autoscale_payload, plain_block)
         emit_salt_event("saltgoat/autoscale", autoscale_payload)
 
@@ -1362,6 +1365,9 @@ def main() -> None:
         telegram_tag = f"saltgoat/monitor/resources/{host_slug}"
         augmented = payload | {"details": details, "tag": telegram_tag, "severity": severity}
         log_to_file("RESOURCE", event_tag, augmented)
+        thread_id = augmented.get("telegram_thread") or notif.get_thread_id(telegram_tag)
+        if thread_id is not None:
+            augmented["telegram_thread"] = thread_id
         telegram_notify(telegram_tag, html_block, augmented, plain_block)
         emit_salt_event(event_tag, payload)
         print(plain_block)

@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.4.3] - 2025-11-04
+
+### Changes
+- 修改 11 个文件: modules/lib/__pycache__/notification.cpython-312.pyc, modules/lib/backup_notify.py, modules/lib/notification.py, modules/magetools/__pycache__/magento_api_watch.cpython-312.pyc, modules/magetools/__pycache__/magento_summary.cpython-312.pyc 等
+
+
 ## [1.4.2] - 2025-11-04
 
 ### Changes

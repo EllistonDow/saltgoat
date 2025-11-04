@@ -5,6 +5,8 @@ import json
 import os
 import re
 import urllib.request
+from functools import lru_cache
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 try:
@@ -25,6 +27,7 @@ _LEVELS = {
 _CALLER: Optional[Caller] = None
 _CACHE: Optional[Dict[str, object]] = None
 _TAG_RE = re.compile(r"<[^>]+>")
+TELEGRAM_TOPICS_PATH = Path(__file__).resolve().parents[2] / "salt" / "pillar" / "telegram-topics.sls"
 
 
 def _get_caller() -> Optional[Caller]:
@@ -234,3 +237,61 @@ def dispatch_webhooks(
         except Exception:
             continue
     return delivered
+
+
+@lru_cache
+def _load_topics_from_file() -> Dict[str, int]:
+    if not TELEGRAM_TOPICS_PATH.exists():
+        return {}
+    try:
+        import yaml  # type: ignore
+    except Exception:
+        yaml = None  # type: ignore
+
+    try:
+        raw = TELEGRAM_TOPICS_PATH.read_text(encoding="utf-8")
+    except Exception:
+        return {}
+
+    if yaml is not None:
+        try:
+            data = yaml.safe_load(raw) or {}
+        except Exception:
+            return {}
+    else:
+        data = {}
+        current_tag = None
+        for line in raw.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("saltgoat/"):
+                parts = stripped.split(":")
+                if len(parts) == 2:
+                    data.setdefault("telegram_topics", {})[parts[0]] = int(parts[1])
+        if not data:
+            return {}
+
+    topics = data.get("telegram_topics")
+    if isinstance(topics, dict):
+        normalized: Dict[str, int] = {}
+        for key, value in topics.items():
+            try:
+                normalized[str(key)] = int(value)
+            except Exception:
+                continue
+        return normalized
+    return {}
+
+
+def get_thread_id(tag: str) -> Optional[int]:
+    topics = _load_topics_from_file()
+    if not topics:
+        return None
+    if tag in topics:
+        return topics[tag]
+    parts = tag.split("/")
+    while len(parts) > 1:
+        parts = parts[:-1]
+        candidate = "/".join(parts)
+        if candidate in topics:
+            return topics[candidate]
+    return None

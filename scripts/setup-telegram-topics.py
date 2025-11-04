@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -54,6 +55,17 @@ def _normalize_site(site: str) -> str:
     return site.strip().lower().replace("/", "-")
 
 
+def _is_valid_site_name(site: str) -> bool:
+    slug = _normalize_site(site)
+    return bool(slug) and not slug.startswith(".")
+
+
+def _has_magento_root(path: Path) -> bool:
+    direct = path / "app" / "etc" / "env.php"
+    rolling = path / "current" / "app" / "etc" / "env.php"
+    return direct.is_file() or rolling.is_file()
+
+
 def detect_sites_from_pillar() -> List[str]:
     if not PILLAR_PATH.exists():
         return []
@@ -93,13 +105,17 @@ def detect_sites_from_pillar() -> List[str]:
 
 
 def detect_sites() -> List[str]:
-    sites = set(detect_sites_from_pillar())
+    sites = {site for site in detect_sites_from_pillar() if _is_valid_site_name(site)}
     base_dir = Path("/var/www")
     if base_dir.exists():
         for entry in base_dir.iterdir():
-            if entry.is_dir():
+            if not entry.is_dir():
+                continue
+            if not _is_valid_site_name(entry.name):
+                continue
+            if _has_magento_root(entry):
                 sites.add(entry.name)
-    return sorted(_normalize_site(site) for site in sites if site)
+    return sorted(_normalize_site(site) for site in sites if _is_valid_site_name(site))
 
 
 def resolve_primary_profile(config: Dict[str, object], profile_name: str) -> Dict[str, object]:
@@ -135,30 +151,39 @@ def resolve_chat_id(entry: Dict[str, object]) -> str:
     raise SystemExit("Unable to determine chat_id for Telegram profile")
 
 
-def create_topic(token: str, chat_id: str, name: str) -> int:
+def create_topic(token: str, chat_id: str, name: str, retries: int = 3) -> int:
     base = f"https://api.telegram.org/bot{token}/createForumTopic"
     params = urllib.parse.urlencode({"chat_id": chat_id, "name": name})
     url = f"{base}?{params}"
-    try:
-        with urllib.request.urlopen(url, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        payload = exc.read().decode("utf-8")
+    attempt = 0
+    while True:
         try:
-            data = json.loads(payload)
-        except json.JSONDecodeError:
-            raise SystemExit(f"Failed to create topic '{name}': {payload}") from exc
-        if data.get("ok") and isinstance(data.get("result"), dict):
-            thread_id = data["result"].get("message_thread_id")
-            if thread_id is not None:
-                return int(thread_id)
-        raise SystemExit(f"Telegram error creating topic '{name}': {data.get('description')}") from exc
-    if not data.get("ok"):
-        raise SystemExit(f"Telegram error creating topic '{name}': {data.get('description')}")
-    result = data.get("result")
-    if not isinstance(result, dict) or "message_thread_id" not in result:
-        raise SystemExit(f"Unexpected response creating topic '{name}': {data}")
-    return int(result["message_thread_id"])
+            with urllib.request.urlopen(url, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            payload = exc.read().decode("utf-8")
+            try:
+                data = json.loads(payload)
+            except json.JSONDecodeError:
+                raise SystemExit(f"Failed to create topic '{name}': {payload}") from exc
+            retry_after = (data.get("parameters") or {}).get("retry_after")
+            if exc.code == 429 and retry_after and attempt < retries:
+                wait_time = int(retry_after) + 1
+                print(f"[INFO] Telegram rate limit hit; waiting {wait_time}s before retrying '{name}'")
+                time.sleep(wait_time)
+                attempt += 1
+                continue
+            if data.get("ok") and isinstance(data.get("result"), dict):
+                thread_id = data["result"].get("message_thread_id")
+                if thread_id is not None:
+                    return int(thread_id)
+            raise SystemExit(f"Telegram error creating topic '{name}': {data.get('description')}") from exc
+        if not data.get("ok"):
+            raise SystemExit(f"Telegram error creating topic '{name}': {data.get('description')}")
+        result = data.get("result")
+        if not isinstance(result, dict) or "message_thread_id" not in result:
+            raise SystemExit(f"Unexpected response creating topic '{name}': {data}")
+        return int(result["message_thread_id"])
 
 
 def ensure_topics(config: Dict[str, object], profile: Dict[str, object], sites: Iterable[str], categories: Dict[str, Tuple[str, str]], dry_run: bool = False) -> bool:

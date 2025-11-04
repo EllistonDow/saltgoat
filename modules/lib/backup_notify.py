@@ -84,6 +84,10 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
     if not notif.should_send(tag, severity, site):
         _log(f"{tag}/skip", {"reason": "filtered", "severity": severity})
         return
+    thread_id = payload.get("telegram_thread") or notif.get_thread_id(tag)
+    if thread_id is not None:
+        payload["telegram_thread"] = thread_id
+
     notif.dispatch_webhooks(tag, str(severity), site, plain, html, payload)
 
     if reactor_common is None or not _path_exists(TELEGRAM_CONFIG):
@@ -111,6 +115,7 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
             profiles,
             logger,
             tag=tag,
+            thread_id=payload.get("telegram_thread"),
             parse_mode=notif.get_parse_mode(),
         )
     except Exception as exc:  # pragma: no cover

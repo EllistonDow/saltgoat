@@ -872,6 +872,9 @@ class MagentoWatcher:
             }
             telegram_tag = f"saltgoat/business/order/{self.site_topic}"
             event_data["tag"] = telegram_tag
+            thread_id = notif.get_thread_id(telegram_tag)
+            if thread_id is not None:
+                event_data["telegram_thread"] = thread_id
             emit_event("saltgoat/business/order", event_data)
             plain_block, message = build_message(
                 "order",
@@ -964,6 +967,9 @@ class MagentoWatcher:
             }
             telegram_tag = f"saltgoat/business/customer/{self.site_topic}"
             event_data["tag"] = telegram_tag
+            thread_id = notif.get_thread_id(telegram_tag)
+            if thread_id is not None:
+                event_data["telegram_thread"] = thread_id
             emit_event("saltgoat/business/customer", event_data)
             plain_block, message = build_message(
                 "customer",
