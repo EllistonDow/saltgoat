@@ -1,5 +1,11 @@
 # SaltGoat 更新日志
 
+## [1.3.17] - 2025-11-04
+
+### Changes
+- 修改 4 个文件: modules/lib/__pycache__/__init__.cpython-312.pyc, modules/lib/backup_notifications.py, modules/magetools/varnish.sh, tests/test_backup_notifications.sh
+
+
 ## [1.3.16] - 2025-11-03
 
 ### Changes

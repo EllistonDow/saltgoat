@@ -532,6 +532,7 @@ restore_backup() {
         if [[ -f "$file" ]]; then
             log_info "恢复 ${site} 原始 Nginx 配置"
             sudo cp "$file" "$target"
+            ensure_run_context_for "$site"
             continue
         fi
         log_warning "未找到 ${site} 的备份文件，尝试基于当前配置回滚 Varnish 变更"
@@ -543,6 +544,7 @@ restore_backup() {
         fi
         sudo cp "$tmp" "$target"
         rm -f "$tmp"
+        ensure_run_context_for "$site"
     done
 }
 
@@ -623,9 +625,90 @@ if root_match:
 else:
     default_root = f"/var/www/{site}"
     root = default_root
-snippet_pattern = re.compile(r'^\s*include\s+/etc/nginx/snippets/varnish-frontend-.*?\.conf;\s*$', re.MULTILINE)
-data = snippet_pattern.sub(f'    include {root}/nginx.conf.sample;', data)
+snippet_pattern = re.compile(r'^(\s*)include\s+(/etc/nginx/snippets/varnish-frontend-[^;]+);\s*$', re.MULTILINE)
+has_run_context = [bool(re.search(r'\$MAGE_RUN_(?:TYPE|CODE|MODE)', data))]
+
+def replace_snippet(match):
+    indent = match.group(1)
+    snippet_path = pathlib.Path(match.group(2))
+    lines = []
+    if not has_run_context[0]:
+        try:
+            snippet_data = snippet_path.read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError:
+            snippet_data = []
+        for line in snippet_data:
+            stripped = line.strip()
+            if stripped.startswith("set $MAGE_RUN_TYPE") or stripped.startswith("set $MAGE_RUN_CODE") or stripped.startswith("set $MAGE_MODE"):
+                lines.append(indent + stripped)
+        if not lines:
+            lines.extend([
+                indent + "set $MAGE_RUN_TYPE store;",
+                indent + f"set $MAGE_RUN_CODE {site};",
+                indent + "set $MAGE_MODE production;",
+            ])
+        has_run_context[0] = True
+    lines.append(f"{indent}include {root}/nginx.conf.sample;")
+    return "\n".join(lines)
+
+data, _ = snippet_pattern.subn(replace_snippet, data)
 sys.stdout.write(data)
+PY
+}
+
+ensure_run_context_for() {
+    local site="$1"
+    local target="/etc/nginx/sites-available/${site}"
+    if [[ ! -f "$target" ]]; then
+        return
+    fi
+    local ident
+    ident="$(echo "$site" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g')"
+    [[ -n "$ident" ]] || ident="$site"
+    local default_run_type="$DEFAULT_RUN_TYPE"
+    local default_run_code="$DEFAULT_RUN_CODE"
+    local default_run_mode="$DEFAULT_RUN_MODE"
+    if [[ -z "$default_run_type" ]]; then
+        default_run_type="$RUN_CONTEXT_TYPE"
+    fi
+    if [[ -z "$default_run_code" ]]; then
+        default_run_code="$RUN_CONTEXT_CODE"
+    fi
+    if [[ -z "$default_run_mode" ]]; then
+        default_run_mode="$RUN_CONTEXT_MODE"
+    fi
+    sudo python3 - "$target" "$default_run_type" "$default_run_code" "$default_run_mode" "$ident" <<'PY'
+import sys, pathlib, re
+config_path, default_type, default_code, default_mode, ident = sys.argv[1:6]
+path = pathlib.Path(config_path)
+try:
+    data = path.read_text(encoding="utf-8")
+except FileNotFoundError:
+    sys.exit(0)
+if re.search(r'\$MAGE_RUN_(?:TYPE|CODE|MODE)', data):
+    sys.exit(0)
+pattern = re.compile(r'^(\s*)include\s+([^;]*nginx\.conf\.sample);\s*$', re.MULTILINE)
+map_prefix = f"mage_{ident}"
+
+def replacer(match):
+    indent = match.group(1)
+    include_target = match.group(2).strip()
+    lines = [
+        f"{indent}set $MAGE_RUN_TYPE {default_type};",
+        f"{indent}set $MAGE_RUN_CODE {default_code};",
+        f"{indent}set $MAGE_MODE {default_mode};",
+        f"{indent}set $MAGE_RUN_TYPE ${map_prefix}_run_type;",
+        f"{indent}set $MAGE_RUN_CODE ${map_prefix}_run_code;",
+        f"{indent}set $MAGE_MODE ${map_prefix}_run_mode;",
+        f"{indent}include {include_target};",
+    ]
+    return "\n".join(lines)
+
+new_data, count = pattern.subn(replacer, data, count=1)
+if count:
+    if not new_data.endswith("\n"):
+        new_data += "\n"
+    path.write_text(new_data, encoding="utf-8")
 PY
 }
 
@@ -1080,6 +1163,7 @@ enable_varnish() {
 
 disable_varnish() {
     log_highlight "为站点 ${SITE} 停用 Varnish"
+    build_run_contexts
     restore_backup
     local sibling
     for sibling in "${RELATED_SITES[@]}"; do
