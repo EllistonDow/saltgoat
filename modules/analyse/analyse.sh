@@ -2,6 +2,8 @@
 # Analyse 模块 - 部署网站分析平台（首批支持 Matomo）
 
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2034
+ANALYSE_HELPER="${MODULE_DIR}/../../modules/lib/analyse_helper.py"
 # shellcheck disable=SC1091
 source "${MODULE_DIR}/../../lib/logger.sh"
 # shellcheck disable=SC1091

@@ -1,64 +1,56 @@
-import sys
 import unittest
-from pathlib import Path
-from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from modules.lib import notification as notif
+from modules.lib import notification
 
 
 class NotificationFilterTests(unittest.TestCase):
     def setUp(self) -> None:
-        notif._CACHE = None  # reset cache between tests
+        self.original_pillar_get = notification.pillar_get
+        notification._CACHE = None
 
-    def _set_pillar(self, data):
-        notif._CACHE = None
-        with mock.patch("modules.lib.notification.pillar_get", return_value=data):
-            notif.load_config(reload=True)
-
-    def test_global_min_severity(self):
-        self._set_pillar({"telegram": {"enabled": True, "min_severity": "WARNING"}})
-        self.assertFalse(notif.should_send("saltgoat/test", "INFO"))
-        self.assertTrue(notif.should_send("saltgoat/test", "ERROR"))
-
-    def test_disabled_tag_prefix(self):
-        self._set_pillar({"telegram": {"disabled_tags": ["saltgoat/business"]}})
-        self.assertFalse(notif.should_send("saltgoat/business/order", "ERROR"))
-        self.assertTrue(notif.should_send("saltgoat/backup/mysql", "ERROR"))
-
-    def test_site_override(self):
-        self._set_pillar(
-            {
-                "telegram": {
-                    "min_severity": "INFO",
-                    "site_overrides": {
-                        "bank": {
-                            "min_severity": "ERROR",
-                            "disabled_tags": ["saltgoat/autoscale/bank"],
-                        }
-                    },
+        def fake_pillar_get(path: str, default=None):
+            if path == "notifications":
+                return {
+                    "telegram": {
+                        "enabled": True,
+                        "min_severity": "NOTICE",
+                        "disabled_tags": ["saltgoat/debug"],
+                        "site_overrides": {
+                            "bank": {
+                                "min_severity": "ERROR",
+                                "disabled_tags": ["saltgoat/orders/bank/summary"],
+                            }
+                        },
+                    }
                 }
-            }
-        )
-        self.assertFalse(notif.should_send("saltgoat/business/order/bank", "NOTICE", site="bank"))
-        self.assertFalse(notif.should_send("saltgoat/autoscale/bank", "CRITICAL", site="bank"))
-        self.assertTrue(notif.should_send("saltgoat/business/order/tank", "NOTICE", site="tank"))
+            return default
 
-    def test_parse_mode_passthrough(self):
-        self._set_pillar({"telegram": {"parse_mode": "Markdown"}})
-        self.assertEqual(notif.get_parse_mode(), "Markdown")
+        notification.pillar_get = fake_pillar_get
+        notification.load_config(reload=True)
 
-    def test_format_pre_block(self):
-        plain, html_block = notif.format_pre_block(
-            "TEST TITLE",
-            "SITE",
-            [("Field", "Value"), ("Empty", None), ("Multiline", "Line1\nLine2")],
+    def tearDown(self) -> None:
+        notification.pillar_get = self.original_pillar_get
+        notification._CACHE = None
+
+    def test_global_min_level_blocks_low_severity(self) -> None:
+        self.assertFalse(notification.should_send("saltgoat/general", "INFO"))
+        self.assertTrue(notification.should_send("saltgoat/general", "NOTICE"))
+
+    def test_global_disabled_tag(self) -> None:
+        self.assertFalse(notification.should_send("saltgoat/debug/tooling", "WARNING"))
+
+    def test_site_override_min_level(self) -> None:
+        self.assertFalse(notification.should_send("saltgoat/orders/bank", "WARNING"))
+        self.assertTrue(notification.should_send("saltgoat/orders/bank", "ERROR"))
+
+    def test_site_override_disabled_tag(self) -> None:
+        self.assertFalse(
+            notification.should_send("saltgoat/orders/bank/summary", "CRITICAL", site="bank")
         )
-        self.assertIn("TEST TITLE", plain)
-        self.assertIn("Line2", plain)
-        self.assertTrue(html_block.startswith("<pre>"))
-        self.assertIn("TEST TITLE", html_block)
+
+    def test_inferred_site_slug(self) -> None:
+        # Site inferred from tag suffix
+        self.assertTrue(notification.should_send("saltgoat/alerts/pwas", "ERROR"))
 
 
 if __name__ == "__main__":

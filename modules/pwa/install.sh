@@ -4,6 +4,7 @@
 set -euo pipefail
 
 : "${SCRIPT_DIR:=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+PWA_HELPER="${SCRIPT_DIR}/modules/lib/pwa_helpers.py"
 
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/logger.sh"
@@ -24,30 +25,6 @@ is_true() {
         1|true|TRUE|True|yes|YES|on|ON) return 0 ;;
     esac
     return 1
-}
-
-decode_b64_json() {
-    local payload="$1"
-    python3 - <<'PY' "$payload"
-import base64
-import json
-import sys
-data = sys.argv[1] if len(sys.argv) > 1 else ""
-if not data:
-    print("{}")
-    raise SystemExit
-try:
-    decoded = base64.b64decode(data).decode("utf-8")
-except Exception:
-    print("{}")
-    raise SystemExit
-try:
-    json.loads(decoded)
-except Exception:
-    print("{}")
-else:
-    print(decoded)
-PY
 }
 
 usage() {
@@ -250,7 +227,10 @@ PY
     fi
 
     eval "$exports"
-    PWA_STUDIO_ENV_OVERRIDES_JSON=$(decode_b64_json "${PWA_STUDIO_ENV_OVERRIDES_B64:-}")
+    if [[ ! -x "$PWA_HELPER" ]]; then
+        abort "缺少 PWA helper: $PWA_HELPER"
+    fi
+    PWA_STUDIO_ENV_OVERRIDES_JSON="$(python3 "$PWA_HELPER" decode-b64 --data "${PWA_STUDIO_ENV_OVERRIDES_B64:-}")"
     if [[ -n "${PWA_HOME_TEMPLATE:-}" ]]; then
         if [[ "${PWA_HOME_TEMPLATE}" != /* ]]; then
             PWA_HOME_TEMPLATE_PATH="${SCRIPT_DIR%/}/${PWA_HOME_TEMPLATE}"
@@ -689,34 +669,14 @@ ensure_saltgoat_extension_workspace() {
     sudo rsync -a "$workspace_src/" "$workspace_dest/"
     sudo chown -R www-data:www-data "$workspace_dest"
 
-    sudo -u www-data -H python3 - "$PWA_STUDIO_DIR" <<'PY'
-import json
-import pathlib
-import sys
-
-root = pathlib.Path(sys.argv[1])
-pkg_path = root / "package.json"
-data = json.loads(pkg_path.read_text(encoding="utf-8"))
-
-workspace_entry = "packages/saltgoat-venia-extension"
-workspaces = data.get("workspaces")
-if isinstance(workspaces, list):
-    if workspace_entry not in workspaces:
-        workspaces.append(workspace_entry)
-elif isinstance(workspaces, dict):
-    packages = workspaces.setdefault("packages", [])
-    if isinstance(packages, list) and workspace_entry not in packages:
-        packages.append(workspace_entry)
-else:
-    workspaces = [workspace_entry]
-    data["workspaces"] = workspaces
-
-deps = data.setdefault("dependencies", {})
-if deps.get("@saltgoat/venia-extension") != f"link:{workspace_entry}":
-    deps["@saltgoat/venia-extension"] = f"link:{workspace_entry}"
-
-pkg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-PY
+    local workspace_status
+    workspace_status=$(sudo -u www-data -H python3 "$PWA_HELPER" ensure-workspace \
+        --root "$PWA_STUDIO_DIR" \
+        --workspace "packages/saltgoat-venia-extension" \
+        --dependency "@saltgoat/venia-extension") || workspace_status=""
+    if [[ "$workspace_status" == "updated" ]]; then
+        log_info "已更新根 package.json workspaces 与依赖映射 (@saltgoat/venia-extension)"
+    fi
 
     ensure_workspace_dependency "${PWA_STUDIO_DIR%/}/packages/venia-ui/package.json" \
         "@saltgoat/venia-extension" "link:../saltgoat-venia-extension"
@@ -737,26 +697,11 @@ ensure_workspace_dependency() {
         return
     fi
 
-    sudo -u www-data -H python3 - "$package_json" "$package_name" "$package_value" <<'PY'
-import json
-import pathlib
-import sys
-
-pkg_path = pathlib.Path(sys.argv[1])
-name = sys.argv[2]
-value = sys.argv[3]
-
-data = json.loads(pkg_path.read_text(encoding="utf-8"))
-deps = data.setdefault("dependencies", {})
-changed = False
-
-if deps.get(name) != value:
-    deps[name] = value
-    changed = True
-
-if changed:
-    pkg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-PY
+    sudo -u www-data -H python3 "$PWA_HELPER" set-field \
+        --file "$package_json" \
+        --section "dependencies" \
+        --name "$package_name" \
+        --value "$package_value" >/dev/null
 
     sudo chown www-data:www-data "$package_json"
 }
@@ -784,25 +729,11 @@ ensure_package_json_field() {
     fi
 
     local changed
-    changed=$(sudo -u www-data -H python3 - "$package_json" "$field" "$package_name" "$package_value" <<'PY'
-import json
-import pathlib
-import sys
-
-pkg_path = pathlib.Path(sys.argv[1])
-field = sys.argv[2]
-name = sys.argv[3]
-value = sys.argv[4]
-data = json.loads(pkg_path.read_text(encoding="utf-8"))
-section = data.setdefault(field, {})
-if section.get(name) == value:
-    print("unchanged")
-else:
-    section[name] = value
-    pkg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    print("updated")
-PY
-)
+    changed=$(sudo -u www-data -H python3 "$PWA_HELPER" set-field \
+        --file "$package_json" \
+        --section "$field" \
+        --name "$package_name" \
+        --value "$package_value") || changed=""
 
     if [[ "$changed" == "updated" ]]; then
         sudo chown www-data:www-data "$package_json"
@@ -827,26 +758,10 @@ remove_package_json_field() {
     fi
 
     local changed
-    changed=$(sudo -u www-data -H python3 - "$package_json" "$field" "$package_name" <<'PY'
-import json
-import pathlib
-import sys
-
-pkg_path = pathlib.Path(sys.argv[1])
-field = sys.argv[2]
-name = sys.argv[3]
-data = json.loads(pkg_path.read_text(encoding="utf-8"))
-section = data.get(field)
-if not isinstance(section, dict) or name not in section:
-    print("absent")
-else:
-    section.pop(name, None)
-    if not section:
-        data.pop(field, None)
-    pkg_path.write_text(json.dumps(data, indent=2) + "\n", encoding='utf-8')
-    print("removed")
-PY
-)
+    changed=$(sudo -u www-data -H python3 "$PWA_HELPER" remove-field \
+        --file "$package_json" \
+        --section "$field" \
+        --name "$package_name") || changed=""
 
     if [[ "$changed" == "removed" ]]; then
         sudo chown www-data:www-data "$package_json"
@@ -1462,34 +1377,7 @@ prepare_pwa_env() {
 
     if [[ -n "$overrides_json" && "$overrides_json" != "{}" ]]; then
         log_info "写入 PWA 环境变量覆盖项"
-        python3 - <<'PY' "$env_file" "$overrides_json"
-import json
-import sys
-from pathlib import Path
-
-env_path = Path(sys.argv[1])
-overrides = json.loads(sys.argv[2])
-
-if not env_path.exists():
-    env_path.write_text('', encoding='utf-8')
-
-lines = []
-existing = {}
-for raw in env_path.read_text(encoding='utf-8').splitlines():
-    if '=' in raw and not raw.strip().startswith('#'):
-        key, _, _ = raw.partition('=')
-        existing[key.strip()] = raw
-    lines.append(raw)
-
-for key, value in overrides.items():
-    new_line = f"{key}={value}"
-    if key in existing:
-        lines = [new_line if l == existing[key] else l for l in lines]
-    else:
-        lines.append(new_line)
-
-env_path.write_text('\n'.join(lines).rstrip() + '\n', encoding='utf-8')
-PY
+        python3 "$PWA_HELPER" apply-env --file "$env_file" --overrides "$overrides_json"
     fi
 
     if [[ -n "${PWA_HOME_IDENTIFIER:-}" ]]; then

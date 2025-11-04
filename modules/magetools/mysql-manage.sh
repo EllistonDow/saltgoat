@@ -11,6 +11,7 @@ source "${SCRIPT_DIR}/lib/logger.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/utils.sh"
 
+MYSQL_HELPER="${SCRIPT_DIR}/modules/lib/mysql_salt_helper.py"
 declare -a MYSQL_CONNECTION_ARGS=()
 SALT_CALL_RESULT=""
 MYSQL_ROOT_PASSWORD=""
@@ -67,24 +68,11 @@ salt_call_bool() {
         exit 1
     }
     LAST_SALT_OUTPUT="$output"
-    SALT_CALL_RESULT="$(SALT_OUTPUT="$output" python3 - <<'PY'
-import json, os, sys
-text = os.environ.get("SALT_OUTPUT", "")
-start = text.find('{')
-if start == -1:
-    sys.stderr.write("Salt 输出缺少 JSON:\n" + text)
-    sys.exit(1)
-data = json.loads(text[start:])
-value = data.get("local")
-if isinstance(value, bool):
-    print("1" if value else "0")
-elif isinstance(value, str):
-    lower = value.lower()
-    print("1" if lower == "true" else "0")
-else:
-    print("1" if value else "0")
-PY
-)"
+    if [[ ! -x "$MYSQL_HELPER" ]]; then
+        log_error "缺少 mysql helper: $MYSQL_HELPER"
+        exit 1
+    fi
+    SALT_CALL_RESULT="$(python3 "$MYSQL_HELPER" bool --payload "$output")"
 }
 
 salt_call_run() {

@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.4.1] - 2025-11-04
+
+### Changes
+- 修改 40 个文件: README.md, docs/CHANGELOG.md, docs/OPS_TOOLING.md, lib/help.sh, modules/analyse/analyse.sh 等
+
+
 ## [1.4.0] - 2025-11-04
 
 ### Changes
@@ -8,6 +14,10 @@
 
 ### Added
 - `modules/lib/monitor_auto_sites.py`, `modules/lib/salt_event.py`, `modules/lib/maintenance_pillar.py`, `modules/lib/automation_helpers.py` 以及配套单元测试，方便 CLI 与外部脚本直接复用 JSON/Pillar/事件逻辑。
+- `scripts/goat_pulse.py --metrics-file` 与 `--plain` 选项，可将服务状态/HTTP 探活/Fail2ban 指标写入 Prometheus textfile，并在无 ANSI 控制符的模式下供 doctor/日志采集使用。
+- 新增 `saltgoat verify` / `scripts/verify.sh`，统一运行 `scripts/code-review.sh -a` 与 `python3 -m unittest` 作为本地或 CI 自检流程。
+- 新增 `saltgoat doctor` / `scripts/doctor.sh`，汇总 Goat Pulse、磁盘/进程摘要与最近的 alerts.log，支持 `--format text|json|markdown` 便于粘贴或被其他系统直接解析。
+- `modules/monitoring/resource_alert.py` 现在会自动检测 RabbitMQ/Valkey systemd 状态并纳入 autoscale/self-heal 列表。
 
 ### Changed
 - `saltgoat monitor auto-sites` 仅在站点或 Beacon 发生变化时才会刷新 Pillar 与 Telegram 话题，并使用新的 Python helper 解析结果。

@@ -8,6 +8,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_ROOT="${SCRIPT_DIR}"
 PILLAR_FILE="${PROJECT_ROOT}/salt/pillar/nginx.sls"
+NGINX_CONTEXT="${PROJECT_ROOT}/modules/lib/nginx_context.py"
 
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/logger.sh"
@@ -564,18 +565,7 @@ show_csp_status() {
     local json
     json=$(KEY_PATH="nginx:csp" PILLAR_FILE="${PILLAR_FILE}" read_pillar_value "nginx:csp")
     if [[ -n "$json" ]]; then
-        JSON_DATA="$json" python3 - <<'PY'
-import json, os
-data = json.loads(os.environ.get("JSON_DATA", "{}"))
-enabled = data.get("enabled", False)
-level = data.get("level", 0)
-policy = data.get("policy", "")
-if enabled and level:
-    print(f"CSP 已启用，等级 {level}")
-    print(f"策略: {policy}")
-else:
-    print("CSP 当前禁用")
-PY
+        JSON_DATA="$json" python3 "$NGINX_CONTEXT" csp-status
     else
         log_info "CSP 当前禁用"
     fi
@@ -585,17 +575,7 @@ show_modsecurity_status() {
     local json
     json=$(KEY_PATH="nginx:modsecurity" PILLAR_FILE="${PILLAR_FILE}" read_pillar_value "nginx:modsecurity")
     if [[ -n "$json" ]]; then
-        JSON_DATA="$json" python3 - <<'PY'
-import json, os
-data = json.loads(os.environ.get("JSON_DATA", "{}"))
-enabled = data.get("enabled", False)
-level = data.get("level", 0)
-admin_path = data.get("admin_path", "/admin")
-if enabled and level:
-    print(f"ModSecurity 已启用，等级 {level}，后台路径 {admin_path}")
-else:
-    print("ModSecurity 当前禁用")
-PY
+        JSON_DATA="$json" python3 "$NGINX_CONTEXT" modsecurity-status
     else
         log_info "ModSecurity 当前禁用"
     fi

@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2016
 # SaltGoat Magento Varnish helper
 # Usage: saltgoat magetools varnish <enable|disable> <site>
 

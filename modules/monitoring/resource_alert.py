@@ -1098,6 +1098,11 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
     else:
         details.append("All critical services running.")
 
+    for heal_target in ("rabbitmq", "valkey"):
+        if heal_target in failing:
+            auto_ctx.setdefault("services", set()).add(heal_target)
+            details.append(f"AUTOHEAL: queued restart for {heal_target}")
+
     fpm_info: Dict[str, Any] = {"pools": {}}
     pool_configs = php_fpm_pool_configs()
     pool_children = php_fpm_children_by_pool()

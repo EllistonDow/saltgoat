@@ -127,12 +127,15 @@ show_main_help() {
     help_command "diagnose <type>"                 "故障诊断 (nginx/mysql/php/system/network/all)"
     help_command "profile analyze <type>"          "性能分析 (system/nginx/mysql/php/...)"
     help_command "version-lock <action>"           "版本锁定 (lock/unlock/show/status)"
+    help_command "doctor"                          "汇总 Goat Pulse/磁盘/告警信息，输出本地体检报告"
     echo ""
 
     help_subtitle "质量与安全"
     help_command "lint [path]"                     "运行 shellcheck 进行静态检查"
     help_command "format [path]"                   "使用 shfmt 自动格式化"
     help_command "security-scan"                   "执行安全扫描与敏感文件检查"
+    help_command "verify"                          "一键执行 scripts/code-review.sh 与 python3 -m unittest 自检"
+    help_command "gitops-watch"                    "在 Git hook/CI 中运行 verify + monitor auto-sites --dry-run"
     help_command "monitoring <type>"               "Prometheus / Grafana 等监控集成"
     echo ""
 

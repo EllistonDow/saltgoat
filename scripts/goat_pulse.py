@@ -10,7 +10,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 
 DEFAULT_TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 SERVICES = [
@@ -29,14 +29,17 @@ FAIL2BAN_STATE = Path("/var/log/saltgoat/fail2ban-state.json")
 
 
 def run(cmd: List[str], timeout: int = 10) -> Tuple[int, str, str]:
-    proc = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=timeout,
-    )
-    return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=timeout,
+        )
+        return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
+    except subprocess.TimeoutExpired:
+        return 124, "", "timeout"
 
 
 def service_status(unit: str) -> Tuple[str, str]:
@@ -128,39 +131,56 @@ def clear_screen() -> None:
     print("\033[2J\033[H", end="")
 
 
-def print_services() -> None:
+def gather_services() -> List[Dict[str, str]]:
+    records = []
+    for label, unit in SERVICES:
+        state, enabled = service_status(unit)
+        records.append({"label": label, "unit": unit, "state": state, "enabled": enabled})
+    return records
+
+
+def print_services(data: List[Dict[str, str]]) -> None:
     print("Service Status")
     print("-" * 50)
     print(f"{'Service':<20} {'State':<10} {'Enabled'}")
-    for label, unit in SERVICES:
-        state, enabled = service_status(unit)
-        print(f"{label:<20} {state:<10} {enabled}")
+    for item in data:
+        print(f"{item['label']:<20} {item['state']:<10} {item['enabled']}")
     print()
 
 
-def print_sites() -> None:
-    print("Storefront Probes")
-    print("-" * 50)
-    print(f"{'Site':<8} {'HTTP':<6} {'Time':<8} {'Via'}")
+def gather_sites() -> List[Dict[str, Any]]:
+    info = []
     for site in SITES:
         url = site_target(site)
         status, duration, varnish = http_probe(url)
+        info.append({"site": site, "status": status, "duration": duration, "varnish": varnish})
+    return info
+
+
+def print_sites(data: List[Dict[str, Any]]) -> None:
+    print("Storefront Probes")
+    print("-" * 50)
+    print(f"{'Site':<8} {'HTTP':<6} {'Time':<8} {'Via'}")
+    for entry in data:
+        status = entry["status"]
+        duration = entry["duration"]
+        varnish = entry["varnish"]
         via = "Varnish" if varnish else "Origin"
         duration_ms = f"{duration:.2f}s" if duration else "-"
-        print(f"{site:<8} {status:<6} {duration_ms:<8} {via}")
+        print(f"{entry['site']:<8} {status:<6} {duration_ms:<8} {via}")
     print()
 
 
-def print_varnish() -> None:
-    hits, miss, ratio = varnish_stats()
+def print_varnish(stats: Tuple[int, int, float]) -> None:
+    hits, miss, ratio = stats
     print("Varnish Cache")
     print("-" * 50)
     print(f"HIT: {hits}  MISS: {miss}  HIT RATIO: {ratio:.1f}%")
     print()
 
 
-def print_fail2ban() -> None:
-    current, data = fail2ban_summary()
+def print_fail2ban(summary: Tuple[int, Dict[str, List[str]]]) -> None:
+    current, data = summary
     print("Fail2ban Summary")
     print("-" * 50)
     print(f"Currently banned IPs: {current}")
@@ -172,18 +192,64 @@ def print_fail2ban() -> None:
     print()
 
 
-def loop(interval: int, once: bool, capture: Optional[List[str]] = None) -> None:
+def write_metrics(path: Path, services: List[Dict[str, str]], sites: List[Dict[str, Any]], varnish_data: Tuple[int, int, float], fail2ban_total: int) -> None:
+    try:
+        lines = []
+        for item in services:
+            active = 1 if item["state"] == "active" else 0
+            enabled = 1 if item["enabled"] == "enabled" else 0
+            svc = item["label"]
+            lines.append(f'saltgoat_service_active{{service="{svc}"}} {active}')
+            lines.append(f'saltgoat_service_enabled{{service="{svc}"}} {enabled}')
+        for entry in sites:
+            status_raw = entry["status"]
+            try:
+                status_val = int(status_raw)
+            except ValueError:
+                status_val = -1
+            duration = entry["duration"] or 0.0
+            varnish = 1 if entry["varnish"] else 0
+            lines.append(f'saltgoat_site_http_status{{site="{entry["site"]}"}} {status_val}')
+            lines.append(f'saltgoat_site_http_duration_seconds{{site="{entry["site"]}"}} {duration:.3f}')
+            lines.append(f'saltgoat_site_varnish{{site="{entry["site"]}"}} {varnish}')
+        hits, miss, ratio = varnish_data
+        lines.append(f"saltgoat_varnish_hits {hits}")
+        lines.append(f"saltgoat_varnish_miss {miss}")
+        lines.append(f"saltgoat_varnish_hit_ratio_percent {ratio:.2f}")
+        lines.append(f"saltgoat_fail2ban_banned_total {fail2ban_total}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except Exception as exc:
+        print(f"[WARN] Failed to write metrics file {path}: {exc}", file=sys.stderr)
+
+
+def loop(
+    interval: int,
+    once: bool,
+    metrics_file: Optional[Path],
+    plain: bool,
+    capture: Optional[List[str]] = None,
+) -> None:
     while True:
         block = []
         header = f"Goat Pulse @ {datetime.utcnow():%Y-%m-%d %H:%M:%S UTC}"
         block.append(header)
         block.append("=" * 50)
-        clear_screen()
+        if not plain:
+            clear_screen()
         print(header)
         print("=" * 50)
         try:
-            for printer in (print_services, print_sites, print_varnish, print_fail2ban):
-                printer()
+            services = gather_services()
+            sites = gather_sites()
+            varnish_data = varnish_stats()
+            fail2ban_data = fail2ban_summary()
+            print_services(services)
+            print_sites(sites)
+            print_varnish(varnish_data)
+            print_fail2ban(fail2ban_data)
+            if metrics_file:
+                write_metrics(metrics_file, services, sites, varnish_data, fail2ban_data[0])
         except KeyboardInterrupt:
             break
         if capture is not None:
@@ -198,16 +264,19 @@ def main() -> None:
     parser.add_argument("-i", "--interval", type=int, default=5, help="refresh interval seconds")
     parser.add_argument("--once", action="store_true", help="render once and exit")
     parser.add_argument("--telegram", action="store_true", help="send single snapshot to Telegram General")
+    parser.add_argument("--metrics-file", type=Path, help="Write Prometheus textfile metrics to path")
+    parser.add_argument("--plain", action="store_true", help="Disable ANSI clear for embedding / doctor")
     parser.add_argument("--telegram-config", default=str(DEFAULT_TELEGRAM_CONFIG), help="telegram config path")
     args = parser.parse_args()
+    metrics_path = Path(args.metrics_file) if args.metrics_file else None
     if args.telegram:
         capture: List[str] = []
-        loop(1, True, capture)
+        loop(1, True, metrics_path, args.plain, capture)
         body = "\n".join(capture)
         send_telegram(body, Path(args.telegram_config))
         print(body)
         return
-    loop(max(1, args.interval), args.once)
+    loop(max(1, args.interval), args.once, metrics_path, args.plain)
 
 
 def send_telegram(text: str, config_path: Path) -> None:

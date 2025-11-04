@@ -10,6 +10,7 @@ source "${SCRIPT_DIR}/lib/logger.sh"
 # shellcheck source=../../lib/utils.sh
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/utils.sh"
+RABBIT_HELPER="${SCRIPT_DIR}/modules/lib/rabbitmq_helper.py"
 
 RMQ_MODE="smart"
 SITE_NAME=""
@@ -321,52 +322,19 @@ build_pillar_json() {
     PILLAR_PHP_MEMORY_LIMIT="$PHP_MEMORY_LIMIT" \
     PILLAR_CPU_QUOTA="${CPU_QUOTA:-}" \
     PILLAR_NICE="${NICE_VALUE:-}" \
-    python3 - <<'PY'
-import json, os
-data = {
-  "site_name": os.environ["PILLAR_SITE_NAME"],
-  "site_path": os.environ["PILLAR_SITE_PATH"],
-  "mode": os.environ["PILLAR_MODE"],
-  "threads": int(os.environ["PILLAR_THREADS"]),
-  "amqp_host": os.environ["PILLAR_AMQP_HOST"],
-  "amqp_port": int(os.environ["PILLAR_AMQP_PORT"]),
-  "amqp_user": os.environ["PILLAR_AMQP_USER"],
-  "amqp_password": os.environ["PILLAR_AMQP_PASSWORD"],
-  "amqp_vhost": os.environ["PILLAR_AMQP_VHOST"],
-  "service_user": os.environ["PILLAR_SERVICE_USER"],
-  "php_memory_limit": os.environ["PILLAR_PHP_MEMORY_LIMIT"],
-  "cpu_quota": os.environ.get("PILLAR_CPU_QUOTA", ""),
-  "nice": os.environ.get("PILLAR_NICE", ""),
-}
-print(json.dumps(data))
-PY
+    python3 "$RABBIT_HELPER" build
 }
 
 build_remove_pillar_json() {
     PILLAR_SITE_NAME="$SITE_NAME" \
     PILLAR_SITE_PATH="$SITE_PATH" \
     PILLAR_SERVICE_USER="$SERVICE_USER" \
-    python3 - <<'PY'
-import json, os
-data = {
-  "site_name": os.environ["PILLAR_SITE_NAME"],
-  "site_path": os.environ["PILLAR_SITE_PATH"],
-  "service_user": os.environ["PILLAR_SERVICE_USER"],
-}
-print(json.dumps(data))
-PY
+    python3 "$RABBIT_HELPER" remove
 }
 
 build_list_pillar_json() {
     PILLAR_SITE_NAME="$SITE_NAME" \
-    python3 - <<'PY'
-import json, os
-name = os.environ["PILLAR_SITE_NAME"]
-if name == "__ALL__":
-    print(json.dumps({"site_name": None, "list_all": True}))
-else:
-    print(json.dumps({"site_name": name, "list_all": False}))
-PY
+    python3 "$RABBIT_HELPER" list
 }
 
 apply_state() {

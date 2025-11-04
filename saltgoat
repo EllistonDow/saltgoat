@@ -1231,6 +1231,18 @@ case "$1" in
         require_module "fun"
         fun_handler "${@:2}"
         ;;
+    "verify")
+        bash "${SCRIPT_DIR}/scripts/verify.sh"
+        ;;
+    "doctor")
+        bash "${SCRIPT_DIR}/scripts/doctor.sh"
+        ;;
+    "gitops-watch")
+        bash "${SCRIPT_DIR}/scripts/gitops-watch.sh"
+        ;;
+    "doctor")
+        bash "${SCRIPT_DIR}/scripts/doctor.sh"
+        ;;
     "help"|"--help"|"-h"|"")
         show_help "$2"
         ;;

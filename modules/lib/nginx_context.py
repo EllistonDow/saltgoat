@@ -251,6 +251,41 @@ def cmd_ensure_run_context(args: argparse.Namespace) -> None:
         config_path.write_text(new_data, encoding="utf-8")
 
 
+def _load_env_json(var_name: str) -> dict:
+    raw = os.environ.get(var_name, "")
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"{var_name} 解析失败: {exc}\n")
+        sys.exit(1)
+
+
+def cmd_csp_status(args: argparse.Namespace) -> None:
+    data = _load_env_json("JSON_DATA")
+    enabled = bool(data.get("enabled"))
+    level = int(data.get("level") or 0)
+    policy = data.get("policy") or ""
+    if enabled and level:
+        print(f"CSP 已启用，等级 {level}")
+        if policy:
+            print(f"策略: {policy}")
+    else:
+        print("CSP 当前禁用")
+
+
+def cmd_modsecurity_status(args: argparse.Namespace) -> None:
+    data = _load_env_json("JSON_DATA")
+    enabled = bool(data.get("enabled"))
+    level = int(data.get("level") or 0)
+    admin_path = data.get("admin_path") or "/admin"
+    if enabled and level:
+        print(f"ModSecurity 已启用，等级 {level}，后台路径 {admin_path}")
+    else:
+        print("ModSecurity 当前禁用")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="SaltGoat Nginx context helpers")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -298,6 +333,12 @@ def build_parser() -> argparse.ArgumentParser:
     ensure.add_argument("--mode", required=True)
     ensure.add_argument("--ident", required=True)
     ensure.set_defaults(func=cmd_ensure_run_context)
+
+    csp_status = sub.add_parser("csp-status", help="打印 CSP 状态")
+    csp_status.set_defaults(func=cmd_csp_status)
+
+    modsec_status = sub.add_parser("modsecurity-status", help="打印 ModSecurity 状态")
+    modsec_status.set_defaults(func=cmd_modsecurity_status)
 
     return parser
 

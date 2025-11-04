@@ -49,14 +49,36 @@ SaltGoat 现在自带几套易用的小工具，方便在排障或上线演练�
 
 ## Goat Pulse 仪表盘
 - **脚本**：`scripts/goat_pulse.py`
-- **用途**：以 ASCII TUI 连续展示 systemd 服务状态、站点 HTTP 探活、Varnish 命中率和 Fail2ban 当前封禁。
+- **用途**：以 ASCII TUI 连续展示 systemd 服务状态、站点 HTTP 探活、Varnish 命中率和 Fail2ban 当前封禁，可同步产出 Prometheus textfile 指标。
+- **示例**：
+-  ```bash
+-  python3 scripts/goat_pulse.py        # 5 秒刷新一次
+-  python3 scripts/goat_pulse.py --once # 输出一次后退出
+-  python3 scripts/goat_pulse.py -i 2   # 自定义刷新间隔
+-  python3 scripts/goat_pulse.py --metrics-file /var/lib/node_exporter/textfile/saltgoat.prom
+-  python3 scripts/goat_pulse.py --once --plain > /tmp/goat-pulse.txt
+-  ```
+- **提示**：默认输出包含 ANSI 清屏控制符，需落盘/嵌入其他脚本时可追加 `--plain`；`--metrics-file` 会同步写入 Prometheus textfile 指标（配合 node_exporter textfile collector），一次命令即可兼顾终端巡检与监控采集。
+
+## 快速自检（Verify / Doctor）
+- **`saltgoat verify` / `scripts/verify.sh`**：一次性运行 `bash scripts/code-review.sh -a` 与 `python3 -m unittest`，在提交前或 CI 流水线中快速确认 Shell 风格与 Python 单元测试通过。
+- **`saltgoat doctor` / `scripts/doctor.sh`**：调用 Goat Pulse（自动加 `--plain --once`）、磁盘/进程摘要、最近 `alerts.log`，并支持 `--format text|json|markdown`，用于粘贴、自动化采集或生成富文本报告。
 - **示例**：
   ```bash
-  python3 scripts/goat_pulse.py        # 5 秒刷新一次
-  python3 scripts/goat_pulse.py --once # 输出一次后退出，便于采集
-  python3 scripts/goat_pulse.py -i 2   # 自定义刷新间隔
+  sudo saltgoat verify
+  sudo saltgoat doctor --format markdown > /tmp/doctor.md
   ```
-- **提示**：输出包含 ANSI 清屏控制符，如需把结果转存成日志，可加 `--once` 并重定向到文件。
+- **提示**：可以在两个脚本中追加自定义检查（例如 `saltgoat monitor auto-sites --dry-run`）以适配团队流程；Doctor 的 Markdown/JSON 输出也适合粘贴到飞书/Slack/工单系统。
+
+## GitOps Watch
+- **脚本**：`scripts/gitops-watch.sh`
+- **入口**：`saltgoat gitops-watch`
+- **用途**：串行执行 `saltgoat verify` 与 `saltgoat monitor auto-sites --dry-run`，在提交/合并前确保 Shell/Python 测试通过且站点探测 Pillar 可成功生成。
+- **推荐场景**：作为 Git pre-push 钩子或 CI 步骤，及时发现 Pillar 缺失、站点配置错误等问题。
+- **示例**：
+  ```bash
+  sudo saltgoat gitops-watch
+  ```
 
 ## Pillar / Event Helper
 - `modules/lib/monitor_auto_sites.py`：独立执行站点探测与 `salt/pillar/monitoring.sls` 生成任务，支持 `--site-root`、`--nginx-dir`、`--monitor-file`、`--skip-systemctl` 等参数；CLI `saltgoat monitor auto-sites` 正是调用此脚本完成检测。
