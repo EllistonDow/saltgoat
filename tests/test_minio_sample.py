@@ -16,6 +16,7 @@ class MinioSampleTest(unittest.TestCase):
         self.assertIn("root_credentials", cfg)
         self.assertIn("binary_source", cfg)
         self.assertIn("health", cfg)
+        self.assertTrue(cfg["health"].get("verify"))
         self.assertIn("binary_hash", cfg)
         self.assertIn("listen_address", cfg)
         self.assertIn("console_address", cfg)

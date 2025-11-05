@@ -42,6 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 from modules.lib import notification as notif  # type: ignore
+from modules.lib import minio_helper  # type: ignore
 PHP_FPM_POOL_DIR = PHP_FPM_CONFIG.parent
 DEFAULT_THRESHOLDS = {
     "memory": {"notice": 78.0, "warning": 85.0, "critical": 92.0},
@@ -60,6 +61,7 @@ PHP_AUTOSCALE_FILE = RUNTIME_DIR / "php-fpm-pools.json"
 MYSQL_AUTOSCALE_FILE = RUNTIME_DIR / "mysql-autotune.json"
 VALKEY_AUTOSCALE_FILE = RUNTIME_DIR / "valkey-autotune.json"
 VALKEY_CONFIG = Path("/etc/valkey/valkey.conf")
+MINIO_PILLAR = REPO_ROOT / "salt" / "pillar" / "minio.sls"
 
 AUTOSCALE_MIN_INTERVAL = 300  # seconds
 PHP_AUTOSCALE_MAX = 240
@@ -197,6 +199,72 @@ def service_status(services: Iterable[str]) -> Dict[str, bool]:
         except FileNotFoundError:
             continue
     return result
+
+
+def load_minio_health_config() -> Optional[minio_helper.MinioConfig]:
+    try:
+        return minio_helper.load_enabled_config(MINIO_PILLAR)
+    except Exception:
+        return None
+
+
+def probe_minio_health(cfg: minio_helper.MinioConfig) -> Tuple[bool, Dict[str, Any]]:
+    if not cfg.enabled:
+        return False, {"enabled": False}
+    url = cfg.health_url
+    timeout = max(1.0, float(cfg.health_timeout))
+    headers = {"User-Agent": "SaltGoatMinioHealth/1.0"}
+    req = urllib.request.Request(url, headers=headers)
+    context = None
+    if cfg.health_scheme.lower() == "https":
+        if cfg.health_verify:
+            context = ssl.create_default_context()
+        else:
+            context = ssl._create_unverified_context()
+    start = time.time()
+    info: Dict[str, Any] = {
+        "url": url,
+        "timeout": timeout,
+        "service": getattr(cfg, "service_name", "minio"),
+    }
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
+            latency = time.time() - start
+            status = resp.getcode()
+            body = resp.read(64).decode("utf-8", errors="ignore") if status != 200 else ""
+            info.update({"status": status, "latency": round(latency, 3), "body": body, "ok": status == 200})
+            info["severity"] = "INFO" if status == 200 else "WARNING"
+            info["message"] = f"HTTP {status}"
+            return status == 200, info
+    except urllib.error.HTTPError as exc:
+        latency = time.time() - start
+        try:
+            body = exc.read(128).decode("utf-8", errors="ignore")
+        except Exception:
+            body = ""
+        info.update(
+            {
+                "status": exc.code,
+                "latency": round(latency, 3),
+                "body": body,
+                "ok": False,
+                "severity": "CRITICAL",
+                "message": f"HTTP {exc.code}",
+            }
+        )
+        return False, info
+    except Exception as exc:
+        latency = time.time() - start
+        info.update(
+            {
+                "status": None,
+                "latency": round(latency, 3),
+                "ok": False,
+                "severity": "CRITICAL",
+                "message": str(exc),
+            }
+        )
+        return False, info
 
 
 def ensure_runtime_dir() -> None:
@@ -1031,6 +1099,35 @@ def format_html_block(title: str, pairs: List[Tuple[str, str]]) -> Tuple[str, st
     return plain, f"<pre>{html.escape(plain)}</pre>"
 
 
+def notify_minio_health(host_value: str, host_slug: str, info: Dict[str, Any]) -> None:
+    severity = str(info.get("severity", "CRITICAL"))
+    title = f"{severity} MINIO HEALTH"
+    fields: List[Tuple[str, str]] = [
+        ("Host", host_value),
+        ("URL", str(info.get("url", ""))),
+        ("Status", str(info.get("status"))),
+        ("Latency", f"{info.get('latency', 0):.3f}s"),
+        ("Message", str(info.get("message", ""))),
+    ]
+    body = info.get("body")
+    if body:
+        fields.append(("Body", str(body)))
+    plain_block, html_block = format_html_block(title, fields)
+    tag = f"saltgoat/storage/minio/{host_slug}"
+    payload = {
+        "host": host_value,
+        "severity": severity,
+        "tag": tag,
+        **info,
+    }
+    log_to_file("MINIO", tag, payload)
+    thread_id = payload.get("telegram_thread") or notif.get_thread_id(tag)
+    if thread_id is not None:
+        payload["telegram_thread"] = thread_id
+    telegram_notify(tag, html_block, payload, plain_block)
+    emit_salt_event("saltgoat/storage/minio", payload)
+
+
 def get_threshold_overrides() -> Dict[str, Any]:
     if Caller is None:
         return {}
@@ -1124,6 +1221,8 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
     core_services = ["nginx", "php8.3-fpm", "mysql", "valkey", "rabbitmq", "salt-minion"]
     if service_exists("varnish"):
         core_services.append("varnish")
+    if service_exists("minio"):
+        core_services.append("minio")
     services = service_status(core_services)
     failing = [svc for svc, ok in services.items() if not ok]
     if failing:
@@ -1136,6 +1235,22 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         if heal_target in failing:
             auto_ctx.setdefault("services", set()).add(heal_target)
             details.append(f"AUTOHEAL: queued restart for {heal_target}")
+
+    minio_status: Optional[Dict[str, Any]] = None
+    minio_cfg = load_minio_health_config()
+    if minio_cfg:
+        ok, info = probe_minio_health(minio_cfg)
+        minio_status = info
+        if ok:
+            details.append(f"MinIO health OK ({info.get('latency', 0.0):.2f}s)")
+        else:
+            bump("CRITICAL", "MinIO health")
+            msg = info.get("message") or "health check failed"
+            details.append(f"MinIO health failed: {msg}")
+            svc_name = str(info.get("service") or "minio")
+            auto_ctx.setdefault("services", set()).add(svc_name)
+    else:
+        minio_status = {"enabled": False}
 
     fpm_info: Dict[str, Any] = {"pools": {}}
     pool_configs = php_fpm_pool_configs()
@@ -1266,6 +1381,7 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         "mysql": mysql_info,
         "valkey": valkey_info,
         "sites": site_payload,
+        "minio": minio_status,
         "thresholds": {
             "load": thresholds,
             "memory": {"notice": mem_notice, "warning": mem_warn, "critical": mem_crit},
@@ -1374,11 +1490,18 @@ def main() -> None:
                     details.append(f"AUTOSCALE: restart service {service} failed")
             save_service_heal_map(heal_map)
 
+    host_value = payload.get("host", hostname())
+    host_slug = host_value.replace(".", "-").lower()
+    minio_info = payload.get("minio")
+    if isinstance(minio_info, dict):
+        minio_enabled = minio_info.get("enabled", True)
+        minio_ok = minio_info.get("ok", True)
+        if minio_enabled and minio_ok is False:
+            notify_minio_health(host_value, host_slug, minio_info)
+
     if severity in {"WARNING", "CRITICAL"}:
         trigger_text = ", ".join(triggers) if triggers else "load"
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        host_value = payload.get("host", hostname())
-        host_slug = host_value.replace(".", "-").lower()
         fields: List[Tuple[str, str]] = [
             ("Host", host_value),
             ("Trigger", trigger_text),

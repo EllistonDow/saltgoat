@@ -21,6 +21,7 @@ except ImportError as exc:  # pragma: no cover
 class MinioConfig:
     enabled: bool
     binary: str
+    service_name: str
     data_dir: str
     config_dir: str
     listen_host: str
@@ -34,6 +35,7 @@ class MinioConfig:
     health_port: int
     health_endpoint: str
     health_timeout: int
+    health_verify: bool
 
     @property
     def listen_address(self) -> str:
@@ -77,11 +79,13 @@ def build_config(data: Dict[str, Any]) -> MinioConfig:
     health_scheme = health.get("scheme") or ("https" if (cfg.get("tls") or {}).get("enabled") else "http")
     health_endpoint = health.get("endpoint") or "/minio/health/live"
     health_timeout = int(health.get("timeout", 5) or 5)
+    health_verify = bool(health.get("verify", True))
     tls = cfg.get("tls") or {}
     creds = cfg.get("root_credentials") or {}
     return MinioConfig(
         enabled=bool(cfg.get("enabled", True)),
         binary=cfg.get("binary", "/usr/local/bin/minio"),
+        service_name=cfg.get("service_name", "minio"),
         data_dir=cfg.get("data_dir", "/var/lib/minio/data"),
         config_dir=cfg.get("config_dir", "/etc/minio"),
         listen_host=listen_host,
@@ -95,17 +99,21 @@ def build_config(data: Dict[str, Any]) -> MinioConfig:
         health_port=health_port,
         health_endpoint=health_endpoint,
         health_timeout=health_timeout,
+        health_verify=health_verify,
     )
 
 
 def cmd_info(args: argparse.Namespace) -> int:
-    data = _load_pillar(args.pillar)
-    cfg = build_config(data)
+    cfg = load_enabled_config(args.pillar)
+    if cfg is None:
+        print(json.dumps({"enabled": False}))
+        return 0
     print(
         json.dumps(
             {
                 "enabled": cfg.enabled,
                 "binary": cfg.binary,
+                "service": cfg.service_name,
                 "data_dir": cfg.data_dir,
                 "config_dir": cfg.config_dir,
                 "listen": cfg.listen_address,
@@ -114,6 +122,7 @@ def cmd_info(args: argparse.Namespace) -> int:
                 "root_user": cfg.root_user,
                 "health_url": cfg.health_url,
                 "health_timeout": cfg.health_timeout,
+                "health_verify": cfg.health_verify,
             },
             ensure_ascii=False,
         )
@@ -122,10 +131,22 @@ def cmd_info(args: argparse.Namespace) -> int:
 
 
 def cmd_health_url(args: argparse.Namespace) -> int:
-    data = _load_pillar(args.pillar)
-    cfg = build_config(data)
-    print(cfg.health_url)
+    cfg = load_enabled_config(args.pillar)
+    if cfg is None:
+        print("")
+    else:
+        print(cfg.health_url)
     return 0
+
+
+def load_enabled_config(path: Path) -> MinioConfig | None:
+    data = _load_pillar(path)
+    cfg = data.get("minio")
+    if not isinstance(cfg, dict):
+        return None
+    if not cfg.get("enabled", True):
+        return None
+    return build_config(data)
 
 
 def build_parser() -> argparse.ArgumentParser:

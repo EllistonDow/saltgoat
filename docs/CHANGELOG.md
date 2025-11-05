@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.4.9] - 2025-11-05
+
+### Changes
+- 修改 8 个文件: modules/lib/minio_helper.py, modules/monitoring/resource_alert.py, salt/pillar/minio.sls.sample, scripts/goat_pulse.py, scripts/setup-telegram-topics.py 等
+
+
 ## [1.4.8] - 2025-11-05
 
 ### Changes

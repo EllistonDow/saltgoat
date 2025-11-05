@@ -27,7 +27,7 @@ class GoatPulseTests(unittest.TestCase):
             {"site": "tank", "status": "503", "duration": 1.5, "varnish": False},
         ]
         metrics_file = Path(tempfile.mkdtemp()) / "goat.prom"
-        goat_pulse.write_metrics(metrics_file, services, sites, (10, 5, 66.6), 3)
+        goat_pulse.write_metrics(metrics_file, services, sites, (10, 5, 66.6), 3, {"enabled": False})
         content = metrics_file.read_text(encoding="utf-8")
         self.assertIn('saltgoat_service_active{service="nginx"} 1', content)
         self.assertIn('saltgoat_site_http_status{site="tank"} 503', content)
@@ -39,6 +39,7 @@ class GoatPulseTests(unittest.TestCase):
         original_sites = goat_pulse.gather_sites
         original_varnish = goat_pulse.varnish_stats
         original_fail2ban = goat_pulse.fail2ban_summary
+        original_minio = goat_pulse.gather_minio_health
 
         goat_pulse.gather_services = lambda: [
             {"label": "nginx", "unit": "nginx", "state": "active", "enabled": "enabled"}
@@ -48,6 +49,7 @@ class GoatPulseTests(unittest.TestCase):
         ]
         goat_pulse.varnish_stats = lambda: (1, 0, 100.0)
         goat_pulse.fail2ban_summary = lambda: (0, {})
+        goat_pulse.gather_minio_health = lambda: {"enabled": False}
 
         buf = io.StringIO()
         try:
@@ -58,6 +60,7 @@ class GoatPulseTests(unittest.TestCase):
             goat_pulse.gather_sites = original_sites
             goat_pulse.varnish_stats = original_varnish
             goat_pulse.fail2ban_summary = original_fail2ban
+            goat_pulse.gather_minio_health = original_minio
 
         output = buf.getvalue()
         self.assertIn("Goat Pulse @", output)
