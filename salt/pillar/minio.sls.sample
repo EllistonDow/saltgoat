@@ -1,0 +1,24 @@
+minio:
+  enabled: true
+  binary: /usr/local/bin/minio
+  binary_source: https://dl.min.io/server/minio/release/linux-amd64/minio
+  binary_hash: ''  # 可填 sha256=<hash> 以启用校验
+  user: minio
+  group: minio
+  data_dir: /var/lib/minio/data
+  config_dir: /etc/minio
+  listen_address: 0.0.0.0:9000
+  console_address: 0.0.0.0:9001
+  health:
+    scheme: http
+    host: 127.0.0.1
+    port: 9000
+    endpoint: /minio/health/live
+    timeout: 5
+  tls:
+    enabled: false
+    cert: /etc/minio/certs/public.crt
+    key: /etc/minio/certs/private.key
+  root_credentials:
+    access_key: minioadmin
+    secret_key: minioadmin

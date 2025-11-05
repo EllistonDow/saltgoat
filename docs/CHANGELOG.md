@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.4.8] - 2025-11-05
+
+### Changes
+- 修改 13 个文件: docs/ROADMAP_OBJECT_STORAGE.md, modules/lib/minio_helper.py, modules/lib/nginx_pillar.py, modules/minio/minio.sh, salt/pillar/minio.sls.sample 等
+
+
 ## [1.4.7] - 2025-11-05
 
 ### Changes
