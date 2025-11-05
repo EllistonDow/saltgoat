@@ -16,6 +16,14 @@ minio:
     endpoint: /minio/health/live
     timeout: 5
     verify: true
+  proxy:
+    enabled: false
+    domain: ""
+    console_enabled: true
+    console_domain: ""
+    ssl_email: admin@example.com
+    site_id: minio-proxy
+    acme_webroot: /var/lib/saltgoat/minio-proxy/acme
   tls:
     enabled: false
     cert: /etc/minio/certs/public.crt

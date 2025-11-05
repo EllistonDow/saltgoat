@@ -127,8 +127,20 @@ SaltGoat 现在自带几套易用的小工具，方便在排障或上线演练�
 - **扩展监控自愈**：评估扩展到对象存储、Varnish 状态、MinIO 容量告警等场景，与现有 `resource_alert` 协同。
 
 ## MinIO 对象存储（快速开始）
-- Pillar：复制 `salt/pillar/minio.sls.sample` 为 `salt/pillar/minio.sls`，补充 `listen_address`、`root_credentials`，如能提前拿到官方哈希可写入 `binary_hash`（支持 `sha256=<hash>` 格式）。
-- 安装：`saltgoat minio apply`（相当于 `state.apply optional.minio`）会创建用户/目录、生成 `.env`、下载并校验二进制、注册 `minio.service`，当 `.env` 或二进制更新后自动触发重启。
+- Pillar：复制 `salt/pillar/minio.sls.sample` 为 `salt/pillar/minio.sls`，补充 `listen_address`、`root_credentials`，如能提前拿到官方哈希可写入 `binary_hash`（支持 `sha256=<hash>` 格式）；`proxy.*` 字段控制 Nginx 反代域名、证书邮箱、ACME webroot 等。
+- 安装：`saltgoat minio apply`（相当于 `state.apply optional.minio`）会创建用户/目录、生成 `.env`、下载并校验二进制、注册 `minio.service`。附带 `--domain minio.example.com [--console-domain console.example.com --ssl-email ops@example.com --no-console]` 时会自动写 Pillar、调用 `optional.certbot`、渲染 `/etc/nginx/sites-available/<site>` 与证书，完成 HTTPS 反代。
 - 健康检查：`saltgoat minio health` 读取 Pillar 中的 `health.*` 设置调用 `/minio/health/live`，失败会返回非零退出码，适合写入 Salt Schedule / Cron。
 - 资讯：`saltgoat minio info` 输出当前 Pillar 摘要（JSON），`saltgoat minio env` 可快速查看 `/etc/minio/minio.env`。
 - 后续规划详见 `docs/ROADMAP_OBJECT_STORAGE.md`，包括与 Restic/通知集成、容量监控、自愈策略等。
+
+## Docker + Nginx Proxy Manager
+- Pillar：可选地依据 `salt/pillar/docker.sls.sample` 设置 `docker:npm`（安装路径、镜像版本、映射端口、数据库密码等）。
+- 安装：`saltgoat proxy install` 会依次套用 `optional.docker`（Docker Engine + compose plugin）与 `optional.docker-npm`（在 `/opt/saltgoat/docker/npm` 渲染 docker-compose.yml 并执行 `docker compose up -d`）。默认端口：HTTP 8080、HTTPS 8443、面板 9181。
+- 使用：
+  1. 访问 https://<主机>:9181（初始账号 `admin@example.com / changeme`），修改密码后在 Proxy Hosts 中配置域名到实际服务。
+  2. 运行 `saltgoat proxy add example.com` 生成 `/etc/nginx/conf.d/proxy-example.com.conf`，该 server block 自动包含 `/.well-known/acme-challenge/` 透传逻辑，让 Let’s Encrypt 校验直接落到 NPM (127.0.0.1:<http_port>)；NPM 内只需设置真实后端端口即可。
+  3. 一旦证书在宿主 `/etc/letsencrypt/live/example.com/` 或 NPM 数据目录 `/opt/saltgoat/docker/npm/data/letsencrypt/live/<cert>/` 生成，重新执行 `saltgoat proxy add example.com`，脚本会自动引用 fullchain/privkey 并渲染 443 server。后续续期也只需在 NPM 中申请，宿主端重复运行 add 即可同步证书路径。
+- 辅助命令：`saltgoat proxy remove <domain>`（同时清理旧目录遗留配置）、`saltgoat proxy list`、`saltgoat proxy status`（查看 docker compose ps）。适用于把 Goat Pulse、Fail2ban、MinIO Console、Mattermost 等零散服务统一纳管到 NPM，由其 UI/API 负责后端映射。
+
+## 服务总览工具
+- `saltgoat services`：汇总已部署服务（MySQL、Valkey、RabbitMQ、MinIO、Webmin、Nginx Proxy Manager、Cockpit 等），输出访问地址/端口及 Pillar 中配置的默认凭据，方便交接或巡检；支持 `--format json` 供脚本消费。执行时建议使用 `sudo` 以读取受限的 Pillar 文件。

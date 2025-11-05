@@ -125,6 +125,8 @@ register_module "memory" "${SCRIPT_DIR}/monitoring/memory.sh"
 register_module "schedule" "${SCRIPT_DIR}/monitoring/schedule.sh"
 register_module "fun" "${SCRIPT_DIR}/modules/fun/fun.sh"
 register_module "minio" "${SCRIPT_DIR}/modules/minio/minio.sh"
+register_module "proxy" "${SCRIPT_DIR}/modules/proxy/proxy.sh"
+register_module "services" "${SCRIPT_DIR}/modules/services/services.sh"
 
 # 显示横幅
 show_banner
@@ -620,6 +622,14 @@ case "$1" in
     "minio")
         require_module "minio"
         minio_handler "${@:2}"
+        ;;
+    "proxy")
+        require_module "proxy"
+        proxy_handler "${@:2}"
+        ;;
+    "services")
+        require_module "services"
+        services_main "${@:2}"
         ;;
     "backup")
         require_module "backup"

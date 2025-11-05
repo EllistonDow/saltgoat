@@ -68,6 +68,12 @@ show_help() {
         "pwa")
             show_pwa_help
             ;;
+        "proxy")
+            show_proxy_help
+            ;;
+        "services")
+            show_services_help
+            ;;
         "git")
             show_git_help
             ;;
@@ -274,7 +280,7 @@ show_minio_help() {
     echo ""
 
     help_subtitle "部署与配置"
-    help_command "apply"                       "套用 optional.minio，创建用户/目录并注册 systemd 服务"
+    help_command "apply [--domain minio.example.com]" "安装 MinIO；带 --domain 时自动生成 Nginx 反代 + SSL"
     help_command "info"                        "读取 Pillar 并输出 JSON 摘要（监听端口、凭据、健康端点）"
     help_command "env"                         "查看 /etc/minio/minio.env（需 sudo）"
     echo ""
@@ -282,7 +288,33 @@ show_minio_help() {
     help_subtitle "运行维护"
     help_command "health"                      "调用 Pillar 中定义的 /minio/health/* URL，失败即退出非零"
     help_command "status"                      "systemctl status minio（含最近日志）"
-    help_note "可通过变量 MINIO_HEALTH_TIMEOUT=10 saltgoat minio health 调整超时；Pillar 的 health.* 字段可自定义方案/主机/端口/路径。"
+    help_note "apply 额外支持 --console-domain / --ssl-email / --no-console；health 可通过 MINIO_HEALTH_TIMEOUT=10 调整超时。"
+}
+
+show_proxy_help() {
+    help_title "Proxy 管理 (Docker + Nginx Proxy Manager)"
+    echo -e "用法: ${GREEN}saltgoat proxy <command>${NC}"
+    echo ""
+
+    help_subtitle "部署"
+    help_command "install" "安装 Docker Engine / compose plugin 并启动 NPM docker-compose"
+    help_command "status"  "查看 /opt/saltgoat/docker/npm 的 docker compose ps"
+    echo ""
+
+    help_subtitle "域名托管"
+    help_command "add <domain>"    "生成宿主 Nginx 透传配置，将请求交给 NPM (默认 127.0.0.1:8080)"
+    help_command "remove <domain>" "移除对应透传配置并 reload Nginx"
+    help_command "list"            "列出当前托管的域名（/etc/nginx/conf.d/proxy）"
+    help_note "首次访问 NPM 面板: https://<host>:9181 (账号 admin@example.com / changeme)。在 NPM 内配置 Proxy Host -> 真实服务。需要 HTTPS 时，请先用 saltgoat nginx add-ssl 获取证书或让域名直接指向 NPM。"
+}
+
+show_services_help() {
+    help_title "服务总览"
+    echo -e "用法: ${GREEN}saltgoat services [--format table|json]${NC}"
+    echo ""
+    help_command "(默认)" "输出主要服务的地址、用户名与密码"
+    help_command "--format json" "以 JSON 形式返回，便于脚本集成"
+    help_note "建议以 root (sudo) 执行，读取 Pillar 中的真实凭据。"
 }
 
 # Nginx帮助

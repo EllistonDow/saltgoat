@@ -1,0 +1,30 @@
+services:
+  app:
+    image: {{ npm_image }}
+    restart: unless-stopped
+    ports:
+      - "{{ http_port }}:80"
+      - "{{ https_port }}:443"
+      - "{{ admin_port }}:81"
+    environment:
+      DB_MYSQL_HOST: db
+      DB_MYSQL_PORT: 3306
+      DB_MYSQL_USER: npm
+      DB_MYSQL_PASSWORD: {{ db_password }}
+      DB_MYSQL_NAME: npm
+    volumes:
+      - {{ data_dir }}/data:/data
+      - {{ data_dir }}/letsencrypt:/etc/letsencrypt
+    depends_on:
+      - db
+
+  db:
+    image: {{ db_image }}
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: {{ db_password }}
+      MYSQL_DATABASE: npm
+      MYSQL_USER: npm
+      MYSQL_PASSWORD: {{ db_password }}
+    volumes:
+      - {{ db_dir }}:/var/lib/mysql

@@ -6,6 +6,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+import yaml
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "modules" / "lib" / "minio_helper.py"
@@ -93,6 +95,23 @@ class MinioHelperCLITest(unittest.TestCase):
     def test_load_enabled_config_disabled(self) -> None:
         cfg = minio_helper.load_enabled_config(self.disabled)
         self.assertIsNone(cfg)
+
+    def test_set_proxy_command_updates_pillar(self) -> None:
+        self.run_cli(
+            "set-proxy",
+            "--domain",
+            "minio.example.com",
+            "--ssl-email",
+            "ops@example.com",
+            "--site-id",
+            "minio-edge",
+        )
+        data = yaml.safe_load(self.pillar.read_text(encoding="utf-8"))
+        proxy = data["minio"]["proxy"]
+        self.assertTrue(proxy["enabled"])
+        self.assertEqual(proxy["domain"], "minio.example.com")
+        self.assertEqual(proxy["ssl_email"], "ops@example.com")
+        self.assertEqual(proxy["site_id"], "minio-edge")
 
 
 if __name__ == "__main__":

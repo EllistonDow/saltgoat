@@ -8,7 +8,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 try:
     import yaml  # type: ignore
@@ -54,6 +54,11 @@ def _load_pillar(path: Path) -> Dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("pillar must be a mapping")
     return data
+
+
+def _save_pillar(path: Path, data: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
 def _parse_address(value: str, default_port: int) -> tuple[str, int]:
@@ -139,6 +144,18 @@ def cmd_health_url(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_set_proxy(args: argparse.Namespace) -> int:
+    update_proxy(
+        args.pillar,
+        domain=args.domain,
+        console_domain=args.console_domain,
+        ssl_email=args.ssl_email,
+        console_enabled=not args.disable_console,
+        site_id=args.site_id,
+    )
+    return 0
+
+
 def load_enabled_config(path: Path) -> MinioConfig | None:
     data = _load_pillar(path)
     cfg = data.get("minio")
@@ -147,6 +164,34 @@ def load_enabled_config(path: Path) -> MinioConfig | None:
     if not cfg.get("enabled", True):
         return None
     return build_config(data)
+
+
+def update_proxy(path: Path, *, domain: Optional[str], console_domain: Optional[str], ssl_email: Optional[str], console_enabled: bool, site_id: Optional[str]) -> None:
+    data = _load_pillar(path)
+    minio = data.setdefault("minio", {})
+    proxy = minio.setdefault("proxy", {})
+    if domain:
+        proxy["enabled"] = True
+        proxy["domain"] = domain
+        proxy["console_enabled"] = console_enabled
+        if console_domain:
+            proxy["console_domain"] = console_domain
+        elif console_enabled:
+            proxy.setdefault("console_domain", domain)
+        else:
+            proxy["console_domain"] = ""
+        if ssl_email:
+            proxy["ssl_email"] = ssl_email
+        proxy.setdefault("acme_webroot", "/var/lib/saltgoat/minio-proxy/acme")
+        if site_id:
+            proxy["site_id"] = site_id
+        else:
+            slug = domain.replace(".", "-")
+            proxy.setdefault("site_id", f"minio-{slug}")
+        minio.setdefault("proxy", proxy)
+    else:
+        proxy["enabled"] = False
+    _save_pillar(path, data)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -164,6 +209,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     health = sub.add_parser("health-url", help="输出健康检查 URL")
     health.set_defaults(func=cmd_health_url)
+
+    proxy = sub.add_parser("set-proxy", help="更新 MinIO 代理域名配置")
+    proxy.add_argument("--domain", required=False, help="公网域名 (例如 minio.example.com)")
+    proxy.add_argument("--console-domain", help="控制台域名，可选")
+    proxy.add_argument("--ssl-email", help="申请证书邮箱，可选")
+    proxy.add_argument("--site-id", help="Nginx 站点 ID，可选")
+    proxy.add_argument("--disable-console", action="store_true", help="禁用 MinIO Console 反代")
+    proxy.set_defaults(func=cmd_set_proxy)
 
     return parser
 

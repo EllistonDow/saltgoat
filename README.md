@@ -54,10 +54,21 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 
 ### ☁️ 对象存储（MinIO）
 
-- `saltgoat minio apply`：调用 `optional.minio` 将用户、目录、环境文件与 systemd 服务补齐，并在提供 `binary_hash` 时启用下载校验。
+- `saltgoat minio apply [--domain minio.example.com --console-domain console.example.com --ssl-email ops@example.com --no-console]`：安装 MinIO 并自动写入 Nginx 反代与 Let’s Encrypt 证书（未传 `--domain` 时仅部署后台服务）。
 - `saltgoat minio health`：依据 Pillar 里的 `health.*` 生成 `/minio/health/live` URL 并发出请求，适合写入 Salt Schedule / CI 以确认服务可用。
 - `saltgoat minio info|env`：分别打印 Pillar 摘要（JSON）与 `/etc/minio/minio.env`，方便核对凭据、端口与 TLS 设置。
-- Pillar 模板 `salt/pillar/minio.sls.sample` 现新增 `binary_source`、`binary_hash`、`health` 字段，可直接粘贴 MinIO 官方 SHA256 或自定义健康主机/端口/路径。
+- Pillar 模板 `salt/pillar/minio.sls.sample` 现新增 `binary_source`、`binary_hash`、`health`、`proxy` 等字段，可直接粘贴 MinIO 官方 SHA256、自定义健康主机，以及控制反代站点/ACME Webroot。
+
+### 🧩 Docker + Nginx Proxy Manager
+
+- `saltgoat proxy install`：套用 `optional.docker` + `optional.docker-npm`，在 `/opt/saltgoat/docker/npm` 启动 docker compose（HTTP 8080、HTTPS 8443、面板 9181，可在 Pillar `docker:npm` 中自定义）。
+- 面板初始账号 `admin@example.com / changeme`，访问 https://<宿主>:9181 立即修改。
+- `saltgoat proxy add example.com`：生成 `/etc/nginx/conf.d/proxy-example.com.conf`，自动包含 `/.well-known/acme-challenge/` 透传，使 Let’s Encrypt 校验落到 NPM（127.0.0.1:<http port>）；证书申请完毕后重新执行同一命令，脚本会自动检测 `/etc/letsencrypt/live/<domain>` 或 NPM 数据目录 `/opt/saltgoat/docker/npm/data/letsencrypt/live/<cert>/`，并渲染 443 server 引用对应 fullchain/privkey。NPM 内部仅需配置 Proxy Host → 后端端口，无需重复导入证书。
+- `saltgoat proxy remove/list/status`：管理透传域名并查看 docker compose 状态，适合把 Goat Pulse / Fail2ban / MinIO Console / 自建面板等零散服务统一纳管。
+
+### 🗃 服务总览
+
+- `saltgoat services [--format json]`：读取 Pillar 与当前配置，列出数据库、缓存、RabbitMQ、MinIO、Webmin、Nginx Proxy Manager 等关键服务的访问地址、端口及默认凭据，便于交接或巡检（建议以 sudo 执行）。
 
 ---
 

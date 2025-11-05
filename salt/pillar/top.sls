@@ -50,3 +50,4 @@ base:
     - mysql-backup
     - notifications
     - telegram-topics
+    - docker
