@@ -157,6 +157,45 @@ with open(path, 'r+', encoding='utf-8') as f:
 PY
 }
 
+clean_python_bytecode() {
+    local repo_root="$1"
+    local -a staged=()
+    local -a to_unstage=()
+    local path
+
+    mapfile -t staged < <(cd "$repo_root" && git diff --cached --name-only 2>/dev/null)
+    for path in "${staged[@]}"; do
+        if [[ "$path" == *.pyc || "$path" == *.pyo || "$path" == *.pyd || "$path" == *"__pycache__"* ]]; then
+            to_unstage+=("$path")
+        fi
+    done
+
+    if ((${#to_unstage[@]} > 0)); then
+        log_warning "检测到已暂存的 Python 字节码/缓存文件，自动从索引移除："
+        for path in "${to_unstage[@]}"; do
+            log_warning "  - $path"
+            (cd "$repo_root" && git reset HEAD -- "$path" >/dev/null 2>&1) || true
+            if (cd "$repo_root" && git ls-files --error-unmatch "$path" >/dev/null 2>&1); then
+                (cd "$repo_root" && git rm --cached --quiet -- "$path" >/dev/null 2>&1) || true
+            fi
+        done
+        log_note "已自动处理上述文件，如需彻底删除请手动清理工作区。"
+    fi
+
+    local tracked
+    tracked=$(cd "$repo_root" && git ls-files -z '*.py[co]' '*.pyd' '*__pycache__*' 2>/dev/null | tr '\0' '\n')
+    if [[ -n "$tracked" ]]; then
+        log_warning "仓库中仍存在已跟踪的 Python 缓存文件，请确认是否需要保留："
+        while IFS= read -r path; do
+            [[ -n "$path" ]] && log_warning "  - $path"
+        done <<< "$tracked"
+        log_warning "若不应存在，可执行：git rm --cached <file>"
+        return 1
+    fi
+
+    return 0
+}
+
 run_git_release() {
     local dry_run="$1"
     shift || true
@@ -283,8 +322,18 @@ run_git_release() {
     (
         cd "$repo_root" || exit 1
 
+        if ! clean_python_bytecode "$repo_root"; then
+            log_warning "检测到 Python 缓存文件需要清理，请处理后重新执行。"
+            exit 1
+        fi
+
         git add --update
         git add docs/CHANGELOG.md saltgoat
+
+        if ! clean_python_bytecode "$repo_root"; then
+            log_warning "自动清理仍检测到 Python 缓存文件，请处理后重试。"
+            exit 1
+        fi
 
         if git diff --cached --quiet; then
             log_error "暂存区没有检测到改动，请确认是否执行了 git add。"

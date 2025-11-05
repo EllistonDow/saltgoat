@@ -37,6 +37,10 @@ erl_crash.dump
 *.o
 *.so
 *.a
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
 
 # IDE 文件
 .vscode/
