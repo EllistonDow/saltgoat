@@ -135,23 +135,10 @@ handle_script_list() {
     fi
 
     log_highlight "自动化脚本列表"
-    JSON_PAYLOAD="$json" python3 - <<'PY'
-import json
-import os
-
-payload = json.loads(os.environ["JSON_PAYLOAD"])
-result = next(iter(payload.values()))
-scripts = result.get("scripts") or []
-
-if not scripts:
-    print("暂无脚本，可使用 'saltgoat automation script create <name>' 创建。")
-else:
-    for item in scripts:
-        print(f"- {item.get('name')}")
-        print(f"  路径: {item.get('path')}")
-        print(f"  修改时间: {item.get('modified')}")
-        print(f"  大小: {item.get('size')} 字节")
-PY
+    if ! python3 "$AUTOMATION_HELPER" render-scripts --json "$json"; then
+        log_error "解析脚本列表失败。"
+        exit 1
+    fi
 }
 
 handle_script_edit() {
@@ -369,32 +356,10 @@ handle_job_list() {
     fi
 
     log_highlight "自动化任务列表"
-    JSON_PAYLOAD="$json" python3 - <<'PY'
-import json
-import os
-
-payload = json.loads(os.environ["JSON_PAYLOAD"])
-result = next(iter(payload.values()))
-jobs = result.get("jobs") or []
-
-if not jobs:
-    print("暂无任务，可使用 'saltgoat automation job create ...' 创建。")
-else:
-    for item in jobs:
-        name = item.get("name")
-        enabled = "已启用" if item.get("enabled") else "已禁用"
-        backend = item.get("backend")
-        active = "运行中" if item.get("active") else "未调度"
-        warning = " ⚠ 脚本缺失" if item.get("script_missing") else ""
-        print(f"- {name} [{enabled}/{backend}] {active}{warning}")
-        print(f"  Cron: {item.get('cron')}")
-        script_path = item.get("script_path")
-        if script_path:
-            print(f"  脚本: {script_path}")
-        last_run = item.get("last_run")
-        if last_run:
-            print(f"  最近执行: {last_run} (retcode={item.get('last_retcode')})")
-PY
+    if ! python3 "$AUTOMATION_HELPER" render-jobs --json "$json"; then
+        log_error "解析任务列表失败。"
+        exit 1
+    fi
 }
 
 handle_logs_list() {

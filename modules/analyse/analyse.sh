@@ -26,11 +26,7 @@ generate_random_password() {
     if command -v openssl >/dev/null 2>&1; then
         openssl rand -base64 24 | tr -d '\n'
     else
-        python3 - <<'PY'
-import secrets, string
-alphabet = string.ascii_letters + string.digits
-print(''.join(secrets.choice(alphabet) for _ in range(24)))
-PY
+        python3 "$ANALYSE_HELPER" random-password --length 24
     fi
 }
 
@@ -436,50 +432,28 @@ analyse_install_matomo() {
     fi
 
     if [[ "$override_needed" == "true" ]]; then
-        pillar_override=$(MATOMO_INSTALL_DIR="$install_dir" \
-            MATOMO_DOMAIN="$domain" \
-            MATOMO_PHP_SOCKET="$php_socket" \
-            MATOMO_OWNER="$owner" \
-            MATOMO_GROUP="$group" \
-            MATOMO_DB_ENABLED="$db_enabled" \
-            MATOMO_DB_NAME="$db_name" \
-            MATOMO_DB_USER="$db_user" \
-            MATOMO_DB_PASSWORD="$db_password" \
-            MATOMO_DB_HOST="$db_host" \
-            MATOMO_DB_SOCKET="$db_socket" \
-            MATOMO_DB_PROVIDER="$db_provider" \
-            MATOMO_DB_ADMIN_USER="$db_admin_user" \
-            MATOMO_DB_ADMIN_PASSWORD="$db_admin_password" \
-            python3 - <<'PY'
-import json
-import os
-
-data = {
-    "matomo": {
-        "install_dir": os.environ.get("MATOMO_INSTALL_DIR", "/var/www/matomo"),
-        "domain": os.environ.get("MATOMO_DOMAIN", "matomo.local"),
-        "php_fpm_socket": os.environ.get("MATOMO_PHP_SOCKET", "/run/php/php8.3-fpm.sock"),
-        "owner": os.environ.get("MATOMO_OWNER", "www-data"),
-        "group": os.environ.get("MATOMO_GROUP", "www-data"),
-    }
-}
-
-if os.environ.get("MATOMO_DB_ENABLED", "false").lower() == "true":
-    data["matomo"]["db"] = {
-        "enabled": True,
-        "name": os.environ.get("MATOMO_DB_NAME", "matomo"),
-        "user": os.environ.get("MATOMO_DB_USER", "matomo"),
-        "password": os.environ.get("MATOMO_DB_PASSWORD", ""),
-        "host": os.environ.get("MATOMO_DB_HOST", "localhost"),
-        "socket": os.environ.get("MATOMO_DB_SOCKET", "/var/run/mysqld/mysqld.sock"),
-        "provider": os.environ.get("MATOMO_DB_PROVIDER", "existing"),
-        "admin_user": os.environ.get("MATOMO_DB_ADMIN_USER", "root"),
-        "admin_password": os.environ.get("MATOMO_DB_ADMIN_PASSWORD", ""),
-    }
-
-print(json.dumps(data))
-PY
-)
+        local args=(
+            "matomo-override"
+            "--install-dir" "$install_dir"
+            "--domain" "$domain"
+            "--php-socket" "$php_socket"
+            "--owner" "$owner"
+            "--group" "$group"
+        )
+        if [[ "$db_enabled" == "true" ]]; then
+            args+=(
+                "--db-enabled"
+                "--db-name" "$db_name"
+                "--db-user" "$db_user"
+                "--db-password" "$db_password"
+                "--db-host" "$db_host"
+                "--db-socket" "$db_socket"
+                "--db-provider" "$db_provider"
+                "--db-admin-user" "$db_admin_user"
+                "--db-admin-password" "$db_admin_password"
+            )
+        fi
+        pillar_override=$(python3 "$ANALYSE_HELPER" "${args[@]}")
     fi
 
     local apply_status

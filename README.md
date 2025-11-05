@@ -43,12 +43,21 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - `salt/states/optional/magento-schedule.sls` 默认下发每日 `saltgoat monitor report daily` 与 `saltgoat magetools schedule auto`，确保巡检与计划任务长期收敛。
 - `saltgoat pillar backup` 一键将 `salt/pillar` 打包到 `/var/lib/saltgoat/pillar-backups/`，配合版本库和外部存储实现配置留痕。
 - `saltgoat verify` 运行 `scripts/code-review.sh -a` 与 `python3 -m unittest`，适合作为本地 Git hook 或 CI 预检命令，确保脚本/单元测试通过后再发布。
-- `saltgoat gitops-watch` 在 Git hook 或 CI 中统一执行 `saltgoat verify`、`saltgoat monitor auto-sites --dry-run` 并检测 Git 配置漂移，提前发现渲染/站点探测问题，避免把脏 Pillar 或未同步分支带入生产。
+- `saltgoat gitops-watch` 在 Git hook 或 CI 中统一执行 `saltgoat verify`、`saltgoat monitor auto-sites --dry-run` 并检测 Git 配置漂移，提前发现渲染/站点探测问题，避免把脏 Pillar 或未同步分支带入生产；输出若提示 `Behind > 0` 先 `git pull --rebase origin master`，如列出 `__pycache__/` 或 `*.pyc` 即执行 `git rm --cached <file>` 后重试。
+- `python3 modules/lib/nginx_pillar.py --pillar salt/pillar/nginx.sls create --site bank --domains bank.example.com` 等子命令可直接管理站点/SSL/CSP/ModSecurity Pillar，`saltgoat nginx ...` 内部已调用同一 CLI，便于脚本化集成。
+- `python3 modules/lib/pwa_helpers.py load-config --config salt/pillar/magento-pwa.sls --site bank` 输出 JSON/ENV 组合，辅助 `saltgoat pwa install` 完成自动化；同一 helper 还提供 `ensure-env-default`, `sanitize-checkout`, `patch-product-fragment` 等命令，方便单独调试 PWA Studio 覆盖。
 - `saltgoat smoke-suite` 快速冒烟：依次执行 `verify`、`monitor auto-sites --dry-run`、`monitor quick-check` 与 `doctor --format markdown`，产出 `/tmp/saltgoat-doctor-*.md` 报告用于留痕。
 - `saltgoat doctor --format text|json|markdown` 输出 Goat Pulse + 磁盘/进程/告警快照，可直接生成 CLI 文本、JSON 供自动化消费，或 Markdown 片段方便贴到工单。
 - `scripts/goat_pulse.py --plain --metrics-file /var/lib/saltgoat/goat-pulse.prom` 既能在终端显示 ASCII 面板，也能禁用 ANSI 清屏供 `saltgoat doctor` / 日志抓取，同时导出 Prometheus 兼容指标。
 - `python3 modules/lib/nginx_context.py site-metadata --site <name> --pillar salt/pillar/nginx.sls` 输出站点根目录、server_name、Varnish/HTTPS 标记与 Magento run context，供 `monitor auto-sites`、`magetools varnish` 以及外部脚本统一解析。
 - `modules/lib/salt_event.py`：统一封装 Salt Event 发送逻辑（`python3 modules/lib/salt_event.py send --tag saltgoat/test key=value`），shell 脚本会自动回落到 `salt-call event.send`，便于在没有 `salt.client` 的环境里保持行为一致。
+
+### ☁️ 对象存储（MinIO）
+
+- `saltgoat minio apply`：调用 `optional.minio` 将用户、目录、环境文件与 systemd 服务补齐，并在提供 `binary_hash` 时启用下载校验。
+- `saltgoat minio health`：依据 Pillar 里的 `health.*` 生成 `/minio/health/live` URL 并发出请求，适合写入 Salt Schedule / CI 以确认服务可用。
+- `saltgoat minio info|env`：分别打印 Pillar 摘要（JSON）与 `/etc/minio/minio.env`，方便核对凭据、端口与 TLS 设置。
+- Pillar 模板 `salt/pillar/minio.sls.sample` 现新增 `binary_source`、`binary_hash`、`health` 字段，可直接粘贴 MinIO 官方 SHA256 或自定义健康主机/端口/路径。
 
 ---
 

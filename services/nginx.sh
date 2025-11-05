@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_ROOT="${SCRIPT_DIR}"
 PILLAR_FILE="${PROJECT_ROOT}/salt/pillar/nginx.sls"
 NGINX_CONTEXT="${PROJECT_ROOT}/modules/lib/nginx_context.py"
+NGINX_PILLAR_HELPER="${PROJECT_ROOT}/modules/lib/nginx_pillar.py"
 
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/logger.sh"
@@ -67,24 +68,9 @@ cleanup_site_files() {
 
 detect_magento_admin_path() {
     local roots
-    roots=$(PILLAR_FILE="${PILLAR_FILE}" python3 <<'PY'
-import os
-import yaml
-from pathlib import Path
-
-pillar = Path(os.environ.get("PILLAR_FILE", ""))
-if not pillar.exists():
-    exit()
-
-data = yaml.safe_load(pillar.read_text()) or {}
-sites = (data.get("nginx") or {}).get("sites") or {}
-for name, site in sites.items():
-    if isinstance(site, dict) and site.get("magento"):
-        root = site.get("root") or f"/var/www/{name}"
-        if root:
-            print(root)
-PY
-)
+    if ! roots=$(pillar_cli magento-roots 2>/dev/null); then
+        roots=""
+    fi
     local default_path="/admin_tattoo"
     local root
     while IFS= read -r root; do
@@ -143,110 +129,36 @@ EOF
     fi
 }
 
-read_pillar_value() {
-    local key_path="${KEY_PATH:-$1}"
-    env KEY_PATH="$key_path" PILLAR_FILE="${PILLAR_FILE}" python3 <<'PY' 2>/dev/null
-import os
-import yaml
-from pathlib import Path
-
-pillar_path = Path(os.environ.get("PILLAR_FILE", ""))
-key_path = os.environ.get("KEY_PATH", "")
-
-if not pillar_path.exists():
-    exit(0)
-
-data = yaml.safe_load(pillar_path.read_text()) or {}
-
-def get_by_path(d, path):
-    parts = path.split(":")
-    cur = d
-    for part in parts:
-        if not isinstance(cur, dict) or part not in cur:
-            return None
-        cur = cur[part]
-    return cur
-
-value = get_by_path(data, key_path)
-if value is not None:
-    import json
-    print(json.dumps(value))
-PY
-}
-
-collect_site_info() {
-    local site="$1"
-    SITE="$site" PILLAR_FILE="$PILLAR_FILE" python3 <<'PY'
-import json
-import os
-import yaml
-from pathlib import Path
-
-pillar_path = Path(os.environ.get("PILLAR_FILE", ""))
-site_name = os.environ.get("SITE", "")
-
-data = {}
-if pillar_path.exists():
-    try:
-        data = yaml.safe_load(pillar_path.read_text()) or {}
-    except Exception:
-        data = {}
-
-nginx = data.get("nginx") or {}
-site_cfg = (nginx.get("sites") or {}).get(site_name, {}) if site_name else {}
-
-root = site_cfg.get("root") or nginx.get("default_site_root") or (f"/var/www/{site_name}" if site_name else "/var/www/html")
-domains = site_cfg.get("server_name") or []
-if not domains and site_name:
-    domains = [site_name]
-email = site_cfg.get("ssl_email") or data.get("ssl_email") or nginx.get("ssl_email") or ""
-magento_flag = bool(site_cfg.get("magento"))
-ssl_webroot = site_cfg.get("ssl_webroot", "")
-
-print(json.dumps({
-    "root": root,
-    "domains": domains,
-    "email": email,
-    "magento": magento_flag,
-    "ssl_webroot": ssl_webroot,
-}))
-PY
-}
-
 ensure_ssl_certificate() {
     local site="$1"
     local override_domain="${2:-}"
 
-    local info_json
-    if ! info_json=$(collect_site_info "$site"); then
-        log_warning "无法读取站点 ${site} 的配置信息，跳过证书申请。"
-        return 1
+    local info_env
+    if ! info_env=$(pillar_cli site-info --site "$site" --format env 2>/dev/null); then
+        info_env=""
     fi
 
-    if [[ -z "$info_json" ]]; then
+    if [[ -z "$info_env" ]]; then
         log_warning "站点 ${site} 配置信息为空，跳过证书申请。"
         return 1
     fi
 
-    local root_path fallback_root
-    local ssl_email configured_webroot
-    local magento_flag
-    local -a domains=()
+    local fallback_root=""
+    local magento_flag="0"
+    local ssl_email=""
+    local configured_webroot=""
+    local domains_csv=""
+    while IFS='=' read -r key value; do
+        case "$key" in
+            root) fallback_root="$value" ;;
+            domains) domains_csv="$value" ;;
+            email) ssl_email="$value" ;;
+            magento) magento_flag="$value" ;;
+            ssl_webroot) configured_webroot="$value" ;;
+        esac
+    done <<<"$info_env"
 
-    read -r fallback_root magento_flag ssl_email configured_webroot <<<"$(python3 - "$info_json" <<'PY'
-import json, sys
-data = json.loads(sys.argv[1])
-root = data.get("root", "")
-magento = data.get("magento", False)
-email = data.get("email", "")
-webroot = data.get("ssl_webroot", "")
-print(root)
-print("1" if magento else "0")
-print(email)
-print(webroot)
-PY
-)"
-
+    local root_path=""
     if [[ -n "$configured_webroot" ]]; then
         root_path="$configured_webroot"
     elif [[ "$magento_flag" == "1" ]]; then
@@ -259,14 +171,10 @@ PY
         root_path="/var/www/${site}"
     fi
 
-    mapfile -t domains < <(python3 - "$info_json" <<'PY'
-import json, sys
-data = json.loads(sys.argv[1])
-for item in data.get("domains", []) or []:
-    if item:
-        print(item)
-PY
-)
+    local -a domains=()
+    if [[ -n "$domains_csv" ]]; then
+        IFS=',' read -ra domains <<<"$domains_csv"
+    fi
 
     if [[ -n "$override_domain" ]]; then
         domains=("$override_domain" "${domains[@]}")
@@ -334,219 +242,13 @@ PY
     return 1
 }
 
-python_update() {
-    local mode="$1"; shift
-    local site_arg="${1:-}"
-    local domains_arg="${2:-}"
-    local root_arg="${3:-}"
-    local email_arg="${4:-}"
-    local ssl_arg="${5:-}"
-    local magento_env="${6:-}"
-    local -a env_vars=(
-        "MODE=${mode}"
-        "PILLAR_FILE=${PILLAR_FILE}"
-        "SITE=${site_arg}"
-        "DOMAINS=${domains_arg}"
-        "ROOT_PATH=${root_arg}"
-        "EMAIL=${email_arg}"
-        "SSL_DOMAIN=${ssl_arg}"
-    )
-    if [[ -n "$magento_env" ]]; then
-        env_vars+=("MAGENTO_FLAG=${magento_env}")
-    fi
-    if [[ -n "${CSP_LEVEL:-}" ]]; then
-        env_vars+=("CSP_LEVEL=${CSP_LEVEL}")
-    fi
-    if [[ -n "${MODSEC_LEVEL:-}" ]]; then
-        env_vars+=("MODSEC_LEVEL=${MODSEC_LEVEL}")
-    fi
-    if [[ -n "${MODSEC_ADMIN_PATH:-}" ]]; then
-        env_vars+=("MODSEC_ADMIN_PATH=${MODSEC_ADMIN_PATH}")
-    fi
-    if [[ -n "${CSP_ENABLED:-}" ]]; then
-        env_vars+=("CSP_ENABLED=${CSP_ENABLED}")
-    fi
-    if [[ -n "${MODSEC_ENABLED:-}" ]]; then
-        env_vars+=("MODSEC_ENABLED=${MODSEC_ENABLED}")
-    fi
-    env "${env_vars[@]}" python3 <<'PY'
-import os
-import sys
-from pathlib import Path
-
-try:
-    import yaml  # type: ignore
-except ImportError:
-    sys.stderr.write("PyYAML 未安装，无法管理 Nginx pillar。\n")
-    sys.exit(1)
-
-pillar_path = Path(os.environ["PILLAR_FILE"])
-mode = os.environ["MODE"]
-site = os.environ.get("SITE") or ""
-domains = os.environ.get("DOMAINS", "")
-root_path = os.environ.get("ROOT_PATH") or ""
-email = os.environ.get("EMAIL") or ""
-ssl_domain = os.environ.get("SSL_DOMAIN") or ""
-magento_flag = os.environ.get("MAGENTO_FLAG") == "1"
-
-if pillar_path.exists():
-    data = yaml.safe_load(pillar_path.read_text()) or {}
-else:
-    data = {}
-
-nginx = data.setdefault("nginx", {})
-sites = nginx.setdefault("sites", {})
-
-def save():
-    pillar_path.write_text(
-        yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
-    )
-
-if mode == "create":
-    if not site or not domains:
-        sys.stderr.write("站点与域名均为必填。\n")
-        sys.exit(1)
-    if site in sites:
-        sys.stderr.write(f"站点 {site} 已存在。\n")
-        sys.exit(1)
-    domains_list = [d for d in domains.split() if d]
-    if not domains_list:
-        sys.stderr.write("至少提供一个域名。\n")
-        sys.exit(1)
-    root = root_path or f"/var/www/{site}"
-    sites[site] = {
-        "enabled": True,
-        "server_name": domains_list,
-        "listen": [{"port": 80}],
-        "root": root,
-        "index": ["index.php", "index.html"],
-        "php": {
-            "enabled": True,
-            "fastcgi_pass": "unix:/run/php/php8.3-fpm.sock",
-        },
-        "headers": {
-            "X-Frame-Options": "SAMEORIGIN",
-            "X-Content-Type-Options": "nosniff",
-        },
-    }
-    if magento_flag:
-        sites[site]["magento"] = True
-    save()
-elif mode == "delete":
-    if site not in sites:
-        sys.stderr.write(f"站点 {site} 不存在。\n")
-        sys.exit(1)
-    del sites[site]
-    save()
-elif mode in {"enable", "disable"}:
-    if site not in sites:
-        sys.stderr.write(f"站点 {site} 不存在。\n")
-        sys.exit(1)
-    sites[site]["enabled"] = mode == "enable"
-    save()
-elif mode == "ssl":
-    if site not in sites:
-        sys.stderr.write(f"站点 {site} 不存在。\n")
-        sys.exit(1)
-    candidates = sites[site].get("server_name", [])
-    domain = ssl_domain or (candidates[0] if candidates else "")
-    if not domain:
-        sys.stderr.write("未找到可用于 SSL 的域名。\n")
-        sys.exit(1)
-    cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
-    key_path = f"/etc/letsencrypt/live/{domain}/privkey.pem"
-    ssl = sites[site].setdefault("ssl", {})
-    ssl.update(
-        {
-            "enabled": True,
-            "cert": cert_path,
-            "key": key_path,
-            "protocols": "TLSv1.2 TLSv1.3",
-            "prefer_server_ciphers": False,
-        }
-    )
-    listen = sites[site].setdefault("listen", [{"port": 80}])
-    # 标准化条目方便去重
-    normalized = []
-    for entry in listen:
-        if isinstance(entry, dict):
-            port = entry.get("port")
-            opts = {
-                "ssl": entry.get("ssl", False),
-                "options": entry.get("options"),
-            }
-            normalized.append((port, opts))
-            entry.pop("http2", None)
-            entry.pop("http_2", None)
-        else:
-            normalized.append((entry, {"ssl": False, "options": None}))
-
-    has_ssl_port = any(item[0] == 443 and item[1].get("ssl") for item in normalized)
-    if not has_ssl_port:
-        listen.append({"port": 443, "ssl": True})
-
-    # 确保 HTTP 监听存在，若缺失则补充 80
-    if not any(item[0] == 80 for item in normalized):
-        listen.insert(0, {"port": 80})
-
-    # 启用 HTTPS 重定向（可由 Pillar 使用 ssl.redirect=False 关闭）
-    ssl.setdefault("redirect", True)
-    if email:
-        nginx["ssl_email"] = email
-    save()
-elif mode == "csp_level":
-    levels = {
-        1: "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'",
-        2: "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-        3: "default-src 'self' http: https: data: blob: 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'",
-        4: "default-src 'self' http: https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' http: https: data:; font-src 'self' http: https: data:",
-        5: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' http: https: data:; font-src 'self' http: https: data:; connect-src 'self' http: https:; frame-src 'self'"
-    }
-    level = int(os.environ.get("CSP_LEVEL", "0") or 0)
-    enabled_flag = os.environ.get("CSP_ENABLED")
-    csp_cfg = nginx.setdefault("csp", {})
-    if level <= 0 or enabled_flag == "0":
-        csp_cfg.update({"enabled": False, "level": 0, "policy": ""})
-    else:
-        if level not in levels:
-            sys.stderr.write(f"不支持的 CSP 等级: {level}\n")
-            sys.exit(1)
-        csp_cfg.update({"enabled": True, "level": level, "policy": levels[level]})
-    save()
-elif mode == "modsecurity_level":
-    level_raw = os.environ.get("MODSEC_LEVEL", "0") or "0"
-    try:
-        level = int(level_raw)
-    except ValueError:
-        sys.stderr.write(f"无效的 ModSecurity 等级: {level_raw}\n")
-        sys.exit(1)
-    enabled_flag = os.environ.get("MODSEC_ENABLED")
-    admin_path = os.environ.get("MODSEC_ADMIN_PATH") or nginx.get("modsecurity", {}).get("admin_path", "/admin")
-    mod_cfg = nginx.setdefault("modsecurity", {})
-    if level <= 0 or enabled_flag == "0":
-        mod_cfg.update({"enabled": False, "level": 0, "admin_path": admin_path})
-    else:
-        if level < 1 or level > 10:
-            sys.stderr.write(f"ModSecurity 等级必须在 1-10 之间: {level}\n")
-            sys.exit(1)
-        mod_cfg.update({"enabled": True, "level": level, "admin_path": admin_path})
-    save()
-elif mode == "list":
-    for name, cfg in sites.items():
-        enabled = cfg.get("enabled", True)
-        domains = ", ".join(cfg.get("server_name", []))
-        root = cfg.get("root", "")
-        ssl_enabled = cfg.get("ssl", {}).get("enabled", False)
-        print(f"{name}: enabled={enabled}, ssl={ssl_enabled}, root={root}, domains=[{domains}]")
-else:
-    sys.stderr.write(f"未知操作: {mode}\n")
-    sys.exit(1)
-PY
+pillar_cli() {
+    python3 "$NGINX_PILLAR_HELPER" --pillar "$PILLAR_FILE" "$@"
 }
 
 ensure_sites_exist() {
     ensure_pillar_file
-    python_update list >/dev/null
+    pillar_cli list >/dev/null
 }
 
 get_csp_policy() {
@@ -563,7 +265,7 @@ get_csp_policy() {
 
 show_csp_status() {
     local json
-    json=$(KEY_PATH="nginx:csp" PILLAR_FILE="${PILLAR_FILE}" read_pillar_value "nginx:csp")
+    json="$(pillar_cli get --key 'nginx:csp' 2>/dev/null || true)"
     if [[ -n "$json" ]]; then
         JSON_DATA="$json" python3 "$NGINX_CONTEXT" csp-status
     else
@@ -573,7 +275,7 @@ show_csp_status() {
 
 show_modsecurity_status() {
     local json
-    json=$(KEY_PATH="nginx:modsecurity" PILLAR_FILE="${PILLAR_FILE}" read_pillar_value "nginx:modsecurity")
+    json="$(pillar_cli get --key 'nginx:modsecurity' 2>/dev/null || true)"
     if [[ -n "$json" ]]; then
         JSON_DATA="$json" python3 "$NGINX_CONTEXT" modsecurity-status
     else
@@ -591,20 +293,20 @@ handle_csp_command() {
                 return 1
             fi
             if [[ "$level" == "0" ]]; then
-                CSP_LEVEL=0 CSP_ENABLED=0 python_update csp_level
+                pillar_cli csp-level --level 0 --enabled 0
                 log_success "已禁用 CSP"
             else
                 if ! get_csp_policy "$level" >/dev/null; then
                     log_error "不支持的 CSP 等级: $level (仅 1-5，可用 0 禁用)"
                     return 1
                 fi
-                CSP_LEVEL="$level" CSP_ENABLED=1 python_update csp_level
+                pillar_cli csp-level --level "$level" --enabled 1
                 log_success "已设置 CSP 等级为 $level"
             fi
             cmd_apply
             ;;
         disable)
-            CSP_LEVEL=0 CSP_ENABLED=0 python_update csp_level
+            pillar_cli csp-level --level 0 --enabled 0
             log_success "已禁用 CSP"
             cmd_apply
             ;;
@@ -656,7 +358,7 @@ handle_modsecurity_command() {
                 fi
             fi
             if [[ "$level" == "0" ]]; then
-                MODSEC_LEVEL=0 MODSEC_ENABLED=0 MODSEC_ADMIN_PATH="$admin_path" python_update modsecurity_level
+                pillar_cli modsecurity-level --level 0 --enabled 0 --admin-path "$admin_path"
                 log_success "已禁用 ModSecurity"
                 cmd_apply
                 return $?
@@ -665,10 +367,10 @@ handle_modsecurity_command() {
                 log_error "ModSecurity 等级需为 1-10，或使用 0 禁用"
                 return 1
             fi
-            MODSEC_LEVEL="$level" MODSEC_ENABLED=1 MODSEC_ADMIN_PATH="$admin_path" python_update modsecurity_level
+            pillar_cli modsecurity-level --level "$level" --enabled 1 --admin-path "$admin_path"
             if ! cmd_apply; then
                 log_error "core.nginx 状态应用失败，ModSecurity 未成功启用。"
-                MODSEC_LEVEL=0 MODSEC_ENABLED=0 MODSEC_ADMIN_PATH="$admin_path" python_update modsecurity_level
+                pillar_cli modsecurity-level --level 0 --enabled 0 --admin-path "$admin_path"
                 log_warning "已将 Pillar 回退为禁用状态，请先解决依赖再重试。"
                 return 1
             fi
@@ -679,7 +381,7 @@ handle_modsecurity_command() {
             fi
             ;;
         disable)
-            MODSEC_LEVEL=0 MODSEC_ENABLED=0 python_update modsecurity_level
+            pillar_cli modsecurity-level --level 0 --enabled 0 --admin-path "$(detect_magento_admin_path)"
             log_success "已禁用 ModSecurity"
             cmd_apply
             ;;
@@ -731,7 +433,24 @@ cmd_create() {
     local root_path="${3:-}"
     local magento_flag="${4:-0}"
     ensure_pillar_file
-    MAGENTO_FLAG="$magento_flag" python_update create "$site" "$domains_arg" "$root_path"
+    local normalized_domains="${domains_arg//,/ }"
+    local -a domains=()
+    read -ra domains <<<"$normalized_domains"
+    if (( ${#domains[@]} == 0 )); then
+        log_error "请至少提供一个域名。"
+        return 1
+    fi
+    local -a args=(create --site "$site")
+    for domain in "${domains[@]}"; do
+        [[ -n "$domain" ]] && args+=("--domains" "$domain")
+    done
+    if [[ -n "$root_path" ]]; then
+        args+=("--root" "$root_path")
+    fi
+    if [[ "$magento_flag" == "1" ]]; then
+        args+=("--magento")
+    fi
+    pillar_cli "${args[@]}"
     log_success "站点 ${site} 已写入 pillar。"
     cmd_apply
 }
@@ -739,7 +458,7 @@ cmd_create() {
 cmd_delete() {
     local site="$1"
     ensure_pillar_file
-    python_update delete "$site"
+    pillar_cli delete --site "$site"
     log_success "已移除站点 ${site}。"
     cleanup_site_files "$site"
     cmd_apply
@@ -749,14 +468,14 @@ cmd_enable_disable() {
     local action="$1"
     local site="$2"
     ensure_pillar_file
-    python_update "$action" "$site"
+    pillar_cli "$action" --site "$site"
     log_success "站点 ${site} 已标记为 ${action}。"
     cmd_apply
 }
 
 cmd_list() {
     ensure_pillar_file
-    python_update list
+    pillar_cli list
 }
 
 cmd_ssl() {
@@ -765,7 +484,10 @@ cmd_ssl() {
     local email="${3:-}"
     local dry_run="${4:-0}"
     ensure_pillar_file
-    python_update ssl "$site" "" "" "$email" "$domain"
+    local -a args=(ssl --site "$site")
+    [[ -n "$domain" ]] && args+=("--domain" "$domain")
+    [[ -n "$email" ]] && args+=("--email" "$email")
+    pillar_cli "${args[@]}"
     log_info "已更新站点 ${site} 的 SSL 信息。"
     if [[ "$dry_run" == "1" ]]; then
         log_info "Dry run 模式：仅写入 Pillar，已跳过证书申请与 core.nginx 状态套用。"

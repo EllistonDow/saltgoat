@@ -34,6 +34,36 @@ class AnalyseHelperTest(unittest.TestCase):
             self.assertIn("-foo", proc.stdout)
             self.assertIn("+bar", proc.stdout)
 
+    def test_random_password(self):
+        proc = self.run_cli("random-password", "--length", "32")
+        password = proc.stdout.strip()
+        self.assertEqual(len(password), 32)
+        self.assertTrue(all(ch.isalnum() for ch in password))
+
+    def test_matomo_override(self):
+        proc = self.run_cli(
+            "matomo-override",
+            "--install-dir",
+            "/var/www/matomo",
+            "--domain",
+            "matomo.local",
+            "--php-socket",
+            "/run/php/php8.3-fpm.sock",
+            "--owner",
+            "www-data",
+            "--group",
+            "www-data",
+            "--db-enabled",
+            "--db-name",
+            "matomo",
+            "--db-user",
+            "matomo",
+        )
+        data = json.loads(proc.stdout)
+        self.assertEqual(data["matomo"]["domain"], "matomo.local")
+        self.assertIn("db", data["matomo"])
+        self.assertTrue(data["matomo"]["db"]["enabled"])
+
 
 if __name__ == "__main__":
     unittest.main()

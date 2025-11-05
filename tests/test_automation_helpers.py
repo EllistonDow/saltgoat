@@ -38,6 +38,45 @@ class AutomationHelperTest(unittest.TestCase):
         self.assertEqual(lines[0], "/srv/base")
         self.assertEqual(lines[1], "/srv/base/scripts")
 
+    def test_render_scripts(self):
+        payload = json.dumps(
+            {
+                "local": {
+                    "scripts": [
+                        {"name": "demo", "path": "/srv/demo.sh", "modified": "2025-01-01", "size": 128}
+                    ]
+                }
+            }
+        )
+        proc = self.run_cmd("render-scripts", "--json", payload)
+        self.assertIn("- demo", proc.stdout)
+        empty = self.run_cmd("render-scripts", "--json", json.dumps({"local": {"scripts": []}}))
+        self.assertIn("暂无脚本", empty.stdout)
+
+    def test_render_jobs(self):
+        payload = json.dumps(
+            {
+                "local": {
+                    "jobs": [
+                        {
+                            "name": "nightly",
+                            "enabled": True,
+                            "backend": "cron",
+                            "active": False,
+                            "cron": "0 3 * * *",
+                            "script_path": "/srv/demo.sh",
+                            "last_run": "2025-01-01 03:00",
+                            "last_retcode": 0,
+                        }
+                    ]
+                }
+            }
+        )
+        proc = self.run_cmd("render-jobs", "--json", payload)
+        self.assertIn("nightly", proc.stdout)
+        empty = self.run_cmd("render-jobs", "--json", json.dumps({"local": {"jobs": []}}))
+        self.assertIn("暂无任务", empty.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

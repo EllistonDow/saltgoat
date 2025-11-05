@@ -47,6 +47,9 @@ show_help() {
         "analyse")
             show_analyse_help
             ;;
+        "minio")
+            show_minio_help
+            ;;
         "fun")
             show_fun_help
             ;;
@@ -116,6 +119,7 @@ show_main_help() {
     help_command "pwa"                             "PWA 部署与管理工具"
     help_command "analyse"                         "部署网站分析与可观测组件"
     help_command "git"                             "Git 快速发布工具"
+    help_command "minio"                           "自托管对象存储部署/健康检查"
     help_command "postfix --smtp <名称> [--enable|--disable]" "切换 SMTP 帐号并可同步开启/关闭 Postfix"
     help_command "fun <status|joke|tip>"            "健康面板 + 趣味命令（详见 docs/OPS_TOOLING.md）"
     echo ""
@@ -262,6 +266,23 @@ show_pillar_help() {
     help_command "saltgoat pillar show"            "安装前核对数据库/缓存等凭据"
     help_command "saltgoat pillar refresh"         "手动编辑 Pillar 后立即刷新缓存"
     help_note "Pillar 文件位于 ${SCRIPT_DIR}/salt/pillar/saltgoat.sls，请使用安全通道同步。"
+}
+
+show_minio_help() {
+    help_title "MinIO 对象存储"
+    echo -e "用法: ${GREEN}saltgoat minio <command>${NC}"
+    echo ""
+
+    help_subtitle "部署与配置"
+    help_command "apply"                       "套用 optional.minio，创建用户/目录并注册 systemd 服务"
+    help_command "info"                        "读取 Pillar 并输出 JSON 摘要（监听端口、凭据、健康端点）"
+    help_command "env"                         "查看 /etc/minio/minio.env（需 sudo）"
+    echo ""
+
+    help_subtitle "运行维护"
+    help_command "health"                      "调用 Pillar 中定义的 /minio/health/* URL，失败即退出非零"
+    help_command "status"                      "systemctl status minio（含最近日志）"
+    help_note "可通过变量 MINIO_HEALTH_TIMEOUT=10 saltgoat minio health 调整超时；Pillar 的 health.* 字段可自定义方案/主机/端口/路径。"
 }
 
 # Nginx帮助

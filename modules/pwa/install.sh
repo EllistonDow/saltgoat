@@ -104,124 +104,7 @@ load_site_config() {
     fi
 
     local exports
-    if ! exports=$(python3 - "$CONFIG_FILE" "$site" <<'PY'
-import json
-import pathlib
-import sys
-import yaml
-
-config_path = pathlib.Path(sys.argv[1])
-site_name = sys.argv[2]
-
-try:
-    data = yaml.safe_load(config_path.read_text()) or {}
-except Exception as exc:
-    print(f"[ERROR] 无法解析 {config_path}: {exc}", file=sys.stderr)
-    sys.exit(1)
-
-sites = (
-    data.get("magento_pwa", {}) or {}
-).get("sites", {}) or {}
-
-if site_name not in sites:
-    print(f"[ERROR] 未在 {config_path} 中找到站点 {site_name}", file=sys.stderr)
-    sys.exit(1)
-
-cfg = sites[site_name]
-
-def emit(key, value):
-    if value is None:
-        value = ""
-    print(f'{key}={json.dumps(value)}')
-
-emit("PWA_SITE_NAME", site_name)
-emit("PWA_ROOT", cfg.get("root", f"/var/www/{site_name}"))
-emit("PWA_BASE_URL", cfg.get("base_url", f"http://{site_name}.example.com/"))
-emit("PWA_BASE_URL_SECURE", cfg.get("base_url_secure", cfg.get("base_url", f"https://{site_name}.example.com/")))
-
-admin = cfg.get("admin", {}) or {}
-emit("PWA_ADMIN_FRONTNAME", admin.get("frontname", "admin"))
-emit("PWA_ADMIN_FIRSTNAME", admin.get("firstname", "Admin"))
-emit("PWA_ADMIN_LASTNAME", admin.get("lastname", "User"))
-emit("PWA_ADMIN_EMAIL", admin.get("email", f"{site_name}@example.com"))
-emit("PWA_ADMIN_USER", admin.get("user", site_name))
-emit("PWA_ADMIN_PASSWORD", admin.get("password", "ChangeMe!"))
-
-emit("PWA_CRYPT_KEY", cfg.get("crypt_key", ""))
-
-db = cfg.get("db", {}) or {}
-emit("PWA_DB_HOST", db.get("host", "localhost"))
-emit("PWA_DB_NAME", db.get("name", f"{site_name}mage"))
-emit("PWA_DB_USER", db.get("user", site_name))
-emit("PWA_DB_PASSWORD", db.get("password", "ChangeMeDb!"))
-
-emit("PWA_TIMEZONE", cfg.get("timezone", "UTC"))
-emit("PWA_LOCALE", cfg.get("locale", "en_US"))
-emit("PWA_CURRENCY", cfg.get("currency", "USD"))
-
-composer = cfg.get("composer", {}) or {}
-emit("PWA_REPO_USER", composer.get("repo_user", ""))
-emit("PWA_REPO_PASS", composer.get("repo_pass", ""))
-
-opensearch = cfg.get("opensearch", {}) or {}
-emit("PWA_OPENSEARCH_HOST", opensearch.get("host", "localhost"))
-emit("PWA_OPENSEARCH_PORT", opensearch.get("port", 9200))
-emit("PWA_OPENSEARCH_SCHEME", opensearch.get("scheme", "http"))
-emit("PWA_OPENSEARCH_PREFIX", opensearch.get("index_prefix", site_name))
-emit("PWA_OPENSEARCH_USERNAME", opensearch.get("username", ""))
-emit("PWA_OPENSEARCH_PASSWORD", opensearch.get("password", ""))
-emit("PWA_OPENSEARCH_TIMEOUT", opensearch.get("timeout", 15))
-emit("PWA_OPENSEARCH_AUTH", bool(opensearch.get("username") or opensearch.get("password") or opensearch.get("enable_auth", False)))
-
-options = cfg.get("options", {}) or {}
-emit("PWA_USE_SECURE", options.get("use_secure", True))
-emit("PWA_USE_SECURE_ADMIN", options.get("use_secure_admin", True))
-emit("PWA_USE_REWRITES", options.get("use_rewrites", True))
-emit("PWA_CLEANUP_DATABASE", options.get("cleanup_database", True))
-
-node_cfg = cfg.get("node", {}) or {}
-emit("PWA_ENSURE_NODE", node_cfg.get("ensure", True))
-emit("PWA_NODE_VERSION", node_cfg.get("version", "18"))
-emit("PWA_INSTALL_YARN", node_cfg.get("install_yarn", True))
-
-services = cfg.get("services", {}) or {}
-emit("PWA_INSTALL_CRON", services.get("install_cron", True))
-emit("PWA_CONFIGURE_VALKEY", services.get("configure_valkey", False))
-emit("PWA_CONFIGURE_RABBITMQ", services.get("configure_rabbitmq", False))
-
-pwa_studio = cfg.get("pwa_studio", {}) or {}
-emit("PWA_STUDIO_ENABLE", pwa_studio.get("enable", False))
-emit("PWA_STUDIO_REPO", pwa_studio.get("repo", "https://github.com/magento/pwa-studio.git"))
-emit("PWA_STUDIO_BRANCH", pwa_studio.get("branch", "develop"))
-target_dir = pwa_studio.get("target_dir", f"{cfg.get('root', f'/var/www/{site_name}')}/pwa-studio")
-emit("PWA_STUDIO_DIR", target_dir)
-emit("PWA_STUDIO_INSTALL_COMMAND", pwa_studio.get("yarn_command", "yarn install"))
-emit("PWA_STUDIO_BUILD_COMMAND", pwa_studio.get("build_command", "yarn build"))
-emit("PWA_STUDIO_ENV_TEMPLATE", pwa_studio.get("env_template", "packages/venia-concept/.env.dist"))
-env_file_default = pwa_studio.get("env_file", f"{target_dir}/.env")
-emit("PWA_STUDIO_ENV_FILE", env_file_default)
-emit("PWA_STUDIO_PORT", pwa_studio.get("serve_port", 8082))
-import base64
-def emit_b64(key, value):
-    raw = json.dumps(value)
-    encoded = base64.b64encode(raw.encode()).decode()
-    print(f'{key}="{encoded}"')
-emit_b64("PWA_STUDIO_ENV_OVERRIDES_B64", pwa_studio.get("env_overrides", {}))
-
-cms_cfg = (cfg.get("cms") or {}).get("home", {}) or {}
-def normalize_store_ids(value):
-    if value is None:
-        return ["0"]
-    if isinstance(value, (list, tuple)):
-        return [str(v) for v in value] or ["0"]
-    return [str(value)]
-
-emit("PWA_HOME_TITLE", cms_cfg.get("title", "PWA Home"))
-emit("PWA_HOME_TEMPLATE", cms_cfg.get("template", ""))
-emit("PWA_HOME_STORE_IDS", ",".join(normalize_store_ids(cms_cfg.get("store_ids"))))
-emit("PWA_HOME_IDENTIFIER", cms_cfg.get("identifier", ""))
-PY
-    ); then
+    if ! exports=$(python3 "$PWA_HELPER" load-config --config "$CONFIG_FILE" --site "$site" 2>/dev/null); then
         log_error "解析 PWA 配置失败，请检查上方错误输出。"
         exit 1
     fi
@@ -891,50 +774,16 @@ ensure_pwa_root_peer_dependencies() {
 }
 
 check_single_react_version() {
-    local result
-    result=$(python3 - "${PWA_STUDIO_DIR%/}" <<'PY'
-import json
-import pathlib
-import sys
-
-root = pathlib.Path(sys.argv[1]) / "node_modules"
-names = ["react", "react-dom"]
-report = []
-exit_code = 0
-if not root.exists():
-    print("skip")
-    sys.exit(0)
-for name in names:
-    versions = set()
-    for path in root.rglob(f"*/{name}/package.json"):
-        if ".cache" in path.parts:
-            continue
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if data.get("name") == name:
-            versions.add(data.get("version"))
-    if not versions:
-        report.append(f"{name}=missing")
-        exit_code = 1
-    elif len(versions) == 1:
-        report.append(f"{name}={next(iter(versions))}")
-    else:
-        report.append(f"{name}={','.join(sorted(versions))}")
-        exit_code = 1
-print("; ".join(report))
-sys.exit(exit_code)
-PY
-)
-    local status=$?
-    if [[ "$result" == "skip" ]]; then
+    local output status
+    output=$(python3 "$PWA_HELPER" check-react --dir "${PWA_STUDIO_DIR%/}" 2>&1)
+    status=$?
+    if [[ "$output" == "skip" ]]; then
         return
     fi
-    if [[ $status -ne 0 ]]; then
-        log_warning "React 依赖检测异常: ${result}"
+    if [[ $status -eq 0 ]]; then
+        log_info "React 依赖检测: ${output}"
     else
-        log_info "React 依赖检测: ${result}"
+        log_warning "React 依赖检测异常: ${output}"
     fi
 }
 
@@ -979,36 +828,7 @@ ensure_env_default() {
     local env_file="$1"
     local key="$2"
     local value="$3"
-    sudo -u www-data -H python3 - "$env_file" "$key" "$value" <<'PY'
-import sys
-from pathlib import Path
-
-env_path = Path(sys.argv[1])
-key = sys.argv[2]
-value = sys.argv[3]
-
-if not env_path.exists():
-    env_path.write_text('', encoding='utf-8')
-
-lines = []
-found = False
-for raw in env_path.read_text(encoding='utf-8').splitlines():
-    if raw.strip().startswith('#') or '=' not in raw:
-        lines.append(raw)
-        continue
-    current_key, _, current_val = raw.partition('=')
-    if current_key.strip() == key:
-        lines.append(raw)
-        found = True
-    else:
-        lines.append(raw)
-
-if not found:
-    lines.append(f"{key}={value}")
-
-output = '\n'.join(lines).rstrip() + '\n'
-env_path.write_text(output, encoding='utf-8')
-PY
+    sudo -u www-data -H python3 "$PWA_HELPER" ensure-env-default --file "$env_file" --key "$key" --value "$value" >/dev/null
 }
 
 apply_mos_graphql_fixes() {
@@ -1021,17 +841,7 @@ apply_mos_graphql_fixes() {
     local create_account_file="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/CreateAccount/createAccount.gql.js"
     if [[ -f "$create_account_file" && -n "$(grep -F 'is_confirmed' "$create_account_file" || true)" ]]; then
         log_info "移除 Commerce 专属字段 (is_confirmed) 以兼容 MOS GraphQL"
-        sudo -u www-data -H python3 - "$create_account_file" <<'PY'
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding='utf-8')
-lines = [line for line in text.splitlines() if 'is_confirmed' not in line]
-new_text = '\n'.join(lines) + '\n'
-if new_text != text:
-    path.write_text(new_text, encoding='utf-8')
-PY
+        sudo -u www-data -H python3 "$PWA_HELPER" remove-line --file "$create_account_file" --contains "is_confirmed" >/dev/null
     fi
 
     local product_fragment="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/RootComponents/Product/productDetailFragment.gql.js"
@@ -1050,49 +860,7 @@ PY
         sudo chown www-data:www-data "$product_fragment"
     elif [[ -f "$product_fragment" && -n "$(grep -F 'ProductAttributeMetadata' "$product_fragment" || true)" ]]; then
         log_info "裁剪 ProductAttributeMetadata 相关片段，避免 MOS GraphQL schema 缺失"
-        sudo -u www-data -H python3 - "$product_fragment" <<'PY'
-import sys
-from pathlib import Path
-
-def strip_block(source: str, marker: str) -> str:
-    while True:
-        idx = source.find(marker)
-        if idx == -1:
-            return source
-        # include preceding whitespace on the same line
-        start = source.rfind('\n', 0, idx)
-        if start == -1:
-            start = idx
-        depth = 0
-        i = idx
-        while i < len(source):
-            ch = source[i]
-            if ch == '{':
-                depth += 1
-            elif ch == '}':
-                depth -= 1
-                if depth == 0:
-                    i += 1
-                    break
-            i += 1
-        source = source[:start] + source[i:]
-    return source
-
-def strip_lines_containing(source: str, keyword: str) -> str:
-    lines = [line for line in source.splitlines() if keyword not in line]
-    return '\n'.join(lines) + '\n'
-
-path = Path(sys.argv[1])
-original = path.read_text(encoding='utf-8')
-text = strip_block(original, 'attribute_metadata {')
-text = strip_lines_containing(text, '... on ProductAttributeMetadata')
-text = strip_lines_containing(text, 'used_in_components')
-text = strip_block(text, 'custom_attributes {')
-text = strip_lines_containing(text, 'selected_attribute_options')
-text = strip_lines_containing(text, 'entered_attribute_value')
-if text != original:
-    path.write_text(text, encoding='utf-8')
-PY
+        sudo -u www-data -H python3 "$PWA_HELPER" patch-product-fragment --file "$product_fragment" >/dev/null
     fi
 
     if [[ -f "${overrides_dir}/useProductFullDetail.js" ]]; then
@@ -1101,98 +869,7 @@ PY
         sudo chown www-data:www-data "$product_talon"
     elif [[ -f "$product_talon" ]] && grep -Fq -- "attribute1['attribute_metadata']" "$product_talon"; then
         log_info "调整 ProductFullDetail talon，兼容缺失的 custom_attributes 元数据"
-        sudo python3 - "$product_talon" <<'PY'
-from pathlib import Path
-import sys
-talon_path = Path(sys.argv[1])
-text = talon_path.read_text(encoding='utf-8')
-
-old_compare = """const attributeLabelCompare = (attribute1, attribute2) => {
-    const label1 = attribute1['attribute_metadata']['label'].toLowerCase();
-    const label2 = attribute2['attribute_metadata']['label'].toLowerCase();
-    if (label1 < label2) return -1;
-    else if (label1 > label2) return 1;
-    else return 0;
-};"""
-
-new_compare = """const attributeLabelCompare = (attribute1, attribute2) => {
-    const label1 =
-        attribute1?.attribute_metadata?.label ??
-        attribute1?.attribute_option?.label ??
-        '';
-    const label2 =
-        attribute2?.attribute_metadata?.label ??
-        attribute2?.attribute_option?.label ??
-        '';
-    const safeLabel1 = label1.toLowerCase();
-    const safeLabel2 = label2.toLowerCase();
-    if (safeLabel1 < safeLabel2) return -1;
-    else if (safeLabel1 > safeLabel2) return 1;
-    else return 0;
-};"""
-
-old_custom = """const getCustomAttributes = (product, optionCodes, optionSelections) => {
-    const { custom_attributes, variants } = product;
-    const isConfigurable = isProductConfigurable(product);
-    const optionsSelected =
-        Array.from(optionSelections.values()).filter(value => !!value).length >
-        0;
-
-    if (isConfigurable && optionsSelected) {
-        const item = findMatchingVariant({
-            optionCodes,
-            optionSelections,
-            variants
-        });
-
-        return item && item.product
-            ? [...item.product.custom_attributes].sort(attributeLabelCompare)
-            : [];
-    }
-
-    return custom_attributes
-        ? [...custom_attributes].sort(attributeLabelCompare)
-        : [];
-};"""
-
-new_custom = """const getCustomAttributes = (product, optionCodes, optionSelections) => {
-    const {
-        custom_attributes: baseAttributes = [],
-        variants = []
-    } = product;
-    const isConfigurable = isProductConfigurable(product);
-    const optionsSelected =
-        Array.from(optionSelections.values()).filter(value => !!value).length >
-        0;
-
-    if (isConfigurable && optionsSelected) {
-        const item = findMatchingVariant({
-            optionCodes,
-            optionSelections,
-            variants
-        });
-
-        const variantAttributes = item?.product?.custom_attributes || [];
-
-        return variantAttributes.length
-            ? [...variantAttributes].sort(attributeLabelCompare)
-            : [];
-    }
-
-    return baseAttributes.length
-        ? [...baseAttributes].sort(attributeLabelCompare)
-        : [];
-};"""
-
-updated = text
-if old_compare in updated:
-    updated = updated.replace(old_compare, new_compare)
-if old_custom in updated:
-    updated = updated.replace(old_custom, new_custom)
-
-if updated != text:
-    talon_path.write_text(updated, encoding='utf-8')
-PY
+        sudo python3 "$PWA_HELPER" patch-talon --file "$product_talon" >/dev/null
     fi
 
     sanitize_checkout_graphql() {
@@ -1202,66 +879,8 @@ PY
         fi
 
         local patch_result=""
-        patch_result=$(sudo -u www-data -H python3 - "$target_file" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding='utf-8')
-lines = text.splitlines()
-result = []
-i = 0
-modified = False
-fields_to_sanitize = {
-    'selected_payment_method': ['__typename', 'code', 'title'],
-    'available_payment_methods': ['__typename', 'code', 'title']
-}
-
-while i < len(lines):
-    line = lines[i]
-    stripped = line.strip()
-    matched_field = None
-    for field in fields_to_sanitize:
-        if (
-            field in stripped
-            and f'{field}s' not in stripped  # avoid plural forms
-            and '{' in line
-            and stripped.startswith(field)
-        ):
-            matched_field = field
-            break
-
-    if matched_field:
-        block_lines = [line]
-        depth = line.count('{') - line.count('}')
-        i += 1
-        while i < len(lines) and depth > 0:
-            block_lines.append(lines[i])
-            depth += lines[i].count('{') - lines[i].count('}')
-            i += 1
-        if any('... on ' in blk for blk in block_lines[1:]):
-            indent = line[: len(line) - len(line.lstrip())]
-            result.append(f"{indent}{matched_field} {{")
-            for field_line in fields_to_sanitize[matched_field]:
-                result.append(f"{indent}    {field_line}")
-            result.append(f"{indent}}}")
-            modified = True
-        else:
-            result.extend(block_lines)
-        continue
-    result.append(line)
-    i += 1
-
-if modified:
-    new_text = '\n'.join(result).rstrip() + '\n'
-    path.write_text(new_text, encoding='utf-8')
-    print("changed")
-else:
-    print("unchanged")
-PY
-        )
-
-        if [[ "$patch_result" == "changed" ]]; then
+        patch_result=$(sudo -u www-data -H python3 "$PWA_HELPER" sanitize-checkout --file "$target_file" 2>/dev/null || true)
+        if [[ "$patch_result" == "patched" ]]; then
             log_info "裁剪 checkout GraphQL 片段 (${target_file##*/})，移除 Commerce 专属支付字段"
         fi
     }
@@ -1272,91 +891,34 @@ PY
     local cart_fragment="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/Header/cartTriggerFragments.gql.js"
     if [[ -f "$cart_fragment" && -n "$(grep -F 'total_summary_quantity_including_config' "$cart_fragment" || true)" ]]; then
         log_info "移除 MOS 不支持的购物车统计字段"
-        sudo -u www-data -H python3 - "$cart_fragment" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding='utf-8')
-filtered = '\n'.join(
-    line for line in text.splitlines()
-    if 'total_summary_quantity_including_config' not in line
-) + '\n'
-if filtered != text:
-    path.write_text(filtered, encoding='utf-8')
-PY
+        sudo -u www-data -H python3 "$PWA_HELPER" remove-line --file "$cart_fragment" --contains "total_summary_quantity_including_config" >/dev/null
     fi
 
     local cart_trigger_hook="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/Header/useCartTrigger.js"
     if [[ -f "$cart_trigger_hook" && -n "$(grep -F 'total_summary_quantity_including_config' "$cart_trigger_hook" || true)" ]]; then
         log_info "调整购物车角标统计，兼容 MOS 字段"
-        sudo -u www-data -H python3 - "$cart_trigger_hook" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-old = 'const itemCount = data?.cart?.total_summary_quantity_including_config || 0;'
-new = 'const itemCount = data?.cart?.total_quantity || 0;'
-text = path.read_text(encoding='utf-8')
-if old in text and new not in text:
-    path.write_text(text.replace(old, new), encoding='utf-8')
-PY
+        sudo -u www-data -H python3 "$PWA_HELPER" replace-line \
+            --file "$cart_trigger_hook" \
+            --old "const itemCount = data?.cart?.total_summary_quantity_including_config || 0;" \
+            --new "const itemCount = data?.cart?.total_quantity || 0;" >/dev/null
     fi
 
     local xp_intercept="${PWA_STUDIO_DIR%/}/packages/extensions/experience-platform-connector/intercept.js"
     if [[ -f "$xp_intercept" && -z "$(grep -F 'MAGENTO_EXPERIENCE_PLATFORM_ENABLED' "$xp_intercept" || true)" ]]; then
         log_info "禁用 Experience Platform 扩展（MOS 不支持）"
-        sudo -u www-data -H python3 - "$xp_intercept" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding='utf-8')
-guard = "module.exports = targets => {\n    if (process.env.MAGENTO_EXPERIENCE_PLATFORM_ENABLED !== 'true') {\n        return;\n    }\n"
-if text.startswith("module.exports = targets => {\n") and guard not in text:
-    text = text.replace("module.exports = targets => {\n", guard, 1)
-    path.write_text(text, encoding='utf-8')
-PY
+        sudo -u www-data -H python3 "$PWA_HELPER" add-guard --file "$xp_intercept" --env-var "MAGENTO_EXPERIENCE_PLATFORM_ENABLED" >/dev/null
     fi
 
     local live_search_intercept="${PWA_STUDIO_DIR%/}/packages/extensions/venia-pwa-live-search/src/targets/intercept.js"
     if [[ -f "$live_search_intercept" && -z "$(grep -F 'MAGENTO_LIVE_SEARCH_ENABLED' "$live_search_intercept" || true)" ]]; then
         log_info "按需禁用 PWA Live Search 扩展"
-        sudo -u www-data -H python3 - "$live_search_intercept" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding='utf-8')
-guard = "module.exports = targets => {\n    if (process.env.MAGENTO_LIVE_SEARCH_ENABLED !== 'true') {\n        return;\n    }\n"
-if text.startswith("module.exports = targets => {\n") and guard not in text:
-    text = text.replace("module.exports = targets => {\n", guard, 1)
-    path.write_text(text, encoding='utf-8')
-PY
+        sudo -u www-data -H python3 "$PWA_HELPER" add-guard --file "$live_search_intercept" --env-var "MAGENTO_LIVE_SEARCH_ENABLED" >/dev/null
     fi
 
     local webpack_config="${PWA_STUDIO_DIR%/}/packages/venia-concept/webpack.config.js"
     if [[ -f "$webpack_config" && -z "$(grep -F 'config.performance.hints = false' "$webpack_config" || true)" ]]; then
         log_info "调整 webpack 配置，禁用性能提示告警"
-        sudo -u www-data -H python3 - "$webpack_config" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding='utf-8')
-marker = "    return [config];"
-snippet = (
-    "    config.performance = config.performance || {};\n"
-    "    config.performance.hints = false;\n"
-    "    config.performance.maxEntrypointSize = 1200 * 1024;\n"
-    "    config.performance.maxAssetSize = 800 * 1024;\n"
-)
-
-if "config.performance.hints = false" not in text and marker in text:
-    updated = text.replace(marker, snippet + "\n" + marker)
-    if updated != text:
-        path.write_text(updated, encoding='utf-8')
-PY
+        sudo -u www-data -H python3 "$PWA_HELPER" tune-webpack --file "$webpack_config" >/dev/null
     fi
 }
 
@@ -1418,25 +980,7 @@ ensure_pwa_env_vars() {
 read_pwa_env_value() {
     local key="$1"
     local env_file="$PWA_STUDIO_ENV_FILE"
-    python3 - "$env_file" "$key" <<'PY'
-import sys
-from pathlib import Path
-
-env_path = Path(sys.argv[1])
-target_key = sys.argv[2]
-if not env_path.exists():
-    sys.exit(1)
-value = ""
-for line in env_path.read_text(encoding="utf-8").splitlines():
-    if line.strip().startswith("#") or "=" not in line:
-        continue
-    k, _, v = line.partition("=")
-    if k.strip() == target_key:
-        value = v
-        break
-if value:
-    print(value.strip())
-PY
+    python3 "$PWA_HELPER" get-env --file "$env_file" --key "$key"
 }
 
 log_pwa_home_identifier_hint() {
@@ -1488,21 +1032,7 @@ ensure_magento_graphql_ready() {
         log_warning "无法访问 ${graphql_endpoint}（HTTP 空响应），请确认 Magento 已完成安装并对外开放。"
         return 1
     fi
-    if ! python3 - "$response" <<'PY'
-import json, sys
-payload_text = sys.argv[1]
-try:
-    payload = json.loads(payload_text)
-except Exception:
-    print("GraphQL 接口返回非 JSON 内容。")
-    sys.exit(1)
-errors = payload.get("errors")
-if errors:
-    print("GraphQL 返回 errors: {}".format(errors))
-    sys.exit(1)
-sys.exit(0)
-PY
-    then
+    if ! python3 "$PWA_HELPER" validate-graphql --payload "$response"; then
         log_warning "Magento GraphQL 接口未准备就绪，已跳过 PWA 构建。"
         return 1
     fi

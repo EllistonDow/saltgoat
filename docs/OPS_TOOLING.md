@@ -81,11 +81,54 @@ SaltGoat 现在自带几套易用的小工具，方便在排障或上线演练�
   ```bash
   sudo saltgoat gitops-watch
   ```
+- **输出示例**：
+  ```text
+  [2025-11-05T04:50:12+00:00] Running saltgoat verify -- dry-run
+  ...
+  [2025-11-05T04:52:31+00:00] Checking GitOps drift
+  Branch: master
+  Upstream: origin/master
+  Ahead: 0
+  Behind: 2
+  Working tree changes:
+    M docs/OPS_TOOLING.md
+  ```
+- **处理建议**：若 `Behind > 0` 先 `git pull --rebase origin master`，`Ahead > 0` 时与团队确认再推送；如列表出现 `__pycache__/` 或 `*.pyc`，执行 `git rm --cached <file>`（脚本已自动阻断后续发布）。
 
 ## Pillar / Event Helper
 - `modules/lib/monitor_auto_sites.py`：独立执行站点探测与 `salt/pillar/monitoring.sls` 生成任务，支持 `--site-root`、`--nginx-dir`、`--monitor-file`、`--skip-systemctl` 等参数；CLI `saltgoat monitor auto-sites` 正是调用此脚本完成检测。
 - `modules/lib/nginx_context.py site-metadata`：统一输出站点元数据（root/server_name/Varnish/HTTPS/run context），现已被 `monitor auto-sites` 与 `magetools varnish` 消费，也方便第三方脚本直接解析。
+- `modules/lib/nginx_pillar.py`：纯 Python CLI 管理 `salt/pillar/nginx.sls`（`create/delete/enable/disable/ssl/csp-level/modsecurity-level/list`），供 `saltgoat nginx` 及外部自动化共用。示例：
+  ```bash
+  python3 modules/lib/nginx_pillar.py --pillar salt/pillar/nginx.sls create \
+    --site bank --domains bank.example.com tank.example.com --root /var/www/bank --magento
+  python3 modules/lib/nginx_pillar.py --pillar salt/pillar/nginx.sls ssl \
+    --site bank --domain bank.example.com --email admin@bank.example.com
+  python3 modules/lib/nginx_pillar.py --pillar salt/pillar/nginx.sls modsecurity-level \
+    --level 5 --enabled 1 --admin-path /admin_tattoo
+  ```
+- `modules/lib/pwa_helpers.py`：除 package.json 操作外，提供 `load-config`（解析 `magento-pwa.sls`）、`ensure-env-default`、`patch-product-fragment`、`sanitize-checkout`、`remove-line`、`add-guard`、`tune-webpack`、`check-react`、`validate-graphql` 等子命令，统一替换 `modules/pwa/install.sh` 中的内嵌 Python。常用示例：
+  ```bash
+  python3 modules/lib/pwa_helpers.py load-config --config salt/pillar/magento-pwa.sls --site bank
+  python3 modules/lib/pwa_helpers.py ensure-env-default --file /var/www/bank/pwa-studio/.env --key MAGENTO_BACKEND_EDITION --value MOS
+  python3 modules/lib/pwa_helpers.py patch-product-fragment --file packages/peregrine/lib/talons/RootComponents/Product/productDetailFragment.gql.js
+  python3 modules/lib/pwa_helpers.py check-react --dir /var/www/bank/pwa-studio
+  python3 modules/lib/pwa_helpers.py validate-graphql --payload '{"data":{"storeConfig":{"store_name":"Demo"}}}'
+  ```
 - `notifications.webhook` Pillar 字段允许声明 `endpoints: [{name,url,headers}]`，Pipe 会在 `magento_api_watch`、`magento_summary`、`resource_alert`、`backup_notify`、每日巡检等动作触发时，同步向 HTTP Endpoint POST JSON（与 Telegram 内容一致）。
 - `modules/lib/salt_event.py`：`send` 子命令优先通过 `salt.client.Caller` 发送事件，失败时会将 JSON payload 写到 STDOUT 并以退出码 `2` 提示 shell 走 `salt-call event.send` 兜底；`format` 子命令可单独渲染 JSON。
 - `modules/lib/maintenance_pillar.py`：将 `saltgoat magetools maintenance` 的环境变量转换成 Pillar JSON，方便调试或直接喂给 `salt-call`. 示例：`SITE_NAME=bank SITE_PATH=/var/www/bank python3 modules/lib/maintenance_pillar.py`.
 - `modules/lib/automation_helpers.py`：统一解析 `saltgoat automation_*` 返回的 JSON，提供 `render-basic`（输出 comment 并携带退出码）、`extract-field <name>`、`parse-paths` 三个子命令，在 shell 脚本中可复用与 Salt CLI 相同的解析逻辑。
+
+## 自动化路线图（草案）
+- **对象存储模块**：封装 MinIO/兼容 S3 的部署与备份策略，配合现有备份通知。
+- **Telegram 话题过滤**：在 `setup-telegram-topics.py` 中过滤隐藏目录（如 `.cache/`）、支持按站点显式列表，避免噪音话题。
+- **Shell → Python 拆分**：持续清理剩余 `here-doc`（例如 `modules/pwa/install.sh` 中针对 SQL/配置的片段、`modules/analyse` 里的 inline Python），避免费力逻辑散落在 Bash 中，确保所有复杂操作集中在 `modules/lib/*.py` 并覆盖单测。
+- **扩展监控自愈**：评估扩展到对象存储、Varnish 状态、MinIO 容量告警等场景，与现有 `resource_alert` 协同。
+
+## MinIO 对象存储（快速开始）
+- Pillar：复制 `salt/pillar/minio.sls.sample` 为 `salt/pillar/minio.sls`，补充 `listen_address`、`root_credentials`，如能提前拿到官方哈希可写入 `binary_hash`（支持 `sha256=<hash>` 格式）。
+- 安装：`saltgoat minio apply`（相当于 `state.apply optional.minio`）会创建用户/目录、生成 `.env`、下载并校验二进制、注册 `minio.service`，当 `.env` 或二进制更新后自动触发重启。
+- 健康检查：`saltgoat minio health` 读取 Pillar 中的 `health.*` 设置调用 `/minio/health/live`，失败会返回非零退出码，适合写入 Salt Schedule / Cron。
+- 资讯：`saltgoat minio info` 输出当前 Pillar 摘要（JSON），`saltgoat minio env` 可快速查看 `/etc/minio/minio.env`。
+- 后续规划详见 `docs/ROADMAP_OBJECT_STORAGE.md`，包括与 Restic/通知集成、容量监控、自愈策略等。

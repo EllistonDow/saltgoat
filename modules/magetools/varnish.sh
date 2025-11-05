@@ -175,27 +175,10 @@ load_run_context() {
 }
 
 collect_server_names() {
-    local json
-    if ! json=$(sudo python3 "$NGINX_CONTEXT" site-metadata --site "$SITE" --pillar "$NGINX_PILLAR" 2>/dev/null); then
-        mapfile -t SERVER_NAMES < <(sudo python3 "$NGINX_CONTEXT" server-names --site "$SITE")
-        return
+    mapfile -t SERVER_NAMES < <(sudo python3 "$NGINX_CONTEXT" site-server-names --site "$SITE" --pillar "$NGINX_PILLAR" 2>/dev/null || true)
+    if (( ${#SERVER_NAMES[@]} == 0 )); then
+        mapfile -t SERVER_NAMES < <(sudo python3 "$NGINX_CONTEXT" server-names --site "$SITE" 2>/dev/null || true)
     fi
-    mapfile -t SERVER_NAMES < <(SALTGOAT_JSON="$json" python3 - <<'PY'
-import json
-import os
-
-raw = os.environ.get("SALTGOAT_JSON", "").strip()
-if not raw:
-    raise SystemExit
-try:
-    data = json.loads(raw)
-except json.JSONDecodeError:
-    raise SystemExit
-for name in data.get("server_names") or []:
-    if name:
-        print(name)
-PY
-)
 }
 
 magento_base_domains() {
@@ -423,25 +406,9 @@ detect_php_version() {
         return
     fi
     local version
-    version="$(python3 - <<'PY'
-import os
-import re
-
-base = "/etc/php"
-if not os.path.isdir(base):
-    print("8.3")
-    raise SystemExit
-entries = [
-    name for name in os.listdir(base)
-    if re.fullmatch(r"[0-9]+\\.[0-9]+", name)
-]
-if not entries:
-    print("8.3")
-    raise SystemExit
-entries.sort(key=lambda item: tuple(int(part) for part in item.split(".")), reverse=True)
-print(entries[0])
-PY
-)"
+    if ! version="$(sudo python3 "$NGINX_CONTEXT" php-version 2>/dev/null)"; then
+        version=""
+    fi
     version="$(echo "$version" | tr -d '[:space:]')"
     if [[ -z "$version" ]]; then
         version="8.3"
@@ -505,31 +472,9 @@ pool_socket_for() {
         echo "${POOL_SOCKET_CACHE[$site]}"
         return
     fi
-    local metadata socket=""
-    metadata="$(sudo python3 "$NGINX_CONTEXT" site-metadata --site "$site" 2>/dev/null || true)"
-    if [[ -n "$metadata" ]]; then
-        socket="$(SALTGOAT_META="$metadata" python3 - <<'PY'
-import json
-import os
-
-raw = os.environ.get("SALTGOAT_META", "").strip()
-if not raw:
-    raise SystemExit
-try:
-    data = json.loads(raw)
-except json.JSONDecodeError:
-    raise SystemExit
-if not isinstance(data, dict):
-    raise SystemExit
-pool = data.get("fpm_pool")
-if not isinstance(pool, dict):
-    raise SystemExit
-socket = pool.get("socket") or pool.get("listen")
-if isinstance(socket, str) and socket.strip():
-    print(socket.strip())
-PY
-)"
-    fi
+    local root="${SITE_ROOTS[$site]}"
+    local socket=""
+    socket="$(sudo python3 "$NGINX_CONTEXT" pool-socket --site "$site" --pillar "$NGINX_PILLAR" --root "${root:-}" 2>/dev/null || true)"
     socket="$(normalize_fastcgi_socket "$socket")"
     if [[ -z "$socket" ]]; then
         socket="$(derive_pool_socket_from_root "$site")"

@@ -5,11 +5,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import re
 import sys
 from typing import Dict, Iterable, List
-import os
 
 try:
     import yaml  # type: ignore
@@ -18,6 +18,7 @@ except ImportError as exc:  # pragma: no cover
     sys.exit(1)
 
 SITES_AVAILABLE = pathlib.Path(os.environ.get("SALTGOAT_SITES_AVAILABLE", "/etc/nginx/sites-available"))
+PHP_BASE_DIR = pathlib.Path(os.environ.get("SALTGOAT_PHP_BASE", "/etc/php"))
 
 
 def _load_yaml(path: pathlib.Path) -> dict:
@@ -219,6 +220,61 @@ def _normalize_fastcgi_socket(value: str) -> str:
     return value
 
 
+def _detect_installed_php_versions(base: pathlib.Path | None = None) -> List[str]:
+    base = base or PHP_BASE_DIR
+    if not base.exists():
+        return []
+    versions: List[str] = []
+    for entry in base.iterdir():
+        if entry.is_dir() and re.fullmatch(r"[0-9]+\.[0-9]+", entry.name):
+            versions.append(entry.name)
+    versions.sort(key=lambda item: tuple(int(part) for part in item.split(".")), reverse=True)
+    return versions
+
+
+def _default_php_version() -> str:
+    versions = _detect_installed_php_versions(PHP_BASE_DIR)
+    if versions:
+        return versions[0]
+    return "8.3"
+
+
+def _slugify(value: str) -> str:
+    value = value.strip().lower()
+    value = re.sub(r"[^a-z0-9]+", "-", value)
+    value = value.strip("-")
+    return value or "site"
+
+
+def _read_pool_listen(conf_path: pathlib.Path) -> str:
+    if not conf_path.exists():
+        return ""
+    try:
+        for raw in conf_path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            if key.strip() == "listen":
+                return val.strip()
+    except Exception:  # pragma: no cover - defensive
+        return ""
+    return ""
+
+
+def _discover_pool_socket(site: str, root: str, php_version: str | None = None) -> str:
+    version = php_version or _default_php_version()
+    pool_dir = PHP_BASE_DIR / version / "fpm" / "pool.d"
+    root_slug = _slugify(pathlib.Path(root or f"/var/www/{site}").name)
+    candidates: List[str] = [f"magento-{root_slug}", root_slug, site]
+    for candidate in candidates:
+        conf_path = pool_dir / f"{candidate}.conf"
+        socket = _normalize_fastcgi_socket(_read_pool_listen(conf_path))
+        if socket:
+            return socket
+    return f"unix:/run/php/php{version}-fpm.sock"
+
+
 def cmd_sanitize_config(args: argparse.Namespace) -> None:
     path, data = _read_site_config(args.site)
     if not data:
@@ -397,6 +453,31 @@ def cmd_modsecurity_status(args: argparse.Namespace) -> None:
         print("ModSecurity 当前禁用")
 
 
+def cmd_php_version(args: argparse.Namespace) -> None:
+    print(_default_php_version())
+
+
+def cmd_pool_socket(args: argparse.Namespace) -> None:
+    metadata = get_site_metadata(args.site, args.pillar)
+    socket: str = ""
+    fpm = metadata.get("fpm_pool")
+    if isinstance(fpm, dict):
+        socket = fpm.get("socket") or fpm.get("listen") or ""
+    socket = _normalize_fastcgi_socket(socket)
+    root = args.root or metadata.get("root") or f"/var/www/{args.site}"
+    php_version = args.php_version or None
+    if not socket:
+        socket = _discover_pool_socket(args.site, str(root), php_version)
+    print(socket)
+
+
+def cmd_site_server_names(args: argparse.Namespace) -> None:
+    metadata = get_site_metadata(args.site, args.pillar)
+    for name in metadata.get("server_names") or []:
+        if name:
+            print(name)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="SaltGoat Nginx context helpers")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -456,6 +537,21 @@ def build_parser() -> argparse.ArgumentParser:
     metadata.add_argument("--site", required=True)
     metadata.add_argument("--pillar", type=pathlib.Path, default=pathlib.Path("/etc/salt/pillar/nginx.sls"))
     metadata.set_defaults(func=cmd_site_metadata)
+
+    php_version = sub.add_parser("php-version", help="检测默认 PHP 版本")
+    php_version.set_defaults(func=cmd_php_version)
+
+    pool = sub.add_parser("pool-socket", help="检测站点对应的 PHP-FPM socket")
+    pool.add_argument("--site", required=True)
+    pool.add_argument("--pillar", type=pathlib.Path, default=pathlib.Path("/etc/salt/pillar/nginx.sls"))
+    pool.add_argument("--root", default="")
+    pool.add_argument("--php-version", default="")
+    pool.set_defaults(func=cmd_pool_socket)
+
+    server_meta = sub.add_parser("site-server-names", help="输出站点 server_name 列表（包含 Pillar 推断）")
+    server_meta.add_argument("--site", required=True)
+    server_meta.add_argument("--pillar", type=pathlib.Path, default=pathlib.Path("/etc/salt/pillar/nginx.sls"))
+    server_meta.set_defaults(func=cmd_site_server_names)
 
     return parser
 

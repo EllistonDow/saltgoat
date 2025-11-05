@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
+import string
 import subprocess
 import sys
 from pathlib import Path
@@ -83,6 +85,39 @@ def cmd_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_random_password(args: argparse.Namespace) -> int:
+    alphabet = string.ascii_letters + string.digits
+    length = args.length
+    print("".join(secrets.choice(alphabet) for _ in range(length)))
+    return 0
+
+
+def cmd_matomo_override(args: argparse.Namespace) -> int:
+    data = {
+        "matomo": {
+            "install_dir": args.install_dir,
+            "domain": args.domain,
+            "php_fpm_socket": args.php_socket,
+            "owner": args.owner,
+            "group": args.group,
+        }
+    }
+    if args.db_enabled:
+        data["matomo"]["db"] = {
+            "enabled": True,
+            "name": args.db_name,
+            "user": args.db_user,
+            "password": args.db_password or "",
+            "host": args.db_host,
+            "socket": args.db_socket,
+            "provider": args.db_provider,
+            "admin_user": args.db_admin_user,
+            "admin_password": args.db_admin_password or "",
+        }
+    print(json.dumps(data))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Analyse helper CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -99,6 +134,27 @@ def build_parser() -> argparse.ArgumentParser:
     diff = sub.add_parser("diff", help="Show unified diff for analyse result")
     diff.add_argument("--file", required=True)
     diff.set_defaults(func=cmd_diff)
+
+    rand = sub.add_parser("random-password", help="Generate random password")
+    rand.add_argument("--length", type=int, default=24)
+    rand.set_defaults(func=cmd_random_password)
+
+    matomo = sub.add_parser("matomo-override", help="Build Matomo pillar override JSON")
+    matomo.add_argument("--install-dir", required=True)
+    matomo.add_argument("--domain", required=True)
+    matomo.add_argument("--php-socket", required=True)
+    matomo.add_argument("--owner", required=True)
+    matomo.add_argument("--group", required=True)
+    matomo.add_argument("--db-enabled", action="store_true")
+    matomo.add_argument("--db-name", default="matomo")
+    matomo.add_argument("--db-user", default="matomo")
+    matomo.add_argument("--db-password", default="")
+    matomo.add_argument("--db-host", default="localhost")
+    matomo.add_argument("--db-socket", default="/var/run/mysqld/mysqld.sock")
+    matomo.add_argument("--db-provider", default="existing")
+    matomo.add_argument("--db-admin-user", default="root")
+    matomo.add_argument("--db-admin-password", default="")
+    matomo.set_defaults(func=cmd_matomo_override)
 
     return parser
 

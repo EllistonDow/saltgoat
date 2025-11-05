@@ -11,6 +11,7 @@ source "${SCRIPT_DIR}/lib/logger.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/utils.sh"
 RABBIT_HELPER="${SCRIPT_DIR}/modules/lib/rabbitmq_helper.py"
+NGINX_CONTEXT="${SCRIPT_DIR}/modules/lib/nginx_context.py"
 
 RMQ_MODE="smart"
 SITE_NAME=""
@@ -63,22 +64,25 @@ load_env_defaults() {
     AMQP_PASSWORD="${AMQP_PASSWORD:-${pillar_password:-$AMQP_PASSWORD}}"
 }
 
-normalize_path() {
-    local target="$1"
-    [[ -z "$target" ]] && return 1
-    sudo python3 - "$target" <<'PY'
-import os, sys
-path = sys.argv[1]
-print(os.path.realpath(path))
-PY
-}
-
 resolve_site_path() {
     if [[ "$SITE_NAME" == "__ALL__" ]]; then
         SITE_PATH=""
         return
     fi
     local resolved="${SITE_PATH_OVERRIDE}"
+    if [[ -z "$resolved" ]]; then
+        local detected
+        detected="$(python3 "$NGINX_CONTEXT" site-root --site "$SITE_NAME" 2>/dev/null || true)"
+        detected="${detected%/}"
+        if [[ "$detected" == */pub ]]; then
+            detected="${detected%/pub}"
+        fi
+        if [[ -n "$detected" ]]; then
+            if sudo test -d "$detected"; then
+                resolved="$detected"
+            fi
+        fi
+    fi
     if [[ -z "$resolved" ]]; then
         local candidates=("/var/www/${SITE_NAME}" "/var/www/${SITE_NAME}/current")
         local candidate
@@ -88,58 +92,18 @@ resolve_site_path() {
                 break
             fi
         done
-        if [[ -z "$resolved" ]]; then
-            local nginx_conf="/etc/nginx/sites-available/${SITE_NAME}"
-            if sudo test -f "$nginx_conf"; then
-                local root
-                root=$(sudo python3 - "$nginx_conf" <<'PY'
-import pathlib, re, sys
-conf_path = pathlib.Path(sys.argv[1])
-data = conf_path.read_text(encoding='utf-8', errors='ignore')
-mage_root = None
-root_value = None
-for line in data.splitlines():
-    line = line.strip()
-    if not line or line.startswith('#'):
-        continue
-    m = re.match(r"set\s+\$MAGE_ROOT\s+([^;]+);", line)
-    if m:
-        mage_root = m.group(1).strip().rstrip('/')
-        continue
-    m = re.match(r"root\s+([^;]+);", line)
-    if m and root_value is None:
-        value = m.group(1).strip()
-        if value.startswith('$MAGE_ROOT') and mage_root:
-            suffix = value[len('$MAGE_ROOT'):]
-            value = mage_root + suffix
-        root_value = value
-        break
-
-if root_value is None and mage_root is not None:
-    root_value = mage_root + '/pub'
-
-if root_value:
-    print(root_value)
-PY
-)
-                if [[ -n "$root" ]]; then
-                    root=${root%/}
-                    if [[ "$root" == */pub ]]; then
-                        root=${root%/pub}
-                    fi
-                    if sudo test -d "$root"; then
-                        resolved="$root"
-                    fi
-                fi
-            fi
-        fi
     fi
 
     if [[ -z "$resolved" ]]; then
         abort "无法推导站点目录，请使用 --site-path 明确指定。"
     fi
 
-    resolved=$(normalize_path "$resolved") || abort "无法解析站点目录: $resolved"
+    local canonical_path
+    canonical_path="$(sudo readlink -f "$resolved" 2>/dev/null || sudo realpath "$resolved" 2>/dev/null || true)"
+    if [[ -z "$canonical_path" ]]; then
+        abort "无法解析站点目录: $resolved"
+    fi
+    resolved="$canonical_path"
     resolved=${resolved%/}
     if [[ "$resolved" == */current ]]; then
         resolved=${resolved%/current}
