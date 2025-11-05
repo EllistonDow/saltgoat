@@ -163,9 +163,11 @@ def send_telegram(tag: str, message: str, payload: Dict[str, object]) -> None:
         profiles = reactor_common.load_telegram_profiles(str(TELEGRAM_CONFIG), _log)
     except Exception as exc:
         _log("error", {"message": str(exc)})
+        notif.queue_failure("telegram", tag, payload, str(exc), {"thread": payload.get("telegram_thread")})
         return
     if not profiles:
         _log("skip", {"reason": "no_profiles"})
+        notif.queue_failure("telegram", tag, payload, "no_profiles", {"thread": payload.get("telegram_thread")})
         return
     try:
         reactor_common.broadcast_telegram(
@@ -178,6 +180,7 @@ def send_telegram(tag: str, message: str, payload: Dict[str, object]) -> None:
         )
     except Exception as exc:
         _log("error", {"message": str(exc)})
+        notif.queue_failure("telegram", tag, payload, str(exc), {"thread": payload.get("telegram_thread")})
 
 
 def notify_new_ban(jail: str, ip: str, stats: Dict[str, object]) -> None:

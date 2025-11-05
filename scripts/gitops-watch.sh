@@ -15,3 +15,9 @@ sudo saltgoat verify
 
 log "Running saltgoat monitor auto-sites (dry-run)"
 sudo saltgoat monitor auto-sites --dry-run || true
+
+log "Checking GitOps drift"
+if ! python3 "${REPO_ROOT}/modules/lib/gitops.py" --format text; then
+    log "GitOps drift detected. Review the report above."
+    exit 3
+fi

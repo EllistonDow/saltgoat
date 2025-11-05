@@ -175,7 +175,7 @@ load_run_context() {
 }
 
 collect_server_names() {
-    local json output
+    local json
     if ! json=$(sudo python3 "$NGINX_CONTEXT" site-metadata --site "$SITE" --pillar "$NGINX_PILLAR" 2>/dev/null); then
         mapfile -t SERVER_NAMES < <(sudo python3 "$NGINX_CONTEXT" server-names --site "$SITE")
         return

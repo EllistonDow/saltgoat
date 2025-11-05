@@ -106,12 +106,14 @@ backup_event_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.', '
         profiles = reactor_common.load_telegram_profiles("{{ telegram_cfg_path }}", log)
         if not profiles:
             log("skip", {"reason": "no_profiles"})
+            notif.queue_failure("telegram", TELEGRAM_TAG, payload, "no_profiles", {"thread": thread_id})
             raise SystemExit()
         thread_id = notif.get_thread_id(TELEGRAM_TAG) or notif.get_thread_id(f"saltgoat/backup/{kind}")
         try:
             reactor_common.broadcast_telegram(message, profiles, log, tag=TELEGRAM_TAG, thread_id=thread_id, parse_mode=notif.get_parse_mode())
         except Exception as exc:  # pylint: disable=broad-except
             log("error", {"message": str(exc)})
+            notif.queue_failure("telegram", TELEGRAM_TAG, payload, str(exc), {"thread": thread_id})
             raise
         PY
     - python_shell: True

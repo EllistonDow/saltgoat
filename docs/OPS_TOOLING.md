@@ -75,7 +75,7 @@ SaltGoat 现在自带几套易用的小工具，方便在排障或上线演练�
 ## GitOps Watch
 - **脚本**：`scripts/gitops-watch.sh`
 - **入口**：`saltgoat gitops-watch`
-- **用途**：串行执行 `saltgoat verify` 与 `saltgoat monitor auto-sites --dry-run`，在提交/合并前确保 Shell/Python 测试通过且站点探测 Pillar 可成功生成。
+- **用途**：串行执行 `saltgoat verify` 与 `saltgoat monitor auto-sites --dry-run`，最后调用 `modules/lib/gitops.py` 检查 Git 配置漂移，确保 Shell/Python 测试通过、站点探测 Pillar 可成功生成且工作区保持与上游一致。
 - **推荐场景**：作为 Git pre-push 钩子或 CI 步骤，及时发现 Pillar 缺失、站点配置错误等问题。
 - **示例**：
   ```bash

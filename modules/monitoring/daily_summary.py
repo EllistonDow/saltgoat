@@ -282,7 +282,10 @@ def main() -> None:
         thread_id = payload_with_tag.get("telegram_thread") or notif.get_thread_id(tag)
         if thread_id is not None:
             payload_with_tag["telegram_thread"] = thread_id
-        telegram_notify(tag, summary_text, payload_with_tag, summary_text)
+        try:
+            telegram_notify(tag, summary_text, payload_with_tag, summary_text)
+        except Exception as exc:
+            notif.queue_failure("telegram", tag, payload_with_tag, str(exc))
     if not args.quiet:
         print(summary_text)
 

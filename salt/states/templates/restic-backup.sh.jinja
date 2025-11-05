@@ -252,6 +252,11 @@ if tags:
     message_lines.append(f"Tags: {tags}")
 message_lines.append(f"Return code: {rc}")
 message = "\n".join(message_lines)
+payload = {
+    "severity": "INFO" if status == "success" else "ERROR",
+    "site": site,
+    "message": message,
+}
 
 LOG_PATH = "/var/log/saltgoat/alerts.log"
 EVENT_TAG = f"saltgoat/backup/restic/{status}"
@@ -290,5 +295,10 @@ try:
     )
 except Exception as exc:  # pylint: disable=broad-except
     log("error", {"message": str(exc)})
+    notif.queue_failure("telegram", TELEGRAM_TAG, {
+        "severity": payload.get("severity", "INFO"),
+        "site": site,
+        "message": message,
+    }, str(exc), {"thread": THREAD_ID})
 PY
 fi

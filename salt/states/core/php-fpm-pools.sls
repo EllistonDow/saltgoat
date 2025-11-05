@@ -296,6 +296,16 @@ update_magento_sample_fastcgi_pass_{{ pool.pool_name }}:
       - MULTILINE
     - show_changes: False
     - onlyif: test -f {{ sample_path }}
+
+update_magento_sample_memory_limit_{{ pool.pool_name }}:
+  file.replace:
+    - name: {{ sample_path }}
+    - pattern: 'memory_limit=\s*[0-9]+[KMG]B?'
+    - repl: 'memory_limit=2048M'
+    - flags:
+      - MULTILINE
+    - show_changes: False
+    - onlyif: test -f {{ sample_path }}
     {% endif %}
   {% endif %}
 {% endfor %}

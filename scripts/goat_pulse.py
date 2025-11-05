@@ -290,7 +290,6 @@ def main() -> None:
         loop(1, True, metrics_path, args.plain, capture)
         body = "\n".join(capture)
         send_telegram(body, Path(args.telegram_config))
-        print(body)
         return
     loop(max(1, args.interval), args.once, metrics_path, args.plain)
 

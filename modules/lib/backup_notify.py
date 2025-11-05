@@ -103,6 +103,13 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
         )
     except Exception as exc:  # pragma: no cover
         logger("error", {"message": str(exc)})
+        notif.queue_failure(
+            "telegram",
+            tag,
+            payload | {"message": html},
+            str(exc),
+            {"thread": payload.get("telegram_thread")},
+        )
         return
 
     if not profiles:
@@ -120,6 +127,13 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
         )
     except Exception as exc:  # pragma: no cover
         logger("error", {"message": str(exc)})
+        notif.queue_failure(
+            "telegram",
+            tag,
+            payload | {"message": html},
+            str(exc),
+            {"thread": payload.get("telegram_thread")},
+        )
 
 
 def handle_mysql(args: argparse.Namespace) -> None:

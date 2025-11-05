@@ -4,6 +4,7 @@ import html
 import json
 import os
 import re
+import time
 import urllib.request
 from functools import lru_cache
 from pathlib import Path
@@ -28,6 +29,7 @@ _CALLER: Optional[Caller] = None
 _CACHE: Optional[Dict[str, object]] = None
 _TAG_RE = re.compile(r"<[^>]+>")
 TELEGRAM_TOPICS_PATH = Path(__file__).resolve().parents[2] / "salt" / "pillar" / "telegram-topics.sls"
+QUEUE_DIR = Path("/var/log/saltgoat/notify-queue")
 
 
 def _get_caller() -> Optional[Caller]:
@@ -140,6 +142,23 @@ def get_parse_mode() -> str:
     return str(load_config().get("parse_mode", "HTML"))
 
 
+def queue_failure(destination: str, tag: str, payload: Dict[str, object], error: str | None = None, context: Optional[Dict[str, object]] = None) -> None:
+    try:
+        QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+        record = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "destination": destination,
+            "tag": tag,
+            "payload": payload,
+            "error": error,
+            "context": context or {},
+        }
+        path = QUEUE_DIR / f"{int(time.time())}_{os.getpid()}.json"
+        path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def _matches_disabled(tag: str, patterns: List[str]) -> bool:
     return any(tag.startswith(pattern) for pattern in patterns)
 
@@ -234,7 +253,14 @@ def dispatch_webhooks(
                 req.add_header("Content-Type", "application/json; charset=utf-8")
             urllib.request.urlopen(req, timeout=10)  # nosec B310
             delivered += 1
-        except Exception:
+        except Exception as exc:
+            queue_failure(
+                "webhook",
+                tag,
+                body,
+                str(exc),
+                {"url": entry.get("url"), "headers": entry.get("headers")},
+            )
             continue
     return delivered
 

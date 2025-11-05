@@ -961,18 +961,46 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_messa
     def _log(kind: str, extra: Dict[str, Any]) -> None:
         log_to_file("TELEGRAM", f"{tag} {kind}", extra)
 
-    profiles = reactor_common.load_telegram_profiles(str(TELEGRAM_CONFIG), _log)
+    try:
+        profiles = reactor_common.load_telegram_profiles(str(TELEGRAM_CONFIG), _log)
+    except Exception as exc:
+        _log("error", {"message": str(exc)})
+        notif.queue_failure(
+            "telegram",
+            tag,
+            payload | {"message": message},
+            str(exc),
+            {"thread": payload.get("telegram_thread")},
+        )
+        return
     if not profiles:
         _log("skip", {"reason": "no_profiles"})
+        notif.queue_failure(
+            "telegram",
+            tag,
+            payload | {"message": message},
+            "no_profiles",
+            {"thread": payload.get("telegram_thread")},
+        )
         return
     _log("profile_summary", {"count": len(profiles)})
-    reactor_common.broadcast_telegram(
-        message,
-        profiles,
-        _log,
-        tag=tag,
-        parse_mode="HTML",
-    )
+    try:
+        reactor_common.broadcast_telegram(
+            message,
+            profiles,
+            _log,
+            tag=tag,
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        _log("error", {"message": str(exc)})
+        notif.queue_failure(
+            "telegram",
+            tag,
+            payload | {"message": message},
+            str(exc),
+            {"thread": payload.get("telegram_thread")},
+        )
 
 
 def emit_salt_event(tag: str, payload: Dict[str, Any]) -> None:

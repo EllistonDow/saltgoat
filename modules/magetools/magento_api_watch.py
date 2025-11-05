@@ -378,6 +378,13 @@ def telegram_broadcast(
         profiles = reactor_common.load_telegram_profiles(str(TELEGRAM_CONFIG), _log)
     except Exception as exc:  # pragma: no cover
         log_to_file("TELEGRAM", f"{tag} error", {"message": str(exc)})
+        notif.queue_failure(
+            "telegram",
+            tag,
+            payload | {"message": message},
+            str(exc),
+            {"thread": thread_id},
+        )
         return
 
     if not profiles:
@@ -398,6 +405,13 @@ def telegram_broadcast(
         )
     except Exception as exc:  # pragma: no cover
         _log("error", {"message": str(exc)})
+        notif.queue_failure(
+            "telegram",
+            tag,
+            payload | {"message": message},
+            str(exc),
+            {"thread": thread_id},
+        )
 
 
 def build_message(kind: str, site: str, payload: Dict[str, Any]) -> Tuple[str, str]:
