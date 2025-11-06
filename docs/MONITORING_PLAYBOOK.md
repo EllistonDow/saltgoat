@@ -83,6 +83,14 @@
    ```
 
    遇到失败时，配套查看 `alerts.log` 与对应 Telegram 话题。
+3. Mastodon（若部署了多站点）：
+
+   ```bash
+   sudo saltgoat mastodon backup-db <site>
+   sudo ls /srv/mastodon/<site>/backups
+   ```
+
+   确保 PostgreSQL 备份与媒体目录同步纳入 Restic/MinIO；Telegram 话题中可查到 `saltgoat/backup/mastodon_db/<site>` 的状态。
 
 ## 5. 例行巡检节奏
 

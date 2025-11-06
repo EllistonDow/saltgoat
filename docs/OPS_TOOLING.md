@@ -154,6 +154,14 @@ SaltGoat 现在自带几套易用的小工具，方便在排障或上线演练�
 - 暴露入口：搭配 `saltgoat traefik install` 部署统一入口后，可由相关 CLI 自动生成宿主 Nginx → Traefik 的透传配置并申请证书，或者在 Traefik Pillar 中启用 ACME，让其直接处理 HTTP-01/TLS-ALPN。
 - 备份：Postgres 数据位于 `/opt/saltgoat/docker/mattermost/db`，应用文件/日志位于 `data|config|logs|plugins` 目录，可用现有备份脚本（如 Restic）纳入策略。
 
+## Mastodon 多站点社交
+- Pillar：复制 `salt/pillar/mastodon.sls.sample`，在 `mastodon.instances` 下为每个站点定义 `domain`、`base_dir`、`postgres.*`、`redis.*`、`smtp.*`、`storage.*` 与 `traefik.*`。未填写时会自动落到 `/opt/saltgoat/docker/mastodon-<site>`、`/srv/mastodon/<site>/uploads` 等默认目录。`traefik.aliases` 支持多域名，`extra_env` 可追加任何 Mastodon 运行时变量。
+- 部署：`saltgoat mastodon install bank` 会同步 Pillar → `salt/pillar/nginx.sls`，渲染 `/opt/saltgoat/docker/mastodon-bank/docker-compose.yml`、`.env.production`、`.secrets.env` 并执行 `docker compose up -d`，同时运行 `bundle exec rake db:migrate`、`assets:precompile` 和 `tootctl domains add`。
+- 管理：`saltgoat mastodon status|logs|restart|pull|upgrade <site>` 提供常规运维操作；`backup-db` 会触发容器内 `pg_dump`，通过管道写入 `storage.backups_dir` 下的时间戳文件（gzip 压缩），便于再配合 Restic/MinIO 同步。
+- 证书：若 `traefik.tls.enabled=false`，CLI 会在部署后自动调用 `saltgoat nginx add-ssl mastodon-<site> <domain>`，沿用 Nginx + Let's Encrypt 的申请流程；也可在 Traefik Pillar 启用 ACME，让 Traefik 直接处理 TLS。
+- 入口：默认通过 Traefik label 暴露，仍保留宿主 Nginx 透传能力（`optional.mastodon` state 会生成 `/etc/nginx/sites-available/mastodon-<site>`，将 80/443 流量转发至 Traefik HTTP 端口）。
+- 储存：媒体文件持久化到 `storage.uploads_dir`，数据库与 Redis 数据分别挂载到 `base_dir/postgres`、`base_dir/redis`。可配合 Restic/MinIO 定制定时任务，同步媒体与数据库备份。
+
 ## Uptime Kuma 监控面板
 - Pillar：复制 `salt/pillar/uptime_kuma.sls.sample` 为 `salt/pillar/uptime_kuma.sls`，可覆盖 `base_dir`、`bind_host`、`http_port`、镜像版本与额外环境变量；`traefik` 节支持声明域名、entrypoints、TLS 解析器和额外 label，方便自动挂到 Traefik。
 - 部署：`saltgoat uptime-kuma install` 会清理旧版 systemd 安装（停止/移除 `/opt/uptime-kuma`），在 `/opt/saltgoat/docker/uptime-kuma` 渲染 docker-compose 并执行 `docker compose up -d`（默认监听 127.0.0.1:3001）。

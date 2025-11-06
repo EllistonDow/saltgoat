@@ -237,7 +237,6 @@ def main() -> None:
 
         generated = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         rows = [
-            ("Window", f"{start_str} -> {end_str}"),
             ("Orders", str(order_count)),
             ("Revenue", format_totals(totals)),
             ("Customers", str(customer_count)),

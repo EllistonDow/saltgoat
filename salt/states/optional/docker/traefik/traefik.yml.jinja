@@ -27,6 +27,8 @@
   }
 } %}
 {% set cfg = salt['slsutil.merge'](defaults, salt['pillar.get']('docker:traefik', {}) or {}, strategy='recurse') %}
+{% set trusted_ips = cfg.get('trusted_ips', ['127.0.0.1/32', '::1/128', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']) %}
+{% set forwarded_insecure = cfg.get('forwarded_insecure', True) %}
 log:
   level: {{ cfg.get('log_level', 'INFO') | upper }}
 
@@ -37,10 +39,22 @@ api:
 entryPoints:
   web:
     address: ":80"
+    forwardedHeaders:
+      insecure: {{ 'true' if forwarded_insecure else 'false' }}
+      trustedIPs:
+{% for ip in trusted_ips %}
+        - "{{ ip }}"
+{% endfor %}
 {% set https_port = cfg.get('https_port') %}
 {% if https_port %}
   websecure:
     address: ":443"
+    forwardedHeaders:
+      insecure: {{ 'true' if forwarded_insecure else 'false' }}
+      trustedIPs:
+{% for ip in trusted_ips %}
+        - "{{ ip }}"
+{% endfor %}
 {% endif %}
 
 providers:

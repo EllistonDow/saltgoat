@@ -6,6 +6,7 @@ base:
     - common.system
     - common.packages
     - common.security
+    - core.sysctl
     - core.nginx
     - core.php
     - core.mysql

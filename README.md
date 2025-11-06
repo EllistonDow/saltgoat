@@ -67,6 +67,10 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - `saltgoat mattermost status|logs|restart|upgrade`：查看 compose 状态、最近日志、快速重启或滚动升级镜像。
 - Pillar `mattermost:traefik` 支持自动生成 Traefik labels（路由、entrypoints、TLS resolver、额外中间件），结合 `saltgoat traefik install` 可一键打通宿主 Nginx → Traefik → Mattermost 的 HTTPS 流程。
 - 亦可将 `mattermost:file_store.type` 设置为 `s3` 并在 `extra_env` 块追加 `MM_FILESETTINGS_AMAZONS3*` 参数，直接复用 SaltGoat MinIO 作为对象存储。
+- `cp salt/pillar/mastodon.sls.sample salt/pillar/mastodon.sls`：为每个社交站点定义域名、镜像版本、PostgreSQL/Redis/SMTP、Traefik 参数，可一次维护多套实例。
+- `saltgoat mastodon install <site>`：渲染 `/opt/saltgoat/docker/mastodon-<site>` 下的 docker compose、`.env.production` 与 `.secrets.env`，自动生成密钥、准备 Traefik/Nginx 透传并拉起 web/streaming/sidekiq/db/redis 容器。
+- `saltgoat mastodon status|logs|restart|pull|upgrade <site>`：查看容器组状态、跟踪日志、滚动升级镜像；`backup-db` 子命令会通过 `pg_dump` 生成数据库备份并写入 `storage.backups_dir`。
+- Pillar `mastodon.instances.<site>.traefik` 支持自定义路由、entrypoints、TLS resolver 与额外 label；若 `tls.enabled=false`，CLI 会在部署结束后自动尝试 `saltgoat nginx add-ssl mastodon-<site> <domain>` 申请证书，沿用既有的 Nginx + LE 流程。
 
 ### 🔭 Uptime Kuma 监控面板
 

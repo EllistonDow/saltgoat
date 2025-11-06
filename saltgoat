@@ -127,6 +127,7 @@ register_module "fun" "${SCRIPT_DIR}/modules/fun/fun.sh"
 register_module "minio" "${SCRIPT_DIR}/modules/minio/minio.sh"
 register_module "traefik" "${SCRIPT_DIR}/modules/traefik/traefik.sh"
 register_module "mattermost" "${SCRIPT_DIR}/modules/mattermost/mattermost.sh"
+register_module "mastodon" "${SCRIPT_DIR}/modules/mastodon/mastodon.sh"
 register_module "services" "${SCRIPT_DIR}/modules/services/services.sh"
 
 # 显示横幅
@@ -1246,6 +1247,10 @@ case "$1" in
     "fun")
         require_module "fun"
         fun_handler "${@:2}"
+        ;;
+    "mastodon")
+        require_module "mastodon"
+        mastodon_handler "${@:2}"
         ;;
     "mattermost")
         require_module "mattermost"

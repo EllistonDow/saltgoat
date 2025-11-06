@@ -1,0 +1,94 @@
+services:
+  db:
+    image: {{ postgres_image }}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "{{ postgres_db }}"
+      POSTGRES_USER: "{{ postgres_user }}"
+      POSTGRES_PASSWORD: "{{ postgres_password }}"
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    networks:
+      - saltgoat-core
+
+  redis:
+    image: {{ redis_image }}
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - ./redis:/data
+    networks:
+      - saltgoat-core
+
+  web:
+    image: {{ image }}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+      - .secrets.env
+    command: bundle exec puma -C config/puma.rb
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - {{ uploads_dir }}:/mastodon/public/system
+      - {{ assets_dir }}:/mastodon/public/assets
+      - {{ packs_dir }}:/mastodon/public/packs
+      - ./tmp:/mastodon/tmp
+    environment:
+      RAILS_ENV: production
+      NODE_ENV: production
+    {% if traefik_rule %}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.{{ router_name }}.rule={{ traefik_rule }}"
+      - "traefik.http.routers.{{ router_name }}.entrypoints={{ traefik_entrypoints | join(',') }}"
+    {% if not traefik_tls_enabled %}
+      - "traefik.http.middlewares.{{ router_name }}-forcehttps.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.{{ router_name }}.middlewares={{ router_name }}-forcehttps"
+    {% endif %}
+      - "traefik.http.services.{{ router_name }}.loadbalancer.server.port=3000"
+    {% if traefik_tls_enabled %}
+      - "traefik.http.routers.{{ router_name }}.tls=true"
+      - "traefik.http.routers.{{ router_name }}.tls.certresolver={{ traefik_certresolver }}"
+    {% endif %}
+    {% for label in traefik_extra_labels %}
+      - "{{ label }}"
+    {% endfor %}
+    {% endif %}
+    networks:
+      - saltgoat-core
+
+  streaming:
+    image: {{ streaming_image }}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+      - .secrets.env
+    command: node ./streaming
+    depends_on:
+      - redis
+    networks:
+      - saltgoat-core
+
+  sidekiq:
+    image: {{ image }}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+      - .secrets.env
+    command: bundle exec sidekiq
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./tmp:/mastodon/tmp
+      - {{ uploads_dir }}:/mastodon/public/system
+      - {{ assets_dir }}:/mastodon/public/assets
+      - {{ packs_dir }}:/mastodon/public/packs
+    networks:
+      - saltgoat-core
+
+networks:
+  saltgoat-core:
+    external: true

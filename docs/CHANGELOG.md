@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.1] - 2025-11-06
+
+### Changes
+- 修改 23 个文件: README.md, docs/MONITORING_PLAYBOOK.md, docs/OPS_TOOLING.md, modules/lib/mastodon_helper.py, modules/lib/notification.py 等
+
+
 ## [1.5.0] - 2025-11-06
 
 ### Changes

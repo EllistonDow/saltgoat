@@ -265,4 +265,62 @@ nginx:
           directives:
           - alias /var/www/mattermost/.well-known/acme-challenge/
           - try_files $uri =404
+    mastodon-bankpost:
+      enabled: true
+      server_name:
+      - bankpost.magento.tattoogoat.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/mastodon-bankpost
+      php:
+        enabled: false
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/bankpost.magento.tattoogoat.com/fullchain.pem
+        key: /etc/letsencrypt/live/bankpost.magento.tattoogoat.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+      locations:
+        /:
+          directives:
+          - proxy_pass http://127.0.0.1:18080
+          - proxy_set_header Host $host
+          - proxy_set_header X-Real-IP $remote_addr
+          - proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for
+          - proxy_set_header X-Forwarded-Proto $scheme
+        /.well-known/acme-challenge/:
+          directives:
+          - alias /var/www/mastodon-bankpost/.well-known/acme-challenge/
+          - try_files $uri =404
+    matomo:
+      enabled: true
+      server_name:
+      - matomo.magento.tattoogoat.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/matomo/matomo
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/matomo.magento.tattoogoat.com/fullchain.pem
+        key: /etc/letsencrypt/live/matomo.magento.tattoogoat.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
   ssl_email: ssl@tschenfeng.com

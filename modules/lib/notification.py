@@ -28,6 +28,7 @@ _LEVELS = {
 _CALLER: Optional[Caller] = None
 _CACHE: Optional[Dict[str, object]] = None
 _TAG_RE = re.compile(r"<[^>]+>")
+_MD_SPECIAL_RE = re.compile(r"([_\*\[\]\(\)~`>#+\-=|{}.!])")
 TELEGRAM_TOPICS_PATH = Path(__file__).resolve().parents[2] / "salt" / "pillar" / "telegram-topics.sls"
 QUEUE_DIR = Path("/var/log/saltgoat/notify-queue")
 
@@ -212,6 +213,29 @@ def format_pre_block(title: str, subtitle: str, fields: List[Tuple[str, Optional
             lines.append(f"{' ' * width}   {extra}")
     plain = "\n".join(lines)
     return plain, f"<pre>{html.escape(plain)}</pre>"
+
+
+def escape_markdown_v2(text: str) -> str:
+    if not text:
+        return ""
+    escaped = text.replace("\\", "\\\\")
+    return _MD_SPECIAL_RE.sub(r"\\\1", escaped)
+
+
+def format_markdown_code(value: str) -> str:
+    if value is None:
+        value = ""
+    escaped = value.replace("\\", "\\\\").replace("`", "\\`")
+    return f"`{escaped}`"
+
+
+def format_markdown_code_block(lines: List[str]) -> str:
+    safe_lines: List[str] = []
+    for line in lines:
+        if line is None:
+            line = ""
+        safe_lines.append(line.replace("\\", "\\\\"))
+    return "```\n" + "\n".join(safe_lines) + "\n```"
 
 
 def html_to_plain(content: str) -> str:
