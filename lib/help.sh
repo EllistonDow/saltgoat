@@ -68,8 +68,11 @@ show_help() {
         "pwa")
             show_pwa_help
             ;;
-        "proxy")
-            show_proxy_help
+        "traefik")
+            show_traefik_help
+            ;;
+        "mattermost")
+            show_mattermost_help
             ;;
         "services")
             show_services_help
@@ -125,6 +128,7 @@ show_main_help() {
     help_command "pwa"                             "PWA 部署与管理工具"
     help_command "analyse"                         "部署网站分析与可观测组件"
     help_command "git"                             "Git 快速发布工具"
+    help_command "mattermost"                      "自托管协作平台（Docker 版）"
     help_command "minio"                           "自托管对象存储部署/健康检查"
     help_command "postfix --smtp <名称> [--enable|--disable]" "切换 SMTP 帐号并可同步开启/关闭 Postfix"
     help_command "fun <status|joke|tip>"            "健康面板 + 趣味命令（详见 docs/OPS_TOOLING.md）"
@@ -280,32 +284,35 @@ show_minio_help() {
     echo ""
 
     help_subtitle "部署与配置"
-    help_command "apply [--domain minio.example.com]" "安装 MinIO；带 --domain 时自动生成 Nginx 反代 + SSL"
-    help_command "info"                        "读取 Pillar 并输出 JSON 摘要（监听端口、凭据、健康端点）"
-    help_command "env"                         "查看 /etc/minio/minio.env（需 sudo）"
+    help_command "apply"                       "渲染 docker compose 并启动 MinIO（默认绑定 127.0.0.1:9000/9001）"
+    help_command "info"                        "输出 Pillar 摘要（镜像、端口、凭据、健康端点）"
     echo ""
 
     help_subtitle "运行维护"
-    help_command "health"                      "调用 Pillar 中定义的 /minio/health/* URL，失败即退出非零"
-    help_command "status"                      "systemctl status minio（含最近日志）"
-    help_note "apply 额外支持 --console-domain / --ssl-email / --no-console；health 可通过 MINIO_HEALTH_TIMEOUT=10 调整超时。"
+    help_command "status"                      "查看 docker compose ps"
+    help_command "logs [lines]"                "查看容器日志（默认 100 行）"
+    help_command "restart"                    "force-recreate 方式重启容器"
+    help_command "health"                     "调用 Pillar 定义的 /minio/health/live，失败即退出非零"
+    help_note "建议结合 saltgoat traefik install 或宿主 Nginx 生成透传与证书。"
 }
 
-show_proxy_help() {
-    help_title "Proxy 管理 (Docker + Nginx Proxy Manager)"
-    echo -e "用法: ${GREEN}saltgoat proxy <command>${NC}"
+show_traefik_help() {
+    help_title "Traefik 入口网关"
+    echo -e "用法: ${GREEN}saltgoat traefik <command>${NC}"
     echo ""
 
     help_subtitle "部署"
-    help_command "install" "安装 Docker Engine / compose plugin 并启动 NPM docker-compose"
-    help_command "status"  "查看 /opt/saltgoat/docker/npm 的 docker compose ps"
+    help_command "install"         "套用 optional.docker + optional.docker-traefik，清理旧 NPM/透传配置"
+    help_command "cleanup-legacy"  "仅移除遗留的 NPM 容器与 /etc/nginx/conf.d/proxy-* 文件"
     echo ""
 
-    help_subtitle "域名托管"
-    help_command "add <domain>"    "生成宿主 Nginx 透传配置，将请求交给 NPM (默认 127.0.0.1:8080)"
-    help_command "remove <domain>" "移除对应透传配置并 reload Nginx"
-    help_command "list"            "列出当前托管的域名（/etc/nginx/conf.d/proxy）"
-    help_note "首次访问 NPM 面板: https://<host>:9181 (账号 admin@example.com / changeme)。在 NPM 内配置 Proxy Host -> 真实服务。需要 HTTPS 时，请先用 saltgoat nginx add-ssl 获取证书或让域名直接指向 NPM。"
+    help_subtitle "运维"
+    help_command "status"          "查看 Traefik docker compose ps"
+    help_command "logs [lines]"    "输出容器日志（默认 200 行）"
+    help_command "restart"         "以 force-recreate 方式重启 Traefik"
+    help_command "down"            "停止 Traefik 容器"
+    help_command "config"          "查看当前 /etc/traefik/traefik.yml（位于 compose config 目录）"
+    help_note "默认绑定端口: HTTP 18080、HTTPS 18443、Dashboard 19080，可在 Pillar docker:traefik 中自定义。"
 }
 
 show_services_help() {
@@ -831,26 +838,55 @@ show_uptime_kuma_help() {
     echo ""
 
     help_subtitle "运维操作"
-    help_command "install"                     "安装 Uptime Kuma（默认端口 3001）"
-    help_command "uninstall"                   "卸载服务并移除数据目录"
-    help_command "status"                      "查看运行状态、监听端口与数据目录"
-    help_command "restart"                     "重启服务"
-    help_command "logs [lines]"                "查看实时日志（默认 50 行）"
+    help_command "install"                     "套用 optional.uptime-kuma（Docker Compose，默认 127.0.0.1:3001）"
+    help_command "status"                      "查看 docker compose ps"
+    help_command "logs [lines]"                "查看容器日志（默认 200 行）"
+    help_command "restart"                     "重新创建并启动容器"
+    help_command "down"                        "停止 Uptime Kuma 容器"
+    help_command "pull"                        "拉取最新镜像（结合 restart 完成升级）"
+    help_command "cleanup-legacy"              "移除旧版 systemd/手工安装残留"
     echo ""
 
-    help_subtitle "配置管理"
-    help_command "config show"                 "显示安装目录、端口与用户"
-    help_command "config port <number>"        "修改监听端口并重启服务"
-    help_command "config update"               "更新到最新发行版"
-    help_command "config backup|restore"       "备份或恢复监控配置"
-    help_command "monitor"                     "导入 SaltGoat 默认监控项"
+    help_subtitle "配置查看"
+    help_command "config"                      "输出合并后的 Pillar 配置（包含 Traefik 路由）"
+    help_note "Pillar 位于 salt/pillar/uptime_kuma.sls，可配置镜像版本、端口、Traefik 路由等。"
     help_note "默认账户 admin/admin，首次登录后请立即修改密码。"
     echo ""
 
     help_subtitle "示例"
-    help_command "saltgoat uptime-kuma install"        "部署面板并开放端口"
-    help_command "saltgoat uptime-kuma config port 3002" "调整监听端口"
-    help_command "saltgoat uptime-kuma monitor"        "导入核心组件监控模板"
+    help_command "saltgoat uptime-kuma install"        "部署面板并挂载至 Traefik"
+    help_command "saltgoat uptime-kuma pull"           "更新镜像后配合 restart 完成升级"
+    help_command "saltgoat uptime-kuma cleanup-legacy" "清理旧版 systemd 安装"
+}
+
+# Mattermost 帮助
+show_mattermost_help() {
+    help_title "Mattermost 协作平台 (Docker)"
+    echo -e "用法: ${GREEN}saltgoat mattermost <command>${NC}"
+    echo ""
+
+    help_subtitle "运维操作"
+    help_command "install"                     "根据 Pillar 渲染 docker compose 并启动"
+    help_command "status"                      "查看 compose 容器状态"
+    help_command "logs [lines]"                "查看应用日志（默认 200 行）"
+    help_command "restart"                     "重启 Mattermost / Postgres 容器"
+    help_command "upgrade"                     "拉取最新镜像并重新部署"
+    echo ""
+
+    help_subtitle "Pillar 关键字段"
+    help_command "mattermost:site_url"         "外网访问地址 (https://chat.example.com)"
+    help_command "mattermost:http_port"        "映射到宿主的端口，默认 8065"
+    help_command "mattermost:db.*"             "Postgres 镜像/库名/用户/密码"
+    help_command "mattermost:admin.*"          "首次启动创建的管理员账户"
+    help_command "mattermost:smtp.*"           "SMTP 服务器、账号、TLS 设置"
+    help_note "模板位于 salt/pillar/mattermost.sls.sample，可复制后按需修改。"
+    help_note "建议配合 saltgoat traefik install，由 SaltGoat 自动渲染宿主 Nginx → Traefik 透传与证书。"
+    echo ""
+
+    help_subtitle "示例"
+    help_command "cp salt/pillar/mattermost.sls.sample salt/pillar/mattermost.sls" "初始化 Pillar"
+    help_command "saltgoat mattermost install"  "部署 compose 栈"
+    help_command "saltgoat traefik install"            "部署统一入口网关后再执行安装命令"
 }
 
 # SSL 证书管理帮助

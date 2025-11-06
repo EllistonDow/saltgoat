@@ -1,0 +1,33 @@
+{% set ssl_cfg = ssl or {} %}
+server {
+    listen 80;
+{% if ssl_cfg.get('enabled') %}
+    listen 443 ssl;
+{% endif %}
+    server_name {{ primary_domain }}{% if aliases %} {{ aliases | join(' ') }}{% endif %};
+
+    location /.well-known/acme-challenge/ {
+        root {{ webroot | default('/var/www/letsencrypt') }};
+    }
+
+{% if ssl_cfg.get('enabled') and ssl_cfg.get('redirect', True) %}
+    if ($scheme != "https") {
+        return 301 https://$host$request_uri;
+    }
+{% endif %}
+
+{% if ssl_cfg.get('enabled') %}
+    ssl_certificate {{ ssl_cfg.get('cert', '/etc/ssl/certs/ssl-cert-snakeoil.pem') }};
+    ssl_certificate_key {{ ssl_cfg.get('key', '/etc/ssl/private/ssl-cert-snakeoil.key') }};
+    ssl_protocols {{ ssl_cfg.get('protocols', 'TLSv1.2 TLSv1.3') }};
+    ssl_prefer_server_ciphers {{ 'on' if ssl_cfg.get('prefer_server_ciphers', False) else 'off' }};
+{% endif %}
+
+    location / {
+        proxy_pass http://127.0.0.1:{{ upstream_port }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

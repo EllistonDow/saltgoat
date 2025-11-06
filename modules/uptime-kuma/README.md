@@ -15,19 +15,12 @@ Uptime Kuma 是一个现代化的自托管监控工具，提供实时服务监�
 - **API 支持**: RESTful API 接口
 - **多语言支持**: 支持多种语言界面
 
-## 安装要求
-
-- Node.js 18+ 
-- 512MB+ 内存
-- 1GB+ 磁盘空间
-- 网络连接
-
 ## 使用方法
 
 ### 安装 Uptime Kuma
 
 ```bash
-# 安装 Uptime Kuma
+# 安装 Uptime Kuma（Docker Compose）
 sudo saltgoat uptime-kuma install
 ```
 
@@ -38,63 +31,50 @@ sudo saltgoat uptime-kuma install
 sudo saltgoat uptime-kuma status
 ```
 
-### 配置管理
+### 拉取镜像
 
 ```bash
-# 查看当前配置
-sudo saltgoat uptime-kuma config show
-
-# 更改端口
-sudo saltgoat uptime-kuma config port 3002
-
-# 更新到最新版本
-sudo saltgoat uptime-kuma config update
-
-# 备份数据
-sudo saltgoat uptime-kuma config backup
-
-# 恢复数据
-sudo saltgoat uptime-kuma config restore /path/to/backup.tar.gz
+# 更新到最新版本镜像
+sudo saltgoat uptime-kuma pull
+# 重新部署
+sudo saltgoat uptime-kuma restart
 ```
 
 ### 日志管理
 
 ```bash
-# 查看最近 50 行日志
+# 查看最近 200 行日志
 sudo saltgoat uptime-kuma logs
-
-# 查看最近 100 行日志
-sudo saltgoat uptime-kuma logs 100
+# 查看最近 500 行日志
+sudo saltgoat uptime-kuma logs 500
 ```
 
 ### 服务管理
 
 ```bash
-# 重启 Uptime Kuma 服务
+# 重启 Uptime Kuma 容器
 sudo saltgoat uptime-kuma restart
-```
 
-### 监控配置
-
-```bash
-# 配置 SaltGoat 服务监控
-sudo saltgoat uptime-kuma monitor
+# 停止容器
+sudo saltgoat uptime-kuma down
 ```
 
 ### 卸载
 
 ```bash
-# 卸载 Uptime Kuma
-sudo saltgoat uptime-kuma uninstall
+# 清理旧版 systemd 安装
+sudo saltgoat uptime-kuma cleanup-legacy
+# 停止并移除容器
+sudo saltgoat uptime-kuma down
 ```
 
 ## 访问地址
 
 安装完成后，通过以下地址访问 Uptime Kuma：
 
-- **Web 界面**: `http://your-server-ip:3001`
+- **Web 界面**: `http://your-server-ip:3001`（或经 Traefik 暴露的域名）
 - **默认账户**: admin / admin
-- **状态页面**: `http://your-server-ip:3001/status/your-status-page`
+- **状态页面**: `https://status.example.com/status/your-status-page`
 
 ## 监控类型
 
@@ -155,33 +135,6 @@ sudo saltgoat uptime-kuma uninstall
 - **多语言**: 支持多种语言
 - **移动友好**: 响应式设计
 
-## 与 SaltGoat 集成
-
-Uptime Kuma 与 SaltGoat 完美集成：
-
-### 自动监控配置
-
-```bash
-# 配置 SaltGoat 服务监控
-sudo saltgoat uptime-kuma monitor
-```
-
-这将自动创建以下监控：
-
-- **Nginx**: Web 服务器监控
-- **MySQL**: 数据库服务监控
-- **PHP-FPM**: PHP 进程监控
-- **Valkey**: 缓存服务监控
-- **OpenSearch**: 搜索引擎监控
-- **RabbitMQ**: 消息队列监控
-
-### 集成特性
-
-- **自动发现**: 自动发现 SaltGoat 管理的服务
-- **统一管理**: 通过 SaltGoat 统一管理监控配置
-- **告警集成**: 集成 SaltGoat 告警系统
-- **数据备份**: 集成 SaltGoat 备份系统
-
 ## 性能优化
 
 ### 系统优化
@@ -216,11 +169,9 @@ sudo saltgoat uptime-kuma monitor
 ### 服务无法启动
 
 ```bash
-# 检查服务状态
-systemctl status uptime-kuma
-
-# 查看详细日志
-journalctl -u uptime-kuma -f
+# 检查容器状态与日志
+sudo saltgoat uptime-kuma status
+sudo saltgoat uptime-kuma logs
 ```
 
 ### 无法访问 Web 界面
@@ -253,19 +204,7 @@ journalctl -u uptime-kuma -f
 
 ## 相关命令
 
-```bash
-# 查看所有可用命令
-saltgoat uptime-kuma help
-
-# 完整状态检查
-sudo saltgoat uptime-kuma status
-
-# 配置监控
-sudo saltgoat uptime-kuma monitor
-
-# 备份数据
-sudo saltgoat uptime-kuma config backup
-```
+> 安装命令会根据 Pillar 自动写入 `nginx:sites:uptime-kuma`、生成透传配置，并在缺少证书时调用 `saltgoat nginx add-ssl uptime-kuma <domain>` 自动申请 HTTPS。如需查看其它子命令，可执行 `saltgoat uptime-kuma help`。
 
 ## 与其他监控工具对比
 

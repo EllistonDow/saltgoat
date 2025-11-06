@@ -1,0 +1,35 @@
+#jinja2: lstrip_blocks: True, trim_blocks: True
+services:
+  app:
+    image: {{ image }}
+    restart: unless-stopped
+    container_name: uptime-kuma-app
+    ports:
+      - "{{ bind_host }}:{{ http_port }}:3001"
+    volumes:
+      - {{ data_dir }}:/app/data
+    environment:
+      UPTIME_KUMA_PORT: "3001"
+{% for key, value in environment.items() %}
+      {{ key }}: {{ value }}
+{% endfor %}
+{% if traefik_rule %}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.{{ traefik_router }}.rule={{ traefik_rule }}"
+      - "traefik.http.routers.{{ traefik_router }}.entrypoints={{ ','.join(traefik_entrypoints or ['web']) }}"
+      - "traefik.http.services.{{ traefik_router }}.loadbalancer.server.port=3001"
+{% if traefik_tls_enabled %}
+      - "traefik.http.routers.{{ traefik_router }}.tls=true"
+      - "traefik.http.routers.{{ traefik_router }}.tls.certresolver={{ traefik_cert_resolver }}"
+{% endif %}
+{% for label in traefik_extra_labels %}
+      - "{{ label }}"
+{% endfor %}
+{% endif %}
+    networks:
+      - saltgoat-core
+
+networks:
+  saltgoat-core:
+    external: true

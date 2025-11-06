@@ -54,21 +54,36 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 
 ### ☁️ 对象存储（MinIO）
 
-- `saltgoat minio apply [--domain minio.example.com --console-domain console.example.com --ssl-email ops@example.com --no-console]`：安装 MinIO 并自动写入 Nginx 反代与 Let’s Encrypt 证书（未传 `--domain` 时仅部署后台服务）。
-- `saltgoat minio health`：依据 Pillar 里的 `health.*` 生成 `/minio/health/live` URL 并发出请求，适合写入 Salt Schedule / CI 以确认服务可用。
-- `saltgoat minio info|env`：分别打印 Pillar 摘要（JSON）与 `/etc/minio/minio.env`，方便核对凭据、端口与 TLS 设置。
-- Pillar 模板 `salt/pillar/minio.sls.sample` 现新增 `binary_source`、`binary_hash`、`health`、`proxy` 等字段，可直接粘贴 MinIO 官方 SHA256、自定义健康主机，以及控制反代站点/ACME Webroot。
+- `saltgoat minio apply`：渲染 `/opt/saltgoat/docker/minio/docker-compose.yml` 并启动 MinIO。默认映射到宿主 `127.0.0.1:9000/9001`，建议通过 Traefik 或宿主 Nginx 自动生成反代与证书。
+- `saltgoat minio status|logs|restart`：封装 docker compose 操作，便于查看容器状态、实时日志或重建。
+- `saltgoat minio health`：依据 Pillar 里的 `health.*` 生成 `/minio/health/live` 请求，适合写入 Salt Schedule / CI 以确认服务可用。
+- Pillar 模板 `salt/pillar/minio.sls.sample` 提供 `image`、`base_dir`、`data_dir`、`bind_host`、`api_port`、`console_port`、`extra_env` 等字段，可按需覆盖。
+- 当 API/Console 的 `traefik.*.tls.enabled` 为 `false` 时，CLI 会自动生成 `nginx:sites:minio-api|minio-console` 与透传配置，并在证书缺失时调用 `saltgoat nginx add-ssl` 自动申请/续期。
 
-### 🧩 Docker + Nginx Proxy Manager
+### 💬 Mattermost 协作平台
 
-- `saltgoat proxy install`：套用 `optional.docker` + `optional.docker-npm`，在 `/opt/saltgoat/docker/npm` 启动 docker compose（HTTP 8080、HTTPS 8443、面板 9181，可在 Pillar `docker:npm` 中自定义）。
-- 面板初始账号 `admin@example.com / changeme`，访问 https://<宿主>:9181 立即修改。
-- `saltgoat proxy add example.com`：生成 `/etc/nginx/conf.d/proxy-example.com.conf`，自动包含 `/.well-known/acme-challenge/` 透传，使 Let’s Encrypt 校验落到 NPM（127.0.0.1:<http port>）；证书申请完毕后重新执行同一命令，脚本会自动检测 `/etc/letsencrypt/live/<domain>` 或 NPM 数据目录 `/opt/saltgoat/docker/npm/data/letsencrypt/live/<cert>/`，并渲染 443 server 引用对应 fullchain/privkey。NPM 内部仅需配置 Proxy Host → 后端端口，无需重复导入证书。
-- `saltgoat proxy remove/list/status`：管理透传域名并查看 docker compose 状态，适合把 Goat Pulse / Fail2ban / MinIO Console / 自建面板等零散服务统一纳管。
+- `cp salt/pillar/mattermost.sls.sample salt/pillar/mattermost.sls`：初始化 Pillar，填写 `site_url`、管理员账号、数据库密码、SMTP 等。
+- `saltgoat mattermost install`：渲染 `/opt/saltgoat/docker/mattermost` 下的 docker compose（包含 Mattermost + Postgres），并以 `.env` 文件注入管理员、SMTP、文件存储等配置。
+- `saltgoat mattermost status|logs|restart|upgrade`：查看 compose 状态、最近日志、快速重启或滚动升级镜像。
+- Pillar `mattermost:traefik` 支持自动生成 Traefik labels（路由、entrypoints、TLS resolver、额外中间件），结合 `saltgoat traefik install` 可一键打通宿主 Nginx → Traefik → Mattermost 的 HTTPS 流程。
+- 亦可将 `mattermost:file_store.type` 设置为 `s3` 并在 `extra_env` 块追加 `MM_FILESETTINGS_AMAZONS3*` 参数，直接复用 SaltGoat MinIO 作为对象存储。
+
+### 🔭 Uptime Kuma 监控面板
+
+- `saltgoat uptime-kuma install`：渲染 `/opt/saltgoat/docker/uptime-kuma/docker-compose.yml` 并启动容器，默认监听 `127.0.0.1:3001`，配合 Traefik/Nginx 透传即可暴露公网。
+- `saltgoat uptime-kuma status|logs|restart|down|pull`：查看 compose 状态、读取日志、重建容器或停止服务；升级时先执行 `pull` 再 `restart`。
+- Pillar `uptime_kuma` 可覆盖镜像版本、监听地址、环境变量，并通过 `traefik.*` 字段声明域名、entrypoints、TLS 解析器与额外 label，实现自动路由和证书管理。
+- 当 `traefik.tls.enabled` 为 `false` 时，CLI 会自动生成宿主 Nginx 透传、补写 `nginx:sites:uptime-kuma`，并在缺少证书时调用 `saltgoat nginx add-ssl uptime-kuma <domain>` 自动申请/续期。
+
+### 🧩 Docker + Traefik 入口网关
+
+- `saltgoat traefik install`：套用 `optional.docker` + `optional.docker-traefik`，在 `/opt/saltgoat/docker/traefik` 启动 docker compose（默认端口：HTTP 18080、HTTPS 18443、Dashboard 19080，均可在 Pillar `docker:traefik` 中覆盖）。
+- `saltgoat traefik status|logs|restart|down|config`：查看 compose 状态、日志、重启或停止容器，并快速检查渲染后的 `traefik.yml`。
+- `saltgoat traefik cleanup-legacy`：一键移除旧版 Nginx Proxy Manager docker 目录与 `/etc/nginx/conf.d/proxy-*` 透传配置，确保环境干净。
 
 ### 🗃 服务总览
 
-- `saltgoat services [--format json]`：读取 Pillar 与当前配置，列出数据库、缓存、RabbitMQ、MinIO、Webmin、Nginx Proxy Manager 等关键服务的访问地址、端口及默认凭据，便于交接或巡检（建议以 sudo 执行）。
+- `saltgoat services [--format json]`：读取 Pillar 与当前配置，列出数据库、缓存、RabbitMQ、MinIO、Webmin、Traefik 等关键服务的访问地址、端口及默认凭据，便于交接或巡检（建议以 sudo 执行）。
 
 ---
 

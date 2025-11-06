@@ -11,15 +11,13 @@ class MinioSampleTest(unittest.TestCase):
         self.assertIn("minio", data)
         cfg = data["minio"]
         self.assertTrue(cfg.get("enabled"))
-        self.assertEqual(cfg.get("user"), "minio")
+        self.assertEqual(cfg.get("base_dir"), "/opt/saltgoat/docker/minio")
         self.assertIn("data_dir", cfg)
         self.assertIn("root_credentials", cfg)
-        self.assertIn("binary_source", cfg)
         self.assertIn("health", cfg)
         self.assertTrue(cfg["health"].get("verify"))
-        self.assertIn("binary_hash", cfg)
-        self.assertIn("listen_address", cfg)
-        self.assertIn("console_address", cfg)
+        self.assertIn("api_port", cfg)
+        self.assertIn("console_port", cfg)
 
 
 if __name__ == "__main__":

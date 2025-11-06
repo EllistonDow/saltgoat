@@ -1,9 +1,24 @@
 docker:
-  npm:
-    base_dir: /opt/saltgoat/docker/npm
-    http_port: 8080
-    https_port: 8443
-    admin_port: 9181
-    image: jc21/nginx-proxy-manager:2.11.3
-    db_image: mariadb:10.11
-    db_password: "ChangeMe!SetInSecret"
+  traefik:
+    base_dir: /opt/saltgoat/docker/traefik
+    image: traefik:v3.1
+    project: traefik
+    http_port: 18080
+    https_port: 18443
+    dashboard_port: 19080
+    log_level: INFO
+    dashboard:
+      enabled: true
+      insecure: false
+      basic_auth: {}
+    acme:
+      enabled: false
+      resolver: saltgoat
+      email: admin@example.com
+      storage: acme.json
+      http_challenge:
+        enabled: true
+        entrypoint: web
+      tls_challenge: false
+    environment: {}
+    extra_args: []

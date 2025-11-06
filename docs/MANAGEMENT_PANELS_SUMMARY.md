@@ -63,7 +63,7 @@ sudo saltgoat cockpit install
 # 安装 Adminer
 sudo saltgoat adminer install
 
-# 安装 Uptime Kuma
+# 安装 Uptime Kuma（Docker Compose）
 sudo saltgoat uptime-kuma install
 ```
 
@@ -76,8 +76,9 @@ sudo saltgoat cockpit status
 # 查看 Adminer 状态
 sudo saltgoat adminer status
 
-# 查看 Uptime Kuma 状态
+# 查看 Uptime Kuma 状态 / 日志
 sudo saltgoat uptime-kuma status
+sudo saltgoat uptime-kuma logs
 ```
 
 ### 获取帮助
@@ -137,9 +138,9 @@ saltgoat help uptime-kuma
 
 ### Uptime Kuma 安全
 - 用户认证系统
-- 数据备份功能
-- 服务隔离运行
-- 权限控制
+- 数据目录挂载（持久化于 `/opt/saltgoat/docker/uptime-kuma/data`）
+- Traefik / HTTPS 自动化支持
+- 容器隔离运行
 
 ## 🎯 与 SaltGoat 集成
 

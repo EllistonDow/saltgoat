@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.4.11] - 2025-11-06
+
+### Changes
+- 修改 59 个文件: README.md, docs/INSTALL.md, docs/MANAGEMENT_PANELS_SUMMARY.md, docs/OPS_TOOLING.md, lib/help.sh 等
+
+
 ## [1.4.10] - 2025-11-05
 
 ### Changes

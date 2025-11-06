@@ -3,7 +3,7 @@ minio:
   image: "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
   base_dir: "/opt/saltgoat/docker/minio"
   data_dir: "/var/lib/minio/data"
-  bind_host: "127.0.0.1"    # 映射到宿主的接口，留空表示 0.0.0.0
+  bind_host: "127.0.0.1"
   api_port: 9000
   console_port: 9001
   domain: ""
@@ -20,7 +20,7 @@ minio:
     endpoint: /minio/health/live
     timeout: 5
     verify: true
-  extra_env: {}  # 额外 MINIO_* 环境变量，可按 key: value 新增
+  extra_env: {}
   traefik:
     api:
       router: "minio-api"

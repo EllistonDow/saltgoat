@@ -319,14 +319,16 @@ sudo saltgoat adminer security
 
 #### Uptime Kuma 监控面板
 ```bash
-# 安装 Uptime Kuma
+# 安装 Uptime Kuma（Docker Compose）
 sudo saltgoat uptime-kuma install
 
-# 查看状态
+# 查看状态 / 日志 / 重启
 sudo saltgoat uptime-kuma status
+sudo saltgoat uptime-kuma logs
+sudo saltgoat uptime-kuma restart
 
-# 配置 SaltGoat 服务监控
-sudo saltgoat uptime-kuma monitor
+# 升级镜像
+sudo saltgoat uptime-kuma pull && sudo saltgoat uptime-kuma restart
 ```
 
 ### 🚨 故障排除

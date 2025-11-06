@@ -128,23 +128,17 @@ def detect_prometheus_port() -> str:
     return "9090"
 
 
-def detect_uptime_kuma_port() -> str:
-    service_file = Path("/etc/systemd/system/uptime-kuma.service")
-    text = read_text(service_file)
-    match = re.search(r"UPTIME_KUMA_PORT=(\d+)", text)
-    if match:
-        return match.group(1)
-    return "3001"
-
-
 def build_services() -> List[ServiceEntry]:
     services: List[ServiceEntry] = []
     ip = get_ip()
     host = socket.getfqdn()
 
     saltgoat_cfg = read_yaml(PILLAR_DIR / "saltgoat.sls")
-    docker_cfg = read_yaml(PILLAR_DIR / "docker.sls").get("docker", {}).get("npm", {})
+    docker_root = read_yaml(PILLAR_DIR / "docker.sls").get("docker", {})
+    traefik_cfg = docker_root.get("traefik", {}) if isinstance(docker_root, dict) else {}
     minio_cfg = read_yaml(PILLAR_DIR / "minio.sls").get("minio", {})
+    mattermost_cfg = read_yaml(PILLAR_DIR / "mattermost.sls").get("mattermost", {})
+    kuma_cfg = read_yaml(PILLAR_DIR / "uptime_kuma.sls").get("uptime_kuma", {})
 
     def pillar_value(key: str, default: str = "") -> str:
         value = saltgoat_cfg.get(key, default)
@@ -219,60 +213,57 @@ def build_services() -> List[ServiceEntry]:
     minio_root = (minio_cfg.get("root_credentials") or {}) if isinstance(minio_cfg, dict) else {}
     minio_user = str(minio_root.get("access_key", "minioadmin"))
     minio_pass = str(minio_root.get("secret_key", "minioadmin"))
-    listen = str(minio_cfg.get("listen_address", "0.0.0.0:9000"))
-    api_port = listen.split(":")[-1] if ":" in listen else "9000"
-    console_listen = str(minio_cfg.get("console_address", "0.0.0.0:9001"))
-    console_port = console_listen.split(":")[-1] if ":" in console_listen else "9001"
-    proxy_cfg = minio_cfg.get("proxy") if isinstance(minio_cfg, dict) else {}
-    minio_domain = ""
-    if isinstance(proxy_cfg, dict) and proxy_cfg.get("enabled"):
-        minio_domain = str(proxy_cfg.get("domain", ""))
-    if minio_domain:
-        minio_address = f"https://{minio_domain}"
-    else:
-        minio_address = f"http://{ip}:{api_port}"
+    bind_host = str(minio_cfg.get("bind_host", "127.0.0.1") or "0.0.0.0")
+    api_port = str(minio_cfg.get("api_port", "9000"))
+    console_port = str(minio_cfg.get("console_port", "9001"))
+    minio_address = f"http://{ip}:{api_port}"
     services.append(
         ServiceEntry(
             name="MinIO API",
             address=minio_address,
             username=minio_user,
             password=minio_pass,
-            notes="S3-compatible"
+            notes=f"S3-compatible (bind {bind_host}:{api_port})"
         )
     )
-    console_enabled = False
-    console_domain = ""
-    if isinstance(proxy_cfg, dict):
-        console_enabled = bool(proxy_cfg.get("console_enabled", True))
-        console_domain = str(proxy_cfg.get("console_domain", ""))
-    if console_enabled:
-        if console_domain:
-            console_addr = f"https://{console_domain}"
-        else:
-            console_addr = f"http://{ip}:{console_port}"
-        services.append(
-            ServiceEntry(
-                name="MinIO Console",
-                address=console_addr,
-                username=minio_user,
-                password=minio_pass,
-                notes="Web UI",
-            )
-        )
-
-    # Nginx Proxy Manager
-    npm_http = str(docker_cfg.get("http_port", "8080"))
-    npm_https = str(docker_cfg.get("https_port", "8443"))
-    npm_admin = str(docker_cfg.get("admin_port", "9181"))
     services.append(
         ServiceEntry(
-            name="Nginx Proxy Manager",
-            address=f"http://{host}:{npm_admin}",
-            username="admin@example.com",
-            password="changeme",
-            notes=f"Proxy ports {npm_http}/{npm_https}; change credentials after login",
+            name="MinIO Console",
+            address=f"http://{ip}:{console_port}",
+            username=minio_user,
+            password=minio_pass,
+            notes=f"Web UI (bind {bind_host}:{console_port})",
         )
     )
+
+    # Traefik
+    if isinstance(traefik_cfg, dict) and traefik_cfg:
+        traefik_http = str(traefik_cfg.get("http_port", "18080"))
+        traefik_https = traefik_cfg.get("https_port")
+        traefik_https_str = str(traefik_https) if traefik_https else "-"
+        dashboard_port = str(traefik_cfg.get("dashboard_port", "19080"))
+        dashboard_cfg = traefik_cfg.get("dashboard", {}) if isinstance(traefik_cfg.get("dashboard"), dict) else {}
+        dashboard_enabled = bool(dashboard_cfg.get("enabled", True))
+        dashboard_insecure = bool(dashboard_cfg.get("insecure", False))
+        dashboard_auth = dashboard_cfg.get("basic_auth", {}) if isinstance(dashboard_cfg.get("basic_auth"), dict) else {}
+        dash_user = dash_pass = "-"
+        if dashboard_auth:
+            dash_user, dash_pass = next(iter(dashboard_auth.items()))
+        notes = f"HTTP {traefik_http}"
+        if traefik_https:
+            notes += f" / HTTPS {traefik_https_str}"
+        notes += f"; Dashboard {'enabled' if dashboard_enabled else 'disabled'}"
+        if dashboard_enabled and not dashboard_insecure and not dashboard_auth:
+            notes += " (api@internal only; configure auth to expose)"
+        services.append(
+            ServiceEntry(
+                name="Traefik",
+                address=f"http://{host}:{dashboard_port}",
+                username=dash_user,
+                password=dash_pass,
+                notes=notes,
+            )
+        )
 
     # Cockpit
     services.append(
@@ -312,17 +303,49 @@ def build_services() -> List[ServiceEntry]:
     )
 
     # Uptime Kuma
-    kuma_port = detect_uptime_kuma_port()
-    kuma_state = service_state("uptime-kuma")
+    kuma_bind = "127.0.0.1"
+    kuma_port = "3001"
+    kuma_state = "docker"
+    if isinstance(kuma_cfg, dict) and kuma_cfg:
+        kuma_bind = str(kuma_cfg.get("bind_host", kuma_bind))
+        kuma_port = str(kuma_cfg.get("http_port", kuma_port))
+        traefik = kuma_cfg.get("traefik", {}) if isinstance(kuma_cfg.get("traefik"), dict) else {}
+        domain = (traefik.get("domain") or "").strip()
+        tls_enabled = bool(traefik.get("tls", {}).get("enabled", True)) if isinstance(traefik.get("tls"), dict) else True
+        scheme = "https" if tls_enabled else "http"
+        address = f"{scheme}://{domain}" if domain else f"http://{host}:{kuma_port}"
+        notes = f"Bind {kuma_bind}:{kuma_port}; data dir {kuma_cfg.get('data_dir', '/opt/saltgoat/docker/uptime-kuma/data')}"
+    else:
+        address = f"http://{host}:{kuma_port}"
+        notes = "docker-compose (defaults)"
     services.append(
         ServiceEntry(
             name="Uptime Kuma",
-            address=f"http://{host}:{kuma_port}",
+            address=address,
             username="admin",
             password="(set via UI)",
-            notes=f"Synthetic probes (state: {kuma_state})",
+            notes=notes,
         )
     )
+
+    if isinstance(mattermost_cfg, dict) and mattermost_cfg:
+        mm_enabled = mattermost_cfg.get("enabled", True)
+        if mm_enabled:
+            mm_port = str(mattermost_cfg.get("http_port", "8065"))
+            mm_site = mattermost_cfg.get("site_url") or f"http://{host}:{mm_port}"
+            mm_admin = mattermost_cfg.get("admin", {}) if isinstance(mattermost_cfg.get("admin"), dict) else {}
+            mm_user = str(mm_admin.get("username", "sysadmin"))
+            mm_pass = str(mm_admin.get("password", "<see pillar>"))
+            mm_base = mattermost_cfg.get("base_dir", "/opt/saltgoat/docker/mattermost")
+            services.append(
+                ServiceEntry(
+                    name="Mattermost",
+                    address=mm_site,
+                    username=mm_user,
+                    password=mm_pass,
+                    notes=f"Docker compose @ {mm_base}",
+                )
+            )
 
     return services
 

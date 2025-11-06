@@ -125,7 +125,8 @@ register_module "memory" "${SCRIPT_DIR}/monitoring/memory.sh"
 register_module "schedule" "${SCRIPT_DIR}/monitoring/schedule.sh"
 register_module "fun" "${SCRIPT_DIR}/modules/fun/fun.sh"
 register_module "minio" "${SCRIPT_DIR}/modules/minio/minio.sh"
-register_module "proxy" "${SCRIPT_DIR}/modules/proxy/proxy.sh"
+register_module "traefik" "${SCRIPT_DIR}/modules/traefik/traefik.sh"
+register_module "mattermost" "${SCRIPT_DIR}/modules/mattermost/mattermost.sh"
 register_module "services" "${SCRIPT_DIR}/modules/services/services.sh"
 
 # 显示横幅
@@ -623,9 +624,9 @@ case "$1" in
         require_module "minio"
         minio_handler "${@:2}"
         ;;
-    "proxy")
-        require_module "proxy"
-        proxy_handler "${@:2}"
+    "traefik")
+        require_module "traefik"
+        traefik_handler "${@:2}"
         ;;
     "services")
         require_module "services"
@@ -1240,11 +1241,15 @@ case "$1" in
         ;;
     "uptime-kuma")
         require_module "uptime-kuma"
-        uptime_kuma_main "$2" "$3" "$4"
+        kuma_handler "${@:2}"
         ;;
     "fun")
         require_module "fun"
         fun_handler "${@:2}"
+        ;;
+    "mattermost")
+        require_module "mattermost"
+        mattermost_main "${@:2}"
         ;;
     "verify")
         bash "${SCRIPT_DIR}/scripts/verify.sh"

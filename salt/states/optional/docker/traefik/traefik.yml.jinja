@@ -1,0 +1,93 @@
+#jinja2: lstrip_blocks: True, trim_blocks: True
+{% set defaults = {
+  'base_dir': '/opt/saltgoat/docker/traefik',
+  'image': 'traefik:v3.1',
+  'project': 'traefik',
+  'http_port': 18080,
+  'https_port': 0,
+  'dashboard_port': 19080,
+  'log_level': 'INFO',
+  'extra_args': [],
+  'environment': {},
+  'dashboard': {
+    'enabled': True,
+    'insecure': False,
+    'basic_auth': {}
+  },
+  'acme': {
+    'enabled': False,
+    'resolver': 'saltgoat',
+    'email': '',
+    'storage': 'acme.json',
+    'http_challenge': {
+      'enabled': True,
+      'entrypoint': 'web'
+    },
+    'tls_challenge': False
+  }
+} %}
+{% set cfg = salt['slsutil.merge'](defaults, salt['pillar.get']('docker:traefik', {}) or {}, strategy='recurse') %}
+log:
+  level: {{ cfg.get('log_level', 'INFO') | upper }}
+
+api:
+  dashboard: {{ 'true' if cfg.get('dashboard', {}).get('enabled', True) else 'false' }}
+  insecure: {{ 'true' if cfg.get('dashboard', {}).get('insecure', False) else 'false' }}
+
+entryPoints:
+  web:
+    address: ":80"
+{% set https_port = cfg.get('https_port') %}
+{% if https_port %}
+  websecure:
+    address: ":443"
+{% endif %}
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+  file:
+    directory: "/etc/traefik/dynamic"
+    watch: true
+
+accessLog: {}
+
+{% set basic_auth = cfg.get('dashboard', {}).get('basic_auth', {}) %}
+{% if basic_auth %}
+http:
+  middlewares:
+    traefik-dashboard-auth:
+      basicAuth:
+        users:
+{% for user, password in basic_auth.items() %}
+          - "{{ user }}:{{ password }}"
+{% endfor %}
+  routers:
+    traefik-dashboard:
+      rule: "PathPrefix(`/dashboard`)"
+      service: api@internal
+      entryPoints:
+        - web
+{% if https_port %}
+        - websecure
+{% endif %}
+      middlewares:
+        - traefik-dashboard-auth
+{% endif %}
+
+{% set acme = cfg.get('acme', {}) %}
+{% if acme.get('enabled') %}
+certificatesResolvers:
+  {{ acme.get('resolver', 'saltgoat') }}:
+    acme:
+      email: "{{ acme.get('email', 'admin@example.com') }}"
+      storage: "/var/lib/traefik/{{ acme.get('storage', 'acme.json') }}"
+{% if acme.get('http_challenge', {}).get('enabled', True) %}
+      httpChallenge:
+        entryPoint: "{{ acme.get('http_challenge', {}).get('entrypoint', 'web') }}"
+{% endif %}
+{% if acme.get('tls_challenge') %}
+      tlsChallenge: {}
+{% endif %}
+{% endif %}

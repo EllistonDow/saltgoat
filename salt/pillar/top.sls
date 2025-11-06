@@ -51,3 +51,6 @@ base:
     - notifications
     - telegram-topics
     - docker
+    - minio
+    - mattermost
+    - uptime_kuma

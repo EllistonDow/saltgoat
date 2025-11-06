@@ -1,0 +1,57 @@
+services:
+  db:
+    image: {{ db_image }}
+    container_name: mattermost-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: {{ db_user }}
+      POSTGRES_PASSWORD: {{ db_password }}
+      POSTGRES_DB: {{ db_name }}
+    volumes:
+      - mattermost-db-data:/var/lib/postgresql/data
+    networks:
+      - saltgoat-core
+
+  app:
+    image: {{ mm_image }}
+    container_name: mattermost-app
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file:
+      - .env
+    volumes:
+      - {{ config_dir }}:/mattermost/config
+      - {{ data_dir }}:/mattermost/data
+      - {{ logs_dir }}:/mattermost/logs
+      - {{ plugins_dir }}:/mattermost/plugins
+      - {{ client_plugins_dir }}:/mattermost/client/plugins
+    ulimits:
+      nofile:
+        soft: 8096
+        hard: 8096
+{% set traefik = traefik or {} %}
+{% if traefik.rule %}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.{{ traefik.router }}.rule={{ traefik.rule }}"
+      - "traefik.http.routers.{{ traefik.router }}.entrypoints={{ ','.join(traefik.entrypoints or ['web']) }}"
+      - "traefik.http.services.{{ traefik.router }}.loadbalancer.server.port={{ traefik.service_port }}"
+{% if traefik.tls_enabled %}
+      - "traefik.http.routers.{{ traefik.router }}.tls=true"
+      - "traefik.http.routers.{{ traefik.router }}.tls.certresolver={{ traefik.cert_resolver }}"
+{% endif %}
+{% for label in traefik.extra_labels or [] %}
+      - "{{ label }}"
+{% endfor %}
+{% endif %}
+    networks:
+      - saltgoat-core
+
+volumes:
+  mattermost-db-data:
+    driver: local
+
+networks:
+  saltgoat-core:
+    external: true

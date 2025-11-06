@@ -183,4 +183,86 @@ nginx:
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
+    uptime-kuma:
+      enabled: true
+      server_name:
+      - status.magento.tattoogoat.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/uptime-kuma
+      php:
+        enabled: false
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/status.magento.tattoogoat.com/fullchain.pem
+        key: /etc/letsencrypt/live/status.magento.tattoogoat.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+      locations:
+        /:
+          directives:
+          - proxy_pass http://127.0.0.1:18080
+          - proxy_set_header Host $host
+          - proxy_set_header X-Real-IP $remote_addr
+          - proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for
+          - proxy_set_header X-Forwarded-Proto $scheme
+        /.well-known/acme-challenge/:
+          directives:
+          - alias /var/www/uptime-kuma/.well-known/acme-challenge/
+          - try_files $uri =404
+    foo:
+      enabled: true
+      server_name:
+      - foo.com
+      listen:
+      - port: 80
+      root: /var/www/foo
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+    mattermost:
+      enabled: true
+      server_name:
+      - chat.magento.tattoogoat.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/mattermost
+      php:
+        enabled: false
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/chat.magento.tattoogoat.com/fullchain.pem
+        key: /etc/letsencrypt/live/chat.magento.tattoogoat.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+      locations:
+        /:
+          directives:
+          - proxy_pass http://127.0.0.1:18080
+          - proxy_set_header Host $host
+          - proxy_set_header X-Real-IP $remote_addr
+          - proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for
+          - proxy_set_header X-Forwarded-Proto $scheme
+        /.well-known/acme-challenge/:
+          directives:
+          - alias /var/www/mattermost/.well-known/acme-challenge/
+          - try_files $uri =404
   ssl_email: ssl@tschenfeng.com
