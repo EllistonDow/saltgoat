@@ -16,11 +16,15 @@ docker-gpg-key:
     - require:
       - pkg: docker-packages
 
+{% set arch = salt['grains.get']('osarch', 'amd64') %}
+{% set codename = salt['grains.get']('oscodename', 'noble') %}
+
 docker-apt-source:
   file.managed:
     - name: /etc/apt/sources.list.d/docker.list
     - contents: |
-        deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable
+        deb [arch={{ arch }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ codename }} stable
+    - template: jinja
     - require:
       - cmd: docker-gpg-key
 

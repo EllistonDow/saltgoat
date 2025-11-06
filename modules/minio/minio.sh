@@ -220,7 +220,7 @@ minio_issue_ssl() {
     local info
     info="$(minio_ssl_info)"
     [[ -z "${info}" ]] && return
-    local line site domain
+    local site domain
     while IFS='=' read -r key value; do
         [[ -z "${key}" || -z "${value}" ]] && continue
         case "${key}" in
@@ -302,9 +302,15 @@ minio_health() {
 }
 
 minio_show_info() {
-    minio_info_json | python3 - <<'PY'
+    local json
+    json="$(minio_info_json)"
+    JSON_PAYLOAD="$json" python3 - <<'PY'
 import json, sys
-print(json.dumps(json.loads(sys.stdin.read()), ensure_ascii=False, indent=2))
+import os
+payload = os.environ.get("JSON_PAYLOAD", "")
+if not payload:
+    sys.exit(1)
+print(json.dumps(json.loads(payload), ensure_ascii=False, indent=2))
 PY
 }
 

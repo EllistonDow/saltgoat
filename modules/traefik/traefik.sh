@@ -4,10 +4,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ROOT_DIR="${SCRIPT_DIR}"
 TRAEFIK_HELPER="${SCRIPT_DIR}/modules/lib/traefik_helper.py"
-DOCKER_PILLAR="${ROOT_DIR}/salt/pillar/docker.sls"
-DOCKER_SAMPLE="${ROOT_DIR}/salt/pillar/docker.sls.sample"
+DOCKER_PILLAR="${SCRIPT_DIR}/salt/pillar/docker.sls"
+DOCKER_SAMPLE="${SCRIPT_DIR}/salt/pillar/docker.sls.sample"
 
 # shellcheck source=../../lib/logger.sh
 # shellcheck disable=SC1091
@@ -33,9 +32,15 @@ traefik_info_json() {
 
 traefik_get_field() {
     local field="$1"
-    traefik_info_json | python3 - "$field" <<'PY'
+    local json
+    json="$(traefik_info_json)"
+    JSON_PAYLOAD="$json" python3 - "$field" <<'PY'
 import json, sys
-data = json.load(sys.stdin)
+import os
+payload = os.environ.get("JSON_PAYLOAD", "")
+if not payload:
+    sys.exit(1)
+data = json.loads(payload)
 parts = sys.argv[1].split(".")
 cur = data
 for part in parts:

@@ -4,7 +4,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ROOT_DIR="${SCRIPT_DIR}"
 LOGGER="${SCRIPT_DIR}/lib/logger.sh"
 HELPER="${SCRIPT_DIR}/modules/lib/uptime_kuma_helper.py"
 PILLAR_FILE="${SCRIPT_DIR}/salt/pillar/uptime_kuma.sls"
@@ -34,9 +33,15 @@ kuma_info() {
 
 kuma_get_field() {
     local field="$1"
-    kuma_info | python3 - "$field" <<'PY'
+    local json
+    json="$(kuma_info)"
+    JSON_PAYLOAD="$json" python3 - "$field" <<'PY'
 import json, sys
-data = json.load(sys.stdin)
+import os
+payload = os.environ.get("JSON_PAYLOAD", "")
+if not payload:
+    sys.exit(1)
+data = json.loads(payload)
 parts = sys.argv[1].split(".")
 cur = data
 for part in parts:

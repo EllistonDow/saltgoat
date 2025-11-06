@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.0] - 2025-11-06
+
+### Changes
+- 修改 6 个文件: docs/ROADMAP_OBJECT_STORAGE.md, modules/mattermost/mattermost.sh, modules/minio/minio.sh, modules/traefik/traefik.sh, modules/uptime-kuma/uptime-kuma.sh 等
+
+
 ## [1.4.11] - 2025-11-06
 
 ### Changes

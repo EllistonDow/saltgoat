@@ -29,7 +29,8 @@ mattermost_base_dir() {
 mattermost_ensure_site() {
     local site="mattermost"
     local docker_pillar="${SCRIPT_DIR}/salt/pillar/docker.sls"
-    python3 - "${MATTERMOST_PILLAR}" "${NGINX_PILLAR}" "${docker_pillar}" <<'PY'
+    local site="mattermost"
+    python3 - "${MATTERMOST_PILLAR}" "${NGINX_PILLAR}" "${docker_pillar}" "${site}" <<'PY'
 from pathlib import Path
 import sys
 
@@ -38,6 +39,7 @@ import yaml
 mm_path = Path(sys.argv[1])
 nginx_path = Path(sys.argv[2])
 docker_path = Path(sys.argv[3])
+site = sys.argv[4]
 
 if not mm_path.exists():
     sys.exit(0)
@@ -68,7 +70,7 @@ if not isinstance(nginx_data, dict):
     nginx_data = {}
 nginx_cfg = nginx_data.setdefault("nginx", {})
 sites = nginx_cfg.setdefault("sites", {})
-entry = sites.get("mattermost")
+entry = sites.get(site)
 if not isinstance(entry, dict):
     entry = {
         "enabled": True,
@@ -81,7 +83,7 @@ if not isinstance(entry, dict):
             "X-Content-Type-Options": "nosniff",
         },
     }
-    sites["mattermost"] = entry
+    sites[site] = entry
 
 names = entry.setdefault("server_name", [])
 for host in domains:
@@ -144,7 +146,7 @@ challenge_block["directives"] = [
 
 nginx_path.write_text(yaml.safe_dump(nginx_data, sort_keys=False, default_flow_style=False), encoding="utf-8")
 PY
-    sudo mkdir -p /var/www/mattermost
+    sudo mkdir -p "/var/www/${site}"
 }
 
 mattermost_ssl_domain() {
