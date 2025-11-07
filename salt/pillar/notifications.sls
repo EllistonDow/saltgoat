@@ -1,14 +1,11 @@
 notifications:
   telegram:
     enabled: true
-    parse_mode: HTML
     min_severity: INFO
-    disabled_tags: []
-    site_overrides: {}
   webhook:
-    enabled: false
+    enabled: true
     endpoints:
-      - name: ops
-        url: "https://example.com/hooks/saltgoat"
+      - name: mattermost
+        url: https://chat.magento.tattoogoat.com/hooks/gtxuszagbfryfbfd6ssj9kat9a
         headers:
-          X-Token: "replace-me"
+          Content-Type: application/json

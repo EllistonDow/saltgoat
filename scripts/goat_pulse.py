@@ -159,7 +159,7 @@ def gather_minio_health() -> Dict[str, Any]:
     info: Dict[str, Any] = {
         "enabled": True,
         "url": url,
-        "service": cfg.service_name,
+        "service": getattr(cfg, "service_name", "minio"),
     }
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:

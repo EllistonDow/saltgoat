@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.4] - 2025-11-07
+
+### Changes
+- 修改 3 个文件: modules/magetools/magento_summary.py, salt/pillar/notifications.sls, scripts/goat_pulse.py
+
+
 ## [1.5.3] - 2025-11-07
 
 ### Changes

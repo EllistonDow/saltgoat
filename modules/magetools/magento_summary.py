@@ -243,6 +243,7 @@ def main() -> None:
             ("Generated", generated),
         ]
         plain_text, message = format_block(f"{label.upper()} SUMMARY", display_site, rows)
+        telegram_tag = f"saltgoat/business/summary/{site_slug}"
         payload = {
             "site": site,
             "site_slug": site_slug,
@@ -252,21 +253,19 @@ def main() -> None:
             "customers": {"count": customer_count},
             "range": {"start": start_str, "end": end_str},
             "severity": "INFO",
+            "tag": telegram_tag,
         }
         if args.telegram_thread is not None:
             payload["telegram_thread"] = int(args.telegram_thread)
-        elif "telegram_thread" not in payload:
-            thread = notif.get_thread_id(telegram_tag)
-            if thread is not None:
-                payload["telegram_thread"] = thread
+        thread = payload.get("telegram_thread") or notif.get_thread_id(telegram_tag)
+        if thread is not None:
+            payload["telegram_thread"] = thread
 
         log_to_file("SUMMARY", event_tag, payload)
         emit_event(event_tag, payload)
 
         if not args.no_telegram:
-            telegram_tag = f"saltgoat/business/summary/{site_slug}"
             if notif.should_send(telegram_tag, payload["severity"], site_slug):
-                payload["tag"] = telegram_tag
                 telegram_broadcast(telegram_tag, message, payload, plain_text)
             else:
                 log_to_file(
