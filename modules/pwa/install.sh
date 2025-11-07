@@ -567,6 +567,47 @@ ensure_saltgoat_extension_workspace() {
         "@saltgoat/venia-extension" "link:../saltgoat-venia-extension"
 }
 
+ensure_sample_payment_extensions() {
+    if ! is_true "${PWA_WITH_FRONTEND:-false}"; then
+        return
+    fi
+
+    local template_root="${SCRIPT_DIR}/modules/pwa/templates/extensions"
+    local target_root="${PWA_STUDIO_DIR%/}/packages/extensions"
+    local venia_concept_package="${PWA_STUDIO_DIR%/}/packages/venia-concept/package.json"
+    local extensions=(
+        "venia-sample-payments-checkmo|@magento/venia-sample-payments-checkmo"
+        "venia-sample-payments-cashondelivery|@magento/venia-sample-payments-cashondelivery"
+    )
+
+    if [[ ! -d "$template_root" ]]; then
+        log_warning "缺少 PWA 扩展示例模板目录 (${template_root})，已跳过支付扩展同步。"
+        return
+    fi
+
+    sudo -u www-data -H mkdir -p "$target_root"
+
+    local ext
+    for ext in "${extensions[@]}"; do
+        local dir="${ext%%|*}"
+        local pkg="${ext##*|}"
+        local src="${template_root}/${dir}"
+        local dest="${target_root}/${dir}"
+
+        if [[ ! -d "$src" ]]; then
+            log_warning "未找到 ${dir} 模板 (${src})，请更新 saltgoat 仓库。"
+            continue
+        fi
+
+        log_info "同步 Venia 示例支付扩展 (${dir})"
+        sudo mkdir -p "$dest"
+        sudo rsync -a --delete "$src/" "$dest/"
+        sudo chown -R www-data:www-data "$dest"
+
+        ensure_package_json_dependency "$venia_concept_package" "$pkg" "link:../extensions/${dir}"
+    done
+}
+
 ensure_workspace_dependency() {
     local package_json="$1"
     local package_name="$2"
@@ -628,6 +669,10 @@ ensure_package_json_dev_dependency() {
     ensure_package_json_field "$1" "devDependencies" "$2" "$3"
 }
 
+ensure_package_json_dependency() {
+    ensure_package_json_field "$1" "dependencies" "$2" "$3"
+}
+
 remove_package_json_field() {
     local package_json="$1"
     local field="$2"
@@ -676,8 +721,6 @@ prune_unused_pwa_extensions() {
         "venia-sample-backends"
         "venia-sample-eventing"
         "venia-sample-language-packs"
-        "venia-sample-payments-cashondelivery"
-        "venia-sample-payments-checkmo"
         "venia-product-recommendations"
     )
 
@@ -837,6 +880,7 @@ apply_mos_graphql_fixes() {
     fi
 
     ensure_saltgoat_extension_workspace
+    ensure_sample_payment_extensions
 
     local create_account_file="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/CreateAccount/createAccount.gql.js"
     if [[ -f "$create_account_file" && -n "$(grep -F 'is_confirmed' "$create_account_file" || true)" ]]; then

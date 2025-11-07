@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.6] - 2025-11-07
+
+### Changes
+- 修改 3 个文件: modules/pwa/install.sh, modules/pwa/overrides/packages/venia-concept/local-intercept.js, modules/pwa/workspaces/saltgoat-venia-extension/package.json
+
+
 ## [1.5.5] - 2025-11-07
 
 ### Changes

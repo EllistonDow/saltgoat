@@ -6,7 +6,12 @@
   "license": "MIT",
   "sideEffects": false,
   "peerDependencies": {
+    "@apollo/client": "^3.5.0",
+    "@magento/peregrine": "^15.0.0",
+    "@magento/venia-ui": "^12.0.0",
+    "prop-types": "^15.8.1",
     "react": "^17.0.0",
-    "react-dom": "^17.0.0"
+    "react-dom": "^17.0.0",
+    "react-intl": "^5.20.0"
   }
 }
