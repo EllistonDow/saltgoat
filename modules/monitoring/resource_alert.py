@@ -55,13 +55,29 @@ MYSQL_WARNING_RATIO = 0.9
 MYSQL_CRITICAL_RATIO = 0.95
 VALKEY_WARNING_RATIO = 0.85
 VALKEY_CRITICAL_RATIO = 0.93
+OPENSEARCH_WARNING_HEAP = 75.0
+OPENSEARCH_CRITICAL_HEAP = 85.0
+OPENSEARCH_COMFORT_HEAP = 55.0
 
 RUNTIME_DIR = Path("/etc/saltgoat/runtime")
 PHP_AUTOSCALE_FILE = RUNTIME_DIR / "php-fpm-pools.json"
 MYSQL_AUTOSCALE_FILE = RUNTIME_DIR / "mysql-autotune.json"
 VALKEY_AUTOSCALE_FILE = RUNTIME_DIR / "valkey-autotune.json"
+OPENSEARCH_AUTOSCALE_FILE = RUNTIME_DIR / "opensearch-autotune.json"
 VALKEY_CONFIG = Path("/etc/valkey/valkey.conf")
+OPENSEARCH_CONFIG = Path("/etc/opensearch/opensearch.yml")
 MINIO_PILLAR = REPO_ROOT / "salt" / "pillar" / "minio.sls"
+DEFAULT_OPENSEARCH_URL = os.environ.get("OPENSEARCH_URL", "http://127.0.0.1:9200").rstrip("/")
+OPENSEARCH_STATS_URL = os.environ.get(
+    "OPENSEARCH_STATS_URL",
+    f"{DEFAULT_OPENSEARCH_URL or 'http://127.0.0.1:9200'}/_cluster/stats?human=false",
+)
+OPENSEARCH_REQUEST_TIMEOUT = int(os.environ.get("OPENSEARCH_TIMEOUT", "10"))
+OPENSEARCH_CACHE_RULES = {
+    "index_buffer_size": {"min": 10, "max": 45, "step": 5, "default": 20},
+    "fielddata_cache_size": {"min": 10, "max": 45, "step": 5, "default": 20},
+    "queries_cache_size": {"min": 5, "max": 25, "step": 2, "default": 10},
+}
 
 AUTOSCALE_MIN_INTERVAL = 300  # seconds
 PHP_AUTOSCALE_MAX = 240
@@ -523,6 +539,130 @@ def collect_valkey_metrics() -> Optional[Dict[str, Any]]:
     if password:
         metrics["password"] = password
     return metrics
+
+
+def _to_percent(value: Any, default: int) -> int:
+    if isinstance(value, (int, float)):
+        try:
+            return max(0, int(value))
+        except ValueError:
+            return default
+    if isinstance(value, str):
+        raw = value.strip()
+        if raw.endswith("%"):
+            raw = raw[:-1]
+        try:
+            return max(0, int(float(raw)))
+        except ValueError:
+            return default
+    return default
+
+
+def current_opensearch_cache_settings() -> Dict[str, int]:
+    settings = {key: rule["default"] for key, rule in OPENSEARCH_CACHE_RULES.items()}
+    data = load_runtime_json(OPENSEARCH_AUTOSCALE_FILE)
+    cache_obj = data.get("opensearch")
+    if isinstance(cache_obj, dict):
+        for key in settings:
+            settings[key] = _to_percent(cache_obj.get(key), settings[key])
+        return settings
+    if shell_exists(OPENSEARCH_CONFIG):
+        try:
+            text = OPENSEARCH_CONFIG.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return settings
+        for key in settings:
+            pattern = rf"^{re.escape(key)}\s*:\s*([0-9]+)%"
+            match = re.search(pattern, text, flags=re.MULTILINE)
+            if match:
+                settings[key] = _to_percent(match.group(1), settings[key])
+    return settings
+
+
+def collect_opensearch_metrics() -> Optional[Dict[str, Any]]:
+    if not shell_exists(OPENSEARCH_CONFIG):
+        return None
+    req = urllib.request.Request(
+        OPENSEARCH_STATS_URL,
+        headers={"User-Agent": "SaltGoatResource/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=OPENSEARCH_REQUEST_TIMEOUT) as resp:
+            raw = resp.read()
+    except (urllib.error.URLError, TimeoutError, ConnectionError, ValueError):
+        return None
+    if not raw:
+        return None
+    try:
+        stats = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError:
+        return None
+    nodes = stats.get("nodes", {})
+    jvm_mem = nodes.get("jvm", {}).get("mem", {})
+    indices = stats.get("indices", {})
+    metrics: Dict[str, Any] = {
+        "status": stats.get("status"),
+        "cluster_name": stats.get("cluster_name"),
+        "nodes_count": nodes.get("count"),
+        "heap_used_percent": jvm_mem.get("heap_used_percent"),
+        "heap_used_in_bytes": jvm_mem.get("heap_used_in_bytes"),
+        "heap_max_in_bytes": jvm_mem.get("heap_max_in_bytes") or jvm_mem.get("heap_committed_in_bytes"),
+        "fielddata_memory_bytes": indices.get("fielddata", {}).get("memory_size_in_bytes"),
+        "fielddata_evictions": indices.get("fielddata", {}).get("evictions"),
+        "query_cache_memory_bytes": indices.get("query_cache", {}).get("memory_size_in_bytes"),
+        "query_cache_evictions": indices.get("query_cache", {}).get("evictions"),
+        "segments_memory_bytes": indices.get("segments", {}).get("memory_in_bytes"),
+        "docs_count": indices.get("docs", {}).get("count"),
+    }
+    return metrics
+
+
+def autoscale_opensearch(metrics: Dict[str, Any], auto_ctx: Dict[str, Any]) -> None:
+    heap_percent = metrics.get("heap_used_percent")
+    if heap_percent is None:
+        return
+    try:
+        heap_percent = float(heap_percent)
+    except (TypeError, ValueError):
+        return
+    caches = current_opensearch_cache_settings()
+    if not caches:
+        return
+    direction: Optional[str] = None
+    if heap_percent >= OPENSEARCH_CRITICAL_HEAP:
+        direction = "decrease"
+    elif heap_percent <= OPENSEARCH_COMFORT_HEAP:
+        direction = "increase"
+    if not direction:
+        return
+    data = load_runtime_json(OPENSEARCH_AUTOSCALE_FILE)
+    meta = runtime_meta_scope(data, "opensearch")
+    if recently_scaled(meta):
+        return
+    new_caches: Dict[str, int] = {}
+    changed = False
+    for key, rule in OPENSEARCH_CACHE_RULES.items():
+        current = caches.get(key, rule["default"])
+        if direction == "decrease":
+            new_value = max(rule["min"], current - rule["step"])
+        else:
+            new_value = min(rule["max"], current + rule["step"])
+        new_caches[key] = new_value
+        if new_value != current:
+            changed = True
+    if not changed:
+        return
+    data["opensearch"] = {k: f"{v}%" for k, v in new_caches.items()}
+    meta["last_scaled_at"] = time.time()
+    meta["direction"] = direction
+    save_runtime_json(OPENSEARCH_AUTOSCALE_FILE, data)
+    old_fmt = ", ".join(f"{k} {caches[k]}%" for k in ("index_buffer_size", "fielddata_cache_size", "queries_cache_size"))
+    new_fmt = ", ".join(f"{k} {new_caches[k]}%" for k in ("index_buffer_size", "fielddata_cache_size", "queries_cache_size"))
+    auto_ctx["actions"].append(
+        f"Adjusted OpenSearch caches ({old_fmt} -> {new_fmt}) after heap {heap_percent:.1f}%."
+    )
+    auto_ctx.setdefault("states", set()).add("optional.magento-optimization")
+    auto_ctx.setdefault("services", set()).add("opensearch")
 
 
 def autoscale_php_pool(pool_name: str, config: Dict[str, Any], auto_ctx: Dict[str, Any]) -> None:
@@ -1364,6 +1504,33 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
             elif ratio >= VALKEY_WARNING_RATIO:
                 bump("WARNING", "Valkey memory")
 
+    opensearch_info: Dict[str, Any] = {}
+    opensearch_metrics = collect_opensearch_metrics()
+    if opensearch_metrics:
+        opensearch_info.update(opensearch_metrics)
+        cache_settings = current_opensearch_cache_settings()
+        if cache_settings:
+            opensearch_info["cache_config"] = {key: f"{value}%" for key, value in cache_settings.items()}
+        heap_percent = opensearch_metrics.get("heap_used_percent")
+        heap_used = opensearch_metrics.get("heap_used_in_bytes") or 0
+        heap_max = opensearch_metrics.get("heap_max_in_bytes") or 0
+        if isinstance(heap_percent, (int, float)):
+            used_gb = heap_used / (1024**3) if heap_used else 0
+            max_gb = heap_max / (1024**3) if heap_max else 0
+            if heap_used and heap_max:
+                details.append(
+                    f"OpenSearch heap: {used_gb:.2f} / {max_gb:.2f} GiB ({heap_percent:.1f}%)."
+                )
+            if heap_percent >= OPENSEARCH_CRITICAL_HEAP:
+                bump("CRITICAL", "OpenSearch heap")
+                details.append("OpenSearch heap near saturation; attempting cache autoscale.")
+                autoscale_opensearch(opensearch_metrics, auto_ctx)
+            elif heap_percent >= OPENSEARCH_WARNING_HEAP:
+                bump("WARNING", "OpenSearch heap")
+            elif heap_percent <= OPENSEARCH_COMFORT_HEAP:
+                details.append("OpenSearch heap comfortably low; evaluating cache expansion.")
+                autoscale_opensearch(opensearch_metrics, auto_ctx)
+
     site_payload: List[Dict[str, Any]] = []
     sites_config = load_site_checks()
     if sites_config:
@@ -1380,6 +1547,7 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         "php_fpm": fpm_info,
         "mysql": mysql_info,
         "valkey": valkey_info,
+        "opensearch": opensearch_info,
         "sites": site_payload,
         "minio": minio_status,
         "thresholds": {
@@ -1389,6 +1557,10 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
             "php_fpm": {"notice_ratio": FPM_NOTICE_RATIO, "warning_ratio": FPM_WARNING_RATIO},
             "mysql": {"notice_ratio": MYSQL_NOTICE_RATIO, "warning_ratio": MYSQL_WARNING_RATIO, "critical_ratio": MYSQL_CRITICAL_RATIO},
             "valkey": {"warning_ratio": VALKEY_WARNING_RATIO, "critical_ratio": VALKEY_CRITICAL_RATIO},
+            "opensearch": {
+                "heap_warning_percent": OPENSEARCH_WARNING_HEAP,
+                "heap_critical_percent": OPENSEARCH_CRITICAL_HEAP,
+            },
         },
         "autoscale": {"actions": list(auto_ctx["actions"])},
     }

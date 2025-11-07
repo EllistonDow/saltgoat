@@ -202,6 +202,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - `sudo saltgoat monitor enable-beacons`：启用 Beacon/Reactors；若缺少 `salt-minion` 会提示并降级。
 - `sudo saltgoat schedule enable`：下发 SaltGoat 自身任务（内存、日志清理等），同样支持自动降级到 cron。
 - Salt Beacon 触发的 systemd 自愈流程会自动执行 `systemctl restart`，并把成功/失败状态写入 `/var/log/saltgoat/alerts.log`、发送 Telegram，同时重新发布 Salt 事件（便于级联自动化）。
+- `modules/monitoring/resource_alert.py` 会在负载过高时自动调节 PHP-FPM 进程池、MySQL `max_connections`、Valkey `maxmemory`，以及 OpenSearch 的缓存占比，把结果写入 `/etc/saltgoat/runtime/*.json` 并触发 autoscale 通知。
 - 监控/自愈巡检的完整 SOP 参考 [`docs/monitoring-playbook.md`](docs/monitoring-playbook.md)。
 
 ### 自动化脚本 (Automation)

@@ -194,6 +194,7 @@
 {% set runtime_dir = '/etc/saltgoat/runtime' %}
 {% set mysql_runtime_file = runtime_dir + '/mysql-autotune.json' %}
 {% set valkey_runtime_file = runtime_dir + '/valkey-autotune.json' %}
+{% set opensearch_runtime_file = runtime_dir + '/opensearch-autotune.json' %}
 {% if salt['file.file_exists'](mysql_runtime_file) %}
   {% set mysql_runtime_all = salt['slsutil.deserialize']('json', salt['file.read'](mysql_runtime_file)) %}
   {% if mysql_runtime_all is mapping %}
@@ -211,6 +212,16 @@
     {% if valkey_runtime %}
       {% set profile_config = salt['slsutil.merge'](profile_config, {'valkey': valkey_runtime}, strategy='recurse', merge_lists=False) %}
       {% set valkey_config = profile_config.get('valkey', {}) %}
+    {% endif %}
+  {% endif %}
+{% endif %}
+{% if salt['file.file_exists'](opensearch_runtime_file) %}
+  {% set opensearch_runtime_all = salt['slsutil.deserialize']('json', salt['file.read'](opensearch_runtime_file)) %}
+  {% if opensearch_runtime_all is mapping %}
+    {% set opensearch_runtime = opensearch_runtime_all.get('opensearch', {}) %}
+    {% if opensearch_runtime %}
+      {% set profile_config = salt['slsutil.merge'](profile_config, {'opensearch': opensearch_runtime}, strategy='recurse', merge_lists=False) %}
+      {% set opensearch_config = profile_config.get('opensearch', {}) %}
     {% endif %}
   {% endif %}
 {% endif %}

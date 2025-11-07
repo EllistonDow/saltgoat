@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.3] - 2025-11-07
+
+### Changes
+- 修改 3 个文件: README.md, modules/monitoring/resource_alert.py, salt/states/optional/magento-optimization.sls
+
+
 ## [1.5.2] - 2025-11-07
 
 ### Changes
