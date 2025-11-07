@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 import CMSPageShimmer from '@magento/venia-ui/lib/RootComponents/CMS/cms.shimmer';
 import RichContent from '@magento/venia-ui/lib/components/RichContent';
 import { useCmsPage } from '@magento/peregrine/lib/talons/Cms/useCmsPage';
+
+import Showcase from './Showcase';
 
 const createHomeContent = OriginalComponent => {
     const PwaHomeContent = props => {
@@ -31,18 +33,25 @@ const createHomeContent = OriginalComponent => {
             identifier
         });
 
+        const cmsContent = useMemo(() => cmsPage?.content?.trim() || '', [cmsPage]);
+
         if (shouldShowLoadingIndicator) {
             return React.createElement(CMSPageShimmer, null);
         }
 
-        if (!cmsPage || !cmsPage.content) {
-            // 若 CMS 页面缺失，退回原始组件以保持页面可用
-            return OriginalComponent
-                ? React.createElement(OriginalComponent, props)
-                : null;
+        if (!cmsContent) {
+            // 默认回退为 Venia 风格展示 + 原组件（避免空白页面）
+            return React.createElement(
+                React.Fragment,
+                null,
+                React.createElement(Showcase, null),
+                OriginalComponent
+                    ? React.createElement(OriginalComponent, props)
+                    : null
+            );
         }
 
-        return React.createElement(RichContent, { html: cmsPage.content });
+        return React.createElement(RichContent, { html: cmsContent });
     };
 
     PwaHomeContent.displayName = 'PwaHomeContent';

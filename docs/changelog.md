@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.8] - 2025-11-07
+
+### Changes
+- 修改 2 个文件: modules/pwa/templates/cms/pwa_home.html, modules/pwa/workspaces/saltgoat-venia-extension/src/components/HomeContent/index.js
+
+
 ## [1.5.7] - 2025-11-07
 
 ### Changes
