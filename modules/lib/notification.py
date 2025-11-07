@@ -31,6 +31,13 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _MD_SPECIAL_RE = re.compile(r"([_\*\[\]\(\)~`>#+\-=|{}.!])")
 TELEGRAM_TOPICS_PATH = Path(__file__).resolve().parents[2] / "salt" / "pillar" / "telegram-topics.sls"
 QUEUE_DIR = Path("/var/log/saltgoat/notify-queue")
+FALLBACK_NOTIFICATIONS_PATH = Path(
+    os.environ.get(
+        "SALTGOAT_NOTIFICATIONS_FILE",
+        Path(__file__).resolve().parents[2] / "salt" / "pillar" / "notifications.sls",
+    )
+)
+SKIP_PILLAR = os.environ.get("SALTGOAT_SKIP_PILLAR", "0") in {"1", "true", "True"}
 
 
 def _get_caller() -> Optional[Caller]:
@@ -46,6 +53,8 @@ def _get_caller() -> Optional[Caller]:
 
 
 def pillar_get(path: str, default: object = None) -> object:
+    if SKIP_PILLAR:
+        return default
     caller = _get_caller()
     if caller is None:
         return default
@@ -74,7 +83,12 @@ def load_config(reload: bool = False) -> Dict[str, object]:
     if _CACHE is not None and not reload:
         return _CACHE
 
-    data = pillar_get("notifications", {})
+    sentinel = object()
+    data = pillar_get("notifications", sentinel)
+    if data is sentinel or not isinstance(data, dict):
+        data = {}
+    if not data:
+        data = _load_notifications_fallback()
     if not isinstance(data, dict):
         data = {}
     telegram = data.get("telegram", {}) if isinstance(data.get("telegram"), dict) else {}
@@ -244,6 +258,29 @@ def html_to_plain(content: str) -> str:
     return html.unescape(_TAG_RE.sub("", content))
 
 
+def _load_notifications_fallback() -> Dict[str, object]:
+    path = FALLBACK_NOTIFICATIONS_PATH
+    if not path or not path.exists():
+        return {}
+    try:
+        import yaml  # type: ignore
+    except Exception:  # pragma: no cover - PyYAML 不可用
+        yaml = None  # type: ignore
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except Exception:
+        return {}
+    if yaml is None:
+        return {}
+    try:
+        data = yaml.safe_load(raw) or {}
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return data.get("notifications", {}) or {}
+
+
 def dispatch_webhooks(
     tag: str,
     severity: str,
@@ -263,6 +300,7 @@ def dispatch_webhooks(
         "plain": plain_message,
         "html": html_message,
         "payload": payload or {},
+        "text": plain_message,
     }
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
     delivered = 0
