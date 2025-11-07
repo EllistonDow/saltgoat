@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.7] - 2025-11-07
+
+### Changes
+- 修改 1 个文件: modules/pwa/templates/cms/pwa_home.html
+
+
 ## [1.5.6] - 2025-11-07
 
 ### Changes

@@ -1,14 +1,70 @@
 <div class="pwa-home">
     <section class="hero">
-        <h1>Welcome to your PWA storefront</h1>
-        <p>使用 Page Builder 编辑此页面即可即时同步至 PWA 前端。</p>
+        <span class="eyebrow">SaltGoat Commerce</span>
+        <h1>极速上线的 Headless PWA 门店</h1>
+        <p>
+            自动化部署、智能监控、自愈与通知已经就位。现在只需在 Page Builder
+            里插入你自己的 Banner、商品和专题内容，就能立即对外展示。
+        </p>
+        <div class="hero-actions">
+            <a class="cta primary" href="/collections/new-arrivals">立即选购</a>
+            <a class="cta ghost" href="/customer/account/login">登录 / 注册</a>
+        </div>
     </section>
+
+    <section class="stats">
+        <article>
+            <strong>99.95%</strong>
+            <span>高可用 SLA</span>
+        </article>
+        <article>
+            <strong>2x</strong>
+            <span>PageSpeed 提升</span>
+        </article>
+        <article>
+            <strong>24/7</strong>
+            <span>资源告警 & 自愈</span>
+        </article>
+        <article>
+            <strong>15 min</strong>
+            <span>一键部署完成</span>
+        </article>
+    </section>
+
+    <section class="feature-grid">
+        <article>
+            <h3>全自动运营</h3>
+            <p>
+                SaltGoat Schedule 会自动发现新站点，生成 Cron / Salt Schedule，并同步到 Telegram / Mattermost
+                通知线程。
+            </p>
+        </article>
+        <article>
+            <h3>智能扩容</h3>
+            <p>
+                PHP-FPM、MySQL、Valkey、OpenSearch 等核心服务具备运行时监控与自动调参，不再担心 504 或
+                max connections。
+            </p>
+        </article>
+        <article>
+            <h3>多渠道推送</h3>
+            <p>
+                订单、用户、备份、自愈、服务状态等事件以 MarkdownV2 / HTML 方式优雅推送到 Telegram
+                线程，也可同步到 Mattermost。
+            </p>
+        </article>
+    </section>
+
     <section class="next-steps">
         <h2>下一步建议</h2>
-        <ul>
-            <li>在 Page Builder 中替换 Banner、商品推荐等模块。</li>
-            <li>为不同 Store View 创建本地化内容。</li>
-            <li>完成编辑后运行 <code>sudo saltgoat pwa sync-content &lt;site&gt; --rebuild</code> 让前端刷新。</li>
-        </ul>
+        <ol>
+            <li>在 Page Builder 中添加品牌 Banner、品类卡片或自定义内容。</li>
+            <li>使用 <code>saltgoat monitor auto-sites</code> / <code>magetools schedule auto</code> 自动接入监控与计划任务。</li>
+            <li>更新 <code>modules/pwa/templates/cms/pwa_home.html</code> 即可批量下发默认模板。</li>
+        </ol>
+        <p class="footnote">
+            完成编辑后执行 <code>sudo saltgoat pwa sync-content &lt;site&gt; --rebuild</code> 或触发 CI
+            管道，PWA 前端就会重新构建生效。
+        </p>
     </section>
 </div>
