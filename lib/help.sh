@@ -131,7 +131,7 @@ show_main_help() {
     help_command "mattermost"                      "自托管协作平台（Docker 版）"
     help_command "minio"                           "自托管对象存储部署/健康检查"
     help_command "postfix --smtp <名称> [--enable|--disable]" "切换 SMTP 帐号并可同步开启/关闭 Postfix"
-    help_command "fun <status|joke|tip>"            "健康面板 + 趣味命令（详见 docs/OPS_TOOLING.md）"
+    help_command "fun <status|joke|tip>"            "健康面板 + 趣味命令（详见 docs/ops-tooling.md）"
     echo ""
 
     help_subtitle "诊断与状态"
@@ -224,7 +224,7 @@ show_fun_help() {
     help_command "fun joke"              "随机输出 SaltGoat 主题冷笑话（含 ASCII 山羊）"
     help_command "fun ascii"             "打印 ASCII 山羊 + 鼓励提示"
     help_command "fun tip"               "输出一个运维小贴士（提醒 varnish/backup/fail2ban 工具）"
-    help_note "更多运维工具详见 docs/OPS_TOOLING.md。"
+    help_note "更多运维工具详见 docs/ops-tooling.md。"
 }
 
 # 安装帮助
@@ -608,7 +608,7 @@ show_magetools_help() {
     help_command "permissions fix [path]"       "调用 Salt state 修复站点权限（默认当前目录）"
     help_command "permissions check [path]"     "使用 test=True 检查权限差异"
     help_command "permissions reset [path]"     "重新应用权限 state（操作前会确认）"
-    help_note "命令内部执行 sudo salt-call state.apply optional.magento-permissions-* (pillar=site_path)；详见 docs/MAGENTO_PERMISSIONS.md。"
+    help_note "命令内部执行 sudo salt-call state.apply optional.magento-permissions-* (pillar=site_path)；详见 docs/magento-permissions.md。"
     echo ""
 
     help_subtitle "缓存 / 队列"
@@ -697,8 +697,8 @@ show_pwa_help() {
     echo ""
 
     help_subtitle "相关文档"
-    help_command "docs/MAGENTO_PWA.md"          "安装流程与注意事项"
-    help_command "docs/pwa-todo.md"             "UI 与 Page Builder 推进计划"
+    help_command "docs/magento-pwa.md"          "安装流程与注意事项"
+    help_command "todo/pwa.md"                  "UI 与 Page Builder 推进计划"
     echo ""
 
     help_note "旧命令 'saltgoat magetools pwa' 已兼容转发，请尽快迁移至新命名空间。"
@@ -720,7 +720,7 @@ show_xtrabackup_help() {
     echo ""
 
     help_subtitle "前置要求"
-    help_command "Pillar mysql_backup.*"       "需在 Pillar 中定义账号、目录、定时策略（示例见 docs/MYSQL_BACKUP.md）"
+    help_command "Pillar mysql_backup.*"       "需在 Pillar 中定义账号、目录、定时策略（示例见 docs/mysql-backup.md）"
     help_command "mysql_password"              "root 凭据默认读取 pillar['mysql_password']"
     help_command "systemd"                     "安装流程会创建 saltgoat-mysql-backup.{service,timer}"
     help_note "首次执行 install 会自动启用 percona-release pxb-84-lts 仓库，并卸载旧版 PXB 套件。"
@@ -740,7 +740,7 @@ show_xtrabackup_help() {
     help_command "sudo saltgoat magetools xtrabackup mysql run"     "立即执行一次热备并写入时间戳目录"
     help_command "sudo saltgoat magetools xtrabackup mysql summary" "巡检备份容量与最近执行时间"
     help_command "sudo saltgoat magetools backup mysql run"         "沿用旧命令，内部转发至 xtrabackup 流程"
-    help_note "详细使用说明、恢复步骤与排错指南请参见 docs/MYSQL_BACKUP.md。"
+    help_note "详细使用说明、恢复步骤与排错指南请参见 docs/mysql-backup.md。"
 }
 
 # 版本锁定帮助

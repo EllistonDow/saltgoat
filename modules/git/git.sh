@@ -114,7 +114,7 @@ remote_tag_exists() {
 update_changelog() {
     local new_version="$1"
     local message="${2:-}"
-    local changelog="${MODULE_DIR}/../../docs/CHANGELOG.md"
+    local changelog="${MODULE_DIR}/../../docs/changelog.md"
     local date_str
     date_str=$(date +%Y-%m-%d)
     local header="## [${new_version}]"
@@ -301,7 +301,7 @@ run_git_release() {
     if [[ "$dry_run" == "true" ]]; then
         log_highlight "Release 预览 (dry-run): ${release_base} -> ${new_version}"
         log_info "提交信息: ${commit_msg}"
-        log_info "将更新文件: saltgoat, docs/CHANGELOG.md"
+        log_info "将更新文件: saltgoat, docs/changelog.md"
         local status_output
         status_output=$(cd "$repo_root" && git status --short)
         if [[ -n "$status_output" ]]; then
@@ -328,7 +328,7 @@ run_git_release() {
         fi
 
         git add --update
-        git add docs/CHANGELOG.md saltgoat
+        git add docs/changelog.md saltgoat
 
         if ! clean_python_bytecode "$repo_root"; then
             log_warning "自动清理仍检测到 Python 缓存文件，请处理后重试。"

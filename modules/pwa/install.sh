@@ -1407,7 +1407,7 @@ EOF
 1. 配置 SSL 证书并运行: sudo saltgoat magetools varnish enable ${PWA_SITE_NAME}
 2. 运行: sudo saltgoat magetools valkey-setup ${PWA_SITE_NAME} （如未自动执行）
 3. 运行: sudo saltgoat magetools rabbitmq-salt smart ${PWA_SITE_NAME} （如未自动执行）
-4. 如启用 PWA Studio，可将构建产物通过 Nginx/PM2 对外发布，详见 docs/MAGENTO_PWA.md。
+4. 如启用 PWA Studio，可将构建产物通过 Nginx/PM2 对外发布，详见 docs/magento-pwa.md。
 EOF
 }
 

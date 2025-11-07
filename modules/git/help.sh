@@ -12,7 +12,7 @@ show_git_help() {
     help_subtitle "工作流程"
     help_command "1" "读取当前 SCRIPT_VERSION 并解析可选 version 参数"
     help_command "2" "根据变更生成摘要（或使用 note）并写入 CHANGELOG"
-    help_command "3" "git add --update；自动纳入 saltgoat 与 docs/CHANGELOG.md"
+    help_command "3" "git add --update；自动纳入 saltgoat 与 docs/changelog.md"
     help_command "4" "提交 commit、创建/更新 tag 并推送到远程"
     echo ""
 

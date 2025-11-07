@@ -1,27 +1,33 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.2] - 2025-11-07
+
+### Changes
+- --help
+
+
 ## [1.5.1] - 2025-11-06
 
 ### Changes
-- 修改 23 个文件: README.md, docs/MONITORING_PLAYBOOK.md, docs/OPS_TOOLING.md, modules/lib/mastodon_helper.py, modules/lib/notification.py 等
+- 修改 23 个文件: README.md, docs/monitoring-playbook.md, docs/ops-tooling.md, modules/lib/mastodon_helper.py, modules/lib/notification.py 等
 
 
 ## [1.5.0] - 2025-11-06
 
 ### Changes
-- 修改 6 个文件: docs/ROADMAP_OBJECT_STORAGE.md, modules/mattermost/mattermost.sh, modules/minio/minio.sh, modules/traefik/traefik.sh, modules/uptime-kuma/uptime-kuma.sh 等
+- 修改 6 个文件: docs/roadmap-object-storage.md, modules/mattermost/mattermost.sh, modules/minio/minio.sh, modules/traefik/traefik.sh, modules/uptime-kuma/uptime-kuma.sh 等
 
 
 ## [1.4.11] - 2025-11-06
 
 ### Changes
-- 修改 59 个文件: README.md, docs/INSTALL.md, docs/MANAGEMENT_PANELS_SUMMARY.md, docs/OPS_TOOLING.md, lib/help.sh 等
+- 修改 59 个文件: README.md, docs/install.md, docs/management-panels-summary.md, docs/ops-tooling.md, lib/help.sh 等
 
 
 ## [1.4.10] - 2025-11-05
 
 ### Changes
-- 修改 24 个文件: README.md, docs/OPS_TOOLING.md, lib/help.sh, modules/lib/minio_helper.py, modules/minio/minio.sh 等
+- 修改 24 个文件: README.md, docs/ops-tooling.md, lib/help.sh, modules/lib/minio_helper.py, modules/minio/minio.sh 等
 
 
 ## [1.4.9] - 2025-11-05
@@ -33,19 +39,19 @@
 ## [1.4.8] - 2025-11-05
 
 ### Changes
-- 修改 13 个文件: docs/ROADMAP_OBJECT_STORAGE.md, modules/lib/minio_helper.py, modules/lib/nginx_pillar.py, modules/minio/minio.sh, salt/pillar/minio.sls.sample 等
+- 修改 13 个文件: docs/roadmap-object-storage.md, modules/lib/minio_helper.py, modules/lib/nginx_pillar.py, modules/minio/minio.sh, salt/pillar/minio.sls.sample 等
 
 
 ## [1.4.7] - 2025-11-05
 
 ### Changes
-- 修改 17 个文件: README.md, docs/OPS_TOOLING.md, lib/help.sh, modules/analyse/analyse.sh, modules/automation/automation.sh 等
+- 修改 17 个文件: README.md, docs/ops-tooling.md, lib/help.sh, modules/analyse/analyse.sh, modules/automation/automation.sh 等
 
 
 ## [1.4.6] - 2025-11-05
 
 ### Changes
-- 修改 22 个文件: README.md, docs/OPS_TOOLING.md, modules/lib/__pycache__/notification.cpython-312.pyc, modules/lib/backup_notify.py, modules/lib/gitops.py 等
+- 修改 22 个文件: README.md, docs/ops-tooling.md, modules/lib/__pycache__/notification.cpython-312.pyc, modules/lib/backup_notify.py, modules/lib/gitops.py 等
 
 
 ## [1.4.5] - 2025-11-04
@@ -69,19 +75,19 @@
 ## [1.4.2] - 2025-11-04
 
 ### Changes
-- 修改 29 个文件: README.md, docs/CHANGELOG.md, docs/OPS_TOOLING.md, lib/help.sh, modules/lib/__pycache__/notification.cpython-312.pyc 等
+- 修改 29 个文件: README.md, docs/changelog.md, docs/ops-tooling.md, lib/help.sh, modules/lib/__pycache__/notification.cpython-312.pyc 等
 
 
 ## [1.4.1] - 2025-11-04
 
 ### Changes
-- 修改 40 个文件: README.md, docs/CHANGELOG.md, docs/OPS_TOOLING.md, lib/help.sh, modules/analyse/analyse.sh 等
+- 修改 40 个文件: README.md, docs/changelog.md, docs/ops-tooling.md, lib/help.sh, modules/analyse/analyse.sh 等
 
 
 ## [1.4.0] - 2025-11-04
 
 ### Changes
-- 修改 57 个文件: README.md, docs/CHANGELOG.md, docs/OPS_TOOLING.md, lib/help.sh, modules/automation/automation.sh 等
+- 修改 57 个文件: README.md, docs/changelog.md, docs/ops-tooling.md, lib/help.sh, modules/automation/automation.sh 等
 
 
 ### Added
@@ -97,7 +103,7 @@
 ### Changed
 - `saltgoat monitor auto-sites` 仅在站点或 Beacon 发生变化时才会刷新 Pillar 与 Telegram 话题，并使用新的 Python helper 解析结果。
 - `modules/maintenance/backup.sh`、`modules/magetools/maintenance.sh`、`modules/automation/automation.sh` 均不再包含 heredoc Python，全部改为调用共享 helper。
-- README、`docs/OPS_TOOLING.md`、`lib/help.sh` 更新，记录所有新的 helper 与使用方法。
+- README、`docs/ops-tooling.md`、`lib/help.sh` 更新，记录所有新的 helper 与使用方法。
 
 # [1.3.18] - 2025-11-04
 
@@ -105,7 +111,7 @@
 - 新增 `tests/test_varnish_regression.sh`、`scripts/health-panel.sh`、`tests/test_magento_cli_suite.sh`，分别用于 Varnish 回归、健康面板、Magento CLI 预检。
 - 新增 `modules/security/fail2ban_watch.py` 及 `optional.fail2ban-watch` state，自动部署 `saltgoat-fail2ban-watch.service` + `.timer` 推送 Telegram 告警。
 - 新增 `modules/fun/fun.sh` 并接入 `saltgoat fun <status|joke|tip|ascii>`。
-- 新文档 [`docs/OPS_TOOLING.md`](OPS_TOOLING.md) 汇总上述工具使用方式。
+- 新文档 [`docs/ops-tooling.md`](OPS_TOOLING.md) 汇总上述工具使用方式。
 
 # SaltGoat 更新日志
 
@@ -154,13 +160,13 @@
 ## [1.3.10] - 2025-11-02
 
 ### Changes
-- 修改 14 个文件: README.md, docs/TELEGRAM_TOPICS.md, docs/magento-multisite-plan.md, modules/lib/__pycache__/notification.cpython-312.pyc, modules/magetools/README.md 等
+- 修改 14 个文件: README.md, docs/telegram-topics.md, docs/magento-multisite-plan.md, modules/lib/__pycache__/notification.cpython-312.pyc, modules/magetools/README.md 等
 
 
 ## [1.3.9] - 2025-11-02
 
 ### Changes
-- 修改 14 个文件: .github/workflows/code-review.yml, AGENTS.md, README.md, docs/BACKUP_RESTIC.md, docs/MAGENTO_MAINTENANCE.md 等
+- 修改 14 个文件: .github/workflows/code-review.yml, AGENTS.md, README.md, docs/backup-restic.md, docs/magento-maintenance.md 等
 
 
 ## [1.3.8] - 2025-11-02
@@ -172,7 +178,7 @@
 ## [1.3.7] - 2025-11-02
 
 ### Changes
-- 修改 8 个文件: core/install.sh, docs/TELEGRAM_TOPICS.md, modules/monitoring/resource_alert.py, monitoring/README.md, monitoring/system.sh 等
+- 修改 8 个文件: core/install.sh, docs/telegram-topics.md, modules/monitoring/resource_alert.py, monitoring/README.md, monitoring/system.sh 等
 
 
 ## [1.3.6] - 2025-11-02
@@ -190,7 +196,7 @@
 ## [1.3.4] - 2025-11-02
 
 ### Changes
-- 修改 16 个文件: docs/MAGENTO_MAINTENANCE.md, modules/magetools/__pycache__/magento_api_watch.cpython-312.pyc, modules/magetools/__pycache__/magento_summary.cpython-312.pyc, modules/magetools/backup-restic.sh, modules/magetools/magento_api_watch.py 等
+- 修改 16 个文件: docs/magento-maintenance.md, modules/magetools/__pycache__/magento_api_watch.cpython-312.pyc, modules/magetools/__pycache__/magento_summary.cpython-312.pyc, modules/magetools/backup-restic.sh, modules/magetools/magento_api_watch.py 等
 
 
 ## [1.3.3] - 2025-11-02
@@ -214,7 +220,7 @@
 ## [1.3.0] - 2025-11-02
 
 ### Changes
-- 修改 11 个文件: docs/MAGENTO_MAINTENANCE.md, lib/help.sh, modules/magetools/__pycache__/magento-schedule.cpython-312.pyc, modules/magetools/magento-schedule.py, modules/magetools/magetools.sh 等
+- 修改 11 个文件: docs/magento-maintenance.md, lib/help.sh, modules/magetools/__pycache__/magento-schedule.cpython-312.pyc, modules/magetools/magento-schedule.py, modules/magetools/magetools.sh 等
 
 
 ## [1.2.10] - 2025-11-02
@@ -226,19 +232,19 @@
 ## [1.2.9] - 2025-11-02
 
 ### Changes
-- 修改 14 个文件: docs/MAGENTO_PWA.md, docs/PWA_PROJECT_GUIDE.md, docs/pwa-todo.md, modules/monitoring/__pycache__/resource_alert.cpython-312.pyc, modules/monitoring/resource_alert.py 等
+- 修改 14 个文件: docs/magento-pwa.md, docs/pwa-project-guide.md, todo/pwa.md, modules/monitoring/__pycache__/resource_alert.cpython-312.pyc, modules/monitoring/resource_alert.py 等
 
 
 ## [1.2.8] - 2025-11-01
 
 ### Changes
-- 修改 4 个文件: docs/PWA_PROJECT_GUIDE.md, docs/pwa-todo.md, modules/pwa/install.sh, modules/pwa/workspaces/saltgoat-venia-extension/src/components/HomeContent/index.js
+- 修改 4 个文件: docs/pwa-project-guide.md, todo/pwa.md, modules/pwa/install.sh, modules/pwa/workspaces/saltgoat-venia-extension/src/components/HomeContent/index.js
 
 
 ## [1.2.7] - 2025-11-01
 
 ### Changes
-- 修改 11 个文件: README.md, docs/PWA_PROJECT_GUIDE.md, docs/pwa-todo.md, modules/pwa/install.sh, modules/pwa/overrides/packages/venia-concept/local-intercept.js 等
+- 修改 11 个文件: README.md, docs/pwa-project-guide.md, todo/pwa.md, modules/pwa/install.sh, modules/pwa/overrides/packages/venia-concept/local-intercept.js 等
 
 
 ## [1.2.6] - 2025-11-01
@@ -250,25 +256,25 @@
 ## [1.2.5] - 2025-10-31
 
 ### Changes
-- 修改 11 个文件: README.md, docs/CHANGELOG.md, docs/MAGENTO_PWA.md, docs/pwa-todo.md, lib/help.sh 等
+- 修改 11 个文件: README.md, docs/changelog.md, docs/magento-pwa.md, todo/pwa.md, lib/help.sh 等
 
 
 ## [1.2.4] - 2025-10-31
 
 ### Changes
-- 修改 7 个文件: docs/MAGENTO_PWA.md, modules/magetools/permissions.sh, modules/pwa/install.sh, modules/pwa/overrides/productDetailFragment.gql.js, modules/pwa/overrides/useProductFullDetail.js 等
+- 修改 7 个文件: docs/magento-pwa.md, modules/magetools/permissions.sh, modules/pwa/install.sh, modules/pwa/overrides/productDetailFragment.gql.js, modules/pwa/overrides/useProductFullDetail.js 等
 
 
 ## [1.2.3] - 2025-10-31
 
 ### Changes
-- 修改 13 个文件: .gitignore, README.md, docs/MAGENTO_PWA.md, lib/help.sh, modules/magetools/magetools.sh 等
+- 修改 13 个文件: .gitignore, README.md, docs/magento-pwa.md, lib/help.sh, modules/magetools/magetools.sh 等
 
 
 ## [1.2.2] - 2025-10-30
 
 ### Changes
-- 修改 4 个文件: docs/MAGENTO_MAINTENANCE.md, lib/help.sh, modules/magetools/varnish.sh, salt/states/optional/varnish.vcl
+- 修改 4 个文件: docs/magento-maintenance.md, lib/help.sh, modules/magetools/varnish.sh, salt/states/optional/varnish.vcl
 
 
 ## [1.2.1] - 2025-10-30
@@ -286,31 +292,31 @@
 ## [1.2.0] - 2025-10-30
 
 ### Changes
-- 修改 7 个文件: core/install.sh, docs/MAGENTO_MAINTENANCE.md, modules/magetools/varnish.sh, salt/pillar/saltgoat.sls, salt/states/optional/varnish.sls 等
+- 修改 7 个文件: core/install.sh, docs/magento-maintenance.md, modules/magetools/varnish.sh, salt/pillar/saltgoat.sls, salt/states/optional/varnish.sls 等
 
 
 ## [1.1.11] - 2025-10-30
 
 ### Changes
-- 修改 11 个文件: docs/CHANGELOG.md, docs/MAGENTO_MAINTENANCE.md, docs/SECRET_MANAGEMENT.md, lib/help.sh, modules/magetools/README.md 等
+- 修改 11 个文件: docs/changelog.md, docs/magento-maintenance.md, docs/secret-management.md, lib/help.sh, modules/magetools/README.md 等
 
 
 ## [1.1.10] - 2025-10-30
 
 ### Changes
-- 修改 3 个文件: docs/CHANGELOG.md, modules/monitoring/resource_alert.py, monitoring/README.md
+- 修改 3 个文件: docs/changelog.md, modules/monitoring/resource_alert.py, monitoring/README.md
 
 
 ## [1.1.9] - 2025-10-30
 
 ### Changes
-- 修改 7 个文件: README.md, docs/CHANGELOG.md, docs/MAGENTO_MAINTENANCE.md, salt/_modules/saltgoat.py, salt/pillar/magento-schedule.sls 等
+- 修改 7 个文件: README.md, docs/changelog.md, docs/magento-maintenance.md, salt/_modules/saltgoat.py, salt/pillar/magento-schedule.sls 等
 
 
 ## [1.0.9] - 2025-10-30
 
 ### Changes
-- 修改 27 个文件: AGENTS.md, README.md, docs/BACKUP_RESTIC.md, docs/CHANGELOG.md, docs/INSTALL.md 等
+- 修改 27 个文件: AGENTS.md, README.md, docs/backup-restic.md, docs/changelog.md, docs/install.md 等
 - `magento_schedule.stats_jobs` 支持为每站点定时运行 `saltgoat magetools stats`，自动生成每日/每周/每月业务汇总。
 - `saltgoat monitor alert resources` 告警信息新增“Triggered: Load/Memory/Disk”等字段，并输出命中阈值详情；可通过 Pillar `saltgoat:monitor:thresholds` 自定义阈值。
 - 新增 `saltgoat magetools varnish enable|disable <site>`，一键切换 Nginx(TLS) → Varnish → backend Nginx/PHP，停用时自动恢复原配置。
@@ -327,13 +333,13 @@
 ## [1.1.7] - 2025-10-30
 
 ### Changes
-- 修改 34 个文件: README.md, docs/MAGENTO_MAINTENANCE.md, docs/SECRET_MANAGEMENT.md, docs/TELEGRAM_TOPICS.md, modules/magetools/backup-restic.sh 等
+- 修改 34 个文件: README.md, docs/magento-maintenance.md, docs/secret-management.md, docs/telegram-topics.md, modules/magetools/backup-restic.sh 等
 
 
 ## [1.1.6] - 2025-10-30
 
 ### Changes
-- 修改 9 个文件: README.md, docs/MAGENTO_MAINTENANCE.md, modules/magetools/__pycache__/magento_api_watch.cpython-312.pyc, modules/magetools/magento_api_watch.py, modules/magetools/magetools.sh 等
+- 修改 9 个文件: README.md, docs/magento-maintenance.md, modules/magetools/__pycache__/magento_api_watch.cpython-312.pyc, modules/magetools/magento_api_watch.py, modules/magetools/magetools.sh 等
 
 
 ## [1.1.5] - 2025-10-29
@@ -345,7 +351,7 @@
 ## [1.1.4] - 2025-10-29
 
 ### Changes
-- 修改 1 个文件: docs/BACKUP_RESTIC.md
+- 修改 1 个文件: docs/backup-restic.md
 
 
 ## [1.1.3] - 2025-10-29
@@ -357,43 +363,43 @@
 ## [1.1.2] - 2025-10-29
 
 ### Changes
-- 修改 9 个文件: README.md, docs/BACKUP_RESTIC.md, docs/MAGENTO_MAINTENANCE.md, docs/MYSQL_BACKUP.md, modules/magetools/backup-restic.sh 等
+- 修改 9 个文件: README.md, docs/backup-restic.md, docs/magento-maintenance.md, docs/mysql-backup.md, modules/magetools/backup-restic.sh 等
 
 
 ## [1.1.1] - 2025-10-29
 
 ### Changes
-- 修改 15 个文件: README.md, docs/MAGENTO_MAINTENANCE.md, docs/MYSQL_BACKUP.md, salt/pillar/backup-restic.sls, salt/pillar/backup-restic.sls.sample 等
+- 修改 15 个文件: README.md, docs/magento-maintenance.md, docs/mysql-backup.md, salt/pillar/backup-restic.sls, salt/pillar/backup-restic.sls.sample 等
 
 
 ## [1.1.0] - 2025-10-29
 
 ### Changes
-- 修改 5 个文件: docs/MAGENTO_MAINTENANCE.md, docs/MYSQL_BACKUP.md, salt/_modules/saltgoat.py, salt/pillar/magento-schedule.sls, salt/states/optional/magento-schedule.sls
+- 修改 5 个文件: docs/magento-maintenance.md, docs/mysql-backup.md, salt/_modules/saltgoat.py, salt/pillar/magento-schedule.sls, salt/states/optional/magento-schedule.sls
 
 
 ## [1.0.13] - 2025-10-29
 
 ### Changes
-- 修改 6 个文件: docs/BACKUP_RESTIC.md, docs/MAGENTO_MAINTENANCE.md, docs/MYSQL_BACKUP.md, salt/pillar/magento-optimize.sls, salt/pillar/magento-schedule.sls 等
+- 修改 6 个文件: docs/backup-restic.md, docs/magento-maintenance.md, docs/mysql-backup.md, salt/pillar/magento-optimize.sls, salt/pillar/magento-schedule.sls 等
 
 
 ## [1.0.12] - 2025-10-29
 
 ### Changes
-- 修改 4 个文件: docs/MYSQL_BACKUP.md, modules/magetools/magento-cron.sh, salt/pillar/magento-optimize.sls, salt/pillar/top.sls
+- 修改 4 个文件: docs/mysql-backup.md, modules/magetools/magento-cron.sh, salt/pillar/magento-optimize.sls, salt/pillar/top.sls
 
 
 ## [1.0.11] - 2025-10-29
 
 ### Changes
-- 修改 6 个文件: README.md, docs/BACKUP_RESTIC.md, docs/MYSQL_BACKUP.md, docs/POSTFIX_SMTP.md, docs/SECRET_MANAGEMENT.md 等
+- 修改 6 个文件: README.md, docs/backup-restic.md, docs/mysql-backup.md, docs/postfix-smtp.md, docs/secret-management.md 等
 
 
 ## [1.0.10] - 2025-10-29
 
 ### Changes
-- 修改 17 个文件: .gitignore, docs/BACKUP_RESTIC.md, docs/MYSQL_BACKUP.md, docs/POSTFIX_SMTP.md, lib/utils.sh 等
+- 修改 17 个文件: .gitignore, docs/backup-restic.md, docs/mysql-backup.md, docs/postfix-smtp.md, lib/utils.sh 等
 
 
 ## [1.0.9] - 2025-10-29
@@ -411,7 +417,7 @@
 ## [1.0.7] - 2025-10-29
 
 ### Changes
-- 修改 9 个文件: README.md, docs/MAGENTO_MAINTENANCE.md, docs/MAGENTO_MAINTENANCE_QUICK_REFERENCE.md, modules/magetools/magento-cron.sh, salt/states/optional/magento-maintenance/daily.sls 等
+- 修改 9 个文件: README.md, docs/magento-maintenance.md, docs/magento-maintenance-quick-reference.md, modules/magetools/magento-cron.sh, salt/states/optional/magento-maintenance/daily.sls 等
 
 
 ## [1.0.6] - 2025-10-29
@@ -423,7 +429,7 @@
 ## [1.0.5] - 2025-10-29
 
 ### Changes
-- 修改 36 个文件: core/system.sh, docs/POSTFIX_SMTP.md, lib/help.sh, modules/git/git.sh, modules/magetools/backup-restic.sh 等
+- 修改 36 个文件: core/system.sh, docs/postfix-smtp.md, lib/help.sh, modules/git/git.sh, modules/magetools/backup-restic.sh 等
 
 
 ## [1.0.4] - 2025-10-27
@@ -435,13 +441,13 @@
 ## [1.0.3] - 2025-10-27
 
 ### Changes
-- 修改 16 个文件: docs/MAGENTO_PERMISSIONS.md, docs/MYSQL_BACKUP.md, lib/help.sh, modules/git/help.sh, modules/magetools/README.md 等
+- 修改 16 个文件: docs/magento-permissions.md, docs/mysql-backup.md, lib/help.sh, modules/git/help.sh, modules/magetools/README.md 等
 
 
 ## [1.0.2] - 2025-10-27
 
 ### Changes
-- 修改 45 个文件: README.md, bank, docs/BACKUP_RESTIC.md, docs/INSTALL.md, docs/MAGENTO_MAINTENANCE.md 等
+- 修改 45 个文件: README.md, bank, docs/backup-restic.md, docs/install.md, docs/magento-maintenance.md 等
 
 
 ## [1.0.1] - 2025-10-26
@@ -453,7 +459,7 @@
 ## [1.0.0] - 2025-10-26
 
 ### Changes
-- 修改 7 个文件: docs/CHANGELOG.md, lib/help.sh, modules/git/git.sh, salt/pillar/nginx.sls, salt/states/optional/certbot.sls 等
+- 修改 7 个文件: docs/changelog.md, lib/help.sh, modules/git/git.sh, salt/pillar/nginx.sls, salt/states/optional/certbot.sls 等
 
 
 ## [0.9.17] - 2025-10-26
@@ -465,13 +471,13 @@
 ## [0.9.16] - 2025-10-26
 
 ### Changes
-- 修改 68 个文件: README.md, docs/CHANGELOG.md, docs/INSTALL.md, docs/MAGENTO_MAINTENANCE.md, docs/MAGENTO_MAINTENANCE_QUICK_REFERENCE.md 等
+- 修改 68 个文件: README.md, docs/changelog.md, docs/install.md, docs/magento-maintenance.md, docs/magento-maintenance-quick-reference.md 等
 
 
 ## [0.9.15] - 2025-10-25
 
 ### Changes
-- 修改 18 个文件: README.md, docs/CHANGELOG.md, docs/INSTALL.md, modules/analyse/analyse.sh, modules/git/git.sh 等
+- 修改 18 个文件: README.md, docs/changelog.md, docs/install.md, modules/analyse/analyse.sh, modules/git/git.sh 等
 
 
 ## [Unreleased]
@@ -484,7 +490,7 @@
 - `saltgoat magetools varnish enable|disable` 更新为启用大头部缓冲、无损回滚配置，解决启用后站点出现 `502 Bad Gateway` 的问题。
 
 ### 📚 文档
-- `docs/INSTALL.md` 补充 Matomo 快速部署与 Git 发布流程说明。
+- `docs/install.md` 补充 Matomo 快速部署与 Git 发布流程说明。
 - 帮助菜单更新，指引 Dry-run 用法与回滚指令。
 
 
@@ -526,7 +532,7 @@
 - CLI 现在自动探测 `/var/www`、`/srv`、`/opt/magento` 下的 Magento 站点，并在 `--site` 未指定时填充 Pillar；若检测失败或出现多站冲突，Salt state 会提示或直接中止，避免误改配置。
 
 ### 📘 文档
-- `docs/INSTALL.md` 增补 Pillar 初始化 / 查看 / 刷新的操作说明，并记录 `saltgoat passwords --refresh` 的最佳实践流程。
+- `docs/install.md` 增补 Pillar 初始化 / 查看 / 刷新的操作说明，并记录 `saltgoat passwords --refresh` 的最佳实践流程。
 
 ## [0.9.8] - 2025-10-25
 
@@ -770,7 +776,7 @@ saltgoat nginx create mysite "example.com www.example.com" --magento
 - **权限脚本**：修复所有脚本中的 sudo 权限问题
 
 ### 📚 **文档更新**
-- **权限管理指南**：更新 `docs/MAGENTO_PERMISSIONS.md` 中的权限设置
+- **权限管理指南**：更新 `docs/magento-permissions.md` 中的权限设置
 - **帮助信息**：添加 OpenSearch 认证管理到帮助菜单
 - **最佳实践**：统一所有脚本的权限管理最佳实践提示
 
@@ -787,7 +793,7 @@ saltgoat nginx create mysite "example.com www.example.com" --magento
   - 清理根目录，提高项目可维护性
 
 - **权限管理最佳实践**
-  - 新增 `docs/MAGENTO_PERMISSIONS.md` 权限管理指南
+  - 新增 `docs/magento-permissions.md` 权限管理指南
   - 修复权限管理函数，支持路径参数
   - 更新帮助信息，添加最佳实践提示
 
@@ -805,7 +811,7 @@ saltgoat nginx create mysite "example.com www.example.com" --magento
 
 ### 📚 **文档更新**
 - **新增文档**
-  - `docs/MAGENTO_PERMISSIONS.md` - Magento 2 权限管理完整指南
+  - `docs/magento-permissions.md` - Magento 2 权限管理完整指南
   - 包含最佳实践、故障排除、安全建议
 
 - **帮助信息优化**

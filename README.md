@@ -147,7 +147,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    sudo saltgoat magetools cron <site> install       # 下发 Salt Schedule；若缺少 salt-minion 会自动写 /etc/cron.d/
    ```
 
-更多安装细节、Matomo 部署与 Pillar 示例请参考 [`docs/INSTALL.md`](docs/INSTALL.md)。
+更多安装细节、Matomo 部署与 Pillar 示例请参考 [`docs/install.md`](docs/install.md)。
 
 ---
 
@@ -185,11 +185,11 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
     每次执行都会写入 `/var/log/saltgoat/alerts.log` 并推送 Telegram。
   - `magento_schedule.api_watchers` 可轮询 Magento REST API，将新订单/新用户同步到 Telegram（首次运行仅建立基线，不推送历史数据）。
   - `magento_schedule.stats_jobs` 可定时运行 `saltgoat magetools stats --period <daily|weekly|monthly>`，自动生成业务汇总并写入 `/var/log/saltgoat/alerts.log`（可选推送 Telegram）。
-- 维护流程、权限修复、故障排查详见 [`docs/MAGENTO_MAINTENANCE.md`](docs/MAGENTO_MAINTENANCE.md)。
-- `sudo saltgoat pwa install <site> [--with-pwa]`：读取 `salt/pillar/magento-pwa.sls`，自动部署全新 Magento + PWA 站点并串联 Valkey / RabbitMQ / Cron，详见 [`docs/MAGENTO_PWA.md`](docs/MAGENTO_PWA.md)。支持通过 `cms.home` 配置自动创建/更新 `pwa_home` 页面。
+- 维护流程、权限修复、故障排查详见 [`docs/magento-maintenance.md`](docs/magento-maintenance.md)。
+- `sudo saltgoat pwa install <site> [--with-pwa]`：读取 `salt/pillar/magento-pwa.sls`，自动部署全新 Magento + PWA 站点并串联 Valkey / RabbitMQ / Cron，详见 [`docs/magento-pwa.md`](docs/magento-pwa.md)。支持通过 `cms.home` 配置自动创建/更新 `pwa_home` 页面。
 - `sudo saltgoat pwa status|sync-content|remove <site>`：巡检 PWA 服务、重新应用 overrides/构建或清理前端服务。
 - React/依赖统一通过 Yarn 管理，`sync-content --rebuild` 会校验 `@saltgoat/venia-extension` workspace 并阻止 `package-lock.json` 残留，必要时请手动执行 `yarn list --pattern react` 确认仅保留一个版本。
-- PWA 项目细节与更新准则请参考 [`docs/PWA_PROJECT_GUIDE.md`](docs/PWA_PROJECT_GUIDE.md)。
+- PWA 项目细节与更新准则请参考 [`docs/pwa-project-guide.md`](docs/pwa-project-guide.md)。
 - 自定义前端组件统一封装在 `@saltgoat/venia-extension`（同步自 `modules/pwa/workspaces/saltgoat-venia-extension`），避免直接修改官方 Venia 代码。
 - PHP-FPM 进程池默认按 CPU / 内存容量自动放大（可在 Pillar `saltgoat:php_fpm` 配置最小值、上限与 per_cpu 系数），`resource alert` 会在使用率逼近上限时提前预警。
 
@@ -202,7 +202,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - `sudo saltgoat monitor enable-beacons`：启用 Beacon/Reactors；若缺少 `salt-minion` 会提示并降级。
 - `sudo saltgoat schedule enable`：下发 SaltGoat 自身任务（内存、日志清理等），同样支持自动降级到 cron。
 - Salt Beacon 触发的 systemd 自愈流程会自动执行 `systemctl restart`，并把成功/失败状态写入 `/var/log/saltgoat/alerts.log`、发送 Telegram，同时重新发布 Salt 事件（便于级联自动化）。
-- 监控/自愈巡检的完整 SOP 参考 [`docs/MONITORING_PLAYBOOK.md`](docs/MONITORING_PLAYBOOK.md)。
+- 监控/自愈巡检的完整 SOP 参考 [`docs/monitoring-playbook.md`](docs/monitoring-playbook.md)。
 
 ### 自动化脚本 (Automation)
 - `sudo saltgoat automation script <create|list|edit|run|delete>`：生成并维护 `/srv/saltgoat/automation/scripts/*.sh`。
@@ -211,7 +211,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 
 ### 备份策略
 - Restic 快照：`sudo saltgoat magetools backup restic install --site <name> [--repo <path>]` 为单站点创建 systemd 定时器；`run/summary/logs` 子命令可手动触发与巡检。
-- Percona XtraBackup：`sudo saltgoat magetools xtrabackup mysql run`；配置详见 [`docs/MYSQL_BACKUP.md`](docs/MYSQL_BACKUP.md)。
+- Percona XtraBackup：`sudo saltgoat magetools xtrabackup mysql run`；配置详见 [`docs/mysql-backup.md`](docs/mysql-backup.md)。
 - 单库导出：`sudo saltgoat magetools xtrabackup mysql dump --database <db> --backup-dir <path>` 会输出体积、写 Salt event，并发 Telegram。
 - 所有备份事件都会写入 `/var/log/saltgoat/alerts.log`，便于审计。
 
@@ -256,15 +256,15 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 
 ## 📚 主要文档
 
-- [`docs/INSTALL.md`](docs/INSTALL.md)：安装、Pillar、Matomo、Salt 依赖说明。
-- [`docs/MAGENTO_MAINTENANCE.md`](docs/MAGENTO_MAINTENANCE.md)：维护流程、命令速查、Salt Schedule/Beacon/cron 降级。
-- [`docs/MAGENTO_PERMISSIONS.md`](docs/MAGENTO_PERMISSIONS.md)：站点权限策略、修复脚本。
-- [`docs/BACKUP_RESTIC.md`](docs/BACKUP_RESTIC.md)：Restic 仓库配置与恢复流程。
-- [`docs/MYSQL_BACKUP.md`](docs/MYSQL_BACKUP.md)：Percona XtraBackup 安装、巡检与恢复。
-- [`docs/SECRET_MANAGEMENT.md`](docs/SECRET_MANAGEMENT.md)：密钥模板、Pillar Secret 工作流与密码更新步骤。
-- [`docs/TELEGRAM_TOPICS.md`](docs/TELEGRAM_TOPICS.md)：Telegram 话题 `chat_id`/`message_thread_id` 对照表及通知分类建议。
-- [`docs/OPS_TOOLING.md`](docs/OPS_TOOLING.md)：Varnish 回归脚本、健康面板、Fail2ban Watcher、SaltGoat fun 命令等日常运维工具。
-- [`docs/CHANGELOG.md`](docs/CHANGELOG.md)：版本更新。
+- [`docs/install.md`](docs/install.md)：安装、Pillar、Matomo、Salt 依赖说明。
+- [`docs/magento-maintenance.md`](docs/magento-maintenance.md)：维护流程、命令速查、Salt Schedule/Beacon/cron 降级。
+- [`docs/magento-permissions.md`](docs/magento-permissions.md)：站点权限策略、修复脚本。
+- [`docs/backup-restic.md`](docs/backup-restic.md)：Restic 仓库配置与恢复流程。
+- [`docs/mysql-backup.md`](docs/mysql-backup.md)：Percona XtraBackup 安装、巡检与恢复。
+- [`docs/secret-management.md`](docs/secret-management.md)：密钥模板、Pillar Secret 工作流与密码更新步骤。
+- [`docs/telegram-topics.md`](docs/telegram-topics.md)：Telegram 话题 `chat_id`/`message_thread_id` 对照表及通知分类建议。
+- [`docs/ops-tooling.md`](docs/ops-tooling.md)：Varnish 回归脚本、健康面板、Fail2ban Watcher、SaltGoat fun 命令等日常运维工具。
+- [`docs/changelog.md`](docs/changelog.md)：版本更新。
 
 ---
 

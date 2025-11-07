@@ -318,7 +318,7 @@ PHP调试工具，提供：
 
 ### Magento 维护系统
 详细的维护系统文档请参考：
-- [Magento 维护系统完整文档](../docs/MAGENTO_MAINTENANCE.md)
+- [Magento 维护系统完整文档](../docs/magento-maintenance.md)
 
 该文档包含：
 - 完整的维护任务说明

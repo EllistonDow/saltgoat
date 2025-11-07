@@ -91,7 +91,7 @@ fix_permissions_fast() {
     log_info "[INFO] 权限管理最佳实践:"
     echo "  [SUCCESS] 使用: sudo -u www-data php bin/magento <command>"
     echo "  [ERROR] 避免: sudo php bin/magento <command>"
-    echo "  [INFO] 详细说明: docs/MAGENTO_PERMISSIONS.md"
+    echo "  [INFO] 详细说明: docs/magento-permissions.md"
 }
 
 # 检查依赖

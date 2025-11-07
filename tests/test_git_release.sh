@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CHANGELOG="${REPO_ROOT}/docs/CHANGELOG.md"
+CHANGELOG="${REPO_ROOT}/docs/changelog.md"
 SALTGOAT_SCRIPT="${REPO_ROOT}/saltgoat"
 
 original_version=$(grep -E '^SCRIPT_STATIC_VERSION' "$SALTGOAT_SCRIPT")
