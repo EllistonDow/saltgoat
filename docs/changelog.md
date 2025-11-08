@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.12] - 2025-11-08
+
+### Changes
+- 修改 2 个文件: modules/lib/pwa_helpers.py, modules/pwa/install.sh
+
+
 ## [1.5.11] - 2025-11-08
 
 ### Changes

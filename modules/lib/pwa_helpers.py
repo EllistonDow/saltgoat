@@ -657,6 +657,36 @@ def cmd_validate_graphql(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fix_order_history(args: argparse.Namespace) -> int:
+    path = Path(args.file).resolve()
+    try:
+        text = _read_text(path)
+    except FileNotFoundError:
+        print("absent")
+        return 0
+
+    lines = text.splitlines()
+    changed = False
+    for idx, line in enumerate(lines):
+        if line.strip() == "state":
+            indent = line[: len(line) - len(line.lstrip())]
+            replacement = f"{indent}status"
+            if line != replacement:
+                lines[idx] = replacement
+                changed = True
+
+    if not changed:
+        print("unchanged")
+        return 0
+
+    new_text = "\n".join(lines)
+    if text.endswith("\n"):
+        new_text += "\n"
+    path.write_text(new_text, encoding="utf-8")
+    print("patched")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="PWA helper CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -745,6 +775,12 @@ def build_parser() -> argparse.ArgumentParser:
     validate_graphql = sub.add_parser("validate-graphql", help="Validate Magento GraphQL probe response")
     validate_graphql.add_argument("--payload", required=True)
     validate_graphql.set_defaults(func=cmd_validate_graphql)
+
+    fix_order_history = sub.add_parser(
+        "fix-order-history", help="Replace deprecated CustomerOrder.state field with status"
+    )
+    fix_order_history.add_argument("--file", required=True)
+    fix_order_history.set_defaults(func=cmd_fix_order_history)
 
     return parser
 

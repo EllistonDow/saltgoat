@@ -932,6 +932,20 @@ apply_mos_graphql_fixes() {
     sanitize_checkout_graphql "${PWA_STUDIO_DIR%/}/packages/venia-ui/lib/components/CheckoutPage/PaymentInformation/paymentInformation.gql.js"
     sanitize_checkout_graphql "${PWA_STUDIO_DIR%/}/packages/venia-ui/lib/components/CheckoutPage/checkoutPage.gql.js"
 
+    local -a order_history_files=()
+    while IFS= read -r -d '' file; do
+        order_history_files+=("$file")
+    done < <(sudo -u www-data -H find "${PWA_STUDIO_DIR%/}/packages" -name 'orderHistoryPage.gql.js' -print0 2>/dev/null || true)
+
+    for file in "${order_history_files[@]}"; do
+        local patch_status rel_path
+        patch_status=$(sudo -u www-data -H python3 "$PWA_HELPER" fix-order-history --file "$file" 2>/dev/null || true)
+        if [[ "$patch_status" == "patched" ]]; then
+            rel_path="${file#${PWA_STUDIO_DIR%/}/}"
+            log_info "修复订单历史 GraphQL 查询字段 (state→status): ${rel_path}"
+        fi
+    done
+
     local cart_fragment="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/Header/cartTriggerFragments.gql.js"
     if [[ -f "$cart_fragment" && -n "$(grep -F 'total_summary_quantity_including_config' "$cart_fragment" || true)" ]]; then
         log_info "移除 MOS 不支持的购物车统计字段"
