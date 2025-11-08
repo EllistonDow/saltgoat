@@ -2,11 +2,11 @@ const { Targetables } = require('@magento/pwa-buildpack');
 
 const BANK_TRANSFER_COMPONENTS = {
     checkout:
-        '@saltgoat/venia-extension/src/components/BankTransfer/BankTransfer.js',
+        '@magento/venia-sample-payments-checkmo/src/components/checkmo.js',
     editable:
-        '@saltgoat/venia-extension/src/components/BankTransfer/EditBankTransfer.js',
+        '@magento/venia-sample-payments-checkmo/src/components/edit.js',
     summary:
-        '@saltgoat/venia-extension/src/components/BankTransfer/SummaryBankTransfer.js'
+        '@magento/venia-sample-payments-checkmo/src/components/summary.js'
 };
 
 const registerBankTransfer = targets => {
@@ -54,5 +54,23 @@ module.exports = targets => {
 
     homePage.wrapWithFile(
         '@saltgoat/venia-extension/src/components/HomeContent'
+    );
+
+    const header = targetables.reactComponent(
+        '@magento/venia-ui/lib/components/Header/header.js'
+    );
+    header.addImport(
+        "import ThemeToggle from '@saltgoat/venia-extension/src/components/ThemeToggle';"
+    );
+    header.insertAfterSource(
+        '<div className={classes.secondaryActions}>',
+        '\n                        <ThemeToggle />\n'
+    );
+
+    const app = targetables.reactComponent(
+        '@magento/venia-ui/lib/components/App/app.js'
+    );
+    app.wrapWithFile(
+        '@saltgoat/venia-extension/src/components/ThemeProvider/withThemeProvider'
     );
 };

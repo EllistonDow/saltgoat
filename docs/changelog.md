@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.9] - 2025-11-08
+
+### Changes
+- 修改 1 个文件: modules/pwa/overrides/packages/venia-concept/local-intercept.js
+
+
 ## [1.5.8] - 2025-11-07
 
 ### Changes
