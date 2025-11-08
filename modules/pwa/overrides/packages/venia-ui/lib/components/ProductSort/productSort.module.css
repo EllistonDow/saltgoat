@@ -1,0 +1,19 @@
+.root {
+    composes: bg-white from global;
+    composes: border from global;
+    composes: border-light from global;
+    composes: flex from global;
+    composes: items-center from global;
+    composes: justify-between from global;
+    composes: px-sm from global;
+    composes: py-xs from global;
+    background: var(--sg-card-bg) !important;
+    border-color: var(--sg-card-border) !important;
+    color: var(--sg-text) !important;
+    border-radius: 8px;
+}
+
+.select {
+    composes: text-subtle from global;
+    color: var(--sg-subtext) !important;
+}

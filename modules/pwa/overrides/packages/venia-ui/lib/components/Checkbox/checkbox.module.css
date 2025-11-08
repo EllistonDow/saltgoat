@@ -1,0 +1,80 @@
+.root {
+    --stroke: var(--color-gray-600);
+
+    composes: gap-3 from global;
+    composes: grid from global;
+    composes: grid-flow-col from global;
+    composes: items-center from global;
+    composes: justify-items-center from global;
+    composes: leading-normal from global;
+    composes: text-colorDefault from global;
+    grid-template-areas: 'input label';
+    grid-template-columns: min-content 1fr;
+    color: var(--sg-text);
+}
+
+.input {
+    composes: appearance-none from global;
+    composes: bg-transparent from global;
+    composes: border-2 from global;
+    composes: border-solid from global;
+    composes: border-transparent from global;
+    composes: cursor-pointer from global;
+    composes: h-[1.5rem] from global;
+    composes: rounded from global;
+    composes: w-[1.5rem] from global;
+    grid-area: input;
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    transition: border-color 0.2s ease, background 0.2s ease;
+
+    /* TODO @TW: review, replaces input:disabled. Check if working. */
+    composes: disabled_cursor-not-allowed from global;
+
+    composes: active_enabled_shadow-radioActive from global;
+    composes: active_enabled_outline-0 from global;
+
+    composes: focus_enabled_shadow-radioFocus from global;
+    composes: focus_enabled_outline-0 from global;
+}
+
+.input:checked {
+    background: var(--sg-primary);
+    border-color: var(--sg-primary);
+}
+
+.icon {
+    composes: h-[1.5rem] from global;
+    composes: pointer-events-none from global;
+    composes: w-[1.5rem] from global;
+    grid-area: input;
+}
+
+.icon svg {
+    stroke: rgb(var(--stroke));
+}
+
+.label {
+    composes: cursor-pointer from global;
+    composes: justify-self-start from global;
+    composes: text-colorDefault from global;
+    grid-area: label;
+    color: var(--sg-text);
+}
+
+/* When the input is disabled, update the cursor on the sibling label element. */
+.input:disabled ~ .label {
+    @apply cursor-default;
+    color: var(--sg-subtext);
+}
+
+.input:checked:enabled + .icon {
+    --stroke: var(--color-blue-400);
+}
+
+.input_shimmer {
+    composes: h-[1.5rem] from global;
+    composes: rounded from global;
+    composes: w-[1.5rem] from global;
+    background: var(--sg-card-bg);
+}

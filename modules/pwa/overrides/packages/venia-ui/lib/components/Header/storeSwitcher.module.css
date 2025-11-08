@@ -1,0 +1,30 @@
+.trigger {
+    composes: bg-white from global;
+    composes: border from global;
+    composes: border-solid from global;
+    composes: border-light from global;
+    composes: inline-flex from global;
+    composes: items-center from global;
+    composes: justify-between from global;
+    composes: px-2xs from global;
+    composes: py-3xs from global;
+    background: var(--sg-card-bg) !important;
+    border-color: var(--sg-card-border) !important;
+    color: var(--sg-text) !important;
+}
+
+.dropdown {
+    composes: absolute from global;
+    composes: bg-white from global;
+    composes: border from global;
+    composes: border-solid from global;
+    composes: border-light from global;
+    composes: mt-2xs from global;
+    composes: rounded-sm from global;
+    composes: shadow-menu from global;
+    composes: w-[10rem] from global;
+    background: var(--sg-card-bg) !important;
+    border-color: var(--sg-card-border) !important;
+    color: var(--sg-text) !important;
+    box-shadow: 0 20px 40px var(--sg-hero-shadow);
+}

@@ -153,6 +153,11 @@
     transition: background 0.3s ease, color 0.3s ease;
 }
 
+:global(.bg-white) {
+    background-color: var(--sg-card-bg) !important;
+    color: var(--sg-text) !important;
+}
+
 :global(.text-gray-900) {
     color: var(--sg-text) !important;
 }
@@ -164,7 +169,7 @@
 }
 
 :global(.bg-gray-100) {
-    background-color: rgba(255, 255, 255, 0.08) !important;
+    background-color: var(--sg-card-bg) !important;
 }
 
 :global(.bg-header) {
@@ -173,6 +178,14 @@
 
 :global(.border-subtle) {
     border-color: var(--sg-header-border) !important;
+}
+
+:global(.border-light) {
+    border-color: var(--sg-card-border) !important;
+}
+
+:global(.text-subtle) {
+    color: var(--sg-subtext) !important;
 }
 
 :global(main) {

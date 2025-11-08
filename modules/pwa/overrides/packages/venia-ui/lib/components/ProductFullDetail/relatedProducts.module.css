@@ -1,0 +1,10 @@
+.root {
+    composes: bg-white from global;
+    composes: border from global;
+    composes: border-light from global;
+    composes: rounded-sm from global;
+    composes: p-sm from global;
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    color: var(--sg-text);
+}

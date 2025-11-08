@@ -1,0 +1,28 @@
+.root {
+    composes: absolute from global;
+    composes: bg-white from global;
+    composes: left-0 from global;
+    composes: max-h-[22rem] from global;
+    composes: overflow-y-auto from global;
+    composes: right-0 from global;
+    composes: rounded-b-sm from global;
+    composes: shadow-menu from global;
+    composes: top-full from global;
+    background: var(--sg-card-bg) !important;
+    color: var(--sg-text) !important;
+    border: 1px solid var(--sg-card-border);
+    box-shadow: 0 30px 60px var(--sg-hero-shadow);
+}
+
+.items {
+    composes: divide-y from global;
+    composes: divide-light from global;
+    composes: grid from global;
+}
+
+.item {
+    composes: cursor-pointer from global;
+    composes: p-sm from global;
+    composes: text-colorDefault from global;
+    color: var(--sg-text) !important;
+}

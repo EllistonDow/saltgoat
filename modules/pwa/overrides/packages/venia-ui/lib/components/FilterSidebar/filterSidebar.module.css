@@ -1,0 +1,38 @@
+.root {
+    composes: bg-white from global;
+    composes: border from global;
+    composes: border-solid from global;
+    composes: border-light from global;
+    composes: h-full from global;
+    composes: overflow-y-auto from global;
+    composes: p-sm from global;
+    background: var(--sg-card-bg) !important;
+    border-color: var(--sg-card-border) !important;
+    color: var(--sg-text) !important;
+}
+
+.body {
+    background: transparent;
+    color: var(--sg-text);
+}
+
+.header {
+    border-bottom: 1px solid var(--sg-card-border);
+    color: var(--sg-text);
+}
+
+.headerTitle {
+    color: var(--sg-text);
+}
+
+.action button {
+    color: var(--sg-primary);
+}
+
+.blocks {
+    color: var(--sg-text);
+}
+
+.blocks > li:last-child {
+    border-color: var(--sg-card-border) !important;
+}

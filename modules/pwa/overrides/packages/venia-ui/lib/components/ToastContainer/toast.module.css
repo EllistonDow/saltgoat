@@ -1,0 +1,15 @@
+.root {
+    composes: bg-white from global;
+    composes: border from global;
+    composes: border-light from global;
+    composes: rounded-sm from global;
+    composes: shadow-menu from global;
+    composes: text-sm from global;
+    composes: leading-normal from global;
+    composes: px-sm from global;
+    composes: py-xs from global;
+    background: var(--sg-card-bg) !important;
+    color: var(--sg-text) !important;
+    border-color: var(--sg-card-border) !important;
+    box-shadow: 0 20px 40px var(--sg-hero-shadow);
+}

@@ -1,0 +1,13 @@
+.root {
+    composes: bg-white from global;
+    composes: border-t from global;
+    composes: border-light from global;
+    composes: flex from global;
+    composes: gap-sm from global;
+    composes: items-center from global;
+    composes: justify-between from global;
+    composes: mt-sm from global;
+    composes: pt-sm from global;
+    background: var(--sg-card-bg) !important;
+    border-color: var(--sg-card-border) !important;
+}

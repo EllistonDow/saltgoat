@@ -1,0 +1,12 @@
+.modal {
+    composes: bg-white from global;
+    composes: rounded-sm from global;
+    composes: shadow-menu from global;
+    composes: w-full from global;
+    composes: max-w-lg from global;
+    composes: p-md from global;
+    background: var(--sg-card-bg) !important;
+    color: var(--sg-text) !important;
+    border: 1px solid var(--sg-card-border);
+    box-shadow: 0 30px 60px var(--sg-hero-shadow);
+}

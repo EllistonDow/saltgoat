@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.15] - 2025-11-08
+
+### Changes
+- 修改 19 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/Checkbox/checkbox.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/FilterModal/filterFooter.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/FilterModal/filterModal.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/FilterSidebar/filterSidebar.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/Gallery/item.module.css 等
+
+
 ## [1.5.14] - 2025-11-08
 
 ### Changes
