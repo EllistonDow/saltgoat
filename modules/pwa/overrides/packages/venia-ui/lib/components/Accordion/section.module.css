@@ -1,0 +1,52 @@
+.root {
+    composes: border-b-2 from global;
+    composes: border-solid from global;
+    composes: border-subtle from global;
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    color: var(--sg-text);
+}
+
+.root:last-of-type {
+    @apply border-b-0;
+}
+
+.contents_container {
+    composes: pb-sm from global;
+    composes: pt-0 from global;
+    composes: px-sm from global;
+    composes: empty_hidden from global;
+    background: var(--sg-card-bg);
+    color: var(--sg-text);
+}
+
+.contents_container_closed {
+    composes: contents_container;
+    composes: hidden from global;
+}
+
+.title {
+    composes: text-lg from global;
+    color: var(--sg-text);
+}
+
+.title_container {
+    composes: block from global;
+    composes: cursor-pointer from global;
+    composes: w-full from global;
+    composes: m-0 from global;
+    color: inherit;
+}
+
+.title_wrapper {
+    composes: gap-sm from global;
+    composes: grid from global;
+    composes: grid-cols-1 from global;
+    composes: grid-flow-col from global;
+    composes: h-[4.5rem] from global;
+    composes: items-center from global;
+    composes: justify-items-start from global;
+    composes: px-sm from global;
+    composes: py-0 from global;
+    color: var(--sg-text);
+}

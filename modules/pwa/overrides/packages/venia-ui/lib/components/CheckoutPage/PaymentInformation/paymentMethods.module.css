@@ -1,0 +1,37 @@
+.root {
+    composes: grid from global;
+    composes: p-md from global;
+    composes: pb-s from global;
+    background: var(--sg-card-bg);
+    color: var(--sg-text);
+}
+
+.radio_group {
+    composes: grid from global;
+}
+
+.payment_method {
+    composes: border-b from global;
+    composes: border-solid from global;
+    composes: border-subtle from global;
+    composes: pb-xs from global;
+    composes: pt-xs from global;
+    border-color: var(--sg-card-border);
+}
+
+.payment_method:last-of-type {
+    @apply border-b-0;
+}
+
+.radio_label {
+    composes: font-semibold from global;
+    composes: justify-self-start from global;
+    color: var(--sg-text);
+}
+
+.payment_errors {
+    composes: grid from global;
+    composes: gap-2xs from global;
+    composes: text-error from global;
+    color: #ff7b99;
+}

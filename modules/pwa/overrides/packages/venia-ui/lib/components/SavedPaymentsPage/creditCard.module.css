@@ -1,0 +1,122 @@
+.root {
+    composes: border-2 from global;
+    composes: border-solid from global;
+    composes: border-subtle from global;
+    composes: gap-x-xs from global;
+    composes: grid from global;
+    composes: grid-cols-autoLast from global;
+    composes: min-w-[20rem] from global;
+    composes: px-md from global;
+    composes: py-sm from global;
+    composes: rounded-box from global;
+    composes: relative from global;
+    min-height: 10rem;
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    color: var(--sg-text);
+}
+
+.root_active {
+    composes: root;
+
+    @apply border-brand-dark;
+    border-color: var(--sg-primary);
+}
+
+.title {
+    composes: font-semibold from global;
+    grid-column: 1 / span 1;
+    grid-row: 1 / span 1;
+    color: var(--sg-text);
+}
+
+.number {
+    grid-column: 1 / span 1;
+    grid-row: 2 / span 1;
+    color: var(--sg-subtext);
+}
+
+.expiry_date {
+    grid-column: 1 / span 1;
+    grid-row: 3 / span 1;
+    color: var(--sg-subtext);
+}
+
+.delete {
+    grid-column: 2 / span 1;
+    grid-row: 1 / span 3;
+}
+
+.deleteButton {
+    composes: root from '../LinkButton/linkButton.module.css';
+
+    @apply no-underline;
+    color: var(--sg-primary);
+}
+
+.deleteConfirmationContainer {
+    composes: absolute from global;
+    composes: bg-white from global;
+    composes: gap-md from global;
+    composes: grid from global;
+    composes: h-full from global;
+    composes: items-center from global;
+    composes: justify-items-center from global;
+    composes: left-0 from global;
+    composes: opacity-100 from global;
+    composes: px-md from global;
+    composes: py-xs from global;
+    composes: rounded-box from global;
+    composes: top-0 from global;
+    composes: w-full from global;
+    composes: visible from global;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    transform: scaleX(1);
+    transition-duration: 192ms;
+    transition-timing-function: var(--venia-global-anim-in);
+    transition-property: opacity, transform, visibility;
+    background: var(--sg-card-bg);
+    border: 1px solid var(--sg-card-border);
+}
+
+.deleteConfirmationContainer_hidden {
+    composes: deleteConfirmationContainer;
+
+    @apply opacity-0;
+    @apply invisible;
+    transform: scaleX(0);
+    transition-delay: 0s, 192ms, 0s;
+    transition-timing-function: var(--venia-global-anim-out);
+}
+
+.confirmDeleteButton {
+    composes: root_normalPriorityNegative from '../Button/button.module.css';
+
+    @apply bg-white;
+    composes: order-1 from global;
+    composes: order-first from global;
+    color: var(--sg-primary-text);
+}
+
+.cancelDeleteButton {
+    composes: root_lowPriority from '../Button/button.module.css';
+
+    @apply bg-white;
+    color: var(--sg-text);
+}
+
+.deleteText {
+    composes: hidden from global;
+
+    composes: xs_lg_block from global;
+}
+
+@media screen(-xs) {
+    .deleteConfirmationContainer {
+        transform: scaleY(1);
+    }
+
+    .deleteConfirmationContainer_hidden {
+        transform: scaleY(0);
+    }
+}

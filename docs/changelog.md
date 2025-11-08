@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.16] - 2025-11-08
+
+### Changes
+- 修改 39 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/Accordion/section.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/AccountInformationPage/accountInformationPage.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/AccountInformationPage/editForm.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/AccountInformationPage/editModal.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/AddressBookPage/addEditDialog.module.css 等
+
+
 ## [1.5.15] - 2025-11-08
 
 ### Changes

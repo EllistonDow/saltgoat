@@ -1,0 +1,17 @@
+.root {
+    composes: gap-x-1 from global;
+    composes: grid from global;
+    composes: grid-flow-col from global;
+    grid-auto-rows: 6px;
+    color: var(--sg-text);
+}
+
+.step {
+    composes: bg-gray-300 from global;
+    background: var(--sg-card-border);
+}
+
+.step_completed {
+    composes: bg-brand-dark from global;
+    background: var(--sg-primary);
+}

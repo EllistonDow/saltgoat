@@ -1,0 +1,136 @@
+.root {
+    composes: border-2 from global;
+    composes: border-solid from global;
+    composes: border-subtle from global;
+    composes: content-start from global;
+    composes: grid from global;
+    composes: p-xs from global;
+    composes: relative from global;
+    composes: rounded-box from global;
+    grid-template-columns: 1fr max-content;
+
+    composes: sm_px-md from global;
+    composes: sm_px-5 from global;
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    color: var(--sg-text);
+}
+
+.root_updated {
+    composes: root;
+
+    animation: flash var(--venia-global-anim-bounce) 640ms 2;
+}
+
+.confirmDeleteContainer {
+    composes: absolute from global;
+    composes: bg-white from global;
+    composes: gap-md from global;
+    composes: grid from global;
+    composes: grid-cols-1 from global;
+    composes: h-full from global;
+    composes: items-center from global;
+    composes: justify-items-center from global;
+    composes: left-0 from global;
+    composes: p-xs from global;
+    composes: top-0 from global;
+    composes: w-full from global;
+
+    composes: sm_px-md from global;
+    composes: sm_py-5 from global;
+    background: var(--sg-card-bg);
+    color: var(--sg-text);
+}
+
+@media screen(sm) {
+    .confirmDeleteContainer {
+        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    }
+}
+
+.confirmDeleteButton {
+    composes: root_normalPriorityNegative from '../Button/button.module.css';
+
+    @apply bg-white;
+    composes: order-first from global;
+    composes: sm_order-1 from global;
+    color: var(--sg-primary-text);
+}
+
+.cancelDeleteButton {
+    composes: root_lowPriority from '../Button/button.module.css';
+
+    @apply bg-white;
+    color: var(--sg-text);
+}
+
+.contentContainer {
+    composes: gap-y-2xs from global;
+    composes: grid from global;
+}
+
+.actionContainer {
+    composes: content-start from global;
+    composes: gap-y-2xs from global;
+    composes: grid from global;
+    composes: justify-items-start from global;
+}
+
+.defaultBadge {
+    composes: border from global;
+    composes: border-solid from global;
+    composes: border-subtle from global;
+    composes: font-semibold from global;
+    composes: mb-2xs from global;
+    composes: px-sm from global;
+    composes: py-1.5 from global;
+    composes: rounded-badge from global;
+    composes: text-xs from global;
+    composes: w-max from global;
+    border-color: var(--sg-card-border);
+    color: var(--sg-primary);
+    background: rgba(31, 107, 255, 0.08);
+}
+
+.name {
+    composes: font-semibold from global;
+    color: var(--sg-text);
+}
+
+.telephone {
+    composes: mt-2xs from global;
+    color: var(--sg-subtext);
+}
+
+.linkButton {
+    composes: root from '../LinkButton/linkButton.module.css';
+
+    @apply no-underline;
+    @apply hover_underline;
+}
+
+.editButton {
+    composes: linkButton;
+}
+
+.deleteButton {
+    composes: linkButton;
+}
+
+.actionLabel {
+    composes: hidden from global;
+
+    composes: xs_inline from global;
+}
+
+@keyframes flash {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}

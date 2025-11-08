@@ -1,0 +1,24 @@
+.root {
+    composes: p-xs from global;
+    background: var(--sg-card-bg);
+    color: var(--sg-text);
+}
+
+.confirmButton {
+    composes: confirmButton from '../Dialog/dialog.module.css';
+    composes: root_highPriorityNegative from '../Button/button.module.css';
+}
+
+.errorMessage {
+    composes: font-semibold from global;
+    composes: leading-normal from global;
+    composes: pb-xs from global;
+    composes: text-error from global;
+    composes: text-sm from global;
+    color: #ff7b99;
+}
+
+.prompt {
+    composes: font-semibold from global;
+    color: var(--sg-text);
+}

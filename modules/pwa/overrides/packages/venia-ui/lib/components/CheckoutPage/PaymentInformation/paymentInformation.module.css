@@ -1,0 +1,29 @@
+.root {
+    composes: gap-xs from global;
+    composes: grid from global;
+    composes: grid-cols-1 from global;
+}
+
+.payment_info_container {
+    composes: border-2 from global;
+    composes: border-solid from global;
+    composes: border-subtle from global;
+    composes: rounded-box from global;
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    color: var(--sg-text);
+}
+
+.loading {
+    composes: root from '../../LoadingIndicator/indicator.module.css';
+
+    composes: text-center from global;
+}
+
+.heading {
+    composes: border-0 from global;
+
+    composes: lg_border from global;
+    border-color: var(--sg-card-border);
+    color: var(--sg-text);
+}
