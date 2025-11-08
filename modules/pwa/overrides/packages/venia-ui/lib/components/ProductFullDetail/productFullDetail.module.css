@@ -61,6 +61,8 @@
     composes: leading-normal from global;
     @apply py-xs;
     grid-area: title;
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.05);
 }
 
 .productName {
@@ -103,6 +105,8 @@
 .quantity {
     composes: section;
     grid-area: quantity;
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.05);
 }
 
 .quantityTitle {
@@ -116,8 +120,9 @@
     composes: justify-items-center from global;
     composes: section;
     grid-area: cart;
-
     composes: lg_border-b-0 from global;
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.05);
 }
 
 .description {
@@ -130,6 +135,8 @@
     composes: lg_pl-sm from global;
     composes: lg_pr-sm from global;
     composes: lg_self-stretch from global;
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.05);
 }
 
 .descriptionTitle {
@@ -146,6 +153,8 @@
     composes: lg_pl-sm from global;
     composes: lg_pr-sm from global;
     composes: lg_self-stretch from global;
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.05);
 }
 
 .detailsPageBuilder {

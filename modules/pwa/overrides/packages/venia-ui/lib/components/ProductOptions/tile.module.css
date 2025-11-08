@@ -1,0 +1,50 @@
+.root {
+    composes: root from '../clickable.module.css';
+    composes: border from global;
+    composes: border-solid from global;
+    composes: border-strong from global;
+    composes: h-[3rem] from global;
+    composes: min-w-[3rem] from global;
+    composes: px-2xs from global;
+    composes: py-0 from global;
+    composes: rounded-sm from global;
+    position: relative;
+    background: transparent;
+    border-color: var(--sg-card-border);
+    color: var(--sg-text);
+}
+
+.root_selected {
+    composes: root;
+    background: var(--sg-primary);
+    color: var(--sg-primary-text);
+    border-color: var(--sg-primary);
+}
+
+.root_focused {
+    composes: root;
+    border-color: var(--sg-primary);
+}
+
+.root_selected_focused {
+    composes: root_selected;
+    box-shadow: 0 0 0 2px rgba(77, 142, 255, 0.4);
+}
+
+.root_outOfStock,
+.root_selected_outOfStock {
+    composes: root;
+    composes: bg-disabledTile from global;
+    composes: opacity-50 from global;
+    composes: border-2 from global;
+    composes: border-solid from global;
+    border-color: rgba(255, 255, 255, 0.25);
+    color: var(--sg-subtext);
+
+    composes: after_absolute from global;
+    composes: after_border-t-2 from global;
+    composes: after_border-solid from global;
+    composes: after_border-swatch from global;
+    composes: after_w-swatch from global;
+    composes: after_-rotate-45 from global;
+}

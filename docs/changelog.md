@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.18] - 2025-11-08
+
+### Changes
+- 修改 5 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/ProductFullDetail/productFullDetail.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/ProductOptions/swatch.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/ProductOptions/tile.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/QuantityStepper/quantityStepper.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/Wishlist/AddToListButton/addToListButton.module.css
+
+
 ## [1.5.17] - 2025-11-08
 
 ### Changes
