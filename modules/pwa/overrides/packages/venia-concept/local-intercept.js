@@ -56,21 +56,14 @@ module.exports = targets => {
         '@saltgoat/venia-extension/src/components/HomeContent'
     );
 
-    const header = targetables.reactComponent(
-        '@magento/venia-ui/lib/components/Header/header.js'
+    const routes = targetables.reactComponent(
+        '@magento/venia-ui/lib/components/Routes/routes.js'
     );
-    header.addImport(
-        "import ThemeToggle from '@saltgoat/venia-extension/src/components/ThemeToggle';"
+    routes.addImport(
+        "import NotFound from '@saltgoat/venia-extension/src/components/NotFound';"
     );
-    header.insertAfterSource(
-        '<div className={classes.secondaryActions}>',
-        '\n                        <ThemeToggle />\n'
-    );
-
-    const app = targetables.reactComponent(
-        '@magento/venia-ui/lib/components/App/app.js'
-    );
-    app.wrapWithFile(
-        '@saltgoat/venia-extension/src/components/ThemeProvider/withThemeProvider'
+    routes.insertBeforeSource(
+        '            </Switch>',
+        '                <Route component={NotFound} />\n'
     );
 };

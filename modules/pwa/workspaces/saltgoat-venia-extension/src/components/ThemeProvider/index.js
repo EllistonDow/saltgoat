@@ -46,6 +46,11 @@ const applyTheme = theme => {
 };
 
 const ThemeProvider = ({ children }) => {
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            window.__saltgoatThemeVersion = '20251108_01';
+        }
+    }, []);
     const [theme, setTheme] = useState(readInitialTheme);
 
     useEffect(() => {

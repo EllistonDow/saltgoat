@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.11] - 2025-11-08
+
+### Changes
+- 修改 7 个文件: AGENTS.md, modules/pwa/overrides/packages/venia-concept/local-intercept.js, modules/pwa/workspaces/saltgoat-venia-extension/src/components/NotFound/index.js, modules/pwa/workspaces/saltgoat-venia-extension/src/components/ThemeProvider/index.js, modules/pwa/workspaces/saltgoat-venia-extension/src/components/ThemeProvider/withThemeMain.js 等
+
+
 ## [1.5.10] - 2025-11-08
 
 ### Changes
