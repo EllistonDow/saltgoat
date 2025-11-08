@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.14] - 2025-11-08
+
+### Changes
+- 修改 11 个文件: modules/pwa/install.sh, modules/pwa/overrides/packages/venia-concept/local-intercept.js, modules/pwa/overrides/packages/venia-ui/lib/components/AccountMenu/accountMenu.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/AccountMenu/accountMenuItems.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/Footer/footer.module.css 等
+
+
 ## [1.5.13] - 2025-11-08
 
 ### Changes

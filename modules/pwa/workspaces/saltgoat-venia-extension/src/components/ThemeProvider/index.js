@@ -131,6 +131,20 @@ const THEME_VARS = {
     }
 };
 
+const applySurfaceStyles = (selector, styles) => {
+    if (typeof document === 'undefined') {
+        return;
+    }
+    const node = document.querySelector(selector);
+    if (!node) {
+        return;
+    }
+    Object.entries(styles).forEach(([prop, value]) => {
+        const cssProp = prop.replace(/[A-Z]/g, match => `-${match.toLowerCase()}`);
+        node.style.setProperty(cssProp, value, 'important');
+    });
+};
+
 const applyTheme = theme => {
     if (typeof document === 'undefined') {
         return;
@@ -150,6 +164,11 @@ const applyTheme = theme => {
     if (palette) {
         Object.entries(palette).forEach(([varName, value]) => {
             root.style.setProperty(varName, value);
+        });
+        applySurfaceStyles("[data-cy='Footer-root']", {
+            backgroundColor: palette['--sg-footer-bg'],
+            color: palette['--sg-footer-text'],
+            borderTopColor: palette['--sg-footer-border']
         });
     }
     if (theme === 'dark') {

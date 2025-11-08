@@ -50,6 +50,22 @@
     --sg-timeline-bg: rgba(255, 255, 255, 0.95);
     --sg-timeline-border: rgba(15, 23, 42, 0.08);
     --sg-timeline-shadow: rgba(15, 23, 42, 0.16);
+    --color-gray-50: 255 255 255;
+    --color-gray-75: 250 250 250;
+    --color-gray-100: 244 245 245;
+    --color-gray-200: 234 235 235;
+    --color-gray-300: 223 225 226;
+    --color-gray-400: 181 184 186;
+    --color-gray-500: 149 154 157;
+    --color-gray-600: 118 123 127;
+    --color-gray-700: 84 93 99;
+    --color-gray-800: 51 63 71;
+    --color-gray-900: 23 32 38;
+    --color-brand-100: 99 132 255;
+    --color-brand-700: 31 57 255;
+    --color-blue-100: 173 203 255;
+    --color-blue-400: 61 132 255;
+    --color-blue-700: 31 57 255;
 }
 
 :global(:root[data-theme='dark']),
@@ -113,12 +129,50 @@
     --sg-timeline-bg: rgba(7, 10, 20, 0.85);
     --sg-timeline-border: rgba(255, 255, 255, 0.05);
     --sg-timeline-shadow: rgba(5, 8, 16, 0.5);
+    --color-gray-50: 16 20 32;
+    --color-gray-75: 20 26 40;
+    --color-gray-100: 24 30 46;
+    --color-gray-200: 30 38 56;
+    --color-gray-300: 40 50 70;
+    --color-gray-400: 64 78 102;
+    --color-gray-500: 94 112 140;
+    --color-gray-600: 122 144 170;
+    --color-gray-700: 168 186 210;
+    --color-gray-800: 198 210 224;
+    --color-gray-900: 244 246 251;
+    --color-brand-100: 140 175 255;
+    --color-brand-700: 90 140 255;
+    --color-blue-100: 120 160 255;
+    --color-blue-400: 90 150 255;
+    --color-blue-700: 60 120 255;
 }
 
 :global(body) {
     background: var(--sg-page-bg);
     color: var(--sg-text);
     transition: background 0.3s ease, color 0.3s ease;
+}
+
+:global(.text-gray-900) {
+    color: var(--sg-text) !important;
+}
+
+:global(.text-gray-600),
+:global(.text-gray-500),
+:global(.text-gray-400) {
+    color: var(--sg-subtext) !important;
+}
+
+:global(.bg-gray-100) {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:global(.bg-header) {
+    background-color: var(--sg-header-bg) !important;
+}
+
+:global(.border-subtle) {
+    border-color: var(--sg-header-border) !important;
 }
 
 :global(main) {
@@ -134,9 +188,9 @@
 }
 
 :global([data-cy='Header-root']) {
-    background: var(--sg-header-bg) !important;
-    color: var(--sg-header-text) !important;
-    border-bottom: 1px solid var(--sg-header-border) !important;
+    background: #05070f !important;
+    color: #f4f6fb !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
     transition: background 0.3s ease, color 0.3s ease,
         border-color 0.3s ease !important;
 }
@@ -144,9 +198,9 @@
 :global([data-cy='Header-root'] svg),
 :global([data-cy='Header-root'] button),
 :global([data-cy='Header-root'] a) {
-    color: var(--sg-header-icon) !important;
-    fill: var(--sg-header-icon) !important;
-    stroke: var(--sg-header-icon) !important;
+    color: #f4f6fb !important;
+    fill: #f4f6fb !important;
+    stroke: #f4f6fb !important;
 }
 
 :global([data-cy='Footer-root']) {

@@ -1389,6 +1389,10 @@ ensure_pwa_home_cms_page() {
     local store_ids="${PWA_HOME_STORE_IDS:-0}"
     local content_file
     content_file="$(resolve_home_template_file "$identifier")"
+    if [[ -z "$content_file" ]]; then
+        log_info "未找到 ${identifier} 的 CMS 模板文件，跳过自动写入内容。"
+        return
+    fi
 
     local has_cli="true"
     if ! magento_command_exists "cms:page:create"; then
@@ -1410,27 +1414,10 @@ ensure_pwa_home_cms_page() {
             return
         fi
 
-        local tmp_file=""
-        local cleanup_tmp="false"
-        if [[ -n "$content_file" ]]; then
-            tmp_file="$content_file"
-        else
-            tmp_file="$(mktemp)"
-            cat <<'EOF' > "$tmp_file"
-<h1>PWA Home Placeholder</h1>
-<p>请在 Magento 后台 (Content &gt; Pages) 编辑此页面的 Page Builder 布局。</p>
-EOF
-            cleanup_tmp="true"
-        fi
-
-        if magento_cli cms:page:create "--title=${title}" "--identifier=${identifier}" --is-active=1 "--page-layout=1column" "--store-id=${store_ids}" "--content-file=${tmp_file}"; then
+        if magento_cli cms:page:create "--title=${title}" "--identifier=${identifier}" --is-active=1 "--page-layout=1column" "--store-id=${store_ids}" "--content-file=${content_file}"; then
             log_success "已自动创建 CMS 页面 ${identifier}（PWA 首页占位内容）。"
         else
             log_warning "创建 CMS 页面 ${identifier} 失败，请在 Magento 后台手动创建。"
-        fi
-
-        if [[ "$cleanup_tmp" == "true" ]]; then
-            rm -f "$tmp_file"
         fi
         return
     fi

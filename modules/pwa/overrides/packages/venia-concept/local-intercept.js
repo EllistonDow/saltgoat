@@ -91,4 +91,12 @@ module.exports = targets => {
         '                        <SearchTrigger',
         '                        <ThemeToggle />\n'
     );
+    header.insertAfterSource(
+        'const title = formatMessage({ id: \'logo.title\', defaultMessage: \'Venia\' });',
+        "\n    const saltgoatHeaderStyle = {\n        background: '#05070f',\n        color: '#f4f6fb',\n        borderBottom: '1px solid rgba(255, 255, 255, 0.08)'\n    };\n"
+    );
+    header.replaceJSX(
+        '<header className={rootClass} data-cy="Header-root">',
+        '<header className={rootClass} data-cy="Header-root" style={saltgoatHeaderStyle}>'
+    );
 };
