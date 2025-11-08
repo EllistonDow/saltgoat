@@ -17,11 +17,10 @@ const ThemeToggle = () => {
             title={label}
             data-theme-mode={theme}
         >
-            <span aria-hidden="true" className={classes.icon}>
-                {isDark ? '☾' : '☀'}
-            </span>
-            <span className={classes.label}>
-                {isDark ? 'Dark' : 'Light'}
+            <span className={classes.srOnly}>{label}</span>
+            <span className={classes.iconOrbit} aria-hidden="true">
+                <span className={classes.sun}>☀</span>
+                <span className={classes.moon}>☾</span>
             </span>
         </button>
     );

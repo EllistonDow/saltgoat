@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.20] - 2025-11-08
+
+### Changes
+- 修改 2 个文件: modules/pwa/workspaces/saltgoat-venia-extension/src/components/ThemeToggle/index.js, modules/pwa/workspaces/saltgoat-venia-extension/src/components/ThemeToggle/themeToggle.module.css
+
+
 ## [1.5.19] - 2025-11-08
 
 ### Changes

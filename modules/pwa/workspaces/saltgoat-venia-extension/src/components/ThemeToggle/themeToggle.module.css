@@ -2,18 +2,19 @@
     position: relative;
     border: 1px solid var(--sg-chip-border);
     background: var(--sg-chip-bg);
-    color: var(--sg-text);
     border-radius: 999px;
-    padding: 10px 18px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease,
+        box-shadow 0.2s ease, background 0.3s ease;
     margin-right: 8px;
-    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    gap: 8px;
-    font-weight: 600;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.15);
 }
 
 .toggle::after {
@@ -22,28 +23,70 @@
     inset: 4px;
     border-radius: 999px;
     border: 1px solid transparent;
-    background: linear-gradient(120deg, rgba(255, 255, 255, 0.25), transparent);
-    opacity: 0.6;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.25),
+        rgba(255, 255, 255, 0.05)
+    );
+    opacity: 0.4;
     pointer-events: none;
 }
 
-.toggle[data-theme-mode='dark'] {
-    color: var(--sg-text);
-}
-
 .toggle:hover {
-    transform: translateY(-1px) scale(1.01);
+    transform: translateY(-1px) scale(1.03);
     border-color: var(--sg-card-hover-border);
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.2);
 }
 
-.icon {
+.iconOrbit {
+    position: relative;
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+.sun,
+.moon {
+    position: absolute;
+    inset: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 1.2rem;
     line-height: 1;
+    transition: transform 0.45s ease, opacity 0.45s ease;
 }
 
-.label {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
+.sun {
+    color: #f7c948;
+    text-shadow: 0 0 8px rgba(247, 201, 72, 0.45);
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+}
+
+.moon {
+    color: #9fb5ff;
+    text-shadow: 0 0 10px rgba(112, 144, 255, 0.6);
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.6);
+}
+
+.toggle[data-theme-mode='dark'] .sun {
+    opacity: 0;
+    transform: rotate(120deg) scale(0.6);
+}
+
+.toggle[data-theme-mode='dark'] .moon {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+}
+
+.srOnly {
+    border: 0;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    width: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    position: absolute;
 }
