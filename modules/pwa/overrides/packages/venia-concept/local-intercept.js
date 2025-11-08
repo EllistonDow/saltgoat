@@ -48,6 +48,20 @@ module.exports = targets => {
 
     const targetables = Targetables.using(targets);
 
+    const appComponent = targetables.reactComponent(
+        '@magento/venia-ui/lib/components/App/app.js'
+    );
+    appComponent.wrapWithFile(
+        '@saltgoat/venia-extension/src/components/ThemeProvider/withThemeProvider'
+    );
+
+    const mainComponent = targetables.reactComponent(
+        '@magento/venia-ui/lib/components/Main/main.js'
+    );
+    mainComponent.wrapWithFile(
+        '@saltgoat/venia-extension/src/components/ThemeProvider/withThemeMain'
+    );
+
     const homePage = targetables.reactComponent(
         '@magento/venia-ui/lib/components/HomePage/homePage.ce.js'
     );
@@ -65,5 +79,16 @@ module.exports = targets => {
     routes.insertBeforeSource(
         '            </Switch>',
         '                <Route component={NotFound} />\n'
+    );
+
+    const header = targetables.reactComponent(
+        '@magento/venia-ui/lib/components/Header/header.js'
+    );
+    header.addImport(
+        "import ThemeToggle from '@saltgoat/venia-extension/src/components/ThemeToggle';"
+    );
+    header.insertBeforeSource(
+        '                        <SearchTrigger',
+        '                        <ThemeToggle />\n'
     );
 };

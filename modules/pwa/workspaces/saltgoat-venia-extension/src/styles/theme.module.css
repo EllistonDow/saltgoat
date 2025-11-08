@@ -22,9 +22,37 @@
     --sg-footer-border: rgba(16, 24, 40, 0.08);
     --sg-footer-text: #101828;
     --sg-footer-link: #1f6bff;
+    --sg-home-gradient: radial-gradient(circle at 10% 20%, rgba(82, 120, 255, 0.2), transparent 42%),
+        radial-gradient(circle at 82% -5%, rgba(255, 137, 197, 0.2), transparent 45%),
+        linear-gradient(135deg, #f7f9ff, #eef3ff 55%, #ffffff);
+    --sg-glow-primary: rgba(105, 152, 255, 0.35);
+    --sg-glow-accent: rgba(255, 161, 214, 0.25);
+    --sg-hero-card-bg: rgba(255, 255, 255, 0.92);
+    --sg-hero-card-border: rgba(15, 23, 42, 0.08);
+    --sg-hero-card-shadow: rgba(15, 23, 42, 0.18);
+    --sg-chip-bg: rgba(255, 255, 255, 0.92);
+    --sg-chip-border: rgba(15, 23, 42, 0.08);
+    --sg-hero-stats-bg: rgba(255, 255, 255, 0.86);
+    --sg-hero-stats-border: rgba(15, 23, 42, 0.08);
+    --sg-scene-gradient: linear-gradient(145deg, rgba(79, 123, 255, 0.18), rgba(255, 118, 179, 0.12));
+    --sg-scene-card-bg: rgba(255, 255, 255, 0.96);
+    --sg-scene-card-border: rgba(15, 23, 42, 0.08);
+    --sg-scene-card-shadow: rgba(15, 23, 42, 0.22);
+    --sg-floating-card-bg: rgba(255, 255, 255, 0.9);
+    --sg-floating-card-border: rgba(15, 23, 42, 0.12);
+    --sg-collection-border: rgba(15, 23, 42, 0.08);
+    --sg-collection-shadow: rgba(15, 23, 42, 0.2);
+    --sg-cube-bg: linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(237, 244, 255, 0.7));
+    --sg-cube-border: rgba(15, 23, 42, 0.08);
+    --sg-timeline-bg: rgba(255, 255, 255, 0.95);
+    --sg-timeline-border: rgba(15, 23, 42, 0.08);
+    --sg-timeline-shadow: rgba(15, 23, 42, 0.16);
 }
 
-:global(:root[data-theme='dark']) {
+:global(:root[data-theme='dark']),
+:global(:root.sg-theme-dark),
+:global(body[data-theme='dark']),
+:global(body.sg-theme-dark) {
     color-scheme: dark;
     --sg-page-bg: #0b0f1d;
     --sg-text: #f4f6fb;
@@ -48,6 +76,31 @@
     --sg-footer-border: rgba(255, 255, 255, 0.08);
     --sg-footer-text: #d9deea;
     --sg-footer-link: #8ddcff;
+    --sg-home-gradient: radial-gradient(circle at 10% 20%, rgba(82, 120, 255, 0.25), transparent 40%),
+        radial-gradient(circle at 80% 0%, rgba(255, 120, 199, 0.35), transparent 42%),
+        linear-gradient(135deg, #040619, #0c111f 55%, #0a0f1c);
+    --sg-glow-primary: rgba(120, 182, 255, 0.45);
+    --sg-glow-accent: rgba(255, 120, 199, 0.35);
+    --sg-hero-card-bg: rgba(8, 12, 24, 0.78);
+    --sg-hero-card-border: rgba(255, 255, 255, 0.08);
+    --sg-hero-card-shadow: rgba(5, 8, 16, 0.65);
+    --sg-chip-bg: rgba(255, 255, 255, 0.08);
+    --sg-chip-border: rgba(255, 255, 255, 0.12);
+    --sg-hero-stats-bg: rgba(255, 255, 255, 0.03);
+    --sg-hero-stats-border: rgba(255, 255, 255, 0.08);
+    --sg-scene-gradient: linear-gradient(145deg, rgba(79, 123, 255, 0.2), rgba(255, 118, 179, 0.15));
+    --sg-scene-card-bg: rgba(9, 13, 30, 0.9);
+    --sg-scene-card-border: rgba(255, 255, 255, 0.08);
+    --sg-scene-card-shadow: rgba(5, 8, 18, 0.7);
+    --sg-floating-card-bg: rgba(255, 255, 255, 0.08);
+    --sg-floating-card-border: rgba(255, 255, 255, 0.12);
+    --sg-collection-border: rgba(255, 255, 255, 0.08);
+    --sg-collection-shadow: rgba(5, 8, 18, 0.55);
+    --sg-cube-bg: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+    --sg-cube-border: rgba(255, 255, 255, 0.06);
+    --sg-timeline-bg: rgba(7, 10, 20, 0.85);
+    --sg-timeline-border: rgba(255, 255, 255, 0.05);
+    --sg-timeline-shadow: rgba(5, 8, 16, 0.5);
 }
 
 :global(body) {
