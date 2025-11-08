@@ -7,7 +7,7 @@
     composes: overflow-y-auto from global;
     composes: p-sm from global;
     background: var(--sg-card-bg) !important;
-    border-color: var(--sg-card-border) !important;
+    border: none !important;
     color: var(--sg-text) !important;
 }
 

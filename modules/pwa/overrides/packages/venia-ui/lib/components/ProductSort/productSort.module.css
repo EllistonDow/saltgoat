@@ -1,19 +1,86 @@
 .root {
-    composes: bg-white from global;
-    composes: border from global;
-    composes: border-light from global;
-    composes: flex from global;
-    composes: items-center from global;
-    composes: justify-between from global;
-    composes: px-sm from global;
-    composes: py-xs from global;
-    background: var(--sg-card-bg) !important;
-    border-color: var(--sg-card-border) !important;
-    color: var(--sg-text) !important;
-    border-radius: 8px;
+    composes: relative from global;
+    composes: ml-2xs from global;
 }
 
-.select {
-    composes: text-subtle from global;
-    color: var(--sg-subtext) !important;
+.menu {
+    composes: absolute from global;
+    composes: bg-clip-padding from global;
+    composes: bg-white from global;
+    composes: border from global;
+    composes: border-solid from global;
+    composes: border-subtle from global;
+    composes: list-none from global;
+    composes: mb-0 from global;
+    composes: min-w-[10rem] from global;
+    composes: mt-0.5 from global;
+    composes: mx-0 from global;
+    composes: right-0 from global;
+    composes: rounded from global;
+    composes: shadow-menu from global;
+    composes: text-colorDefault from global;
+    composes: text-left from global;
+    composes: top-[110%] from global;
+    composes: z-menu from global;
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    color: var(--sg-text);
+    box-shadow: 0 20px 40px var(--sg-tile-shadow);
+}
+
+.menuItem {
+    composes: border-b from global;
+    composes: border-solid from global;
+    composes: border-subtle from global;
+    composes: hover_bg-subtle from global;
+    composes: last_border-b-0 from global;
+    border-color: var(--sg-card-border);
+}
+
+.sortButton {
+    composes: root_lowPriority from '../../components/Button/button.module.css';
+    @apply min-w-[6.26rem];
+    composes: lg_border-2 from global;
+    composes: lg_border-gray-500 from global;
+    composes: lg_font-normal from global;
+    composes: lg_normal-case from global;
+    composes: lg_rounded-input from global;
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    color: var(--sg-text);
+    transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.sortButton:hover,
+.sortButton:focus-visible {
+    border-color: var(--sg-primary);
+    color: var(--sg-primary);
+}
+
+.desktopText {
+    composes: hidden from global;
+    composes: lg_inline-flex from global;
+    color: inherit;
+}
+
+.sortText {
+    composes: leading-normal from global;
+    composes: text-colorDefault from global;
+    color: var(--sg-text);
+}
+
+.desktopIconWrapper {
+    composes: root from '../Icon/icon.module.css';
+    transform: translateX(10px);
+}
+
+.desktopIcon {
+    composes: icon from '../Icon/icon.module.css';
+    composes: stroke-gray-500 from global;
+    stroke: var(--sg-subtext);
+}
+
+.mobileText {
+    composes: lg_hidden from global;
+    color: inherit;
 }

@@ -97,7 +97,7 @@
     --sg-hero-gradient: linear-gradient(135deg, #0d1a2d, #0b0f1d 45%, #1b2a54);
     --sg-hero-shadow: rgba(7, 12, 24, 0.45);
     --sg-header-bg: rgba(5, 7, 15, 0.9);
-    --sg-header-border: rgba(255, 255, 255, 0.08);
+    --sg-header-border: rgba(77, 142, 255, 0.35);
     --sg-header-text: #f4f6fb;
     --sg-header-icon: #f4f6fb;
     --sg-footer-bg: rgba(5, 7, 15, 0.95);
@@ -201,9 +201,9 @@
 }
 
 :global([data-cy='Header-root']) {
-    background: #05070f !important;
-    color: #f4f6fb !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: var(--sg-header-bg) !important;
+    color: var(--sg-header-text) !important;
+    border-bottom: 1px solid var(--sg-header-border) !important;
     transition: background 0.3s ease, color 0.3s ease,
         border-color 0.3s ease !important;
 }
@@ -211,9 +211,9 @@
 :global([data-cy='Header-root'] svg),
 :global([data-cy='Header-root'] button),
 :global([data-cy='Header-root'] a) {
-    color: #f4f6fb !important;
-    fill: #f4f6fb !important;
-    stroke: #f4f6fb !important;
+    color: var(--sg-header-icon) !important;
+    fill: var(--sg-header-icon) !important;
+    stroke: var(--sg-header-icon) !important;
 }
 
 :global([data-cy='Footer-root']) {

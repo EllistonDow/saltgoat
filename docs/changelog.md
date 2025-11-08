@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.17] - 2025-11-08
+
+### Changes
+- 修改 8 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/FilterModal/filterBlock.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/FilterSidebar/filterSidebar.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/Header/header.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/PageLoadingIndicator/pageLoadingIndicator.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/ProductSort/productSort.module.css 等
+
+
 ## [1.5.16] - 2025-11-08
 
 ### Changes
