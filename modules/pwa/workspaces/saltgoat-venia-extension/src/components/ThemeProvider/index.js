@@ -32,7 +32,7 @@ const readInitialTheme = () => {
 
 const THEME_VARS = {
     light: {
-        '--sg-page-bg': '#f7f9ff',
+        '--sg-page-bg': '#ffffff',
         '--sg-text': '#101828',
         '--sg-subtext': '#5c6373',
         '--sg-card-bg': 'rgba(255, 255, 255, 0.9)',
