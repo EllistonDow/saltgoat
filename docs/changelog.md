@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.10] - 2025-11-08
+
+### Changes
+- 修改 69 个文件: docs/backup-restic.md, docs/install.md, docs/magento-maintenance.md, docs/magento-permissions.md, docs/magento-pwa.md 等
+
+
 ## [1.5.9] - 2025-11-08
 
 ### Changes
