@@ -1,0 +1,15 @@
+.root {
+    composes: font-normal from global;
+    composes: leading-none from global;
+    composes: pb-0.5 from global;
+    composes: pt-2.5 from global;
+    composes: px-0.5 from global;
+    composes: text-sm from global;
+    composes: empty_hidden from global;
+    color: var(--sg-subtext);
+}
+
+.root_error {
+    composes: root;
+    color: #ff6b81;
+}

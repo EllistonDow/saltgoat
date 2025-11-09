@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.23] - 2025-11-09
+
+### Changes
+- 修改 3 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/Accordion/section.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/ShippingInformation/AddressForm/customerForm.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/Field/message.module.css
+
+
 ## [1.5.22] - 2025-11-09
 
 ### Changes

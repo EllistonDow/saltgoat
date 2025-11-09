@@ -1,8 +1,8 @@
 .root {
-    composes: border-b-2 from global;
+    composes: border-b from global;
     composes: border-solid from global;
     composes: border-subtle from global;
-    background: var(--sg-card-bg);
+    background: transparent;
     border-color: var(--sg-card-border);
     color: var(--sg-text);
 }
@@ -16,7 +16,7 @@
     composes: pt-0 from global;
     composes: px-sm from global;
     composes: empty_hidden from global;
-    background: var(--sg-card-bg);
+    background: transparent;
     color: var(--sg-text);
 }
 
