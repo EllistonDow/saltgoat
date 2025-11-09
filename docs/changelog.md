@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.24] - 2025-11-09
+
+### Changes
+- 修改 6 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/Logo/logo.js, modules/pwa/overrides/packages/venia-ui/lib/components/Logo/tattoo-logo.svg, modules/pwa/overrides/packages/venia-ui/lib/components/MegaMenu/submenu.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/Navigation/navigation.module.css, modules/pwa/workspaces/saltgoat-venia-extension/src/components/ThemeToggle/index.js 等
+
+
 ## [1.5.23] - 2025-11-09
 
 ### Changes

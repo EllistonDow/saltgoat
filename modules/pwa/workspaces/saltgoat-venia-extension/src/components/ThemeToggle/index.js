@@ -20,8 +20,8 @@ const ThemeToggle = () => {
         >
             <span className={classes.srOnly}>{label}</span>
             <span className={classes.iconOrbit} aria-hidden="true">
-                <Sun className={classes.sun} size={18} />
-                <Moon className={classes.moon} size={18} />
+                <Sun className={classes.sun} size={22} />
+                <Moon className={classes.moon} size={22} />
             </span>
         </button>
     );

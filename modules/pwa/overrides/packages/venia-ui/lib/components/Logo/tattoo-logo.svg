@@ -1,0 +1,12 @@
+<svg width="150" height="36" viewBox="0 0 150 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="150" height="36" rx="18" fill="url(#grad)"/>
+  <text x="75" y="23" text-anchor="middle" font-family="'Inter', 'Segoe UI', sans-serif" font-size="18" font-weight="600" fill="#FFFFFF" letter-spacing="0.35em">
+    TATTOO
+  </text>
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="150" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1F6BFF"/>
+      <stop offset="1" stop-color="#8DDCFF"/>
+    </linearGradient>
+  </defs>
+</svg>
