@@ -59,3 +59,19 @@
 .loading {
     color: var(--sg-text);
 }
+
+.createAccount {
+    composes: grid from global;
+    composes: gap-xs from global;
+    composes: justify-items-stretch from global;
+    composes: px-sm from global;
+    composes: py-xs from global;
+}
+
+.forgotPassword {
+    composes: p-md from global;
+}
+
+.loading {
+    composes: p-md from global;
+}

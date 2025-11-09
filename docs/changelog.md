@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.22] - 2025-11-09
+
+### Changes
+- 修改 3 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/AccountMenu/accountMenu.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/Field/field.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/SearchBar/autocomplete.module.css
+
+
 ## [1.5.21] - 2025-11-09
 
 ### Changes
