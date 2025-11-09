@@ -1,4 +1,5 @@
 import React, { useContext } from 'react';
+import { Sun, Moon } from 'react-feather';
 import classes from './themeToggle.module.css';
 import '../../styles/theme.global.module.css';
 import { ThemeContext } from '../ThemeProvider';
@@ -19,8 +20,8 @@ const ThemeToggle = () => {
         >
             <span className={classes.srOnly}>{label}</span>
             <span className={classes.iconOrbit} aria-hidden="true">
-                <span className={classes.sun}>☀</span>
-                <span className={classes.moon}>☾</span>
+                <Sun className={classes.sun} size={18} />
+                <Moon className={classes.moon} size={18} />
             </span>
         </button>
     );
