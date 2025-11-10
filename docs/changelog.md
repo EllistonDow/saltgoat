@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.27] - 2025-11-10
+
+### Changes
+- 修改 1 个文件: modules/pwa/overrides/packages/venia-ui/lib/RootComponents/Category/category.module.css
+
+
 ## [1.5.26] - 2025-11-10
 
 ### Changes
