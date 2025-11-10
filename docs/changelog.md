@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.1] - 2025-11-10
+
+### Changes
+- 修改 4 个文件: docs/pwa-project-guide.md, modules/pwa/install.sh, modules/pwa/templates/cms/pwa_home.html, modules/pwa/workspaces/saltgoat-venia-extension/src/styles/theme.global.module.css
+
+
 ## [1.6.0] - 2025-11-10
 
 ### Changes

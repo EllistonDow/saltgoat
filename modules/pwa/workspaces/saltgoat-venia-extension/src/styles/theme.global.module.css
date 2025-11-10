@@ -2,7 +2,9 @@
     color-scheme: light;
     --sg-page-bg: #ffffff;
     --sg-text: #101828;
+    --sg-text-rgb: 16, 24, 40;
     --sg-subtext: #5c6373;
+    --sg-subtext-rgb: 92, 99, 115;
     --sg-card-bg: rgba(255, 255, 255, 0.9);
     --sg-card-border: rgba(15, 23, 42, 0.08);
     --sg-card-hover-border: rgba(31, 107, 255, 0.45);
@@ -26,8 +28,8 @@
     --sg-footer-text: #101828;
     --sg-footer-link: #1f6bff;
     --venia-global-color-background: var(--sg-page-bg);
-    --venia-global-color-text: var(--sg-text);
-    --venia-global-color-text-alt: var(--sg-subtext);
+    --venia-global-color-text: var(--sg-text-rgb);
+    --venia-global-color-text-alt: var(--sg-subtext-rgb);
     --sg-home-gradient: radial-gradient(circle at 10% 20%, rgba(82, 120, 255, 0.2), transparent 42%),
         radial-gradient(circle at 82% -5%, rgba(255, 137, 197, 0.2), transparent 45%),
         linear-gradient(135deg, #f7f9ff, #eef3ff 55%, #ffffff);
@@ -76,8 +78,8 @@
 :global(body[data-theme='dark']),
 :global(body.sg-theme-dark) {
     --venia-global-color-background: var(--sg-page-bg);
-    --venia-global-color-text: var(--sg-text);
-    --venia-global-color-text-alt: var(--sg-subtext);
+    --venia-global-color-text: var(--sg-text-rgb);
+    --venia-global-color-text-alt: var(--sg-subtext-rgb);
 }
 
 :global(:root[data-theme='dark']),
@@ -87,7 +89,9 @@
     color-scheme: dark;
     --sg-page-bg: #0b0f1d;
     --sg-text: #f4f6fb;
+    --sg-text-rgb: 244, 246, 251;
     --sg-subtext: #b5c0d6;
+    --sg-subtext-rgb: 181, 192, 214;
     --sg-card-bg: rgba(9, 14, 25, 0.85);
     --sg-card-border: rgba(255, 255, 255, 0.08);
     --sg-card-hover-border: rgba(141, 220, 255, 0.6);
@@ -164,6 +168,55 @@
     color: var(--sg-text) !important;
 }
 
+:global(body[data-theme='dark'] .bg-white) {
+    background-color: rgba(12, 18, 36, 0.92) !important;
+    color: #f4f6fb !important;
+}
+
+:global(.bg-subtle),
+:global(.bg-default),
+:global(.bg-surface),
+:global(.surface),
+:global(.surface-100),
+:global(.surface-200),
+:global(.surface-300) {
+    background-color: var(--sg-card-bg) !important;
+    color: var(--sg-text) !important;
+}
+
+:global(body[data-theme='dark'] .bg-subtle),
+:global(body[data-theme='dark'] .bg-default),
+:global(body[data-theme='dark'] .surface),
+:global(body[data-theme='dark'] .surface-100),
+:global(body[data-theme='dark'] .surface-200),
+:global(body[data-theme='dark'] .surface-300) {
+    background-color: rgba(12, 18, 36, 0.92) !important;
+    color: #f4f6fb !important;
+}
+
+:global(.border-subtle),
+:global(.border-default),
+:global(.border-light),
+:global(.surface-border),
+:global(.border-surface) {
+    border-color: var(--sg-card-border) !important;
+}
+
+:global(body[data-theme='dark'] .border-subtle),
+:global(body[data-theme='dark'] .border-default),
+:global(body[data-theme='dark'] .border-light),
+:global(body[data-theme='dark'] .surface-border),
+:global(body[data-theme='dark'] .border-surface) {
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+:global(.text-subtle),
+:global(.text-default),
+:global(.text-neutral-500),
+:global(.text-gray-500) {
+    color: var(--sg-subtext) !important;
+}
+
 :global(.text-gray-900) {
     color: var(--sg-text) !important;
 }
@@ -178,20 +231,12 @@
     background-color: var(--sg-card-bg) !important;
 }
 
+:global(body[data-theme='dark'] .bg-gray-100) {
+    background-color: rgba(12, 18, 36, 0.92) !important;
+}
+
 :global(.bg-header) {
     background-color: var(--sg-header-bg) !important;
-}
-
-:global(.border-subtle) {
-    border-color: var(--sg-header-border) !important;
-}
-
-:global(.border-light) {
-    border-color: var(--sg-card-border) !important;
-}
-
-:global(.text-subtle) {
-    color: var(--sg-subtext) !important;
 }
 
 :global(main) {
@@ -233,6 +278,12 @@
     color: var(--sg-header-icon) !important;
 }
 
+:global(.icon) {
+    color: rgb(var(--venia-global-color-text)) !important;
+    stroke: currentColor !important;
+    fill: none !important;
+}
+
 :global([data-cy='Header-root'] [data-cy='CartTrigger-trigger'] svg) {
     stroke: currentColor !important;
     fill: none !important;
@@ -263,11 +314,6 @@
     border-radius: 20px;
     border: 1px dashed var(--sg-card-border);
     color: var(--sg-subtext);
-}
-
-:global(.bg-white) {
-    background-color: var(--sg-card-bg) !important;
-    color: var(--sg-text) !important;
 }
 
 :global(.text-colorDefault) {

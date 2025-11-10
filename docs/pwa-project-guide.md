@@ -31,10 +31,11 @@
 - 检查 systemd 服务是否存在、是否启用、当前运行状态。
 - 给出下一步建议（如缺少仓库可执行 `sync-content --pull`）。
 
-### 3.3 `saltgoat pwa sync-content <site> [--pull] [--rebuild]`
+### 3.3 `saltgoat pwa sync-content <site> [--pull] [--rebuild] [--skip-cms]`
 - 默认重新应用 overrides、刷新 `.env`、确保 systemd 服务配置。
 - `--pull`：强制拉取/克隆 PWA Studio 仓库。
 - `--rebuild`：在环境变量齐全时执行 `yarn install` + `yarn build`。
+- `--skip-cms`：跳过 `pwa_home` 模板写入，避免覆盖运营在后台的临时改动；仅同步前端代码与 systemd 服务。
 - 后续接入 Page Builder 模板同步逻辑时，也会在此命令中处理。
 
 ### 3.4 `saltgoat pwa remove <site> [--purge]`
