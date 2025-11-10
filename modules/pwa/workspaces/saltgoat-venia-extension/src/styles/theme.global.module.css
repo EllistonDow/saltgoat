@@ -18,6 +18,9 @@
     --sg-header-border: rgba(15, 23, 42, 0.1);
     --sg-header-text: #101828;
     --sg-header-icon: #101828;
+    --sg-menu-bg: rgba(255, 255, 255, 0.98);
+    --sg-menu-border: rgba(15, 23, 42, 0.08);
+    --sg-menu-text: #101828;
     --sg-footer-bg: #e9eefc;
     --sg-footer-border: rgba(16, 24, 40, 0.08);
     --sg-footer-text: #101828;
@@ -100,6 +103,9 @@
     --sg-header-border: rgba(77, 142, 255, 0.35);
     --sg-header-text: #f4f6fb;
     --sg-header-icon: #f4f6fb;
+    --sg-menu-bg: rgba(6, 9, 20, 0.98);
+    --sg-menu-border: rgba(255, 255, 255, 0.08);
+    --sg-menu-text: #f4f6fb;
     --sg-footer-bg: rgba(5, 7, 15, 0.95);
     --sg-footer-border: rgba(255, 255, 255, 0.08);
     --sg-footer-text: #d9deea;

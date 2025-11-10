@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.25] - 2025-11-10
+
+### Changes
+- 修改 6 个文件: modules/pwa/overrides/packages/venia-concept/local-intercept.js, modules/pwa/overrides/packages/venia-ui/lib/components/MegaMenu/submenu.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/Navigation/navigation.module.css, modules/pwa/workspaces/saltgoat-venia-extension/src/components/ThemeProvider/index.js, modules/pwa/workspaces/saltgoat-venia-extension/src/styles/theme.global.module.css 等
+
+
 ## [1.5.24] - 2025-11-09
 
 ### Changes

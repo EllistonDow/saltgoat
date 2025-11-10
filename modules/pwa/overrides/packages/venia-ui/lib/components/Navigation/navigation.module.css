@@ -15,8 +15,9 @@
     transition-duration: 192ms;
     transition-property: opacity, transform, visibility;
     transition-timing-function: var(--venia-global-anim-out);
-    background: rgba(5, 7, 15, 0.98);
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--sg-menu-bg);
+    border-right: 1px solid var(--sg-menu-border);
+    color: var(--sg-menu-text);
 }
 
 .root_open {
@@ -41,8 +42,9 @@
     grid-auto-columns: 3.5rem;
     grid-auto-rows: 3.5rem;
     grid-template-columns: 3.5rem 1fr 3.5rem;
-    background: rgba(8, 10, 20, 0.95);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--sg-menu-bg);
+    border-bottom: 1px solid var(--sg-menu-border);
+    color: var(--sg-menu-text);
 }
 
 .body {
@@ -72,8 +74,9 @@
     composes: w-full from global;
 
     composes: sm_hidden from global;
-    background: rgba(8, 10, 20, 0.95);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--sg-menu-bg);
+    border-top: 1px solid var(--sg-menu-border);
+    color: var(--sg-menu-text);
 }
 
 .modal {
@@ -89,7 +92,7 @@
     transition-duration: 192ms;
     transition-property: opacity, transform, visibility;
     transition-timing-function: var(--venia-global-anim-out);
-    background: rgba(6, 8, 18, 0.98);
+    background: var(--sg-menu-bg);
 }
 
 .modal_open {
@@ -100,4 +103,12 @@
     transform: translate3d(0, 0, 0);
     transition-duration: 384ms;
     transition-timing-function: var(--venia-global-anim-in);
+}
+
+.root :global(a),
+.root :global(button),
+.root :global(svg) {
+    color: var(--sg-menu-text);
+    fill: var(--sg-menu-text);
+    stroke: var(--sg-menu-text);
 }
