@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.5.26] - 2025-11-10
+
+### Changes
+- 修改 1 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/Wishlist/AddToListButton/addToListButton.module.css
+
+
 ## [1.5.25] - 2025-11-10
 
 ### Changes

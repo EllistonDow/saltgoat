@@ -5,9 +5,15 @@
     min-height: 3rem;
     composes: min-w-[3rem] from global;
     color: var(--sg-text);
-    fill: var(--sg-text);
-    stroke: var(--sg-text);
+    --fill: var(--sg-text);
+    --stroke: var(--sg-text);
     transition: color 0.2s ease, fill 0.2s ease, stroke 0.2s ease;
+}
+
+.root :global(svg) {
+    stroke: var(--stroke);
+    fill: var(--fill);
+    color: var(--stroke);
 }
 
 .root_selected {
