@@ -220,6 +220,27 @@
     color: var(--sg-header-icon) !important;
     fill: var(--sg-header-icon) !important;
     stroke: var(--sg-header-icon) !important;
+    opacity: 1 !important;
+}
+
+:global([data-cy='Header-root'] .icon) {
+    stroke: var(--sg-header-icon) !important;
+    fill: none !important;
+    color: var(--sg-header-icon) !important;
+}
+
+:global([data-cy='Header-root'] [data-cy='CartTrigger-trigger']) {
+    color: var(--sg-header-icon) !important;
+}
+
+:global([data-cy='Header-root'] [data-cy='CartTrigger-trigger'] svg) {
+    stroke: currentColor !important;
+    fill: none !important;
+}
+
+:global([data-cy='Header-root'] [data-cy='CartTrigger-trigger'] .counter) {
+    background: var(--sg-primary) !important;
+    color: var(--sg-primary-text) !important;
 }
 
 :global([data-cy='Footer-root']) {

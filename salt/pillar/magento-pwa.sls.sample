@@ -84,4 +84,8 @@ magento_pwa:
           MAGENTO_EXPERIENCE_PLATFORM_ENABLED: "false"
           # 设置 PWA 专用首页 Identifier，缺失时脚本会自动创建占位页面
           MAGENTO_PWA_HOME_IDENTIFIER: pwa_home
+          # Showcase 分类预设（用于 GraphQL 动态填充沉浸式系列）
+          MAGENTO_PWA_SHOWCASE_CATEGORY_IDS: "4,5,6"
+          # 可选：自定义 Showcase 兜底内容（JSON 字符串，详见 docs/pwa-project-guide.md 4.4）
+          # SALTGOAT_PWA_SHOWCASE: '{"hero":{"title":"全新首页"}}'
           CHECKOUT_BRAINTREE_TOKEN: sandbox_example_token

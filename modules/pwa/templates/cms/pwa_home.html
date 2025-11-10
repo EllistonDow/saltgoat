@@ -1,1 +1,403 @@
+<style>
+    .sg-pwa-home {
+        font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+        color: var(--sg-text);
+        background: var(--sg-home-gradient);
+        padding: clamp(32px, 4vw, 72px);
+    }
 
+    .sg-pwa-home a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .sg-pwa-shell {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: clamp(32px, 4vw, 56px);
+    }
+
+    .sg-card {
+        border-radius: 28px;
+        border: 1px solid var(--sg-card-border);
+        background: var(--sg-card-bg);
+        padding: clamp(24px, 3vw, 48px);
+        box-shadow: 0 24px 70px var(--sg-tile-shadow);
+        transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    .sg-hero {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: clamp(24px, 4vw, 40px);
+        align-items: center;
+    }
+
+    .sg-hero h1 {
+        font-size: clamp(2.2rem, 5vw, 3.4rem);
+        margin: 0 0 16px;
+        line-height: 1.1;
+    }
+
+    .sg-hero p {
+        color: var(--sg-subtext);
+        margin: 0 0 20px;
+        line-height: 1.6;
+        font-size: 1.05rem;
+    }
+
+    .sg-hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .sg-button-primary,
+    .sg-button-secondary {
+        border-radius: 999px;
+        padding: 14px 28px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .sg-button-primary {
+        background-image: linear-gradient(120deg, var(--sg-primary), var(--sg-primary-strong));
+        color: var(--sg-primary-text);
+        box-shadow: 0 18px 32px rgba(79, 123, 255, 0.35);
+    }
+
+    .sg-button-secondary {
+        border: 1px solid var(--sg-secondary-border);
+        color: var(--sg-text);
+        background: transparent;
+    }
+
+    .sg-button-primary:hover,
+    .sg-button-secondary:hover {
+        transform: translateY(-2px);
+    }
+
+    .sg-hero-metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 16px;
+        margin-top: 18px;
+    }
+
+    .sg-hero-metric {
+        padding: 16px;
+        border-radius: 18px;
+        border: 1px solid var(--sg-card-border);
+        background: var(--sg-card-bg);
+    }
+
+    .sg-hero-metric strong {
+        display: block;
+        font-size: 1.9rem;
+        color: var(--sg-metric-accent);
+    }
+
+    .sg-hero-media {
+        border-radius: 32px;
+        overflow: hidden;
+        position: relative;
+        min-height: 320px;
+        background-size: cover;
+        background-position: center;
+    }
+
+    .sg-hero-media::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(3, 7, 18, 0) 40%, rgba(3, 7, 18, 0.75) 100%);
+    }
+
+    .sg-hero-media-caption {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+        color: #ffffff;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .sg-section-heading {
+        text-transform: uppercase;
+        letter-spacing: 0.32em;
+        font-size: 0.85rem;
+        color: var(--sg-subtext);
+        margin-bottom: 8px;
+        display: block;
+    }
+
+    .sg-section-title {
+        font-size: clamp(1.6rem, 3vw, 2.4rem);
+        margin: 0 0 24px;
+    }
+
+    .sg-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 24px;
+    }
+
+    .sg-collection {
+        position: relative;
+        border-radius: 24px;
+        overflow: hidden;
+        min-height: 240px;
+        color: #ffffff;
+        border: 1px solid var(--sg-collection-border);
+        box-shadow: 0 30px 45px var(--sg-collection-shadow);
+    }
+
+    .sg-collection img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.6s ease;
+    }
+
+    .sg-collection > div {
+        position: relative;
+        z-index: 1;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        min-height: 100%;
+        background: linear-gradient(180deg, rgba(3, 6, 12, 0), rgba(3, 6, 12, 0.85));
+    }
+
+    .sg-collection span {
+        font-size: 0.75rem;
+        letter-spacing: 0.3em;
+        opacity: 0.85;
+    }
+
+    .sg-collection strong {
+        font-size: 1.4rem;
+        margin-top: 6px;
+    }
+
+    .sg-collection:hover img {
+        transform: scale(1.08);
+    }
+
+    .sg-services {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px;
+    }
+
+    .sg-service-card {
+        border-radius: 20px;
+        border: 1px solid var(--sg-card-border);
+        padding: 20px;
+        background: var(--sg-card-bg);
+        box-shadow: 0 18px 30px var(--sg-tile-shadow);
+    }
+
+    .sg-service-card span {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(79, 123, 255, 0.12);
+        color: var(--sg-primary);
+        font-size: 0.8rem;
+        letter-spacing: 0.2em;
+    }
+
+    .sg-service-card h3 {
+        margin: 14px 0 8px;
+        font-size: 1.25rem;
+    }
+
+    .sg-service-card p {
+        margin: 0;
+        color: var(--sg-subtext);
+        line-height: 1.5;
+    }
+
+    .sg-slider {
+        display: flex;
+        gap: 16px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .sg-slide {
+        flex: 0 0 280px;
+        border-radius: 20px;
+        border: 1px solid var(--sg-card-border);
+        background: var(--sg-card-bg);
+        padding: 20px;
+        scroll-snap-align: start;
+        box-shadow: 0 18px 40px var(--sg-tile-shadow);
+    }
+
+    .sg-slide strong {
+        font-size: 1.1rem;
+        display: block;
+        margin-bottom: 6px;
+    }
+
+    .sg-slide span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--sg-subtext);
+        margin-bottom: 12px;
+    }
+
+    .sg-slide p {
+        margin: 0;
+        color: var(--sg-subtext);
+        line-height: 1.6;
+    }
+
+    @media (max-width: 720px) {
+        .sg-pwa-home {
+            padding: 24px 16px 48px;
+        }
+
+        .sg-card {
+            padding: 24px;
+        }
+    }
+</style>
+
+<div class="sg-pwa-home">
+    <div class="sg-pwa-shell">
+        <section class="sg-card sg-hero">
+            <div>
+            <span class="sg-section-heading">SaltGoat Venia Experience</span>
+            <h1>{{config path="general/store_information/name"}} · 数字旗舰体验</h1>
+            <p>
+                借助 Page Builder + SaltGoat 自动化，{{config path="general/store_information/name"}} 可以把新品发布、直播预告与运营信号集中在同一首屏；模板更新后会自动下发到 PWA 站点，可随时替换为品牌自定义内容。
+            </p>
+            <div class="sg-hero-actions">
+                <a class="sg-button-primary" href="{{store url='collections/new'}}">探索新品</a>
+                <a class="sg-button-secondary" href="{{store url='service'}}">查看服务</a>
+            </div>
+            <div class="sg-hero-metrics">
+                <div class="sg-hero-metric">
+                        <strong>98%</strong>
+                        <span>PWA 覆盖</span>
+                    </div>
+                    <div class="sg-hero-metric">
+                        <strong>15min</strong>
+                        <span>上线窗口</span>
+                    </div>
+                    <div class="sg-hero-metric">
+                        <strong>24/7</strong>
+                        <span>巡检自愈</span>
+                    </div>
+                </div>
+            </div>
+            <div
+                class="sg-hero-media"
+                style="background-image: url('{{media url='wysiwyg/pwa/home-hero.jpg'}}');"
+            >
+                <div class="sg-hero-media-caption">
+                    <span>Live Commerce</span>
+                    <strong>下一场直播 20:00 准时开播</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="sg-card">
+            <span class="sg-section-heading">精选系列</span>
+            <h2 class="sg-section-title">用沉浸式卡片呈现新品矩阵</h2>
+            <div class="sg-grid">
+                <a class="sg-collection" href="{{store url='collections/holographic'}}">
+                    <img src="{{media url='wysiwyg/pwa/collection-holo.jpg'}}" alt="Holographic Drop" />
+                    <div>
+                        <span>Holographic Drop</span>
+                        <strong>立体新品矩阵</strong>
+                    </div>
+                </a>
+                <a class="sg-collection" href="{{store url='collections/motion'}}">
+                    <img src="{{media url='wysiwyg/pwa/collection-motion.jpg'}}" alt="Motion Lab" />
+                    <div>
+                        <span>Motion Lab</span>
+                        <strong>运动性能实验室</strong>
+                    </div>
+                </a>
+                <a class="sg-collection" href="{{store url='collections/living'}}">
+                    <img src="{{media url='wysiwyg/pwa/collection-living.jpg'}}" alt="Living Flow" />
+                    <div>
+                        <span>Living Flow</span>
+                        <strong>家居生活流</strong>
+                    </div>
+                </a>
+            </div>
+        </section>
+
+        <section class="sg-card">
+            <span class="sg-section-heading">自动化驱动</span>
+            <h2 class="sg-section-title">SaltGoat 赋能的服务亮点</h2>
+            <div class="sg-services">
+                <article class="sg-service-card">
+                    <span>内容</span>
+                    <h3>Page Builder 即时同步</h3>
+                    <p>脚本检测 CMS 模板变更后 60 秒内推送到前端并生成快照，方便回滚。</p>
+                </article>
+                <article class="sg-service-card">
+                    <span>监控</span>
+                    <h3>智能资源巡检</h3>
+                    <p>RabbitMQ、Valkey、OpenSearch 异常会触发自愈，告警通过 Telegram/Salt Event 汇总。</p>
+                </article>
+                <article class="sg-service-card">
+                    <span>性能</span>
+                    <h3>一键算力提速</h3>
+                    <p>自动完成 PHP-FPM 调优、Nginx 缓存策略与 Percona 参数，首屏更快。</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="sg-card">
+            <span class="sg-section-heading">实时活动</span>
+            <h2 class="sg-section-title">滑动查看最新上线 / 直播 / 推广</h2>
+            <div class="sg-slider">
+                <article class="sg-slide">
+                    <span>LIVE</span>
+                    <strong>星耀新品夜场</strong>
+                    <p>20:00 · 主播 Zoe 讲解 PWA 新系列，前 300 名下单赠送限量礼。扫描直播二维码即可加入。</p>
+                </article>
+                <article class="sg-slide">
+                    <span>DEPLOY</span>
+                    <strong>Edge CDN 灯塔升级</strong>
+                    <p>SaltGoat 自动调度完成 18 台节点的配置刷新，首屏延时下降 24%。滚动观察 Grafana 仪表。</p>
+                </article>
+                <article class="sg-slide">
+                    <span>OPS</span>
+                    <strong>自愈巡检日报</strong>
+                    <p>Valkey 命中率 99.3%，RabbitMQ 消息延迟 &lt; 80ms，3 条 WAF 告警已自动处理，无需人工干预。</p>
+                </article>
+                <article class="sg-slide">
+                    <span>MARKETING</span>
+                    <strong>PWA 会员房开放</strong>
+                    <p>使用 Page Builder 布局的 VIP 空间现已上线，可在 PWA 专区预约私享日，支持多 Store View 定制。</p>
+                </article>
+            </div>
+        </section>
+    </div>
+</div>

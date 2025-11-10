@@ -1,68 +1,132 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useQuery } from '@apollo/client';
 import { useStyle } from '@magento/venia-ui/lib/classify';
 
 import defaultClasses from './showcase.module.css';
+import { resolveShowcaseConfig } from './showcaseConfig';
+import SHOWCASE_QUERY from './showcase.gql';
 
-const heroStats = [
-    { label: '实时下单响应', value: '180ms', detail: 'GraphQL 边缘缓存' },
-    { label: '部署时间', value: '15min', detail: 'SaltGoat blueprint' },
-    { label: '自愈覆盖', value: '24/7', detail: 'Beacon + Reactor' }
-];
+const DEFAULT_CATEGORY_IDS = '3,4,5';
+const backendOrigin = (process.env.MAGENTO_BACKEND_URL || '').replace(/\/$/, '');
 
-const trendTags = ['渐变玻璃拟物', 'Live Commerce', 'Page Builder', 'Headless PWA'];
+const parseCategoryIds = raw => {
+    const source = raw && raw.trim().length ? raw : DEFAULT_CATEGORY_IDS;
+    return source
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean);
+};
 
-const spotlightCollections = [
-    {
-        title: '立体新品矩阵',
-        subtitle: 'Holographic Drop',
-        href: '/collections/holographic',
-        image:
-            'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=900&q=70'
-    },
-    {
-        title: '运动性能实验室',
-        subtitle: 'Motion Lab',
-        href: '/collections/motion',
-        image:
-            'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=70'
-    },
-    {
-        title: '家居生活流',
-        subtitle: 'Living Flow',
-        href: '/collections/living',
-        image:
-            'https://images.unsplash.com/photo-1493666438817-866a91353ca9?auto=format&fit=crop&w=900&q=70'
+const normalizeSuffix = suffix => {
+    if (!suffix) {
+        return '';
     }
-];
+    return suffix.startsWith('.') ? suffix : `.${suffix}`;
+};
 
-const serviceHighlights = [
-    {
-        title: 'Page Builder 即时同步',
-        description: '内容团队发布后 60 秒内同步至前端，自动生成回滚点。',
-        accent: '内容'
-    },
-    {
-        title: '智能资源巡检',
-        description: 'Valkey / RabbitMQ / OpenSearch 指标异常触发自愈与告警节流。',
-        accent: '监控'
-    },
-    {
-        title: '一键算力提速',
-        description: '自动完成 PHP-FPM thread tuning、Nginx cache 与 Percona 优化。',
-        accent: '性能'
+const buildMediaUrl = path => {
+    if (!path) {
+        return null;
     }
-];
+    if (/^https?:\/\//i.test(path)) {
+        return path;
+    }
+    const normalized = path.startsWith('/') ? path : `/${path}`;
+    if (normalized.startsWith('/media/')) {
+        return backendOrigin ? `${backendOrigin}${normalized}` : normalized;
+    }
+    if (!backendOrigin) {
+        return normalized;
+    }
+    return `${backendOrigin}/media/catalog/category${normalized}`;
+};
 
-const realtimeSignals = [
-    { type: '订单', message: '#1045 付款完成', time: '2 分钟前', delta: '+¥1,280' },
-    { type: '库存', message: '跑鞋 SKY-FLUX 补货 120 件', time: '8 分钟前', delta: '+120' },
-    { type: '运营', message: 'Venia-Live Story 推送成功', time: '12 分钟前', delta: '3 个渠道' },
-    { type: '安全', message: 'WAF 规则更新已激活', time: '25 分钟前', delta: '全站' }
-];
+const replaceTokens = (value, tokens) => {
+    if (typeof value !== 'string') {
+        return value;
+    }
+    return value.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, key) => {
+        const tokenValue = tokens[key];
+        if (tokenValue === undefined || tokenValue === null || tokenValue === '') {
+            return match;
+        }
+        return tokenValue;
+    });
+};
+
+const interpolateConfig = (input, tokens) => {
+    if (Array.isArray(input)) {
+        return input.map(item => interpolateConfig(item, tokens));
+    }
+    if (input && typeof input === 'object') {
+        return Object.entries(input).reduce((acc, [key, value]) => {
+            acc[key] = interpolateConfig(value, tokens);
+            return acc;
+        }, {});
+    }
+    return replaceTokens(input, tokens);
+};
+
+const renderHeading = title => {
+    if (!title) {
+        return null;
+    }
+    const lines = String(title).split(/\n/);
+    return lines.map((line, index) => (
+        <React.Fragment key={`${line}-${index}`}>
+            {line}
+            {index < lines.length - 1 ? <br /> : null}
+        </React.Fragment>
+    ));
+};
 
 const Showcase = () => {
     const classes = useStyle(defaultClasses);
-    const heroSignals = realtimeSignals.slice(0, 2);
+    const categoryIds = useMemo(
+        () => parseCategoryIds(process.env.MAGENTO_PWA_SHOWCASE_CATEGORY_IDS || ''),
+        []
+    );
+    const { data } = useQuery(SHOWCASE_QUERY, {
+        variables: { categoryIds },
+        skip: !categoryIds.length
+    });
+    const storeName = data?.storeConfig?.store_name || '';
+    const categorySuffix = normalizeSuffix(data?.storeConfig?.category_url_suffix || '');
+    const graphqlCollections = useMemo(() => {
+        const items = data?.categoryList?.items || [];
+        return items
+            .filter(item => item && item.name && (item.url_path || item.id))
+            .map(item => {
+                const urlPath = item.url_path ? `/${item.url_path}` : null;
+                const href = urlPath ? `${urlPath}${categorySuffix}` : `/categories/${item.id}`;
+                return {
+                    title: item.name,
+                    subtitle: item.meta_title || item.name,
+                    href,
+                    image: buildMediaUrl(item.image || item.image_path)
+                };
+            });
+    }, [data, categorySuffix]);
+
+    const baseConfig = useMemo(() => resolveShowcaseConfig(), []);
+    const interpolatedConfig = useMemo(
+        () => interpolateConfig(baseConfig, { store_name: storeName }),
+        [baseConfig, storeName]
+    );
+    const fallbackCollections = interpolatedConfig.spotlightCollections || [];
+    const spotlightCollections = graphqlCollections.length ? graphqlCollections : fallbackCollections;
+
+    const hero = interpolatedConfig.hero || {};
+    const heroScene = interpolatedConfig.heroScene || {};
+    const timeline = interpolatedConfig.timeline || {};
+    const heroSignals = (interpolatedConfig.realtimeSignals || []).slice(0, 2);
+    const trendTags = hero.trendTags || [];
+    const heroStats = hero.stats || [];
+    const ctas = hero.ctas || [];
+    const sceneMetrics = heroScene.metrics || [];
+    const serviceHighlights = interpolatedConfig.serviceHighlights || [];
+    const realtimeSignals = interpolatedConfig.realtimeSignals || [];
+    const floatingMetric = hero.floatingMetric || {};
 
     return (
         <section className={classes.root}>
@@ -72,60 +136,74 @@ const Showcase = () => {
             </div>
             <div className={classes.hero}>
                 <div className={classes.heroCard}>
-                    <div className={classes.heroTopRow}>
-                        <span className={classes.badge}>Venia Hyper Surface</span>
-                    </div>
-                    <h1>
-                        立体化 PWA 首屏，
-                        <br />
-                        让用户一眼爱上
-                    </h1>
-                    <p>
-                        通过 SaltGoat PWA 模块，把 Page Builder、实时订单和自动化运营整合成一个具备深度纵深感的首屏体验。渐变玻璃、柔光浮层、流动图块，让性能与美感并存。
-                    </p>
-                    <div className={classes.heroActions}>
-                        <a className={classes.primaryCta} href="/collections/new">
-                            立即选购
-                        </a>
-                        <a className={classes.secondaryCta} href="/page-builder">
-                            布局指南
-                        </a>
-                    </div>
-                    <div className={classes.trendTags}>
-                        {trendTags.map(tag => (
-                            <span key={tag}>{tag}</span>
-                        ))}
-                    </div>
-                    <div className={classes.heroStats}>
-                        {heroStats.map(item => (
-                            <article key={item.label}>
-                                <strong>{item.value}</strong>
-                                <span>{item.label}</span>
-                                <p>{item.detail}</p>
-                            </article>
-                        ))}
-                    </div>
+                    {hero.badge ? (
+                        <div className={classes.heroTopRow}>
+                            <span className={classes.badge}>{hero.badge}</span>
+                        </div>
+                    ) : null}
+                    <h1>{renderHeading(hero.title)}</h1>
+                    {hero.description ? <p>{hero.description}</p> : null}
+                    {ctas.length ? (
+                        <div className={classes.heroActions}>
+                            {ctas.map(cta => {
+                                const variant =
+                                    cta.variant === 'secondary' ? 'secondaryCta' : 'primaryCta';
+                                const className = classes[variant] || classes.primaryCta;
+                                const target = cta.target || undefined;
+                                const rel = target === '_blank' ? 'noreferrer' : undefined;
+                                return (
+                                    <a
+                                        key={`${cta.href}-${cta.label}`}
+                                        className={className}
+                                        href={cta.href}
+                                        target={target}
+                                        rel={rel}
+                                    >
+                                        {cta.label}
+                                    </a>
+                                );
+                            })}
+                        </div>
+                    ) : null}
+                    {trendTags.length ? (
+                        <div className={classes.trendTags}>
+                            {trendTags.map(tag => (
+                                <span key={tag}>{tag}</span>
+                            ))}
+                        </div>
+                    ) : null}
+                    {heroStats.length ? (
+                        <div className={classes.heroStats}>
+                            {heroStats.map(item => (
+                                <article key={`${item.label}-${item.value}`}>
+                                    {item.value ? <strong>{item.value}</strong> : null}
+                                    {item.label ? <span>{item.label}</span> : null}
+                                    {item.detail ? <p>{item.detail}</p> : null}
+                                </article>
+                            ))}
+                        </div>
+                    ) : null}
                 </div>
                 <div className={classes.heroScene}>
                     <div className={classes.sceneBackdrop} />
                     <div className={classes.sceneCard}>
                         <header>
-                            <span>Live Dashboard</span>
-                            <strong>Saltgoat Pulse</strong>
+                            <span>{heroScene.label || 'Live Dashboard'}</span>
+                            <strong>{heroScene.title || 'Saltgoat Pulse'}</strong>
                         </header>
-                        <div className={classes.sceneMetric}>
-                            <div>
-                                <span>转化率</span>
-                                <strong>+38%</strong>
+                        {sceneMetrics.length ? (
+                            <div className={classes.sceneMetric}>
+                                {sceneMetrics.map(metric => (
+                                    <div key={`${metric.label}-${metric.value}`}>
+                                        <span>{metric.label}</span>
+                                        <strong>{metric.value}</strong>
+                                    </div>
+                                ))}
                             </div>
-                            <div>
-                                <span>PV 峰值</span>
-                                <strong>48k</strong>
-                            </div>
-                        </div>
+                        ) : null}
                         <ul className={classes.sceneSignals}>
-                            {heroSignals.map(item => (
-                                <li key={item.message}>
+                            {heroSignals.map((item, index) => (
+                                <li key={`${item.type || 'signal'}-${item.message || index}`}>
                                     <div>
                                         <span>{item.type}</span>
                                         <strong>{item.message}</strong>
@@ -135,10 +213,12 @@ const Showcase = () => {
                             ))}
                         </ul>
                     </div>
-                    <div className={classes.sceneFloating}>
-                        <span>GraphQL Edge</span>
-                        <strong>180 ms</strong>
-                    </div>
+                    {floatingMetric.label || floatingMetric.value ? (
+                        <div className={classes.sceneFloating}>
+                            {floatingMetric.label ? <span>{floatingMetric.label}</span> : null}
+                            {floatingMetric.value ? <strong>{floatingMetric.value}</strong> : null}
+                        </div>
+                    ) : null}
                 </div>
             </div>
 
@@ -150,7 +230,11 @@ const Showcase = () => {
                     </div>
                     <div className={classes.collectionGrid}>
                         {spotlightCollections.map(tile => (
-                            <a key={tile.title} className={classes.collectionCard} href={tile.href}>
+                            <a
+                                key={tile.title || tile.href}
+                                className={classes.collectionCard}
+                                href={tile.href}
+                            >
                                 <img src={tile.image} alt={tile.subtitle} loading="lazy" />
                                 <div>
                                     <span>{tile.subtitle}</span>
@@ -181,14 +265,25 @@ const Showcase = () => {
             <div className={classes.timeline}>
                 <header>
                     <div>
-                        <span>实时脉搏</span>
-                        <h3>订单、库存、运维事件统一面板</h3>
+                        <span>{timeline.label || '实时脉搏'}</span>
+                        <h3>{timeline.title || '订单、库存、运维事件统一面板'}</h3>
                     </div>
-                    <a href="/monitor/live">查看监控</a>
+                    {timeline.cta && timeline.cta.href ? (
+                        <a
+                            href={timeline.cta.href}
+                            target={timeline.cta.target}
+                            rel={timeline.cta.target === '_blank' ? 'noreferrer' : undefined}
+                        >
+                            {timeline.cta.label || timeline.cta.href}
+                        </a>
+                    ) : null}
                 </header>
                 <div className={classes.timelineList}>
-                    {realtimeSignals.map(item => (
-                        <div key={item.message} className={classes.timelineItem}>
+                    {realtimeSignals.map((item, index) => (
+                        <div
+                            key={`${item.message || item.type || 'timeline'}-${index}`}
+                            className={classes.timelineItem}
+                        >
                             <div>
                                 <span>{item.type}</span>
                                 <strong>{item.message}</strong>

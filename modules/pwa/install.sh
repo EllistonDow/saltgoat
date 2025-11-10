@@ -1405,6 +1405,7 @@ ensure_pwa_home_cms_page() {
             if [[ -n "$content_file" ]]; then
                 if magento_cli cms:page:update "--identifier=${identifier}" "--title=${title}" --is-active=1 "--store-id=${store_ids}" --page-layout=1column "--content-file=${content_file}"; then
                     log_success "已更新 CMS 页面 ${identifier} 的内容与配置。"
+                    magento_clear_cms_cache
                 else
                     log_warning "更新 CMS 页面 ${identifier} 失败，请检查 Magento CLI 输出。"
                 fi
@@ -1416,6 +1417,7 @@ ensure_pwa_home_cms_page() {
 
         if magento_cli cms:page:create "--title=${title}" "--identifier=${identifier}" --is-active=1 "--page-layout=1column" "--store-id=${store_ids}" "--content-file=${content_file}"; then
             log_success "已自动创建 CMS 页面 ${identifier}（PWA 首页占位内容）。"
+            magento_clear_cms_cache
         else
             log_warning "创建 CMS 页面 ${identifier} 失败，请在 Magento 后台手动创建。"
         fi
@@ -1425,6 +1427,20 @@ ensure_pwa_home_cms_page() {
     log_info "Magento CLI 缺少 cms:page:create，改用 PHP API 更新页面 ${identifier}。"
     if ! magento_apply_cms_page_php "$identifier" "$title" "$store_ids" "$content_file" 1 "1column"; then
         log_warning "自动创建/更新 CMS 页面 ${identifier} 失败，请手动处理。"
+    else
+        magento_clear_cms_cache
+    fi
+}
+
+magento_clear_cms_cache() {
+    if ! magento_command_exists "cache:clean"; then
+        log_warning "Magento CLI 缺少 cache:clean，无法自动刷新 CMS 缓存。"
+        return
+    fi
+    if magento_cli cache:clean block_html full_page >/dev/null; then
+        log_info "已清理 CMS 相关缓存 (block_html/full_page)。"
+    else
+        log_warning "执行 cache:clean 失败，请手动运行 bin/magento cache:clean cms_page block_html full_page。"
     fi
 }
 

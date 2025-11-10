@@ -59,7 +59,7 @@
 - 推荐每次同步后手动验证：
   - `curl https://<domain>/graphql` 查询 `storeConfig`；
   - `curl https://<domain>/client.*.js` 检查返回的 bundle 名称是否最新；
-  - 浏览器控制台执行 `window.__PWA_REACT_VERSION__`（由 `HomeContent` workspace 注入）确认只有一份 React，若需进一步排查可查看 `window.__PWA_REACT_DEBUG__`（含 dispatcher 状态与全局 React 对比结果）。
+- 浏览器控制台执行 `window.__PWA_REACT_VERSION__`（由 `HomeContent` workspace 注入）确认只有一份 React，若需进一步排查可查看 `window.__PWA_REACT_DEBUG__`（包含版本号、与 `window.React` 的一致性以及时间戳）。
 
 ## 4. 内容隔离与 Page Builder 策略
 
@@ -94,7 +94,42 @@
 - 后续计划：
   - 追加 `modules/pwa/templates/` 中的 Page Builder JSON 作为示例，必要时自动覆盖默认内容。
 
-### 4.4 常见问题
+### 4.4 Showcase 兜底配置
+- 当 `MAGENTO_PWA_HOME_IDENTIFIER` 指向的 CMS 页面缺失或内容为空时，前端会回退到 `Showcase` 组件（位于 `modules/pwa/workspaces/saltgoat-venia-extension/src/components/HomeContent/Showcase.js`）。
+- 兜底数据可通过两种方式覆盖：
+  1. **构建期**：在 `pwa_studio.env_overrides` 写入 `SALTGOAT_PWA_SHOWCASE='{"hero":{"title":"..."}}'`（JSON 字符串），脚本会注入到 PWA `.env`；
+  2. **运行期**：在 `app/design` 或额外脚本中设置 `window.__SALTGOAT_PWA_SHOWCASE__ = { ... }`，支持 A/B 测试或按 Store View 注入。
+- 支持的字段：
+  ```json
+  {
+    "hero": {
+      "badge": "Venia Hyper Surface",
+      "title": "立体化 PWA 首屏，\\n让用户一眼爱上",
+      "description": "段落说明",
+      "ctas": [
+        {"label": "立即选购", "href": "/collections/new", "variant": "primary"},
+        {"label": "布局指南", "href": "/page-builder", "variant": "secondary"}
+      ],
+      "trendTags": ["渐变玻璃拟物", "Live Commerce"],
+      "stats": [{"label": "实时响应", "value": "180ms", "detail": "GraphQL Cache"}],
+      "floatingMetric": {"label": "GraphQL Edge", "value": "180 ms"}
+    },
+    "heroScene": {
+      "label": "Live Dashboard",
+      "title": "Saltgoat Pulse",
+      "metrics": [{"label": "转化率", "value": "+38%"}]
+    },
+    "spotlightCollections": [{"title": "立体新品矩阵", "subtitle": "Holographic", "href": "/collections/holo", "image": "https://..."}],
+    "serviceHighlights": [{"title": "Page Builder 即时同步", "description": "内容团队发布后 60 秒内同步", "accent": "内容"}],
+    "realtimeSignals": [{"type": "订单", "message": "#1045 付款完成", "time": "2 分钟前", "delta": "+¥1,280"}],
+    "timeline": {"label": "实时脉搏", "title": "订单、库存、运维事件统一面板", "cta": {"label": "查看监控", "href": "/monitor/live"}}
+  }
+  ```
+- 未提供的字段会退回默认值；数组为空时对应模块会自动隐藏，避免渲染占位文本。
+- `MAGENTO_PWA_SHOWCASE_CATEGORY_IDS`（逗号分隔）用于指定要从 GraphQL 拉取的“沉浸式系列”分类 ID，默认 `3,4,5`；查询结果会自动填充卡片标题/链接/图片。
+- 默认值与自定义 JSON 中的字符串支持 `{{store_name}}` 占位符，前端会在拿到 `storeConfig` 后自动替换为真实门店名称。
+
+### 4.5 常见问题
 - **新页面未生效**：确认 `MAGENTO_PWA_HOME_IDENTIFIER` 是否与 CMS 页面 Identifier 完全一致，以及 `sync-content` 是否已经运行。
 - **仍显示 Luma 首页**：清理 Service Worker 缓存（浏览器应用程序 → Service Worker）并重启 `pwa-frontend-<site>` 服务。
 - **运营误删 PWA 页面**：可以在 Magento Admin 中重新创建同名页面，或从计划中的模板库恢复；同步完成后重跑 `saltgoat pwa sync-content <site> --rebuild`。
