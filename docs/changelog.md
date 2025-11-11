@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.3] - 2025-11-11
+
+### Changes
+- 修改 11 个文件: modules/lib/pwa_helpers.py, modules/pwa/install.sh, modules/pwa/lib/pwa_studio.sh, modules/pwa/overrides/packages/venia-concept/local-intercept.js, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/PaymentInformation/paymentMethods.js 等
+
+
 ## [1.6.2] - 2025-11-11
 
 ### Changes

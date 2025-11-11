@@ -502,6 +502,55 @@ def cmd_sanitize_cart_trigger(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_patch_product_custom_attributes(args: argparse.Namespace) -> int:
+    path = Path(args.file).resolve()
+    try:
+        text = _read_text(path)
+    except FileNotFoundError:
+        print("absent")
+        return 0
+
+    variant_old = (
+        "        return item && item.product\n"
+        "            ? [...item.product.custom_attributes].sort(attributeLabelCompare)\n"
+        "            : [];"
+    )
+    variant_new = (
+        "        const variantAttributes = item?.product?.custom_attributes || [];\n"
+        "        return variantAttributes.length\n"
+        "            ? [...variantAttributes].sort(attributeLabelCompare)\n"
+        "            : [];"
+    )
+    base_old = (
+        "    return custom_attributes\n"
+        "        ? [...custom_attributes].sort(attributeLabelCompare)\n"
+        "        : [];"
+    )
+    base_new = (
+        "    const baseAttributes = custom_attributes || [];\n"
+        "    return baseAttributes.length\n"
+        "        ? [...baseAttributes].sort(attributeLabelCompare)\n"
+        "        : [];"
+    )
+
+    updated = text
+    changed = False
+    if variant_old in updated:
+        updated = updated.replace(variant_old, variant_new)
+        changed = True
+    if base_old in updated:
+        updated = updated.replace(base_old, base_new)
+        changed = True
+
+    if not changed:
+        print("unchanged")
+        return 0
+
+    path.write_text(updated, encoding="utf-8")
+    print("patched")
+    return 0
+
+
 def cmd_graphql_ping(args: argparse.Namespace) -> int:
     endpoint = args.endpoint
     query = args.query or "query Ping { storeConfig { id } }"
@@ -1258,6 +1307,13 @@ def build_parser() -> argparse.ArgumentParser:
     sanitize_cart = sub.add_parser("sanitize-cart-trigger", help="Remove unsupported cart trigger fields")
     sanitize_cart.add_argument("--file", required=True)
     sanitize_cart.set_defaults(func=cmd_sanitize_cart_trigger)
+
+    patch_custom_attrs = sub.add_parser(
+        "patch-product-custom-attributes",
+        help="Harden ProductFullDetail custom attribute access",
+    )
+    patch_custom_attrs.add_argument("--file", required=True)
+    patch_custom_attrs.set_defaults(func=cmd_patch_product_custom_attributes)
 
     check_react = sub.add_parser("check-react", help="Verify React dependencies versions")
     check_react.add_argument("--dir", required=True)

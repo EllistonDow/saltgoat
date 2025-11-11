@@ -1,35 +1,34 @@
 const { Targetables } = require('@magento/pwa-buildpack');
 
-const BANK_TRANSFER_COMPONENTS = {
+const FREE_PAYMENT_COMPONENTS = {
     checkout:
-        '@magento/venia-sample-payments-checkmo/src/components/checkmo.js',
+        '@saltgoat/venia-extension/src/components/Payments/Free/checkout',
     editable:
-        '@magento/venia-sample-payments-checkmo/src/components/edit.js',
-    summary:
-        '@magento/venia-sample-payments-checkmo/src/components/summary.js'
+        '@saltgoat/venia-extension/src/components/Payments/Free/editable',
+    summary: '@saltgoat/venia-extension/src/components/Payments/Free/summary'
 };
 
-const registerBankTransfer = targets => {
+const registerFreePayment = targets => {
     const veniaTargets = targets.of('@magento/venia-ui');
 
     veniaTargets.checkoutPagePaymentTypes.tap(payments =>
         payments.add({
-            paymentCode: 'banktransfer',
-            importPath: BANK_TRANSFER_COMPONENTS.checkout
+            paymentCode: 'free',
+            importPath: FREE_PAYMENT_COMPONENTS.checkout
         })
     );
 
     veniaTargets.editablePaymentTypes.tap(types =>
         types.add({
-            paymentCode: 'banktransfer',
-            importPath: BANK_TRANSFER_COMPONENTS.editable
+            paymentCode: 'free',
+            importPath: FREE_PAYMENT_COMPONENTS.editable
         })
     );
 
     veniaTargets.summaryPagePaymentTypes.tap(types =>
         types.add({
-            paymentCode: 'banktransfer',
-            importPath: BANK_TRANSFER_COMPONENTS.summary
+            paymentCode: 'free',
+            importPath: FREE_PAYMENT_COMPONENTS.summary
         })
     );
 };
@@ -44,7 +43,7 @@ module.exports = targets => {
         };
     });
 
-    registerBankTransfer(targets);
+    registerFreePayment(targets);
 
     const targetables = Targetables.using(targets);
 

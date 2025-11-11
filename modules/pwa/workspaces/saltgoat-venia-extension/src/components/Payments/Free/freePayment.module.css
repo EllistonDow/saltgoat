@@ -1,0 +1,9 @@
+.container {
+    composes: text-subtle from global;
+    composes: bg-gray-50 from global;
+    composes: border from global;
+    composes: border-subtle from global;
+    composes: rounded from global;
+    composes: px-sm from global;
+    composes: py-xs from global;
+}

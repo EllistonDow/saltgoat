@@ -75,6 +75,16 @@ prepare_pwa_repo() {
     fi
 }
 
+sync_pwa_overrides() {
+    local overrides_dir="${SCRIPT_DIR}/modules/pwa/overrides"
+    if [[ ! -d "$overrides_dir" ]]; then
+        return
+    fi
+    log_info "同步 PWA overrides"
+    sudo rsync -a --exclude '.git' "${overrides_dir}/" "${PWA_STUDIO_DIR%/}/"
+    sudo chown -R www-data:www-data "${PWA_STUDIO_DIR%/}"
+}
+
 ensure_saltgoat_extension_workspace() {
     local workspace_src="${SCRIPT_DIR}/modules/pwa/workspaces/saltgoat-venia-extension"
     if [[ ! -d "$workspace_src" ]]; then
@@ -239,6 +249,12 @@ apply_mos_graphql_fixes() {
         sudo -u www-data -H python3 "$PWA_HELPER" sanitize-cart-trigger --file "$cart_trigger_hook" >/dev/null
     fi
 
+    local product_detail_talon
+    product_detail_talon="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/ProductFullDetail/useProductFullDetail.js"
+    if [[ -f "$product_detail_talon" ]]; then
+        sudo -u www-data -H python3 "$PWA_HELPER" patch-product-custom-attributes --file "$product_detail_talon" >/dev/null
+    fi
+
     local xp_intercept
     xp_intercept="${PWA_STUDIO_DIR%/}/packages/extensions/experience-platform-connector/intercept.js"
     if [[ -f "$xp_intercept" && -z "$(grep -F 'MAGENTO_EXPERIENCE_PLATFORM_ENABLED' "$xp_intercept" || true)" ]]; then
@@ -321,6 +337,7 @@ run_yarn_task() {
 }
 
 build_pwa_frontend() {
+    sync_pwa_overrides
     log_highlight "构建 PWA Studio ..."
     run_yarn_task "yarn install"
     run_yarn_task "yarn build"
