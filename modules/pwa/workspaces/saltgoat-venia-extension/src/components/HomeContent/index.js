@@ -19,6 +19,20 @@ const recordReactDebugInfo = () => {
     window.__PWA_REACT_DEBUG__ = payload;
 };
 
+const resolveFallbackMode = () => {
+    const raw =
+        process.env.SALTGOAT_PWA_SHOWCASE_FALLBACK &&
+        process.env.SALTGOAT_PWA_SHOWCASE_FALLBACK.trim();
+    if (!raw) {
+        return 'off';
+    }
+    const normalized = raw.toLowerCase();
+    if (normalized === 'auto' || normalized === 'on') {
+        return 'auto';
+    }
+    return 'off';
+};
+
 const createHomeContent = OriginalComponent => {
     const PwaHomeContent = props => {
         useEffect(() => {
@@ -35,12 +49,16 @@ const createHomeContent = OriginalComponent => {
         });
 
         const cmsContent = useMemo(() => cmsPage?.content?.trim() || '', [cmsPage]);
+        const fallbackMode = useMemo(() => resolveFallbackMode(), []);
 
         if (shouldShowLoadingIndicator) {
             return React.createElement(CMSPageShimmer, null);
         }
 
         if (!cmsContent) {
+            if (fallbackMode === 'auto') {
+                return React.createElement(Showcase, null);
+            }
             return null;
         }
 

@@ -8,12 +8,9 @@ import contextlib
 import html
 import io
 import json
-import ssl
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
@@ -22,8 +19,6 @@ DEFAULT_TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-
-from modules.lib import minio_helper  # type: ignore  # noqa: E402
 
 SERVICES = [
     ("nginx", "nginx"),
@@ -34,12 +29,10 @@ SERVICES = [
     ("valkey", "valkey"),
     ("opensearch", "opensearch"),
     ("salt-minion", "salt-minion"),
-    ("minio", "minio"),
 ]
 SITES = ["bank", "tank", "pwas"]
 PILLAR_NGINX = Path("salt/pillar/nginx.sls")
 FAIL2BAN_STATE = Path("/var/log/saltgoat/fail2ban-state.json")
-PILLAR_MINIO = REPO_ROOT / "salt" / "pillar" / "minio.sls"
 
 
 def run(cmd: List[str], timeout: int = 10) -> Tuple[int, str, str]:
@@ -141,58 +134,6 @@ def fail2ban_summary() -> Tuple[int, Dict[str, List[str]]]:
     return currently, data
 
 
-def gather_minio_health() -> Dict[str, Any]:
-    try:
-        cfg = minio_helper.load_enabled_config(PILLAR_MINIO)
-    except Exception:
-        cfg = None
-    if cfg is None:
-        return {"enabled": False}
-    url = cfg.health_url
-    timeout = max(1.0, float(cfg.health_timeout))
-    headers = {"User-Agent": "GoatPulse/1.0"}
-    req = urllib.request.Request(url, headers=headers)
-    context = None
-    if cfg.health_scheme.lower().startswith("https"):
-        context = ssl.create_default_context() if cfg.health_verify else ssl._create_unverified_context()
-    start = time.time()
-    info: Dict[str, Any] = {
-        "enabled": True,
-        "url": url,
-        "service": getattr(cfg, "service_name", "minio"),
-    }
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
-            latency = time.time() - start
-            status = resp.getcode()
-            info.update({"status": status, "latency": round(latency, 3), "ok": status == 200, "message": f"HTTP {status}"})
-            return info
-    except urllib.error.HTTPError as exc:
-        latency = time.time() - start
-        info.update({"status": exc.code, "latency": round(latency, 3), "ok": False, "message": f"HTTP {exc.code}"})
-        return info
-    except Exception as exc:
-        latency = time.time() - start
-        info.update({"status": None, "latency": round(latency, 3), "ok": False, "message": str(exc)})
-        return info
-
-
-def print_minio(info: Dict[str, Any]) -> None:
-    print("MinIO Health")
-    print("-" * 50)
-    if not info.get("enabled", True):
-        print("Status: disabled or pillar missing")
-    else:
-        status = "OK" if info.get("ok") else "FAIL"
-        msg = info.get("message", "")
-        latency = info.get("latency")
-        latency_text = f"{latency:.3f}s" if isinstance(latency, (int, float)) else "-"
-        print(f"Status : {status} ({msg})")
-        print(f"Latency: {latency_text}")
-        print(f"URL    : {info.get('url', '-')}")
-    print()
-
-
 def clear_screen() -> None:
     print("\033[2J\033[H", end="")
 
@@ -258,7 +199,7 @@ def print_fail2ban(summary: Tuple[int, Dict[str, List[str]]]) -> None:
     print()
 
 
-def write_metrics(path: Path, services: List[Dict[str, str]], sites: List[Dict[str, Any]], varnish_data: Tuple[int, int, float], fail2ban_total: int, minio_info: Dict[str, Any]) -> None:
+def write_metrics(path: Path, services: List[Dict[str, str]], sites: List[Dict[str, Any]], varnish_data: Tuple[int, int, float], fail2ban_total: int) -> None:
     try:
         lines = []
         for item in services:
@@ -283,13 +224,6 @@ def write_metrics(path: Path, services: List[Dict[str, str]], sites: List[Dict[s
         lines.append(f"saltgoat_varnish_miss {miss}")
         lines.append(f"saltgoat_varnish_hit_ratio_percent {ratio:.2f}")
         lines.append(f"saltgoat_fail2ban_banned_total {fail2ban_total}")
-        if minio_info.get("enabled"):
-            status = 1 if minio_info.get("ok") else 0
-            latency = float(minio_info.get("latency") or 0)
-            lines.append(f"saltgoat_minio_health {status}")
-            lines.append(f"saltgoat_minio_health_latency_seconds {latency:.3f}")
-        else:
-            lines.append("saltgoat_minio_health -1")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     except Exception as exc:
@@ -318,7 +252,6 @@ def loop(
             sites = gather_sites()
             varnish_data = varnish_stats()
             fail2ban_data = fail2ban_summary()
-            minio_info = gather_minio_health()
             if capture is not None:
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
@@ -326,7 +259,6 @@ def loop(
                     print_sites(sites)
                     print_varnish(varnish_data)
                     print_fail2ban(fail2ban_data)
-                    print_minio(minio_info)
                 captured_output = buf.getvalue()
                 print(captured_output, end="")
             else:
@@ -334,9 +266,8 @@ def loop(
                 print_sites(sites)
                 print_varnish(varnish_data)
                 print_fail2ban(fail2ban_data)
-                print_minio(minio_info)
             if metrics_file:
-                write_metrics(metrics_file, services, sites, varnish_data, fail2ban_data[0], minio_info)
+                write_metrics(metrics_file, services, sites, varnish_data, fail2ban_data[0])
         except KeyboardInterrupt:
             break
         if capture is not None:

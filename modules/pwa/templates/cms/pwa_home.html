@@ -1,8 +1,8 @@
 <style>
     .sg-pwa-home {
         font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
-        color: #0f172a;
-        background: linear-gradient(180deg, #f5f7ff 0%, #ffffff 60%);
+        color: var(--sg-text);
+        background: var(--sg-home-gradient);
         padding: clamp(32px, 4vw, 72px);
     }
 
@@ -21,11 +21,12 @@
 
     .sg-card {
         border-radius: 28px;
-        border: 1px solid rgba(15,23,42,0.08);
-        background: #ffffff;
+        border: 1px solid var(--sg-card-border);
+        background: var(--sg-card-bg);
         padding: clamp(24px, 3vw, 48px);
-        box-shadow: 0 24px 70px rgba(15,23,42,0.12);
+        box-shadow: 0 24px 70px var(--sg-tile-shadow);
         transition: background 0.3s ease, color 0.3s ease;
+        color: var(--sg-text);
     }
 
     .sg-hero {
@@ -39,7 +40,7 @@
         font-size: clamp(2.2rem, 5vw, 3.4rem);
         margin: 0 0 16px;
         line-height: 1.1;
-        color: #0f172a;
+        color: var(--sg-text);
     }
 
     .sg-hero p {
@@ -75,7 +76,7 @@
 
     .sg-button-secondary {
         border: 1px solid var(--sg-secondary-border);
-        color: #0f172a;
+        color: var(--sg-text);
         background: transparent;
     }
 
@@ -94,8 +95,8 @@
     .sg-hero-metric {
         padding: 16px;
         border-radius: 18px;
-        border: 1px solid rgba(15,23,42,0.08);
-        background: #ffffff;
+        border: 1px solid var(--sg-card-border);
+        background: var(--sg-card-bg);
     }
 
     .sg-hero-metric strong {
@@ -136,7 +137,7 @@
         text-transform: uppercase;
         letter-spacing: 0.32em;
         font-size: 0.85rem;
-        color: #475467;
+        color: var(--sg-subtext);
         margin-bottom: 8px;
         display: block;
     }
@@ -144,7 +145,7 @@
     .sg-section-title {
         font-size: clamp(1.6rem, 3vw, 2.4rem);
         margin: 0 0 24px;
-        color: #0f172a;
+        color: var(--sg-text);
     }
 
     .sg-grid {
@@ -206,10 +207,10 @@
 
     .sg-service-card {
         border-radius: 20px;
-        border: 1px solid rgba(15,23,42,0.08);
+        border: 1px solid var(--sg-card-border);
         padding: 20px;
-        background: #ffffff;
-        box-shadow: 0 18px 30px rgba(15,23,42,0.12);
+        background: var(--sg-card-bg);
+        box-shadow: 0 18px 30px var(--sg-tile-shadow);
     }
 
     .sg-service-card span {
@@ -246,11 +247,11 @@
     .sg-slide {
         flex: 0 0 280px;
         border-radius: 20px;
-        border: 1px solid rgba(15,23,42,0.08);
-        background: #ffffff;
+        border: 1px solid var(--sg-card-border);
+        background: var(--sg-card-bg);
         padding: 20px;
         scroll-snap-align: start;
-        box-shadow: 0 18px 40px rgba(15,23,42,0.12);
+        box-shadow: 0 18px 40px var(--sg-tile-shadow);
     }
 
     .sg-slide strong {
@@ -272,57 +273,8 @@
 
     .sg-slide p {
         margin: 0;
-        color: #475467;
+        color: var(--sg-subtext);
         line-height: 1.6;
-    }
-
-    body:not([data-theme='dark']) .sg-pwa-home {
-        background: #ffffff !important;
-        color: #0f172a !important;
-    }
-
-    body:not([data-theme='dark']) .sg-card,
-    body:not([data-theme='dark']) .sg-hero-metric,
-    body:not([data-theme='dark']) .sg-service-card,
-    body:not([data-theme='dark']) .sg-slide {
-        background: #ffffff !important;
-        border: 1px solid rgba(15, 23, 42, 0.08);
-        color: #0f172a;
-    }
-
-    body[data-theme='dark'] .sg-pwa-home {
-        background: linear-gradient(135deg, #040619, #0c111f 55%, #0a0f1c) !important;
-        color: #f4f6fb !important;
-    }
-
-    body[data-theme='dark'] .sg-card,
-    body[data-theme='dark'] .sg-hero-metric,
-    body[data-theme='dark'] .sg-service-card,
-    body[data-theme='dark'] .sg-slide {
-        background: rgba(12, 18, 36, 0.92) !important;
-        border: 1px solid rgba(141, 220, 255, 0.15);
-        color: #f4f6fb;
-        box-shadow: 0 24px 60px rgba(5, 8, 16, 0.45);
-    }
-
-    body[data-theme='dark'] .sg-hero p,
-    body[data-theme='dark'] .sg-service-card p,
-    body[data-theme='dark'] .sg-slide p {
-        color: #b5c0d6;
-    }
-
-    body[data-theme='dark'] .sg-hero h1,
-    body[data-theme='dark'] .sg-section-title,
-    body[data-theme='dark'] .sg-slide strong {
-        color: #f4f6fb;
-    }
-
-    body[data-theme='dark'] .sg-section-heading {
-        color: #8ea5cd;
-    }
-
-    body[data-theme='dark'] .sg-slide span {
-        color: #5abffb;
     }
 
     @media (max-width: 720px) {

@@ -31,7 +31,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - **模块化 CLI**：`sudo saltgoat install | maintenance | magetools | monitor | automation …` 覆盖安装、巡检、备份、安全、性能调优等日常操作。
 - **事件驱动自动化（可选）**：启用 `salt-minion`/`salt-master` 后，`sudo saltgoat monitor enable-beacons` 下发服务自愈、资源阈值告警、配置变更处理等 Reactor，Salt Schedule 自动替换 Cron。
 - **自动降级策略**：检测到缺失 `salt-minion` 时，所有计划任务会写入 `/etc/cron.d/`；Reactor 命令也会提示降级状态，保证功能可用。
-- **多层备份**：Restic + S3/Minio 快照、Percona XtraBackup 热备、单库 mysqldump（含 Salt Schedule 示例），并通过 Telegram / Salt event 写日志。
+- **多层备份**：Restic + S3 兼容对象存储快照、Percona XtraBackup 热备、单库 mysqldump（含 Salt Schedule 示例），并通过 Telegram / Salt event 写日志。
 - **完善的维护体系**：`sudo saltgoat magetools maintenance` 日/周/月任务、健康检查、权限修复，全部附带 Telegram 通知和日志。
 
 ### 🛠 智能自愈与巡检
@@ -40,6 +40,9 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - `sudo saltgoat monitor auto-sites`：由 `modules/lib/monitor_auto_sites.py` 解析 `/var/www` 与 Nginx 配置生成 `salt/pillar/monitoring.sls`，只在检测到站点/Beacon 变更时自动刷新 Pillar 并触发 `scripts/setup-telegram-topics.py`，避免重复刷写。
 - `sudo saltgoat monitor quick-check`：即时执行一遍资源/站点巡检，将结果直接输出到终端（适合临时排查）。
 - `modules/monitoring/resource_alert.py`：定时评估资源与站点可用性，失败后记录 `systemctl` 与 `journalctl` 摘要、触发自愈并通过 Telegram/Salt Event 通知；内置重试与冷却窗口避免频繁重启，RabbitMQ/Valkey 等核心服务若异常会自动纳入重启列表。
+- **Swap 监控与自愈**：`resource_alert` 现会读取 `/proc/meminfo` 追踪 swap 占用，按 `saltgoat:monitor:thresholds:swap`（默认 5% / 20% / 40%）触发 Notice/Warning/Critical，并在达到 Critical 时依据 `saltgoat:monitor:swap:autoheal_services`（默认重启 `php8.3-fpm`）自动排程服务自愈与 Telegram 通知。
+- **多站点自动扩容**：`saltgoat magetools multisite create|rollback` 会在新增/移除 store view 后调用 PHP-FPM 池 helper，更新 `magento_optimize:sites.<site>.php_pool.weight`、记录 store 列表并触发 `salt-call --local state.apply core.php` 及 `saltgoat/autoscale/<host>` 事件，避免 `magento-<site>` 池在新域名上线后仍停留在旧容量。
+- `saltgoat swap status|ensure|tune`：统一管理 swap（查看设备、扩容/创建 swapfile、调整 `vm.swappiness`），并提供 `saltgoat swap ensure --min-size 8G` 供 `resource_alert` 或值班脚本一键自愈。
 - `salt/states/optional/magento-schedule.sls` 默认下发每日 `saltgoat monitor report daily` 与 `saltgoat magetools schedule auto`，确保巡检与计划任务长期收敛。
 - `saltgoat pillar backup` 一键将 `salt/pillar` 打包到 `/var/lib/saltgoat/pillar-backups/`，配合版本库和外部存储实现配置留痕。
 - `saltgoat verify` 运行 `scripts/code-review.sh -a` 与 `python3 -m unittest`，适合作为本地 Git hook 或 CI 预检命令，确保脚本/单元测试通过后再发布。
@@ -52,42 +55,9 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - `python3 modules/lib/nginx_context.py site-metadata --site <name> --pillar salt/pillar/nginx.sls` 输出站点根目录、server_name、Varnish/HTTPS 标记与 Magento run context，供 `monitor auto-sites`、`magetools varnish` 以及外部脚本统一解析。
 - `modules/lib/salt_event.py`：统一封装 Salt Event 发送逻辑（`python3 modules/lib/salt_event.py send --tag saltgoat/test key=value`），shell 脚本会自动回落到 `salt-call event.send`，便于在没有 `salt.client` 的环境里保持行为一致。
 
-### ☁️ 对象存储（MinIO）
-
-- `saltgoat minio apply`：渲染 `/opt/saltgoat/docker/minio/docker-compose.yml` 并启动 MinIO。默认映射到宿主 `127.0.0.1:9000/9001`，建议通过 Traefik 或宿主 Nginx 自动生成反代与证书。
-- `saltgoat minio status|logs|restart`：封装 docker compose 操作，便于查看容器状态、实时日志或重建。
-- `saltgoat minio health`：依据 Pillar 里的 `health.*` 生成 `/minio/health/live` 请求，适合写入 Salt Schedule / CI 以确认服务可用。
-- Pillar 模板 `salt/pillar/minio.sls.sample` 提供 `image`、`base_dir`、`data_dir`、`bind_host`、`api_port`、`console_port`、`extra_env` 等字段，可按需覆盖。
-- 当 API/Console 的 `traefik.*.tls.enabled` 为 `false` 时，CLI 会自动生成 `nginx:sites:minio-api|minio-console` 与透传配置，并在证书缺失时调用 `saltgoat nginx add-ssl` 自动申请/续期。
-
-### 💬 Mattermost 协作平台
-
-- `cp salt/pillar/mattermost.sls.sample salt/pillar/mattermost.sls`：初始化 Pillar，填写 `site_url`、管理员账号、数据库密码、SMTP 等。
-- `saltgoat mattermost install`：渲染 `/opt/saltgoat/docker/mattermost` 下的 docker compose（包含 Mattermost + Postgres），并以 `.env` 文件注入管理员、SMTP、文件存储等配置。
-- `saltgoat mattermost status|logs|restart|upgrade`：查看 compose 状态、最近日志、快速重启或滚动升级镜像。
-- Pillar `mattermost:traefik` 支持自动生成 Traefik labels（路由、entrypoints、TLS resolver、额外中间件），结合 `saltgoat traefik install` 可一键打通宿主 Nginx → Traefik → Mattermost 的 HTTPS 流程。
-- 亦可将 `mattermost:file_store.type` 设置为 `s3` 并在 `extra_env` 块追加 `MM_FILESETTINGS_AMAZONS3*` 参数，直接复用 SaltGoat MinIO 作为对象存储。
-- `cp salt/pillar/mastodon.sls.sample salt/pillar/mastodon.sls`：为每个社交站点定义域名、镜像版本、PostgreSQL/Redis/SMTP、Traefik 参数，可一次维护多套实例。
-- `saltgoat mastodon install <site>`：渲染 `/opt/saltgoat/docker/mastodon-<site>` 下的 docker compose、`.env.production` 与 `.secrets.env`，自动生成密钥、准备 Traefik/Nginx 透传并拉起 web/streaming/sidekiq/db/redis 容器。
-- `saltgoat mastodon status|logs|restart|pull|upgrade <site>`：查看容器组状态、跟踪日志、滚动升级镜像；`backup-db` 子命令会通过 `pg_dump` 生成数据库备份并写入 `storage.backups_dir`。
-- Pillar `mastodon.instances.<site>.traefik` 支持自定义路由、entrypoints、TLS resolver 与额外 label；若 `tls.enabled=false`，CLI 会在部署结束后自动尝试 `saltgoat nginx add-ssl mastodon-<site> <domain>` 申请证书，沿用既有的 Nginx + LE 流程。
-
-### 🔭 Uptime Kuma 监控面板
-
-- `saltgoat uptime-kuma install`：渲染 `/opt/saltgoat/docker/uptime-kuma/docker-compose.yml` 并启动容器，默认监听 `127.0.0.1:3001`，配合 Traefik/Nginx 透传即可暴露公网。
-- `saltgoat uptime-kuma status|logs|restart|down|pull`：查看 compose 状态、读取日志、重建容器或停止服务；升级时先执行 `pull` 再 `restart`。
-- Pillar `uptime_kuma` 可覆盖镜像版本、监听地址、环境变量，并通过 `traefik.*` 字段声明域名、entrypoints、TLS 解析器与额外 label，实现自动路由和证书管理。
-- 当 `traefik.tls.enabled` 为 `false` 时，CLI 会自动生成宿主 Nginx 透传、补写 `nginx:sites:uptime-kuma`，并在缺少证书时调用 `saltgoat nginx add-ssl uptime-kuma <domain>` 自动申请/续期。
-
-### 🧩 Docker + Traefik 入口网关
-
-- `saltgoat traefik install`：套用 `optional.docker` + `optional.docker-traefik`，在 `/opt/saltgoat/docker/traefik` 启动 docker compose（默认端口：HTTP 18080、HTTPS 18443、Dashboard 19080，均可在 Pillar `docker:traefik` 中覆盖）。
-- `saltgoat traefik status|logs|restart|down|config`：查看 compose 状态、日志、重启或停止容器，并快速检查渲染后的 `traefik.yml`。
-- `saltgoat traefik cleanup-legacy`：一键移除旧版 Nginx Proxy Manager docker 目录与 `/etc/nginx/conf.d/proxy-*` 透传配置，确保环境干净。
-
 ### 🗃 服务总览
 
-- `saltgoat services [--format json]`：读取 Pillar 与当前配置，列出数据库、缓存、RabbitMQ、MinIO、Webmin、Traefik 等关键服务的访问地址、端口及默认凭据，便于交接或巡检（建议以 sudo 执行）。
+- `saltgoat services [--format json]`：读取 Pillar 与当前配置，列出数据库、缓存、RabbitMQ、Webmin 等关键服务的访问地址、端口及默认凭据，便于交接或巡检（建议以 sudo 执行）。
 
 ---
 
@@ -187,7 +157,9 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
   - `magento_schedule.stats_jobs` 可定时运行 `saltgoat magetools stats --period <daily|weekly|monthly>`，自动生成业务汇总并写入 `/var/log/saltgoat/alerts.log`（可选推送 Telegram）。
 - 维护流程、权限修复、故障排查详见 [`docs/magento-maintenance.md`](docs/magento-maintenance.md)。
 - `sudo saltgoat pwa install <site> [--with-pwa]`：读取 `salt/pillar/magento-pwa.sls`，自动部署全新 Magento + PWA 站点并串联 Valkey / RabbitMQ / Cron，详见 [`docs/magento-pwa.md`](docs/magento-pwa.md)。支持通过 `cms.home` 配置自动创建/更新 `pwa_home` 页面。
-- `sudo saltgoat pwa status|sync-content|remove <site>`：巡检 PWA 服务、重新应用 overrides/构建或清理前端服务。
+- `sudo saltgoat pwa status <site> [--json] [--check]`：输出 PWA 目录、systemd 服务、GraphQL/React/端口健康数据；`--json` 供 automation 消费，`--check` 在异常时返回非零。
+- `sudo saltgoat pwa doctor <site>`：一键生成健康报告（GraphQL/React/端口/最近日志/建议），便于排障或集成到巡检脚本。
+- `sudo saltgoat pwa sync-content|remove <site>`：重新应用 overrides/构建或清理前端服务。
 - React/依赖统一通过 Yarn 管理，`sync-content --rebuild` 会校验 `@saltgoat/venia-extension` workspace 并阻止 `package-lock.json` 残留，必要时请手动执行 `yarn list --pattern react` 确认仅保留一个版本。
 - PWA 项目细节与更新准则请参考 [`docs/pwa-project-guide.md`](docs/pwa-project-guide.md)。
 - 自定义前端组件统一封装在 `@saltgoat/venia-extension`（同步自 `modules/pwa/workspaces/saltgoat-venia-extension`），避免直接修改官方 Venia 代码。

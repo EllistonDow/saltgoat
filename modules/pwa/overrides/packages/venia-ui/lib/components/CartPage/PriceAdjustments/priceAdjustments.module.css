@@ -1,0 +1,16 @@
+.root {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(12px, 2vw, 18px);
+    color: var(--sg-text);
+}
+
+.root > * {
+    border-bottom: 1px solid var(--sg-card-border);
+    padding-bottom: clamp(8px, 2vw, 12px);
+}
+
+.root > *:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}

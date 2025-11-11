@@ -317,20 +317,6 @@ sudo saltgoat adminer status
 sudo saltgoat adminer security
 ```
 
-#### Uptime Kuma 监控面板
-```bash
-# 安装 Uptime Kuma（Docker Compose）
-sudo saltgoat uptime-kuma install
-
-# 查看状态 / 日志 / 重启
-sudo saltgoat uptime-kuma status
-sudo saltgoat uptime-kuma logs
-sudo saltgoat uptime-kuma restart
-
-# 升级镜像
-sudo saltgoat uptime-kuma pull && sudo saltgoat uptime-kuma restart
-```
-
 ### 🚨 故障排除
 
 #### 1. 权限问题

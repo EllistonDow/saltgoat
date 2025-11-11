@@ -34,6 +34,7 @@
     composes: py-2.5 from global;
     composes: text-error from global;
     composes: text-sm from global;
-    background: rgba(255, 93, 126, 0.08);
-    color: var(--sg-text);
+    background: var(--sg-error-surface);
+    color: var(--sg-error);
+    border-color: var(--sg-error);
 }

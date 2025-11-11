@@ -26,10 +26,11 @@
 - 依据 Pillar 或 `--with-pwa` 开关决定是否部署 PWA Studio。
 - 自动套用 overrides、生成 `.env`、构建前端并创建 `pwa-frontend-<site>.service`。
 
-### 3.2 `saltgoat pwa status <site>`
-- 汇总站点目录、PWA Studio 目录/环境文件是否存在。
-- 检查 systemd 服务是否存在、是否启用、当前运行状态。
-- 给出下一步建议（如缺少仓库可执行 `sync-content --pull`）。
+### 3.2 `saltgoat pwa status <site> [--json] [--check] [--no-graphql] [--no-react]`
+- 汇总站点目录、PWA Studio 目录/环境文件是否存在，并检测 systemd 服务状态。
+- 自动执行 GraphQL ping、React 单实例校验、端口监听检查；`--no-graphql` / `--no-react` 可临时跳过对应探测。
+- `--json` 输出结构化结果（适合集成到监控/脚本），`--check` 在发现异常时返回非零退出码。
+- CLI 会给出下一步建议（如缺少仓库可执行 `sync-content --pull --rebuild`）。
 
 ### 3.3 `saltgoat pwa sync-content <site> [--pull] [--rebuild] [--skip-cms]`
 - 默认重新应用 overrides、刷新 `.env`、确保 systemd 服务配置。
@@ -44,7 +45,12 @@
 
 > CLI 新增参数或交互流程时，请在每个子命令的说明后补充示例和注意事项。
 
-### 3.5 自定义 Workspace (`@saltgoat/venia-extension`)
+### 3.5 `saltgoat pwa doctor <site> [--no-graphql] [--no-react]`
+- 汇总 `status` 的所有检查，并追加端口监听 / systemd 日志 / 建议列表。
+- 输出多段式报告（服务摘要、GraphQL、React、端口、最近日志），方便值班人员快速定位问题。
+- 适合在巡检或 `saltgoat doctor` 中调用，若需机器可读结果，可搭配 `pwa status --json --check`。
+
+### 3.6 自定义 Workspace (`@saltgoat/venia-extension`)
 - `modules/pwa/workspaces/saltgoat-venia-extension/` 保存了所有自研 React 组件（例如新的 `HomeContent`、自定义 talon 等）。
 - `sync-content` 会自动将该目录同步到 PWA Studio 的 `packages/saltgoat-venia-extension/` 并写入 `package.json` 的 `workspaces` 与 `dependencies`。
 - 同步脚本同时会在 `packages/venia-ui/package.json` 与 `packages/venia-concept/package.json` 中写入 `@saltgoat/venia-extension` 依赖（以 `link:../saltgoat-venia-extension` 形式），确保 intercept 注入的 `import` 可被 Yarn 解析。
@@ -55,8 +61,9 @@
   4. 运行 `sudo saltgoat pwa sync-content <site> --rebuild`，查看是否编译通过。
 - **禁止** 直接修改 PWA Studio 仓库原始文件（例如 `packages/venia-ui`），所有自定义都应集中在此 workspace，便于升级和回滚。
 
-### 3.6 健康检查与常规自查
-- `saltgoat pwa status` 会输出当前 CMS Identifier、模板路径、PWA service 状态，并在后续版本加入 React 版本/GraphQL ping 结果提醒。
+### 3.7 健康检查与常规自查
+- `saltgoat pwa status --json` 可供 CI/监控解析；`saltgoat pwa doctor` 可直接生成 GraphQL/React/端口/日志报告。
+- 仍建议每次同步后手动验证：
 - 推荐每次同步后手动验证：
   - `curl https://<domain>/graphql` 查询 `storeConfig`；
   - `curl https://<domain>/client.*.js` 检查返回的 bundle 名称是否最新；
@@ -96,7 +103,13 @@
   - 追加 `modules/pwa/templates/` 中的 Page Builder JSON 作为示例，必要时自动覆盖默认内容。
 
 ### 4.4 Showcase 兜底配置
-- 当 `MAGENTO_PWA_HOME_IDENTIFIER` 指向的 CMS 页面缺失或内容为空时，前端会回退到 `Showcase` 组件（位于 `modules/pwa/workspaces/saltgoat-venia-extension/src/components/HomeContent/Showcase.js`）。
+- 首页默认只渲染 CMS 内容；若需要在 CMS 页面缺失或为空时回退到 `Showcase` 组件（`modules/pwa/workspaces/saltgoat-venia-extension/src/components/HomeContent/Showcase.js`），请在 PWA `.env` 中设置 `SALTGOAT_PWA_SHOWCASE_FALLBACK=auto`。默认值 `off` 会完全禁用兜底，避免与自定义首页同时渲染。
+- 可以在 `pwa_studio.env_overrides` 追加：
+  ```yaml
+  pwa_studio:
+    env_overrides:
+      SALTGOAT_PWA_SHOWCASE_FALLBACK: auto   # 或 off
+  ```
 - 兜底数据可通过两种方式覆盖：
   1. **构建期**：在 `pwa_studio.env_overrides` 写入 `SALTGOAT_PWA_SHOWCASE='{"hero":{"title":"..."}}'`（JSON 字符串），脚本会注入到 PWA `.env`；
   2. **运行期**：在 `app/design` 或额外脚本中设置 `window.__SALTGOAT_PWA_SHOWCASE__ = { ... }`，支持 A/B 测试或按 Store View 注入。

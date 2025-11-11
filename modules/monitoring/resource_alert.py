@@ -42,11 +42,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 from modules.lib import notification as notif  # type: ignore
-from modules.lib import minio_helper  # type: ignore
+from modules.lib import swap_helper  # type: ignore
 PHP_FPM_POOL_DIR = PHP_FPM_CONFIG.parent
 DEFAULT_THRESHOLDS = {
     "memory": {"notice": 78.0, "warning": 85.0, "critical": 92.0},
     "disk": {"notice": 80.0, "warning": 90.0, "critical": 95.0},
+    "swap": {"notice": 5.0, "warning": 20.0, "critical": 40.0},
 }
 FPM_NOTICE_RATIO = 0.8
 FPM_WARNING_RATIO = 0.9
@@ -66,7 +67,6 @@ VALKEY_AUTOSCALE_FILE = RUNTIME_DIR / "valkey-autotune.json"
 OPENSEARCH_AUTOSCALE_FILE = RUNTIME_DIR / "opensearch-autotune.json"
 VALKEY_CONFIG = Path("/etc/valkey/valkey.conf")
 OPENSEARCH_CONFIG = Path("/etc/opensearch/opensearch.yml")
-MINIO_PILLAR = REPO_ROOT / "salt" / "pillar" / "minio.sls"
 DEFAULT_OPENSEARCH_URL = os.environ.get("OPENSEARCH_URL", "http://127.0.0.1:9200").rstrip("/")
 OPENSEARCH_STATS_URL = os.environ.get(
     "OPENSEARCH_STATS_URL",
@@ -91,6 +91,9 @@ VALKEY_AUTOSCALE_MIN_STEP_MB = 256
 VALKEY_AUTOSCALE_MAX_RATIO = 0.75
 SERVICE_HEAL_COOLDOWN = 300
 RECENT_IDS_LIMIT = 200
+DEFAULT_SWAP_AUTOHEAL_SERVICES = ["php8.3-fpm"]
+SWAP_ENSURE_MIN_BYTES = int(os.environ.get("SALTGOAT_SWAP_MIN_BYTES", str(8 * 1024**3)))
+SWAP_DEFAULT_FILE = Path(os.environ.get("SALTGOAT_SWAPFILE", "/swapfile"))
 
 _SERVICE_CACHE: Dict[str, bool] = {}
 
@@ -152,8 +155,8 @@ def read_meminfo() -> Dict[str, int]:
     return result
 
 
-def memory_usage_percent() -> float:
-    info = read_meminfo()
+def memory_usage_percent(info: Optional[Dict[str, int]] = None) -> float:
+    info = info or read_meminfo()
     mem_total = info.get("MemTotal")
     if not mem_total:
         return 0.0
@@ -177,6 +180,46 @@ def disk_usage(paths: Iterable[Path]) -> Dict[str, float]:
         except FileNotFoundError:
             continue
     return stats
+
+
+def swap_usage(info: Optional[Dict[str, int]] = None) -> Tuple[float, int, int]:
+    """Return (percent_used, used_mb, total_mb)."""
+    info = info or read_meminfo()
+    total = info.get("SwapTotal", 0)
+    free = info.get("SwapFree", 0)
+    if total <= 0:
+        return 0.0, 0, 0
+    used = max(total - free, 0)
+    percent = (used / total) * 100.0 if total else 0.0
+    return percent, used // 1024, total // 1024
+
+
+def human_bytes(value: float) -> str:
+    units = ["B", "KB", "MB", "GB", "TB"]
+    num = float(value)
+    for unit in units:
+        if num < 1024.0 or unit == units[-1]:
+            return f"{num:.1f}{unit}"
+        num /= 1024.0
+    return f"{num:.1f}{units[-1]}"
+
+
+def auto_expand_swap(details: List[str]) -> None:
+    try:
+        result = swap_helper.ensure_swap_capacity(
+            min_size=SWAP_ENSURE_MIN_BYTES,
+            swapfile=SWAP_DEFAULT_FILE,
+            max_size=None,
+            dry_run=False,
+            quiet=True,
+        )
+    except Exception as exc:  # pragma: no cover - invoked during runtime only
+        details.append(f"AUTOHEAL: swap ensure failed ({exc})")
+        return
+    if result.get("changed"):
+        target = result.get("total_bytes") or result.get("target_bytes")
+        readable = human_bytes(target) if target else "target"
+        details.append(f"AUTOHEAL: expanded swap capacity to {readable}.")
 
 
 def service_exists(name: str) -> bool:
@@ -217,70 +260,6 @@ def service_status(services: Iterable[str]) -> Dict[str, bool]:
     return result
 
 
-def load_minio_health_config() -> Optional[minio_helper.MinioConfig]:
-    try:
-        return minio_helper.load_enabled_config(MINIO_PILLAR)
-    except Exception:
-        return None
-
-
-def probe_minio_health(cfg: minio_helper.MinioConfig) -> Tuple[bool, Dict[str, Any]]:
-    if not cfg.enabled:
-        return False, {"enabled": False}
-    url = cfg.health_url
-    timeout = max(1.0, float(cfg.health_timeout))
-    headers = {"User-Agent": "SaltGoatMinioHealth/1.0"}
-    req = urllib.request.Request(url, headers=headers)
-    context = None
-    if cfg.health_scheme.lower() == "https":
-        if cfg.health_verify:
-            context = ssl.create_default_context()
-        else:
-            context = ssl._create_unverified_context()
-    start = time.time()
-    info: Dict[str, Any] = {
-        "url": url,
-        "timeout": timeout,
-        "service": getattr(cfg, "service_name", "minio"),
-    }
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
-            latency = time.time() - start
-            status = resp.getcode()
-            body = resp.read(64).decode("utf-8", errors="ignore") if status != 200 else ""
-            info.update({"status": status, "latency": round(latency, 3), "body": body, "ok": status == 200})
-            info["severity"] = "INFO" if status == 200 else "WARNING"
-            info["message"] = f"HTTP {status}"
-            return status == 200, info
-    except urllib.error.HTTPError as exc:
-        latency = time.time() - start
-        try:
-            body = exc.read(128).decode("utf-8", errors="ignore")
-        except Exception:
-            body = ""
-        info.update(
-            {
-                "status": exc.code,
-                "latency": round(latency, 3),
-                "body": body,
-                "ok": False,
-                "severity": "CRITICAL",
-                "message": f"HTTP {exc.code}",
-            }
-        )
-        return False, info
-    except Exception as exc:
-        latency = time.time() - start
-        info.update(
-            {
-                "status": None,
-                "latency": round(latency, 3),
-                "ok": False,
-                "severity": "CRITICAL",
-                "message": str(exc),
-            }
-        )
-        return False, info
 
 
 def ensure_runtime_dir() -> None:
@@ -1239,34 +1218,6 @@ def format_html_block(title: str, pairs: List[Tuple[str, str]]) -> Tuple[str, st
     return plain, f"<pre>{html.escape(plain)}</pre>"
 
 
-def notify_minio_health(host_value: str, host_slug: str, info: Dict[str, Any]) -> None:
-    severity = str(info.get("severity", "CRITICAL"))
-    title = f"{severity} MINIO HEALTH"
-    fields: List[Tuple[str, str]] = [
-        ("Host", host_value),
-        ("URL", str(info.get("url", ""))),
-        ("Status", str(info.get("status"))),
-        ("Latency", f"{info.get('latency', 0):.3f}s"),
-        ("Message", str(info.get("message", ""))),
-    ]
-    body = info.get("body")
-    if body:
-        fields.append(("Body", str(body)))
-    plain_block, html_block = format_html_block(title, fields)
-    tag = f"saltgoat/storage/minio/{host_slug}"
-    payload = {
-        "host": host_value,
-        "severity": severity,
-        "tag": tag,
-        **info,
-    }
-    log_to_file("MINIO", tag, payload)
-    thread_id = payload.get("telegram_thread") or notif.get_thread_id(tag)
-    if thread_id is not None:
-        payload["telegram_thread"] = thread_id
-    telegram_notify(tag, html_block, payload, plain_block)
-    emit_salt_event("saltgoat/storage/minio", payload)
-
 
 def get_threshold_overrides() -> Dict[str, Any]:
     if Caller is None:
@@ -1282,6 +1233,24 @@ def get_threshold_overrides() -> Dict[str, Any]:
     except Exception:
         pass
     return {}
+
+
+def get_swap_autoheal_services() -> List[str]:
+    if Caller is None:
+        return list(DEFAULT_SWAP_AUTOHEAL_SERVICES)
+    keys = [
+        "saltgoat:monitor:swap:autoheal_services",
+        "monitor_swap_autoheal_services",
+    ]
+    try:
+        caller = Caller()  # type: ignore[call-arg]
+        for key in keys:
+            services = caller.cmd("pillar.get", key, None)
+            if isinstance(services, list):
+                return [str(s).strip() for s in services if str(s).strip()]
+    except Exception:
+        pass
+    return list(DEFAULT_SWAP_AUTOHEAL_SERVICES)
 
 
 def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
@@ -1322,9 +1291,12 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
             f"15m threshold {thresholds['warn_15m']:.2f}"
         )
 
+    threshold_overrides = get_threshold_overrides()
+    meminfo = read_meminfo()
+
     # Memory
-    memory_thresholds = DEFAULT_THRESHOLDS["memory"] | get_threshold_overrides().get("memory", {})
-    mem_percent = memory_usage_percent()
+    memory_thresholds = DEFAULT_THRESHOLDS["memory"] | threshold_overrides.get("memory", {})
+    mem_percent = memory_usage_percent(meminfo)
     details.append(f"Memory used: {mem_percent:.1f}%")
     mem_crit = float(memory_thresholds.get("critical", DEFAULT_THRESHOLDS["memory"]["critical"]))
     mem_warn = float(memory_thresholds.get("warning", DEFAULT_THRESHOLDS["memory"]["warning"]))
@@ -1339,14 +1311,42 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         bump("NOTICE", "Memory")
         details.append(f"Memory notice: usage >= {mem_notice:.1f}%")
 
+    # Swap
+    swap_thresholds = DEFAULT_THRESHOLDS["swap"] | threshold_overrides.get("swap", {})
+    swap_percent, swap_used_mb, swap_total_mb = swap_usage(meminfo)
+    swap_notice = float(swap_thresholds.get("notice", DEFAULT_THRESHOLDS["swap"]["notice"]))
+    swap_warn = float(swap_thresholds.get("warning", DEFAULT_THRESHOLDS["swap"]["warning"]))
+    swap_crit = float(swap_thresholds.get("critical", DEFAULT_THRESHOLDS["swap"]["critical"]))
+    if swap_total_mb > 0:
+        details.append(f"Swap used: {swap_used_mb}MiB/{swap_total_mb}MiB ({swap_percent:.1f}%)")
+        if swap_percent >= swap_crit:
+            bump("CRITICAL", "Swap usage")
+            details.append(f"Swap critical: usage >= {swap_crit:.1f}%")
+            heal_targets = get_swap_autoheal_services()
+            if heal_targets:
+                auto_ctx.setdefault("services", set()).update(heal_targets)
+                details.append(
+                    "AUTOHEAL: queued restart for high swap -> "
+                    + ", ".join(sorted(set(heal_targets)))
+                )
+            auto_expand_swap(details)
+        elif swap_percent >= swap_warn:
+            bump("WARNING", "Swap usage")
+            details.append(f"Swap warning: usage >= {swap_warn:.1f}%")
+        elif swap_percent >= swap_notice:
+            bump("NOTICE", "Swap usage")
+            details.append(f"Swap notice: usage >= {swap_notice:.1f}%")
+    else:
+        details.append("Swap disabled (SwapTotal=0).")
+
     # Disk
-    disk_thresholds = DEFAULT_THRESHOLDS["disk"] | get_threshold_overrides().get("disk", {})
+    disk_thresholds = DEFAULT_THRESHOLDS["disk"] | threshold_overrides.get("disk", {})
+    disk_crit = float(disk_thresholds.get("critical", DEFAULT_THRESHOLDS["disk"]["critical"]))
+    disk_warn = float(disk_thresholds.get("warning", DEFAULT_THRESHOLDS["disk"]["warning"]))
+    disk_notice = float(disk_thresholds.get("notice", DEFAULT_THRESHOLDS["disk"]["notice"]))
     disks = disk_usage([Path("/"), Path("/var/lib/mysql"), Path("/home")])
     for mount, percent in disks.items():
         details.append(f"Disk {mount}: {percent:.1f}% used")
-        disk_crit = float(disk_thresholds.get("critical", DEFAULT_THRESHOLDS["disk"]["critical"]))
-        disk_warn = float(disk_thresholds.get("warning", DEFAULT_THRESHOLDS["disk"]["warning"]))
-        disk_notice = float(disk_thresholds.get("notice", DEFAULT_THRESHOLDS["disk"]["notice"]))
         if percent >= disk_crit:
             bump("CRITICAL", f"Disk {mount}")
             details.append(f"Disk critical: {mount} usage >= {disk_crit:.1f}%")
@@ -1361,8 +1361,6 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
     core_services = ["nginx", "php8.3-fpm", "mysql", "valkey", "rabbitmq", "salt-minion"]
     if service_exists("varnish"):
         core_services.append("varnish")
-    if service_exists("minio"):
-        core_services.append("minio")
     services = service_status(core_services)
     failing = [svc for svc, ok in services.items() if not ok]
     if failing:
@@ -1375,22 +1373,6 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         if heal_target in failing:
             auto_ctx.setdefault("services", set()).add(heal_target)
             details.append(f"AUTOHEAL: queued restart for {heal_target}")
-
-    minio_status: Optional[Dict[str, Any]] = None
-    minio_cfg = load_minio_health_config()
-    if minio_cfg:
-        ok, info = probe_minio_health(minio_cfg)
-        minio_status = info
-        if ok:
-            details.append(f"MinIO health OK ({info.get('latency', 0.0):.2f}s)")
-        else:
-            bump("CRITICAL", "MinIO health")
-            msg = info.get("message") or "health check failed"
-            details.append(f"MinIO health failed: {msg}")
-            svc_name = str(info.get("service") or "minio")
-            auto_ctx.setdefault("services", set()).add(svc_name)
-    else:
-        minio_status = {"enabled": False}
 
     fpm_info: Dict[str, Any] = {"pools": {}}
     pool_configs = php_fpm_pool_configs()
@@ -1542,6 +1524,11 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         "severity": severity,
         "load": {"1m": load1, "5m": load5, "15m": load15},
         "memory": mem_percent,
+        "swap": {
+            "percent": swap_percent,
+            "used_mb": swap_used_mb,
+            "total_mb": swap_total_mb,
+        },
         "disks": disks,
         "services": services,
         "php_fpm": fpm_info,
@@ -1549,10 +1536,10 @@ def evaluate() -> Tuple[str, List[str], Dict[str, Any], List[str]]:
         "valkey": valkey_info,
         "opensearch": opensearch_info,
         "sites": site_payload,
-        "minio": minio_status,
         "thresholds": {
             "load": thresholds,
             "memory": {"notice": mem_notice, "warning": mem_warn, "critical": mem_crit},
+            "swap": {"notice": swap_notice, "warning": swap_warn, "critical": swap_crit},
             "disk": {"notice": disk_notice, "warning": disk_warn, "critical": disk_crit},
             "php_fpm": {"notice_ratio": FPM_NOTICE_RATIO, "warning_ratio": FPM_WARNING_RATIO},
             "mysql": {"notice_ratio": MYSQL_NOTICE_RATIO, "warning_ratio": MYSQL_WARNING_RATIO, "critical_ratio": MYSQL_CRITICAL_RATIO},
@@ -1664,13 +1651,6 @@ def main() -> None:
 
     host_value = payload.get("host", hostname())
     host_slug = host_value.replace(".", "-").lower()
-    minio_info = payload.get("minio")
-    if isinstance(minio_info, dict):
-        minio_enabled = minio_info.get("enabled", True)
-        minio_ok = minio_info.get("ok", True)
-        if minio_enabled and minio_ok is False:
-            notify_minio_health(host_value, host_slug, minio_info)
-
     if severity in {"WARNING", "CRITICAL"}:
         trigger_text = ", ".join(triggers) if triggers else "load"
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")

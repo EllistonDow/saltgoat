@@ -23,6 +23,8 @@ magento_optimize:
         # min_spare_servers: 6
         # max_spare_servers: 12
         # memory_limit: 2048M
+        # store_codes:
+        #   - site1
     site2:
       env_path: /var/www/site2/app/etc/env.php
       site_root: /var/www/site2

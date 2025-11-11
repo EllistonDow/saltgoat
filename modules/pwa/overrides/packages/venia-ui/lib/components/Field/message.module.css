@@ -11,5 +11,5 @@
 
 .root_error {
     composes: root;
-    color: #ff6b81;
+    color: var(--sg-error);
 }

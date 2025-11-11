@@ -37,12 +37,12 @@
 
 .input:focus {
     border-color: var(--sg-card-hover-border);
-    box-shadow: 0 0 0 2px rgba(31, 107, 255, 0.25);
+    box-shadow: 0 0 0 2px var(--sg-focus-ring);
 }
 
 .input:disabled {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
+    background: var(--sg-input-disabled-bg);
+    border-color: var(--sg-input-disabled-border);
     color: var(--sg-subtext);
 }
 

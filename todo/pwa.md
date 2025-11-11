@@ -9,6 +9,7 @@
 - [x] **系统服务自动化**：创建 `pwa-frontend-<site>.service` 并启停 `yarn buildpack serve`，集成到安装流程中。
 - [x] **inotify 看门狗提升**：构建前自动将 `fs.inotify.max_user_watches` 提升至 524288，并写入 `/etc/sysctl.d/99-saltgoat-pwa.conf`，避免 Yarn watch 超出文件监控上限。
 - [x] **覆盖脚本持久化**：`modules/pwa/overrides/` 中维护官方文件替换版，防止 `saltgoat pwa install` 还原 Commerce 逻辑。
+- [x] **CLI 重构补强**：`saltgoat pwa status` 支持 `--json/--check/--no-graphql/--no-react`，`saltgoat pwa doctor` 输出 GraphQL/React/端口/日志报告，便于自动化与巡检。
 
 ## 🚧 进行中 / 待跟进
 - [ ] **稳定性验证**：对不同 Magento 站点执行安装，观察脚本在多站点/多节点环境下的行为，补齐幂等性保护。
@@ -16,7 +17,6 @@
 - [ ] **CI 保障**：补充最小化集成测试（容器内 `yarn build` + 变体 smoke test），防止升级破坏 MOS 兼容性。
 - [ ] **UI 交付路线**：固化首页、分类、列表、详情页的设计稿与组件抽象，明确 Venia 模块的取舍。
 - [ ] **Page Builder 使用文档**：输出 block 到前端的映射、缓存刷新与排错指南。
-- [ ] **CLI 重构补强**：`saltgoat pwa` install/status/sync/remove 已上线，尚需补齐健康检查与依赖检测提示。
 - [ ] **PWA 内容隔离深化**：`pwa_home` 自动创建已就绪，但模板内容、多 Store View 策略仍待完善。
 - [ ] **PWA CLI 模块化**：继续增强 `remove/sync-content/status` 的日志、提示与兜底脚本。
 - [ ] **模板资产沉淀**：将 Venia 覆盖与 Page Builder 模板整理到 `modules/pwa/templates/` 并做版本管理。

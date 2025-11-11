@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.2] - 2025-11-11
+
+### Changes
+- 修改 131 个文件: README.md, docs/backup-restic.md, docs/changelog.md, docs/install.md, docs/management-panels-summary.md 等
+
+
 ## [1.6.1] - 2025-11-10
 
 ### Changes
@@ -174,46 +180,10 @@
 - 修改 23 个文件: README.md, docs/monitoring-playbook.md, docs/ops-tooling.md, modules/lib/mastodon_helper.py, modules/lib/notification.py 等
 
 
-## [1.5.0] - 2025-11-06
-
-### Changes
-- 修改 6 个文件: docs/roadmap-object-storage.md, modules/mattermost/mattermost.sh, modules/minio/minio.sh, modules/traefik/traefik.sh, modules/uptime-kuma/uptime-kuma.sh 等
-
-
 ## [1.4.11] - 2025-11-06
 
 ### Changes
 - 修改 59 个文件: README.md, docs/install.md, docs/management-panels-summary.md, docs/ops-tooling.md, lib/help.sh 等
-
-
-## [1.4.10] - 2025-11-05
-
-### Changes
-- 修改 24 个文件: README.md, docs/ops-tooling.md, lib/help.sh, modules/lib/minio_helper.py, modules/minio/minio.sh 等
-
-
-## [1.4.9] - 2025-11-05
-
-### Changes
-- 修改 8 个文件: modules/lib/minio_helper.py, modules/monitoring/resource_alert.py, salt/pillar/minio.sls.sample, scripts/goat_pulse.py, scripts/setup-telegram-topics.py 等
-
-
-## [1.4.8] - 2025-11-05
-
-### Changes
-- 修改 13 个文件: docs/roadmap-object-storage.md, modules/lib/minio_helper.py, modules/lib/nginx_pillar.py, modules/minio/minio.sh, salt/pillar/minio.sls.sample 等
-
-
-## [1.4.7] - 2025-11-05
-
-### Changes
-- 修改 17 个文件: README.md, docs/ops-tooling.md, lib/help.sh, modules/analyse/analyse.sh, modules/automation/automation.sh 等
-
-
-## [1.4.6] - 2025-11-05
-
-### Changes
-- 修改 22 个文件: README.md, docs/ops-tooling.md, modules/lib/__pycache__/notification.cpython-312.pyc, modules/lib/backup_notify.py, modules/lib/gitops.py 等
 
 
 ## [1.4.5] - 2025-11-04

@@ -47,9 +47,6 @@ show_help() {
         "analyse")
             show_analyse_help
             ;;
-        "minio")
-            show_minio_help
-            ;;
         "fun")
             show_fun_help
             ;;
@@ -59,20 +56,11 @@ show_help() {
         "adminer")
             show_adminer_help
             ;;
-        "uptime-kuma")
-            show_uptime_kuma_help
-            ;;
         "ssl")
             show_ssl_help
             ;;
         "pwa")
             show_pwa_help
-            ;;
-        "traefik")
-            show_traefik_help
-            ;;
-        "mattermost")
-            show_mattermost_help
             ;;
         "services")
             show_services_help
@@ -128,8 +116,6 @@ show_main_help() {
     help_command "pwa"                             "PWA 部署与管理工具"
     help_command "analyse"                         "部署网站分析与可观测组件"
     help_command "git"                             "Git 快速发布工具"
-    help_command "mattermost"                      "自托管协作平台（Docker 版）"
-    help_command "minio"                           "自托管对象存储部署/健康检查"
     help_command "postfix --smtp <名称> [--enable|--disable]" "切换 SMTP 帐号并可同步开启/关闭 Postfix"
     help_command "fun <status|joke|tip>"            "健康面板 + 趣味命令（详见 docs/ops-tooling.md）"
     echo ""
@@ -156,7 +142,7 @@ show_main_help() {
 
     help_subtitle "面板与证书"
     help_command "saltgui <action>"                "SaltGUI Web 面板管理"
-    help_command "cockpit|adminer|uptime-kuma"     "系统/数据库/监控面板安装"
+    help_command "cockpit|adminer"                 "系统/数据库面板安装"
     help_command "ssl <action>"                    "证书申请、续期与备份"
     echo ""
 
@@ -277,44 +263,6 @@ show_pillar_help() {
     help_command "saltgoat pillar refresh"         "手动编辑 Pillar 后立即刷新缓存"
     help_note "Pillar 文件位于 ${SCRIPT_DIR}/salt/pillar/saltgoat.sls，请使用安全通道同步。"
 }
-
-show_minio_help() {
-    help_title "MinIO 对象存储"
-    echo -e "用法: ${GREEN}saltgoat minio <command>${NC}"
-    echo ""
-
-    help_subtitle "部署与配置"
-    help_command "apply"                       "渲染 docker compose 并启动 MinIO（默认绑定 127.0.0.1:9000/9001）"
-    help_command "info"                        "输出 Pillar 摘要（镜像、端口、凭据、健康端点）"
-    echo ""
-
-    help_subtitle "运行维护"
-    help_command "status"                      "查看 docker compose ps"
-    help_command "logs [lines]"                "查看容器日志（默认 100 行）"
-    help_command "restart"                    "force-recreate 方式重启容器"
-    help_command "health"                     "调用 Pillar 定义的 /minio/health/live，失败即退出非零"
-    help_note "建议结合 saltgoat traefik install 或宿主 Nginx 生成透传与证书。"
-}
-
-show_traefik_help() {
-    help_title "Traefik 入口网关"
-    echo -e "用法: ${GREEN}saltgoat traefik <command>${NC}"
-    echo ""
-
-    help_subtitle "部署"
-    help_command "install"         "套用 optional.docker + optional.docker-traefik，清理旧 NPM/透传配置"
-    help_command "cleanup-legacy"  "仅移除遗留的 NPM 容器与 /etc/nginx/conf.d/proxy-* 文件"
-    echo ""
-
-    help_subtitle "运维"
-    help_command "status"          "查看 Traefik docker compose ps"
-    help_command "logs [lines]"    "输出容器日志（默认 200 行）"
-    help_command "restart"         "以 force-recreate 方式重启 Traefik"
-    help_command "down"            "停止 Traefik 容器"
-    help_command "config"          "查看当前 /etc/traefik/traefik.yml（位于 compose config 目录）"
-    help_note "默认绑定端口: HTTP 18080、HTTPS 18443、Dashboard 19080，可在 Pillar docker:traefik 中自定义。"
-}
-
 show_services_help() {
     help_title "服务总览"
     echo -e "用法: ${GREEN}saltgoat services [--format table|json]${NC}"
@@ -829,64 +777,6 @@ show_adminer_help() {
     help_command "saltgoat adminer install"          "快速部署数据库面板"
     help_command "saltgoat adminer security"         "启用认证并限制来源 IP"
     help_command "saltgoat adminer config theme nette" "切换 Nette 主题"
-}
-
-# Uptime Kuma 帮助
-show_uptime_kuma_help() {
-    help_title "Uptime Kuma 状态面板"
-    echo -e "用法: ${GREEN}saltgoat uptime-kuma <command>${NC}"
-    echo ""
-
-    help_subtitle "运维操作"
-    help_command "install"                     "套用 optional.uptime-kuma（Docker Compose，默认 127.0.0.1:3001）"
-    help_command "status"                      "查看 docker compose ps"
-    help_command "logs [lines]"                "查看容器日志（默认 200 行）"
-    help_command "restart"                     "重新创建并启动容器"
-    help_command "down"                        "停止 Uptime Kuma 容器"
-    help_command "pull"                        "拉取最新镜像（结合 restart 完成升级）"
-    help_command "cleanup-legacy"              "移除旧版 systemd/手工安装残留"
-    echo ""
-
-    help_subtitle "配置查看"
-    help_command "config"                      "输出合并后的 Pillar 配置（包含 Traefik 路由）"
-    help_note "Pillar 位于 salt/pillar/uptime_kuma.sls，可配置镜像版本、端口、Traefik 路由等。"
-    help_note "默认账户 admin/admin，首次登录后请立即修改密码。"
-    echo ""
-
-    help_subtitle "示例"
-    help_command "saltgoat uptime-kuma install"        "部署面板并挂载至 Traefik"
-    help_command "saltgoat uptime-kuma pull"           "更新镜像后配合 restart 完成升级"
-    help_command "saltgoat uptime-kuma cleanup-legacy" "清理旧版 systemd 安装"
-}
-
-# Mattermost 帮助
-show_mattermost_help() {
-    help_title "Mattermost 协作平台 (Docker)"
-    echo -e "用法: ${GREEN}saltgoat mattermost <command>${NC}"
-    echo ""
-
-    help_subtitle "运维操作"
-    help_command "install"                     "根据 Pillar 渲染 docker compose 并启动"
-    help_command "status"                      "查看 compose 容器状态"
-    help_command "logs [lines]"                "查看应用日志（默认 200 行）"
-    help_command "restart"                     "重启 Mattermost / Postgres 容器"
-    help_command "upgrade"                     "拉取最新镜像并重新部署"
-    echo ""
-
-    help_subtitle "Pillar 关键字段"
-    help_command "mattermost:site_url"         "外网访问地址 (https://chat.example.com)"
-    help_command "mattermost:http_port"        "映射到宿主的端口，默认 8065"
-    help_command "mattermost:db.*"             "Postgres 镜像/库名/用户/密码"
-    help_command "mattermost:admin.*"          "首次启动创建的管理员账户"
-    help_command "mattermost:smtp.*"           "SMTP 服务器、账号、TLS 设置"
-    help_note "模板位于 salt/pillar/mattermost.sls.sample，可复制后按需修改。"
-    help_note "建议配合 saltgoat traefik install，由 SaltGoat 自动渲染宿主 Nginx → Traefik 透传与证书。"
-    echo ""
-
-    help_subtitle "示例"
-    help_command "cp salt/pillar/mattermost.sls.sample salt/pillar/mattermost.sls" "初始化 Pillar"
-    help_command "saltgoat mattermost install"  "部署 compose 栈"
-    help_command "saltgoat traefik install"            "部署统一入口网关后再执行安装命令"
 }
 
 # SSL 证书管理帮助

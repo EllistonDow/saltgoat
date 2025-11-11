@@ -24,7 +24,7 @@ secrets:
   mysql_backup_password: 'BackupUserPassword'
   restic:
     password: 'ResticRepoPassword'
-    repo: 's3:https://minio.example.com/backups/prod'
+    repo: 's3:https://object-store.example.com/backups/prod'
     service_user: 'backup'
     repo_owner: 'backup'
   email_accounts:

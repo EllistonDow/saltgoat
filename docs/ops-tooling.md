@@ -141,52 +141,7 @@ SaltGoat 现在自带几套易用的小工具，方便在排障或上线演练�
 - `/etc/saltgoat/runtime/opensearch-autotune.json`：新增的 OpenSearch 缓存控制。当 JVM heap > 85% 时等比例收紧 `indices.memory.index_buffer_size`、`queries.cache.size`、`fielddata.cache.size`；当 heap < 55% 且较为闲置时会逐步放宽缓存，提升搜索吞吐。所有动作都会写入 alerts.log、Telegram autoscale 话题，并自动重跑 `optional.magento-optimization` 以重新渲染 `/etc/opensearch/opensearch.yml`。
 - `/etc/saltgoat/runtime/php-fpm-pools.json`：记录自动扩容的 `pm.max_children`/`spare_servers`，避免在下一次 `state.apply core.php` 时被覆盖。
 
-## 自动化路线图（草案）
-- **对象存储模块**：封装 MinIO/兼容 S3 的部署与备份策略，配合现有备份通知。
-- **Telegram 话题过滤**：在 `setup-telegram-topics.py` 中过滤隐藏目录（如 `.cache/`）、支持按站点显式列表，避免噪音话题。
-- **Shell → Python 拆分**：持续清理剩余 `here-doc`（例如 `modules/pwa/install.sh` 中针对 SQL/配置的片段、`modules/analyse` 里的 inline Python），避免费力逻辑散落在 Bash 中，确保所有复杂操作集中在 `modules/lib/*.py` 并覆盖单测。
-- **扩展监控自愈**：评估扩展到对象存储、Varnish 状态、MinIO 容量告警等场景，与现有 `resource_alert` 协同。
-
-## MinIO 对象存储（快速开始）
-- Pillar：复制 `salt/pillar/minio.sls.sample` 为 `salt/pillar/minio.sls`，填入 `image`、`base_dir`、`data_dir`、`bind_host`、`api_port`、`console_port`、`root_credentials` 等信息；`extra_env` 可注入额外 `MINIO_*` 环境变量。
-- 安装：`saltgoat minio apply` 渲染 `/opt/saltgoat/docker/minio/docker-compose.yml` 并启动容器，默认仅在宿主 `127.0.0.1:9000/9001` 暴露端口。建议通过 Traefik 或宿主 Nginx 自动生成透传配置并申请证书。
-- 当 `traefik.api`/`traefik.console` 的 `tls.enabled` 为 false 时，会自动写入 `nginx:sites:minio-api|minio-console`、生成对应透传配置，并在证书缺失时调用 `saltgoat nginx add-ssl` 自动申请。
-- 若 `traefik:api|console` 的 `tls.enabled` 为 false，State 会自动生成 `nginx:sites:minio-{api,console}`、渲染对应透传配置，并在证书缺失时调用 `saltgoat nginx add-ssl` 完成申请。
-- 运维：`saltgoat minio status|logs|restart` 分别包装了 `docker compose ps/logs/up --force-recreate`，便于排查与滚动升级。
-- 健康检查：`saltgoat minio health` 读取 Pillar 中的 `health.*` 设置访问 `/minio/health/live`，可写入 Salt Schedule / Cron。
-- 后续规划详见 `docs/roadmap-object-storage.md`，包括与 Restic/通知集成、容量监控、自愈策略等。
-
-## Docker + Traefik
-- Pillar：依据 `salt/pillar/docker.sls.sample` 的 `docker:traefik` 节配置 `base_dir`、`image`、映射端口（默认 HTTP 18080、HTTPS 18443、Dashboard 19080）、ACME 参数、额外 `command`/`environment` 等。
-- 安装：`saltgoat traefik install` 会依次套用 `optional.docker` 与 `optional.docker-traefik`，在 `/opt/saltgoat/docker/traefik` 渲染 docker-compose.yml 与 `config/traefik.yml`，并自动清理旧版 Nginx Proxy Manager 目录以及 `/etc/nginx/conf.d/proxy-*` 透传文件。
-- 运行维护：
-  1. `saltgoat traefik status|logs|restart|down`：分别查看 compose ps、最近日志、重启或停止容器。
-  2. `saltgoat traefik config`：输出当前 `traefik.yml`（入口/ACME/Dashboard 配置），便于排查静态选项。
-  3. `saltgoat traefik cleanup-legacy`：单独执行可再次移除遗留的 NPM 目录或宿主 Nginx 透传配置，确保环境干净。
-- 域名暴露：Traefik 监听在 127.0.0.1:18080/18443，SaltGoat 的相关 CLI（如 Mattermost、MinIO 等）会自动生成宿主 Nginx server block，把公网 80/443 流量透传至 Traefik，并使用 `saltgoat nginx add-ssl` 申请证书。也可以在 Pillar 开启 ACME 支持，让 Traefik 直接处理 HTTP-01/TLS-ALPN/DNS-01 挑战。
-
-## 服务总览工具
-- `saltgoat services`：汇总已部署服务（MySQL、Valkey、RabbitMQ、MinIO、Webmin、Traefik、Cockpit 等），输出访问地址/端口及 Pillar 中配置的默认凭据，方便交接或巡检；支持 `--format json` 供脚本消费。执行时建议使用 `sudo` 以读取受限的 Pillar 文件。
-
-## Mattermost 协作平台
-- Pillar：复制 `salt/pillar/mattermost.sls.sample`，设置 `site_url`、`domain`、`http_port`、`admin.*`（首次启动管理员）与 `db.*`、`smtp.*` 等字段；`extra_env` 可追加任意 `MM_*` 环境变量，`file_store.type` 设为 `s3` 时可搭配 MinIO。`mattermost:traefik` 节可声明 router 名称、entrypoints、TLS 解析器与 `extra_labels`，Salt 会据此生成 Traefik labels。
-- 部署：`saltgoat mattermost install` 会渲染 `/opt/saltgoat/docker/mattermost/docker-compose.yml` 与 `.env`，创建数据/日志/插件/Postgres 目录并执行 `docker compose up -d`。
-- 管理：`saltgoat mattermost status|logs|restart|upgrade` 分别查看容器状态、尾日志（默认 200 行）、重启或拉取最新镜像。
-- 暴露入口：搭配 `saltgoat traefik install` 部署统一入口后，可由相关 CLI 自动生成宿主 Nginx → Traefik 的透传配置并申请证书，或者在 Traefik Pillar 中启用 ACME，让其直接处理 HTTP-01/TLS-ALPN。
-- 备份：Postgres 数据位于 `/opt/saltgoat/docker/mattermost/db`，应用文件/日志位于 `data|config|logs|plugins` 目录，可用现有备份脚本（如 Restic）纳入策略。
-
-## Mastodon 多站点社交
-- Pillar：复制 `salt/pillar/mastodon.sls.sample`，在 `mastodon.instances` 下为每个站点定义 `domain`、`base_dir`、`postgres.*`、`redis.*`、`smtp.*`、`storage.*` 与 `traefik.*`。未填写时会自动落到 `/opt/saltgoat/docker/mastodon-<site>`、`/srv/mastodon/<site>/uploads` 等默认目录。`traefik.aliases` 支持多域名，`extra_env` 可追加任何 Mastodon 运行时变量。
-- 部署：`saltgoat mastodon install bank` 会同步 Pillar → `salt/pillar/nginx.sls`，渲染 `/opt/saltgoat/docker/mastodon-bank/docker-compose.yml`、`.env.production`、`.secrets.env` 并执行 `docker compose up -d`，同时运行 `bundle exec rake db:migrate`、`assets:precompile` 和 `tootctl domains add`。
-- 管理：`saltgoat mastodon status|logs|restart|pull|upgrade <site>` 提供常规运维操作；`backup-db` 会触发容器内 `pg_dump`，通过管道写入 `storage.backups_dir` 下的时间戳文件（gzip 压缩），便于再配合 Restic/MinIO 同步。
-- 证书：若 `traefik.tls.enabled=false`，CLI 会在部署后自动调用 `saltgoat nginx add-ssl mastodon-<site> <domain>`，沿用 Nginx + Let's Encrypt 的申请流程；也可在 Traefik Pillar 启用 ACME，让 Traefik 直接处理 TLS。
-- 入口：默认通过 Traefik label 暴露，仍保留宿主 Nginx 透传能力（`optional.mastodon` state 会生成 `/etc/nginx/sites-available/mastodon-<site>`，将 80/443 流量转发至 Traefik HTTP 端口）。
-- 储存：媒体文件持久化到 `storage.uploads_dir`，数据库与 Redis 数据分别挂载到 `base_dir/postgres`、`base_dir/redis`。可配合 Restic/MinIO 定制定时任务，同步媒体与数据库备份。
-
-## Uptime Kuma 监控面板
-- Pillar：复制 `salt/pillar/uptime_kuma.sls.sample` 为 `salt/pillar/uptime_kuma.sls`，可覆盖 `base_dir`、`bind_host`、`http_port`、镜像版本与额外环境变量；`traefik` 节支持声明域名、entrypoints、TLS 解析器和额外 label，方便自动挂到 Traefik。
-- 部署：`saltgoat uptime-kuma install` 会清理旧版 systemd 安装（停止/移除 `/opt/uptime-kuma`），在 `/opt/saltgoat/docker/uptime-kuma` 渲染 docker-compose 并执行 `docker compose up -d`（默认监听 127.0.0.1:3001）。
-- 运维：`saltgoat uptime-kuma status|logs|restart|down|pull` 分别查看容器状态、读取日志、重建/停止容器以及拉取最新镜像；升级流程推荐 `pull` 后紧接 `restart`。
-- 证书与入口：结合 `saltgoat traefik install` 后，通过 Pillar 配置的 Traefik label 自动获得路由/TLS；也可保留监听 127.0.0.1，通过宿主 Nginx 透传。
-- 若 `traefik.tls.enabled` 为 false，State 会自动写入 `nginx:sites:uptime-kuma`、生成透传配置并在证书缺失时调用 `saltgoat nginx add-ssl uptime-kuma <domain>`。
-- 当 `traefik.tls.enabled` 为 false 时，State 自动生成宿主 Nginx 透传、补写 `nginx:sites:uptime-kuma`，并在证书缺失时调用 `saltgoat nginx add-ssl uptime-kuma <domain>`。
+## 其它脚本
+- `scripts/check-docs.py`：校验 README/Docs 中的命令格式、Markdown 目录结构。
+- `scripts/doctor.sh`：组合 Goat Pulse、磁盘/进程摘要、alerts.log，生成文本/JSON/Markdown 报告。
+- `scripts/gitops-watch.sh`：串行跑 verify + monitor auto-sites --dry-run，再执行 `python3 modules/lib/gitops.py check`.

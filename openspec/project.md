@@ -7,7 +7,7 @@ SaltGoat 提供一套可重复的自动化工具，用于在 Ubuntu 24.04 上安
 - SaltStack（salt-call、state.apply、pillar 渲染、Beacon/ Reactor/ Schedule）
 - Bash CLI（`./saltgoat`、`scripts/`、`modules/`）与 Python helper（`modules/lib/*.py`）
 - LEMP 组件：Nginx、PHP-FPM、Percona MySQL、Valkey（Redis 兼容）、RabbitMQ、OpenSearch、Matomo
-- 辅助工具：Restic、Percona XtraBackup、Telegram Bot API、S3/Minio、Systemd、Cron
+- 辅助工具：Restic、Percona XtraBackup、Telegram Bot API、S3 对象存储、Systemd、Cron
 
 ## Project Conventions
 
@@ -17,9 +17,9 @@ SaltGoat 提供一套可重复的自动化工具，用于在 Ubuntu 24.04 上安
 - Python helpers 保持 PEP8/Black 风格（当前未强制格式化工具，但遵循 4 空格缩进和 type hints）。
 
 ### Architecture Patterns
-- `./saltgoat` 是入口 CLI，按子命令 dispatch 到 `core/`、`modules/`、`services/`、`monitoring/` 中的 Bash/Python 逻辑。
+- `./saltgoat` 是入口 CLI，按子命令 dispatch 到 `core/`、`modules/`、`services/`、`monitoring/` 中的 Bash/Python 逻辑，**所有涉及系统状态/命令执行的操作默认通过 Salt 原生接口 (`salt-call`, state/runner/module)` 进行**；只有在现有脚本已是本地命令且不需要 Salt 的场景下才直接调用系统命令。
 - Salt states（`salt/states/*`）描述系统与应用收敛，pillar (`salt/pillar/*`) 提供配置/凭据；CLI 以本地 `salt-call` 运行，也可对接 master/minion 模式。
-- 自动化分层：基础安装（core）、可选模块（modules/optional）、服务 orchestration（services/）、监控与自愈（monitoring/）。缺失 Salt 服务时降级为 Cron + CLI。
+- 自动化分层：基础安装（core）、可选模块（modules/optional）、服务 orchestration（services/）、监控与自愈（monitoring/）。缺失 Salt 服务时可降级为 Cron + CLI，但任何降级逻辑需在文档/代码中显式说明。
 - Library 脚本和 helper（`modules/lib/*.py`、`lib/*.sh`）提供重复逻辑复用，tests 下脚本负责 dry-run 与模板校验。
 
 ### Testing Strategy
@@ -42,11 +42,11 @@ SaltGoat 提供一套可重复的自动化工具，用于在 Ubuntu 24.04 上安
 - 仅支持 Ubuntu 24.04（或兼容内核），假设具备 sudo 权限与可访问的 apt 仓库。
 - 禁止将真实凭据/证书提交至仓库；pillar 只存占位符，可通过 `scripts/sync-passwords.sh` 或 `saltgoat pillar refresh` 同步到本机。
 - 需要在缺失 Salt 服务时自动降级到 Cron；若启用 master/minion，必须保证 Beacon/ Reactor 权限安全。
-- 网络/备份依赖外部对象存储（S3/Minio）与 Telegram API，需要在受限环境下提供替代方案或降级。
+- 网络/备份依赖外部对象存储（S3 兼容）与 Telegram API，需要在受限环境下提供替代方案或降级。
 
 ## External Dependencies
 - SaltStack（salt-master/salt-minion/salt-call）
 - Ubuntu packaging：apt、systemd、cron
 - LEMP + 周边服务：Nginx、PHP-FPM、Percona MySQL、Valkey、RabbitMQ、OpenSearch、Matomo
-- 备份/存储：Restic、Percona XtraBackup、S3/Minio、rsync
+- 备份/存储：Restic、Percona XtraBackup、S3、rsync
 - 消息与通知：Telegram Bot API、Salt event bus

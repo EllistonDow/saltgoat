@@ -6,8 +6,16 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
-from typing import Iterable, List
+from typing import Dict, Iterable, List
 
 try:
     import yaml  # type: ignore
@@ -48,6 +56,116 @@ def _load_package(path: Path) -> dict:
 
 def _write_package(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def _ensure_dependency_entry(pkg_path: Path, section: str, name: str, value: str) -> bool:
+    data = _load_package(pkg_path)
+    container = data.get(section)
+    if not isinstance(container, dict):
+        container = {}
+        data[section] = container
+    if container.get(name) == value:
+        return False
+    container[name] = value
+    _write_package(pkg_path, data)
+    return True
+
+
+def _remove_dependency_entry(pkg_path: Path, sections: List[str], name: str) -> bool:
+    data = _load_package(pkg_path)
+    changed = False
+    for section in sections:
+        container = data.get(section)
+        if isinstance(container, dict) and name in container:
+            container.pop(name, None)
+            changed = True
+            if not container:
+                data.pop(section, None)
+    if changed:
+        _write_package(pkg_path, data)
+    return changed
+
+
+def _should_remove_extension(path: Path) -> bool:
+    name = path.name.lower()
+    if "sample" in name or "example" in name:
+        return True
+    pkg = path / "package.json"
+    if pkg.exists():
+        try:
+            data = json.loads(pkg.read_text(encoding="utf-8"))
+            pkg_name = str(data.get("name", "")).lower()
+            if "sample" in pkg_name or "example" in pkg_name:
+                return True
+        except Exception:
+            return False
+    return False
+
+
+def _get_unit_workdir(service: str) -> Path | None:
+    try:
+        output = subprocess.check_output(
+            ["systemctl", "show", service, "--property=WorkingDirectory", "--value"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return None
+    if not output or output == "-":
+        return None
+    candidate = Path(output)
+    if candidate.exists():
+        return candidate
+    return None
+
+
+GRAPHQL_BLOCK_FIELDS = (
+    "is_confirmed",
+    "ProductAttributeMetadata",
+    "used_in_components",
+    "selected_attribute_options",
+    "entered_attribute_value",
+    "custom_attributes",
+)
+
+
+def _strip_graphql_fields(text: str, fields: Iterable[str]) -> str:
+    lines = text.splitlines()
+    result: List[str] = []
+    skipping = False
+    depth = 0
+    pending_field = None
+
+    for line in lines:
+        stripped = line.strip()
+        if skipping:
+            depth += line.count("{") - line.count("}")
+            if depth <= 0:
+                skipping = False
+                pending_field = None
+            continue
+        for field in fields:
+            if field in stripped:
+                if "{" in line and not stripped.endswith("}"):
+                    skipping = True
+                    depth = line.count("{") - line.count("}")
+                    pending_field = field
+                else:
+                    pending_field = field
+                break
+        if pending_field:
+            if not skipping:
+                pending_field = None
+            continue
+        result.append(line)
+
+    return "\n".join(result)
+
+
+def _safe_replace(text: str, old: str, new: str) -> tuple[str, bool]:
+    if old not in text:
+        return text, False
+    return text.replace(old, new), True
 
 
 def cmd_apply_env(args: argparse.Namespace) -> int:
@@ -115,6 +233,17 @@ def cmd_ensure_workspace(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ensure_workspace_dependency(args: argparse.Namespace) -> int:
+    pkg_path = Path(args.file).resolve()
+    package = args.package
+    value = args.value
+    if _ensure_dependency_entry(pkg_path, "dependencies", package, value):
+        print("updated")
+    else:
+        print("unchanged")
+    return 0
+
+
 def cmd_set_field(args: argparse.Namespace) -> int:
     pkg_path = Path(args.file).resolve()
     data = _load_package(pkg_path)
@@ -128,6 +257,19 @@ def cmd_set_field(args: argparse.Namespace) -> int:
         print("unchanged")
         return 0
     container[name] = value
+    _write_package(pkg_path, data)
+    print("updated")
+    return 0
+
+
+def cmd_ensure_package_field(args: argparse.Namespace) -> int:
+    pkg_path = Path(args.file).resolve()
+    data = _load_package(pkg_path)
+    current = data.get(args.field)
+    if current == args.value:
+        print("unchanged")
+        return 0
+    data[args.field] = args.value
     _write_package(pkg_path, data)
     print("updated")
     return 0
@@ -148,10 +290,263 @@ def cmd_remove_field(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_remove_package_field(args: argparse.Namespace) -> int:
+    pkg_path = Path(args.file).resolve()
+    data = _load_package(pkg_path)
+    if args.field not in data:
+        print("absent")
+        return 0
+    data.pop(args.field, None)
+    _write_package(pkg_path, data)
+    print("removed")
+    return 0
+
+
+def cmd_ensure_package_dependency(args: argparse.Namespace) -> int:
+    pkg_path = Path(args.file).resolve()
+    if _ensure_dependency_entry(pkg_path, "dependencies", args.package, args.version):
+        print("updated")
+    else:
+        print("unchanged")
+    return 0
+
+
+def cmd_ensure_package_dev_dependency(args: argparse.Namespace) -> int:
+    pkg_path = Path(args.file).resolve()
+    if _ensure_dependency_entry(pkg_path, "devDependencies", args.package, args.version):
+        print("updated")
+    else:
+        print("unchanged")
+    return 0
+
+
+def cmd_remove_package_dependency(args: argparse.Namespace) -> int:
+    pkg_path = Path(args.file).resolve()
+    if _remove_dependency_entry(pkg_path, ["dependencies", "devDependencies"], args.package):
+        print("removed")
+    else:
+        print("absent")
+    return 0
+
+
 def _read_text(path: Path) -> str:
     if not path.exists():
         raise FileNotFoundError(f"{path} 不存在")
     return path.read_text(encoding="utf-8")
+
+
+def cmd_prune_extensions(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    extensions_dir = root / "packages" / "extensions"
+    if not extensions_dir.exists():
+        print("absent")
+        return 0
+    removed: List[str] = []
+    for child in extensions_dir.iterdir():
+        if not child.is_dir():
+            continue
+        if _should_remove_extension(child):
+            shutil.rmtree(child, ignore_errors=True)
+            removed.append(child.name)
+    if removed:
+        print("removed:" + ",".join(sorted(removed)))
+    else:
+        print("unchanged")
+    return 0
+
+
+def cmd_ensure_peer_deps(args: argparse.Namespace) -> int:
+    pkg_path = Path(args.file).resolve()
+    data = _load_package(pkg_path)
+    peers = data.get("peerDependencies")
+    if not isinstance(peers, dict):
+        peers = {}
+        data["peerDependencies"] = peers
+
+    deps = {}
+    for section in ("dependencies", "devDependencies"):
+        raw = data.get(section)
+        if isinstance(raw, dict):
+            deps.update(raw)
+
+    keys = ["react", "react-dom"]
+    changed = False
+    for key in keys:
+        value = deps.get(key)
+        if not value:
+            continue
+        if peers.get(key) == value:
+            continue
+        peers[key] = value
+        changed = True
+
+    if changed:
+        _write_package(pkg_path, data)
+        print("updated")
+    else:
+        print("unchanged")
+    return 0
+
+
+def cmd_list_graphql_files(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    if not root.exists():
+        print("absent")
+        return 0
+    patterns = ("*.gql.js", "*.gql.ts", "*.gql.tsx", "*.graphql")
+    for pattern in patterns:
+        for path in root.rglob(pattern):
+            print(path)
+    return 0
+
+
+def cmd_sanitize_graphql(args: argparse.Namespace) -> int:
+    path = Path(args.file).resolve()
+    try:
+        text = _read_text(path)
+    except FileNotFoundError:
+        print("absent")
+        return 0
+    sanitized = _strip_graphql_fields(text, GRAPHQL_BLOCK_FIELDS)
+    if sanitized == text:
+        print("unchanged")
+        return 0
+    if not sanitized.endswith("\n"):
+        sanitized += "\n"
+    path.write_text(sanitized, encoding="utf-8")
+    print("patched")
+    return 0
+
+
+def cmd_sanitize_orders(args: argparse.Namespace) -> int:
+    path = Path(args.file).resolve()
+    try:
+        text = _read_text(path)
+    except FileNotFoundError:
+        print("absent")
+        return 0
+    replacements = [
+        ("state: order.state", "status: order.status ?? order.state"),
+        ("order.state", "order.status"),
+    ]
+    changed = False
+    updated = text
+    for old, new in replacements:
+        updated, replaced = _safe_replace(updated, old, new)
+        changed = changed or replaced
+    if not changed:
+        print("unchanged")
+        return 0
+    path.write_text(updated, encoding="utf-8")
+    print("patched")
+    return 0
+
+
+def cmd_sanitize_payment(args: argparse.Namespace) -> int:
+    path = Path(args.file).resolve()
+    try:
+        text = _read_text(path)
+    except FileNotFoundError:
+        print("absent")
+        return 0
+    changed = False
+    updated, replaced = _safe_replace(
+        text,
+        "const { selected_payment_method } = checkoutDetails;",
+        "const { selected_payment_method = {} } = checkoutDetails || {};",
+    )
+    changed = changed or replaced
+    updated, replaced = _safe_replace(
+        updated,
+        "const paymentMethod = selected_payment_method;",
+        "const paymentMethod = selected_payment_method || {};",
+    )
+    changed = changed or replaced
+    if not changed:
+        print("unchanged")
+        return 0
+    path.write_text(updated, encoding="utf-8")
+    print("patched")
+    return 0
+
+
+def cmd_sanitize_cart_trigger(args: argparse.Namespace) -> int:
+    path = Path(args.file).resolve()
+    try:
+        text = _read_text(path)
+    except FileNotFoundError:
+        print("absent")
+        return 0
+    lines = text.splitlines()
+    filtered = [line for line in lines if "total_summary_quantity_including_config" not in line]
+    changed = len(filtered) != len(lines)
+    updated = "\n".join(filtered)
+    replacement_map = {
+        "const totalItems = cartDetails.totalItems;": "const totalItems = cartDetails?.totalItems ?? 0;",
+        "const totalQuantity = cartDetails.totalQuantity;": "const totalQuantity = cartDetails?.totalQuantity ?? 0;",
+    }
+    for old, new in replacement_map.items():
+        updated, replaced = _safe_replace(updated, old, new)
+        changed = changed or replaced
+    if "const itemCount" not in updated:
+        marker = "    const handleTriggerClick = useCallback(() => {"
+        injection = "    const itemCount = data?.cart?.total_quantity ?? 0;\n\n"
+        if marker in updated:
+            updated = updated.replace(marker, f"{injection}{marker}", 1)
+            changed = True
+    if not changed:
+        print("unchanged")
+        return 0
+    path.write_text(updated, encoding="utf-8")
+    print("patched")
+    return 0
+
+
+def cmd_graphql_ping(args: argparse.Namespace) -> int:
+    endpoint = args.endpoint
+    query = args.query or "query Ping { storeConfig { id } }"
+    payload = json.dumps({"query": query}).encode("utf-8")
+    request = urllib.request.Request(
+        endpoint,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    start = time.time()
+    try:
+        with urllib.request.urlopen(request, timeout=args.timeout) as resp:
+            body = resp.read().decode("utf-8", errors="ignore")
+    except urllib.error.URLError as exc:
+        print(f"GraphQL 请求失败: {exc}")
+        return 1
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        print("GraphQL 返回非 JSON。")
+        return 1
+    errors = data.get("errors")
+    if errors:
+        print(f"GraphQL 返回 errors: {errors}")
+        return 1
+    elapsed = time.time() - start
+    store_config = data.get("data", {}).get("storeConfig") or {}
+    store_id = store_config.get("id", "unknown")
+    print(f"GraphQL OK (store={store_id}, {elapsed:.2f}s)")
+    return 0
+
+
+def cmd_port_check(args: argparse.Namespace) -> int:
+    host = args.host
+    port = int(args.port)
+    timeout = args.timeout
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            pass
+    except OSError as exc:
+        print(f"{host}:{port} 不可访问 ({exc})")
+        return 1
+    print(f"{host}:{port} 可访问")
+    return 0
 
 
 def cmd_ensure_env_default(args: argparse.Namespace) -> int:
@@ -643,6 +1038,40 @@ def cmd_check_react(args: argparse.Namespace) -> int:
     return exit_code
 
 
+def cmd_react_version_check(args: argparse.Namespace) -> int:
+    proxy = argparse.Namespace(dir=args.root)
+    return cmd_check_react(proxy)
+
+
+def cmd_react_debug(args: argparse.Namespace) -> int:
+    service = args.service
+    workdir = _get_unit_workdir(service)
+    if not workdir:
+        return 0
+    pkg_path = workdir / "package.json"
+    if not pkg_path.exists():
+        return 0
+    try:
+        data = json.loads(pkg_path.read_text(encoding="utf-8"))
+    except Exception:
+        return 0
+    deps: Dict[str, str] = {}
+    for section in ("dependencies", "devDependencies", "peerDependencies"):
+        raw = data.get(section)
+        if isinstance(raw, dict):
+            deps.update({k: str(v) for k, v in raw.items()})
+    react = deps.get("react")
+    react_dom = deps.get("react-dom")
+    report = []
+    if react:
+        report.append(f"react={react}")
+    if react_dom:
+        report.append(f"react-dom={react_dom}")
+    if report:
+        print("; ".join(report))
+    return 0
+
+
 def cmd_validate_graphql(args: argparse.Namespace) -> int:
     payload_text = args.payload or ""
     try:
@@ -707,6 +1136,12 @@ def build_parser() -> argparse.ArgumentParser:
     ensure_workspace.add_argument("--value", help="依赖值，默认 link:<workspace>")
     ensure_workspace.set_defaults(func=cmd_ensure_workspace)
 
+    ensure_workspace_dep = sub.add_parser("ensure-workspace-dependency", help="Ensure dependency entry exists in package.json")
+    ensure_workspace_dep.add_argument("--file", required=True)
+    ensure_workspace_dep.add_argument("--package", required=True)
+    ensure_workspace_dep.add_argument("--value", required=True)
+    ensure_workspace_dep.set_defaults(func=cmd_ensure_workspace_dependency)
+
     set_field = sub.add_parser("set-field", help="Set package.json section entry")
     set_field.add_argument("--file", required=True)
     set_field.add_argument("--section", required=True)
@@ -714,11 +1149,39 @@ def build_parser() -> argparse.ArgumentParser:
     set_field.add_argument("--value", required=True)
     set_field.set_defaults(func=cmd_set_field)
 
+    ensure_pkg_field = sub.add_parser("ensure-package-field", help="Ensure top-level package.json field equals value")
+    ensure_pkg_field.add_argument("--file", required=True)
+    ensure_pkg_field.add_argument("--field", required=True)
+    ensure_pkg_field.add_argument("--value", required=True)
+    ensure_pkg_field.set_defaults(func=cmd_ensure_package_field)
+
     remove_field = sub.add_parser("remove-field", help="Remove package.json section entry")
     remove_field.add_argument("--file", required=True)
     remove_field.add_argument("--section", required=True)
     remove_field.add_argument("--name", required=True)
     remove_field.set_defaults(func=cmd_remove_field)
+
+    remove_pkg_field = sub.add_parser("remove-package-field", help="Remove top-level package.json field")
+    remove_pkg_field.add_argument("--file", required=True)
+    remove_pkg_field.add_argument("--field", required=True)
+    remove_pkg_field.set_defaults(func=cmd_remove_package_field)
+
+    ensure_pkg_dep = sub.add_parser("ensure-package-dependency", help="Ensure dependency entry exists")
+    ensure_pkg_dep.add_argument("--file", required=True)
+    ensure_pkg_dep.add_argument("--package", required=True)
+    ensure_pkg_dep.add_argument("--version", required=True)
+    ensure_pkg_dep.set_defaults(func=cmd_ensure_package_dependency)
+
+    ensure_pkg_dev_dep = sub.add_parser("ensure-package-dev-dependency", help="Ensure devDependency entry exists")
+    ensure_pkg_dev_dep.add_argument("--file", required=True)
+    ensure_pkg_dev_dep.add_argument("--package", required=True)
+    ensure_pkg_dev_dep.add_argument("--version", required=True)
+    ensure_pkg_dev_dep.set_defaults(func=cmd_ensure_package_dev_dependency)
+
+    remove_pkg_dep = sub.add_parser("remove-package-dependency", help="Remove dependency/devDependency entry")
+    remove_pkg_dep.add_argument("--file", required=True)
+    remove_pkg_dep.add_argument("--package", required=True)
+    remove_pkg_dep.set_defaults(func=cmd_remove_package_dependency)
 
     ensure_env = sub.add_parser("ensure-env-default", help="Ensure env key exists with default value")
     ensure_env.add_argument("--file", required=True)
@@ -755,6 +1218,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_guard.add_argument("--env-var", required=True)
     add_guard.set_defaults(func=cmd_add_guard)
 
+    prune_ext = sub.add_parser("prune-extensions", help="Remove sample extensions under packages/extensions")
+    prune_ext.add_argument("--root", required=True)
+    prune_ext.set_defaults(func=cmd_prune_extensions)
+
     tune_webpack = sub.add_parser("tune-webpack", help="Tune webpack performance hints")
     tune_webpack.add_argument("--file", required=True)
     tune_webpack.set_defaults(func=cmd_tune_webpack)
@@ -768,9 +1235,53 @@ def build_parser() -> argparse.ArgumentParser:
     load_cfg.add_argument("--site", required=True)
     load_cfg.set_defaults(func=cmd_load_config)
 
+    ensure_peer = sub.add_parser("ensure-peer-deps", help="Ensure peerDependencies align with dependencies")
+    ensure_peer.add_argument("--file", required=True)
+    ensure_peer.set_defaults(func=cmd_ensure_peer_deps)
+
+    list_graphql = sub.add_parser("list-graphql-files", help="List GraphQL fragment sources under root")
+    list_graphql.add_argument("--root", required=True)
+    list_graphql.set_defaults(func=cmd_list_graphql_files)
+
+    sanitize_graphql = sub.add_parser("sanitize-graphql", help="Remove Commerce-only GraphQL fields")
+    sanitize_graphql.add_argument("--file", required=True)
+    sanitize_graphql.set_defaults(func=cmd_sanitize_graphql)
+
+    sanitize_orders = sub.add_parser("sanitize-orders", help="Align orders component with MOS schema")
+    sanitize_orders.add_argument("--file", required=True)
+    sanitize_orders.set_defaults(func=cmd_sanitize_orders)
+
+    sanitize_payment = sub.add_parser("sanitize-payment", help="Harden payment info component for missing fields")
+    sanitize_payment.add_argument("--file", required=True)
+    sanitize_payment.set_defaults(func=cmd_sanitize_payment)
+
+    sanitize_cart = sub.add_parser("sanitize-cart-trigger", help="Remove unsupported cart trigger fields")
+    sanitize_cart.add_argument("--file", required=True)
+    sanitize_cart.set_defaults(func=cmd_sanitize_cart_trigger)
+
     check_react = sub.add_parser("check-react", help="Verify React dependencies versions")
     check_react.add_argument("--dir", required=True)
     check_react.set_defaults(func=cmd_check_react)
+
+    react_version = sub.add_parser("react-version-check", help="Report React versions under node_modules")
+    react_version.add_argument("--root", required=True)
+    react_version.set_defaults(func=cmd_react_version_check)
+
+    react_debug = sub.add_parser("react-debug", help="Inspect systemd service to report React versions")
+    react_debug.add_argument("--service", required=True)
+    react_debug.set_defaults(func=cmd_react_debug)
+
+    graphql_ping = sub.add_parser("graphql-ping", help="Check Magento GraphQL endpoint availability")
+    graphql_ping.add_argument("--endpoint", required=True)
+    graphql_ping.add_argument("--query", help="Custom GraphQL query")
+    graphql_ping.add_argument("--timeout", type=float, default=10.0)
+    graphql_ping.set_defaults(func=cmd_graphql_ping)
+
+    port_check = sub.add_parser("port-check", help="Check TCP port connectivity")
+    port_check.add_argument("--host", default="127.0.0.1")
+    port_check.add_argument("--port", required=True)
+    port_check.add_argument("--timeout", type=float, default=3.0)
+    port_check.set_defaults(func=cmd_port_check)
 
     validate_graphql = sub.add_parser("validate-graphql", help="Validate Magento GraphQL probe response")
     validate_graphql.add_argument("--payload", required=True)

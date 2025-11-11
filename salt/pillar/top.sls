@@ -50,8 +50,3 @@ base:
     - mysql-backup
     - notifications
     - telegram-topics
-    - docker
-    - minio
-    - mastodon
-    - mattermost
-    - uptime_kuma

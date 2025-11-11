@@ -108,12 +108,13 @@
 
 .secondaryActions button,
 .secondaryActions a {
-    color: var(--sg-header-icon) !important;
+    color: var(--sg-header-icon, currentColor) !important;
 }
 
-.secondaryActions svg {
-    stroke: var(--sg-header-icon) !important;
-    fill: transparent !important;
+.secondaryActions svg,
+.secondaryActions svg * {
+    stroke: currentColor !important;
+    fill: currentColor !important;
 }
 
 .searchFallback {

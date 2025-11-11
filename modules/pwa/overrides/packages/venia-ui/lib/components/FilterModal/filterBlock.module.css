@@ -16,7 +16,7 @@
     composes: grid-flow-col from global;
     composes: items-center from global;
     composes: min-h-[3.125rem] from global;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--sg-card-border);
 }
 
 .name {

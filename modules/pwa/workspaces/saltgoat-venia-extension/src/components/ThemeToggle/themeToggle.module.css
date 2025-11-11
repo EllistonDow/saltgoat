@@ -8,6 +8,7 @@
     align-items: center;
     justify-content: center;
     transition: transform 0.3s ease;
+    color: var(--sg-header-icon, currentColor);
 }
 
 .iconOrbit {
@@ -21,8 +22,8 @@
     position: absolute;
     inset: 0;
     transition: transform 0.4s ease, opacity 0.4s ease;
-    stroke: var(--sg-header-icon);
-    color: var(--sg-header-icon);
+    stroke: currentColor;
+    color: currentColor;
     fill: none;
 }
 

@@ -15,7 +15,7 @@
     composes: pb-xs from global;
     composes: text-error from global;
     composes: text-sm from global;
-    color: #ff7b99;
+    color: var(--sg-error);
 }
 
 .prompt {

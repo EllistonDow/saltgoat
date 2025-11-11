@@ -120,15 +120,11 @@ register_module "analyse" "${SCRIPT_DIR}/modules/analyse/analyse.sh"
 register_module "git" "${SCRIPT_DIR}/modules/git/git.sh"
 register_module "cockpit" "${SCRIPT_DIR}/modules/cockpit/cockpit.sh"
 register_module "adminer" "${SCRIPT_DIR}/modules/adminer/adminer.sh"
-register_module "uptime-kuma" "${SCRIPT_DIR}/modules/uptime-kuma/uptime-kuma.sh"
 register_module "memory" "${SCRIPT_DIR}/monitoring/memory.sh"
 register_module "schedule" "${SCRIPT_DIR}/monitoring/schedule.sh"
 register_module "fun" "${SCRIPT_DIR}/modules/fun/fun.sh"
-register_module "minio" "${SCRIPT_DIR}/modules/minio/minio.sh"
-register_module "traefik" "${SCRIPT_DIR}/modules/traefik/traefik.sh"
-register_module "mattermost" "${SCRIPT_DIR}/modules/mattermost/mattermost.sh"
-register_module "mastodon" "${SCRIPT_DIR}/modules/mastodon/mastodon.sh"
 register_module "services" "${SCRIPT_DIR}/modules/services/services.sh"
+register_module "swap" "${SCRIPT_DIR}/modules/system/swap.sh"
 
 # 显示横幅
 show_banner
@@ -620,14 +616,6 @@ case "$1" in
     "rabbitmq")
         require_module "rabbitmq"
         rabbitmq_handler "$@"
-        ;;
-    "minio")
-        require_module "minio"
-        minio_handler "${@:2}"
-        ;;
-    "traefik")
-        require_module "traefik"
-        traefik_handler "${@:2}"
         ;;
     "services")
         require_module "services"
@@ -1240,21 +1228,13 @@ case "$1" in
         require_module "adminer"
         adminer_main "$2" "$3" "$4"
         ;;
-    "uptime-kuma")
-        require_module "uptime-kuma"
-        kuma_handler "${@:2}"
-        ;;
     "fun")
         require_module "fun"
         fun_handler "${@:2}"
         ;;
-    "mastodon")
-        require_module "mastodon"
-        mastodon_handler "${@:2}"
-        ;;
-    "mattermost")
-        require_module "mattermost"
-        mattermost_main "${@:2}"
+    "swap")
+        require_module "swap"
+        swap_runner "${@:2}"
         ;;
     "verify")
         bash "${SCRIPT_DIR}/scripts/verify.sh"

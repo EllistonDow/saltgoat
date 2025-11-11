@@ -41,6 +41,8 @@
 
    - 观察 `/var/log/saltgoat/alerts.log` 是否记录 `Autoscaled ...` 日志。
    - 若触发了扩容动作，按文档收敛 `sudo salt-call --local state.apply core.php`。
+   - Swap 占用达到 Critical 时会在同一日志中输出 `Swap critical` 与 `AUTOHEAL` 记录，并依据 Pillar `saltgoat:monitor:swap:autoheal_services` 重启服务；设为 `[]` 可只告警不自愈。
+   - 需要快速巡检或手工扩容时，执行 `sudo saltgoat swap status` 查看 si/so 与 swappiness，或运行 `sudo saltgoat swap ensure --min-size 8G --max-size 16G` 自动创建/扩容 `/swapfile`。`swap tune` 可将 `vm.swappiness` 调低至 10~20。
 
 3. OpenSearch 缓存/堆自愈
 
@@ -57,6 +59,12 @@
      ```
    - 关注 Mattermost（或其它 Webhook 目标）里是否收到 `tag`、`severity`、`plain_message` 等字段；如未收到，检查 `salt/pillar/notifications.sls` 是否 `webhook.enabled: true`、Pillar 已刷新以及目标系统是否允许匿名 POST。
    - 需要发送纯粹的测试消息时，可改用 `python3 scripts/notification-test.py --tag saltgoat/test/ping --severity INFO --text "hello"`，该脚本会使用当前 Pillar/webhook 设置快速推送。
+
+5. 多站点触发的 PHP-FPM 池扩容
+
+   - 每次执行 `saltgoat magetools multisite create|rollback` 时，脚本会自动运行 PHP 池 helper：读取 `/var/www/<site>` store 列表、更新 `magento_optimize:sites.<site>.php_pool.weight`，并将 store code 写入 `store_codes`。
+   - 脚本会追加 `[AUTOSCALE]` 记录到 `/var/log/saltgoat/alerts.log`，并发送 `saltgoat/autoscale/<host>` 事件；如需跳过，可在命令中添加 `--no-adjust-php-pool`。
+   - 调整成功后会自动执行 `sudo salt-call --local state.apply core.php`，确保 `/etc/php/8.3/fpm/pool.d/` 与 `/etc/saltgoat/runtime/php-fpm-pools.json` 同步；若需要强制特定 weight，可使用 `--php-pool-weight <int>`。
 
 ## 3. 通知与日志验证
 
@@ -106,7 +114,7 @@
    sudo ls /srv/mastodon/<site>/backups
    ```
 
-   确保 PostgreSQL 备份与媒体目录同步纳入 Restic/MinIO；Telegram 话题中可查到 `saltgoat/backup/mastodon_db/<site>` 的状态。
+   确保 PostgreSQL 备份与媒体目录同步纳入 Restic/S3 兼容对象存储；Telegram 话题中可查到 `saltgoat/backup/mastodon_db/<site>` 的状态。
 
 ## 5. 例行巡检节奏
 

@@ -60,7 +60,7 @@
 .cancelDeleteButton {
     composes: root_lowPriority from '../Button/button.module.css';
 
-    @apply bg-white;
+    background: var(--sg-card-bg);
     color: var(--sg-text);
 }
 
@@ -89,7 +89,7 @@
     composes: w-max from global;
     border-color: var(--sg-card-border);
     color: var(--sg-primary);
-    background: rgba(31, 107, 255, 0.08);
+    background: var(--sg-muted-surface);
 }
 
 .name {

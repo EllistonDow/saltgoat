@@ -149,7 +149,7 @@
     composes: rounded-badge from global;
     composes: text-2xs from global;
     border-color: var(--sg-card-border);
-    background: rgba(31, 107, 255, 0.08);
+    background: var(--sg-muted-surface);
     color: var(--sg-primary);
 }
 

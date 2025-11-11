@@ -1,0 +1,11 @@
+## Implementation Tasks
+- [x] Update `modules/magetools/multisite.sh` to add CLI switches for automatic PHP pool adjustment (enable by default, honor --dry-run/rollback).
+- [x] Implement helper (e.g., `modules/lib/php_pool_helper.py`) that:
+  - [x] Reads Magento store/site counts for a root site.
+  - [x] Calculates new pool weight / children targets (configurable defaults + overrides).
+  - [x] Patches `salt/pillar/magento-optimize.sls` (or auto-detected Pillar) with updated weight and optional metadata.
+  - [x] Emits machine-readable output for logs/notifications.
+- [x] From the multisite script, invoke Salt state (`salt-call --local state.apply core.php`) when pillar update succeeds; capture failures for operator visibility.
+- [x] Log and notify (`/var/log/saltgoat/alerts.log`, `saltgoat/autoscale/<host>`) whenever pool settings change, including old/new values and affected store codes.
+- [x] Document the workflow in README / monitoring playbook, covering new CLI flags and automatic pool adjustment behavior.
+- [x] Add tests (bash/python) covering helper weight calculation and multisite CLI flag parsing.

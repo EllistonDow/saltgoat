@@ -1,6 +1,6 @@
 # Restic 备份模块使用手册
 
-SaltGoat 使用 [Restic](https://restic.net/) 构建文件级快照，支持本地目录、Dropbox 挂载以及 S3/Minio 等远端仓库。`sudo saltgoat magetools backup restic` 模块提供站点级的安装、巡检与恢复命令，同时保留 Salt 状态 `optional.backup-restic` 作为集中化部署的选项。
+SaltGoat 使用 [Restic](https://restic.net/) 构建文件级快照，支持本地目录、Dropbox 挂载以及任意 S3 兼容的远端仓库。`sudo saltgoat magetools backup restic` 模块提供站点级的安装、巡检与恢复命令，同时保留 Salt 状态 `optional.backup-restic` 作为集中化部署的选项。
 
 ---
 

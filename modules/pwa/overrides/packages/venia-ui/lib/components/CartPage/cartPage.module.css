@@ -1,0 +1,82 @@
+.root {
+    composes: max-w-screen-lg from global;
+    composes: mx-auto from global;
+    composes: my-0 from global;
+    composes: px-sm from global;
+    composes: lg_px-lg from global;
+    composes: lg_py-md from global;
+    color: var(--sg-text);
+}
+
+.body {
+    composes: grid from global;
+    composes: gap-md from global;
+    grid-template-columns: 1fr 18rem;
+    grid-template-areas:
+        'items summary'
+        'adjustments summary';
+}
+
+.heading_container {
+    composes: gap-y-xs from global;
+    composes: grid from global;
+    composes: mb-xs from global;
+}
+
+.heading {
+    composes: leading-tight from global;
+    color: var(--sg-text);
+}
+
+.stockStatusMessageContainer {
+    composes: empty_hidden from global;
+}
+
+.panel {
+    background: var(--sg-card-bg);
+    border: 1px solid var(--sg-card-border);
+    border-radius: 32px;
+    padding: clamp(20px, 3vw, 32px);
+    box-shadow: 0 30px 60px var(--sg-tile-shadow);
+    transition: background 0.3s ease, border-color 0.3s ease,
+        box-shadow 0.3s ease;
+}
+
+.items_container {
+    composes: panel;
+    grid-area: items;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(16px, 2vw, 24px);
+}
+
+.price_adjustments_container {
+    composes: panel;
+    grid-area: adjustments;
+}
+
+.summary_container {
+    composes: h-full from global;
+    grid-area: summary;
+}
+
+.summary_contents {
+    composes: sticky from global;
+    composes: panel;
+    composes: top-[5.5rem] from global;
+}
+
+@media screen(-lg) {
+    .body {
+        grid-template-columns: 100%;
+        grid-template-areas:
+            'items'
+            'adjustments'
+            'summary';
+    }
+
+    .summary_contents {
+        position: relative;
+        top: auto;
+    }
+}

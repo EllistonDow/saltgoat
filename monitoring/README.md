@@ -64,6 +64,7 @@ sudo saltgoat monitor config         # 输出当前阈值、目录与已启用�
 - Load：警告 1m≈1.25×CPU 核心、5m≈1.1×核心、15m≈1.0×核心；致命 1m≈1.5×核心等
 - Memory：78% Notice、85% Warning、92% Critical
 - Disk：80% Notice、90% Warning、95% Critical
+- Swap：5% Notice、20% Warning、40% Critical；Critical 时会自动排程 `saltgoat:monitor:swap:autoheal_services` 中列出的服务进行自愈（默认重启 `php8.3-fpm`）
 - PHP-FPM：当工作进程使用率 ≥80% 提示 Notice，≥90% Warning，100% 视为 Critical（同时附带当前/上限详情）
 
 可在 Pillar 中覆盖这些值（支持 `saltgoat:monitor:thresholds` 或旧版 `monitor_thresholds` 路径）：
@@ -80,8 +81,24 @@ saltgoat:
       disk:
         warning: 88
         critical: 94
+      swap:
+        warning: 25
+        critical: 45
 ```
-重新执行 `sudo saltgoat monitor alert resources` 即可生效。告警消息会包含 `Triggered: Load/Memory/Disk` 以及命中阈值的说明。
+重新执行 `sudo saltgoat monitor alert resources` 即可生效。告警消息会包含 `Triggered: Load/Memory/Disk/Swap` 以及命中阈值的说明。
+
+如需自定义高 swap 时要重启的服务（或完全禁用自动重启），可以设置：
+
+```yaml
+saltgoat:
+  monitor:
+    swap:
+      autoheal_services:
+        - php8.3-fpm
+        - varnish
+```
+
+设为 `[]` 即可关闭 swap 自愈操作，但仍会发送告警。
 
 ## 4. 启用事件驱动监控（Beacons + Reactor）
 

@@ -31,6 +31,13 @@ RUN_DEPLOY=0
 
 SALTGOAT_BIN="${SCRIPT_DIR}/saltgoat"
 MONITORING_PILLAR_FILE="${SCRIPT_DIR}/salt/pillar/monitoring.sls"
+PHP_POOL_HELPER="${SCRIPT_DIR}/modules/lib/php_pool_helper.py"
+PHP_POOL_PILLAR="${SCRIPT_DIR}/salt/pillar/magento-optimize.sls"
+ADJUST_PHP_POOL=1
+PHP_POOL_WEIGHT=""
+PHP_POOL_BASE_WEIGHT=1
+PHP_POOL_PER_STORE=1
+PHP_POOL_MAX_WEIGHT=""
 
 usage() {
     cat <<'EOF'
@@ -56,6 +63,12 @@ Magento 多站点自动化
   --ssl-email <email>        指定证书申请邮箱（缺省时尝试从 Pillar 获取）
   --nginx-site <name>        自定义 Nginx 站点标识（默认同 --code）
   --run-deploy               创建完成后执行 Magento 部署流程（静态资源/索引等）
+  --adjust-php-pool          （默认）启用 PHP-FPM 池自动扩容逻辑
+  --no-adjust-php-pool       禁用 PHP-FPM 池自动扩容
+  --php-pool-weight <int>    指定池 weight（跳过自动计算）
+  --php-pool-base-weight <int>  自动计算的最小 weight（默认 1）
+  --php-pool-per-store <int> 每个 Store 叠加的 weight（默认 1）
+  --php-pool-max-weight <int>   weight 上限
   --skip-pillar              (兼容参数) 等同 --skip-nginx
   -h, --help                 显示帮助
 
@@ -164,6 +177,51 @@ while [[ $# -gt 0 ]]; do
         --run-deploy)
             RUN_DEPLOY=1
             shift
+            ;;
+        --adjust-php-pool)
+            ADJUST_PHP_POOL=1
+            shift
+            ;;
+        --no-adjust-php-pool)
+            ADJUST_PHP_POOL=0
+            shift
+            ;;
+        --php-pool-weight)
+            if [[ $# -lt 2 ]]; then
+                log_error "--php-pool-weight 需要一个整数参数"
+                exit 1
+            fi
+            if [[ "$2" =~ ^[0-9]+$ ]]; then
+                PHP_POOL_WEIGHT="$2"
+            else
+                log_error "--php-pool-weight 必须是整数"
+                exit 1
+            fi
+            shift 2
+            ;;
+        --php-pool-base-weight)
+            if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ ]]; then
+                log_error "--php-pool-base-weight 需要整数参数"
+                exit 1
+            fi
+            PHP_POOL_BASE_WEIGHT="$2"
+            shift 2
+            ;;
+        --php-pool-per-store)
+            if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ ]]; then
+                log_error "--php-pool-per-store 需要整数参数"
+                exit 1
+            fi
+            PHP_POOL_PER_STORE="$2"
+            shift 2
+            ;;
+        --php-pool-max-weight)
+            if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ ]]; then
+                log_error "--php-pool-max-weight 需要整数参数"
+                exit 1
+            fi
+            PHP_POOL_MAX_WEIGHT="$2"
+            shift 2
             ;;
         --ssl-email)
             if [[ $# -lt 2 ]]; then
@@ -392,6 +450,60 @@ remove_monitoring_entry() {
         --file "$MONITORING_PILLAR_FILE" \
         --site "$STORE_CODE"
     log_info "监控 Pillar 中已移除站点 ${STORE_CODE}."
+}
+
+apply_php_pool_state() {
+    if (( DRY_RUN )); then
+        log_info "[dry-run] 重新渲染 core.php Salt state。"
+        return
+    fi
+    run_cli_command "重新应用 core.php（PHP-FPM 池）" \
+        sudo salt-call --local state.apply core.php
+}
+
+adjust_php_pool() {
+    local action="$1"
+    if (( ADJUST_PHP_POOL == 0 )); then
+        log_note "已跳过 PHP-FPM 池调整 (--no-adjust-php-pool)。"
+        return
+    fi
+    if [[ ! -x "$PHP_POOL_HELPER" && ! -f "$PHP_POOL_HELPER" ]]; then
+        log_warning "未找到 PHP 池 helper: ${PHP_POOL_HELPER}"
+        return
+    fi
+    if (( DRY_RUN )); then
+        log_info "[dry-run] PHP-FPM 池(${ROOT_SITE}) 将执行 ${action} 调整。"
+        return
+    fi
+    local pool_name="magento-${ROOT_SITE}"
+    local -a cmd=(
+        sudo python3 "$PHP_POOL_HELPER" adjust
+        --site "$ROOT_SITE"
+        --site-root "$MAGENTO_CURRENT"
+        --pool-name "$pool_name"
+        --pillar "$PHP_POOL_PILLAR"
+        --action "$action"
+        --primary-store "$ROOT_SITE"
+    )
+    if [[ -n "$STORE_CODE" ]]; then
+        cmd+=(--store-code "$STORE_CODE")
+    fi
+    if [[ -n "$PHP_POOL_WEIGHT" ]]; then
+        cmd+=(--set-weight "$PHP_POOL_WEIGHT")
+    else
+        cmd+=(--base-weight "$PHP_POOL_BASE_WEIGHT" --per-store "$PHP_POOL_PER_STORE")
+        if [[ -n "$PHP_POOL_MAX_WEIGHT" ]]; then
+            cmd+=(--max-weight "$PHP_POOL_MAX_WEIGHT")
+        fi
+    fi
+    log_info "自动调整 PHP-FPM 池 ${pool_name} (模式: ${action})"
+    local helper_output
+    if ! helper_output="$("${cmd[@]}")"; then
+        log_error "PHP-FPM 池调整失败，请检查日志。"
+        return
+    fi
+    log_info "PHP 池状态: ${helper_output}"
+    apply_php_pool_state
 }
 
 magento_cli() {
@@ -896,6 +1008,7 @@ create_multisite() {
 
     provision_nginx_and_ssl
     update_monitoring_pillar
+    adjust_php_pool "add"
     run_deploy_tasks
 
     if (( DRY_RUN == 0 )); then
@@ -963,6 +1076,7 @@ rollback_multisite() {
 
     cleanup_nginx_site
     remove_monitoring_entry
+    adjust_php_pool "remove"
 
     if (( DRY_RUN == 0 )); then
         log_success "多站点已回滚。"

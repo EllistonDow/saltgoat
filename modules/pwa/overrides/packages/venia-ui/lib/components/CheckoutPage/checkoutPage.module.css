@@ -88,6 +88,7 @@
     background: var(--sg-card-bg);
     border-color: var(--sg-card-border);
     color: var(--sg-text);
+    box-shadow: 0 24px 50px var(--sg-tile-shadow);
 }
 
 .signInLabel {
@@ -136,7 +137,7 @@
     composes: lg_sticky from global;
     /* TODO @TW: review. Magic number. Slightly bigger than sticky header. */
     composes: lg_top-[6rem] from global;
-    background: var(--sg-card-bg);
+    background: transparent;
 }
 
 @media screen(lg) {
@@ -164,8 +165,9 @@
     composes: pr-0 from global;
     composes: py-xs from global;
     grid-column: 1 / span 1;
-    background: rgba(255, 93, 126, 0.08);
-    color: var(--sg-text);
+    background: var(--sg-error-surface);
+    color: var(--sg-error);
+    border-color: var(--sg-error);
 }
 
 .review_order_button {

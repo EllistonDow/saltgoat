@@ -40,7 +40,37 @@
     composes: py-xs from global;
     background: var(--sg-card-bg);
     border-color: var(--sg-card-border);
-    color: var(--sg-text);
+    color: var(--sg-body-text);
+    transition: color 0.2s ease, background 0.2s ease;
+    box-shadow: inset 0 -1px 0 var(--sg-divider-glow);
+    position: relative;
+}
+
+.section::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        var(--sg-divider-glow),
+        transparent
+    );
+    opacity: 0.9;
+}
+
+.section:last-child::after {
+    opacity: 0;
+}
+
+.section p,
+.section span,
+.section li,
+.section small {
+    color: var(--sg-body-text);
 }
 
 .sectionTitle {
@@ -50,7 +80,7 @@
     composes: leading-normal from global;
     composes: mb-sm from global;
     composes: text-colorDefault from global;
-    color: var(--sg-text);
+    color: var(--sg-heading-text);
 }
 
 .title {
@@ -61,8 +91,10 @@
     composes: leading-normal from global;
     @apply py-xs;
     grid-area: title;
-    background: transparent;
-    border-color: rgba(255, 255, 255, 0.05);
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    color: var(--sg-heading-text);
+    box-shadow: 0 12px 30px var(--sg-tile-shadow);
 }
 
 .productName {
@@ -71,13 +103,15 @@
 
     composes: lg_font-normal from global;
     composes: lg_text-xl from global;
-    color: var(--sg-text);
+    color: rgb(var(--sg-text-rgb));
+    letter-spacing: 0.01em;
 }
 
 .productPrice {
     composes: block from global;
     composes: mb-2 from global;
-    color: var(--sg-text);
+    color: var(--sg-metric-accent);
+    font-size: 1.15rem;
 }
 
 .imageCarousel {
@@ -105,8 +139,9 @@
 .quantity {
     composes: section;
     grid-area: quantity;
-    background: transparent;
-    border-color: rgba(255, 255, 255, 0.05);
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    box-shadow: 0 8px 24px var(--sg-tile-shadow);
 }
 
 .quantityTitle {
@@ -121,8 +156,9 @@
     composes: section;
     grid-area: cart;
     composes: lg_border-b-0 from global;
-    background: transparent;
-    border-color: rgba(255, 255, 255, 0.05);
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    box-shadow: 0 12px 30px var(--sg-tile-shadow);
 }
 
 .description {
@@ -135,8 +171,9 @@
     composes: lg_pl-sm from global;
     composes: lg_pr-sm from global;
     composes: lg_self-stretch from global;
-    background: transparent;
-    border-color: rgba(255, 255, 255, 0.05);
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    box-shadow: 0 8px 24px var(--sg-tile-shadow);
 }
 
 .descriptionTitle {
@@ -153,8 +190,9 @@
     composes: lg_pl-sm from global;
     composes: lg_pr-sm from global;
     composes: lg_self-stretch from global;
-    background: transparent;
-    border-color: rgba(255, 255, 255, 0.05);
+    background: var(--sg-card-bg);
+    border-color: var(--sg-card-border);
+    box-shadow: 0 8px 24px var(--sg-tile-shadow);
 }
 
 .detailsPageBuilder {

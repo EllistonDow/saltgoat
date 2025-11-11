@@ -9,6 +9,7 @@
     background: var(--sg-card-bg);
     border-color: var(--sg-card-border);
     color: var(--sg-text);
+    box-shadow: 0 18px 40px var(--sg-tile-shadow);
 }
 
 .done {

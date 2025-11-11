@@ -1,2 +1,0 @@
-include:
-  - optional.mattermost.deploy

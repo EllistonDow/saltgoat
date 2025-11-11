@@ -4,7 +4,7 @@
 backup:
   restic:
     enabled: true
-    repo: "s3:https://minio.example.com/backups/magento"
+    repo: "s3:https://object-store.example.com/backups/magento"
     password: "{{ salt['pillar.get']('secrets.restic.password', 'ChangeMeRestic!') }}"
     paths:
       - /var/www/site1

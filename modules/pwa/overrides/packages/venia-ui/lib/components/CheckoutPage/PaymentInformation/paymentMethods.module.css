@@ -33,5 +33,5 @@
     composes: grid from global;
     composes: gap-2xs from global;
     composes: text-error from global;
-    color: #ff7b99;
+    color: var(--sg-error);
 }

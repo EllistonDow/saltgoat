@@ -88,4 +88,6 @@ magento_pwa:
           MAGENTO_PWA_SHOWCASE_CATEGORY_IDS: "4,5,6"
           # 可选：自定义 Showcase 兜底内容（JSON 字符串，详见 docs/pwa-project-guide.md 4.4）
           # SALTGOAT_PWA_SHOWCASE: '{"hero":{"title":"全新首页"}}'
+          # 控制 Showcase 兜底：auto=CMS 为空时启用，off=禁用（默认 off）
+          # SALTGOAT_PWA_SHOWCASE_FALLBACK: auto
           CHECKOUT_BRAINTREE_TOKEN: sandbox_example_token

@@ -4,7 +4,7 @@
     composes: root from './tile.module.css';
 
     @apply border-shaded-10;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--sg-muted-surface);
     border-color: var(--sg-card-border);
     color: var(--sg-text);
     transition: border-color 0.2s ease, transform 0.2s ease;
@@ -13,9 +13,14 @@
 .root_selected {
     composes: root;
 
-    background: linear-gradient(-45deg, rgba(0, 0, 0, 0.2), transparent),
+    background: linear-gradient(
+            -45deg,
+            var(--sg-swatch-selected-overlay),
+            transparent
+        ),
         var(--venia-swatch-bg);
-    border-color: var(--sg-metric-accent);
+    border-color: transparent;
+    box-shadow: 0 14px 28px var(--sg-tile-shadow);
     transform: translateY(-1px);
 }
 
@@ -25,6 +30,7 @@
 
 .root_selected_focused {
     composes: root_selected;
+    box-shadow: 0 0 0 2px var(--sg-focus-ring), 0 14px 28px var(--sg-tile-shadow);
 }
 
 .checked {
