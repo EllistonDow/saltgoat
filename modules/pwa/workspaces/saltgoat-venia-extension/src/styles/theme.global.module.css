@@ -108,11 +108,11 @@
     --sg-body-text: #d4dcf6;
     --sg-card-bg: rgba(9, 14, 25, 0.85);
     --sg-dropdown-bg: rgba(5, 8, 18, 0.8);
-    --sg-card-border: rgba(255, 255, 255, 0.08);
-    --sg-card-hover-border: rgba(141, 220, 255, 0.6);
+    --sg-card-border: rgba(255, 255, 255, 0.04);
+    --sg-card-hover-border: rgba(141, 220, 255, 0.35);
     --sg-flyout-bg: rgba(5, 8, 18, 0.85);
     --sg-flyout-border: rgba(255, 255, 255, 0.12);
-    --sg-primary: #8ddcff;
+    --sg-primary: #7cc2ff;
     --sg-primary-strong: #4bbdfc;
     --sg-primary-text: #0b1220;
     --sg-secondary-border: rgba(255, 255, 255, 0.3);
@@ -163,7 +163,7 @@
     --sg-input-disabled-bg: rgba(255, 255, 255, 0.04);
     --sg-input-disabled-border: rgba(255, 255, 255, 0.1);
     --sg-swatch-selected-overlay: rgba(255, 255, 255, 0.2);
-    --sg-divider-glow: rgba(115, 187, 255, 0.65);
+    --sg-divider-glow: rgba(115, 187, 255, 0.35);
     --sg-accent-soft: rgba(150, 205, 255, 0.9);
     --venia-global-color-background: var(--sg-page-bg);
     --venia-global-color-text: var(--sg-text-rgb);
@@ -345,4 +345,18 @@
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
+}
+:global(.quantityStepperRoot) .button {
+    color: var(--sg-text);
+    border-color: var(--sg-card-border);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+:global(body.sg-theme-dark .quantityStepperRoot) .button {
+    color: var(--sg-subtext);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(body.sg-theme-dark .quantityStepperRoot) .button svg {
+    stroke: rgba(255, 255, 255, 0.7);
 }

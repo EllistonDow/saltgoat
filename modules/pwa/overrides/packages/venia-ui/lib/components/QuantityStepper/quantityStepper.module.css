@@ -34,7 +34,6 @@
     color: var(--sg-text);
     border-color: var(--sg-card-border);
     transition: border-color 0.2s ease, color 0.2s ease;
-
     composes: disabled_cursor-not-allowed from global;
 }
 
@@ -55,6 +54,23 @@
 
 .button_increment {
     composes: button;
+}
+
+:global(body[data-theme='dark']) :local(.button),
+:global(body.sg-theme-dark) :local(.button),
+:global(:root[data-theme='dark']) :local(.button),
+:global(:root.sg-theme-dark) :local(.button) {
+    --stroke: rgba(212, 220, 246, 0.75);
+    color: var(--sg-text);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+:global(body[data-theme='dark']) :local(.button:hover),
+:global(body.sg-theme-dark) :local(.button:hover),
+:global(:root[data-theme='dark']) :local(.button:hover),
+:global(:root.sg-theme-dark) :local(.button:hover) {
+    --stroke: rgba(255, 255, 255, 0.9);
+    border-color: var(--sg-primary);
 }
 
 .icon {

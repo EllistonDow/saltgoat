@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.13] - 2025-11-12
+
+### Changes
+- 修改 3 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/ProductFullDetail/productFullDetail.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/QuantityStepper/quantityStepper.module.css, modules/pwa/workspaces/saltgoat-venia-extension/src/styles/theme.global.module.css
+
+
 ## [1.6.12] - 2025-11-12
 
 ### Changes
