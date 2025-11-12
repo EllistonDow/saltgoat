@@ -1,0 +1,29 @@
+.root {
+    composes: flex from global;
+    composes: flex-col from global;
+    composes: gap-y-sm from global;
+    padding: clamp(12px, 2vw, 24px);
+    background: var(--sg-muted-surface);
+    border-radius: 24px;
+}
+
+.tree {
+    composes: flex from global;
+    composes: flex-col from global;
+    composes: gap-y-xs from global;
+}
+
+.branch {
+    composes: px-sm from global;
+    composes: py-xs from global;
+    border-left: 2px solid var(--sg-divider-glow);
+}
+
+.leaf {
+    composes: w-full from global;
+}
+
+.inactive {
+    composes: fixed from global;
+    composes: invisible from global;
+}

@@ -1,0 +1,47 @@
+.root {
+    composes: grid from global;
+    composes: gap-y-lg from global;
+    composes: px-sm from global;
+    composes: py-lg from global;
+    background: var(--sg-page-bg);
+    color: var(--sg-text);
+}
+
+.header {
+    composes: text-center from global;
+    composes: flex from global;
+    composes: flex-col from global;
+    composes: gap-y-2xs from global;
+}
+
+.title {
+    font-family: var(--sg-font-heading);
+    font-size: clamp(1.3rem, 2.2vw, 1.8rem);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sg-heading-text);
+}
+
+.content {
+    composes: grid from global;
+    composes: gap-4 from global;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.categoryCard {
+    composes: flex from global;
+    composes: flex-col from global;
+    composes: gap-y-1 from global;
+    padding: 18px;
+    border-radius: 20px;
+    border: 1px solid var(--sg-card-border);
+    background: var(--sg-card-bg);
+    box-shadow: 0 16px 36px var(--sg-tile-shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    color: var(--sg-text);
+}
+
+.categoryCard:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 24px 44px var(--sg-tile-shadow);
+}

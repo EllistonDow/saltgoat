@@ -1,0 +1,35 @@
+.root {
+    composes: flex from global;
+    composes: items-center from global;
+    composes: mx-sm from global;
+    composes: my-xs from global;
+    border-radius: 18px;
+    border: 1px solid var(--sg-card-border);
+    background: var(--sg-card-bg);
+    box-shadow: 0 14px 30px var(--sg-tile-shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.root:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 18px 40px var(--sg-tile-shadow);
+}
+
+.target {
+    composes: flex from global;
+    composes: flex-auto from global;
+    composes: justify-between from global;
+    composes: h-[3.5rem] from global;
+    composes: items-center from global;
+    composes: px-md from global;
+    composes: w-full from global;
+    color: var(--sg-text);
+}
+
+.text {
+    composes: inline-block from global;
+    composes: overflow-hidden from global;
+    composes: text-ellipsis from global;
+    composes: whitespace-nowrap from global;
+    font-weight: 600;
+}
