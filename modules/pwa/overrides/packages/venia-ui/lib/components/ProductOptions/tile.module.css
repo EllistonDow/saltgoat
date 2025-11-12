@@ -20,13 +20,13 @@
     composes: root;
     background: linear-gradient(
         135deg,
-        var(--sg-primary),
-        var(--sg-primary-strong)
+        rgba(31, 107, 255, 0.15),
+        rgba(78, 125, 255, 0.3)
     );
-    color: var(--sg-primary-text);
-    border-color: transparent;
-    box-shadow: 0 18px 32px var(--sg-tile-shadow);
-    transform: translateY(-1px);
+    color: var(--sg-primary);
+    border-color: var(--sg-primary);
+    box-shadow: 0 20px 36px var(--sg-tile-shadow);
+    transform: translateY(-2px);
 }
 
 .root_focused {
@@ -36,7 +36,7 @@
 
 .root_selected_focused {
     composes: root_selected;
-    box-shadow: 0 0 0 2px var(--sg-focus-ring), 0 18px 32px var(--sg-tile-shadow);
+    box-shadow: 0 0 0 2px var(--sg-focus-ring), 0 20px 36px var(--sg-tile-shadow);
 }
 
 .root_outOfStock,

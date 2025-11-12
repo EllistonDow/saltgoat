@@ -14,23 +14,25 @@
     composes: root;
 
     background: linear-gradient(
-            -45deg,
-            var(--sg-swatch-selected-overlay),
-            transparent
+            135deg,
+            rgba(255, 255, 255, 0.1),
+            rgba(0, 0, 0, 0.05)
         ),
         var(--venia-swatch-bg);
-    border-color: transparent;
-    box-shadow: 0 14px 28px var(--sg-tile-shadow);
-    transform: translateY(-1px);
+    border-color: var(--sg-primary);
+    color: var(--sg-primary);
+    box-shadow: 0 20px 40px var(--sg-tile-shadow);
+    transform: translateY(-2px);
 }
 
 .root_focused {
     composes: root;
+    border-color: var(--sg-primary);
 }
 
 .root_selected_focused {
     composes: root_selected;
-    box-shadow: 0 0 0 2px var(--sg-focus-ring), 0 14px 28px var(--sg-tile-shadow);
+    box-shadow: 0 0 0 2px var(--sg-focus-ring), 0 20px 40px var(--sg-tile-shadow);
 }
 
 .checked {

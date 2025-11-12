@@ -24,11 +24,11 @@
     composes: leading-normal from global;
     composes: mt-xs from global;
     composes: text-colorDefault from global;
-    color: var(--sg-accent-soft);
+    color: #7dd3fc;
 }
 
 .selectionLabel {
     composes: mr-xs from global;
-    color: var(--sg-accent-soft) !important;
+    color: #38bdf8 !important;
     font-weight: 500;
 }
