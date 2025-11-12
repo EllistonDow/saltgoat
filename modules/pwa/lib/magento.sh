@@ -276,15 +276,32 @@ magento_cli() {
     sudo -u www-data -H bash -lc "cd '$PWA_ROOT' && $rendered"
 }
 
-magento_apply_cms_page_php() {
+apply_cms_template_page() {
     local template_file="$1"
     local identifier="$2"
     local title="$3"
+    local stores="${4:-${PWA_HOME_STORE_IDS:-0}}"
     if [[ ! -f "$template_file" ]]; then
         log_warning "CMS 模板不存在: ${template_file}"
         return 1
     fi
-    sudo -u www-data -H php "$template_file" "$identifier" "$title"
+    local helper="${SCRIPT_DIR}/modules/pwa/lib/cms_apply_page.php"
+    if [[ ! -f "$helper" ]]; then
+        log_warning "缺少 CMS 同步脚本: ${helper}"
+        return 1
+    fi
+    local cmd=(
+        php "$helper"
+        --magento-root "$PWA_ROOT"
+        --identifier "$identifier"
+        --title "$title"
+        --template "$template_file"
+        --stores "$stores"
+    )
+    if is_true "${PWA_HOME_FORCE_TEMPLATE:-true}"; then
+        cmd+=(--force)
+    fi
+    sudo -u www-data -H "${cmd[@]}"
 }
 
 cms_page_exists() {
@@ -301,12 +318,17 @@ ensure_pwa_home_cms_page() {
     fi
     local identifier
     identifier="$(read_pwa_env_value "MAGENTO_PWA_HOME_IDENTIFIER" 2>/dev/null || echo "home")"
-    if cms_page_exists "$identifier"; then
-        log_info "CMS 页面 (${identifier}) 已存在，跳过。"
-        return
+    local stores="${PWA_HOME_STORE_IDS:-0}"
+    local page_title="${PWA_HOME_TITLE:-PWA Home}"
+    log_info "同步 CMS 页面 (${identifier})"
+    if output=$(apply_cms_template_page "$template" "$identifier" "$page_title" "$stores" 2>&1); then
+        log_info "CMS 页面 (${identifier}) 状态: ${output}"
+        if [[ "$output" != "unchanged" ]]; then
+            magento_clear_cms_cache
+        fi
+    else
+        log_warning "CMS 页面同步失败: ${output}"
     fi
-    log_info "创建 CMS 页面 (${identifier})"
-    magento_apply_cms_page_php "$template" "$identifier" "PWA Home"
 }
 
 magento_clear_cms_cache() {

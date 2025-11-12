@@ -25,6 +25,7 @@
 - 读取 `salt/pillar/magento-pwa.sls` 中的 `<site>` 配置，安装 Magento 基础、初始化数据库与管理员账号。
 - 依据 Pillar 或 `--with-pwa` 开关决定是否部署 PWA Studio。
 - 自动套用 overrides、生成 `.env`、构建前端并创建 `pwa-frontend-<site>.service`（默认使用 `yarn workspace @magento/venia-concept run start` 以 `NODE_ENV=production` 模式运行 Buildpack 服务器，可在 Pillar `pwa_studio.serve_command` 覆盖）。
+- Node.js 安装来源由 `node.provider` 控制：`nodesource`（默认，使用 NodeSource 脚本拉取指定主版本）或 `system`（直接安装发行版 `nodejs`/`npm`，无需 `curl | bash`），可按安全策略灵活切换。
 
 ### 3.2 `saltgoat pwa status <site> [--json] [--check] [--no-graphql] [--no-react]`
 - 汇总站点目录、PWA Studio 目录/环境文件是否存在，并检测 systemd 服务状态。
@@ -38,6 +39,7 @@
 - `--rebuild`：在环境变量齐全时执行 `yarn install` + `yarn build`。
 - `--skip-cms`：跳过 `pwa_home` 模板写入，避免覆盖运营在后台的临时改动；仅同步前端代码与 systemd 服务。
 - 后续接入 Page Builder 模板同步逻辑时，也会在此命令中处理。
+- 若 `pwa_studio.enable=false`（或 `saltgoat pwa install <site> --no-pwa`），该命令会直接返回并提示未启用 PWA Studio。
 
 ### 3.4 `saltgoat pwa remove <site> [--purge]`
 - 停止并禁用 `pwa-frontend-<site>.service`，删除 systemd 单元文件。
@@ -97,13 +99,14 @@
 ### 4.3 与 CLI 的协作
 - `saltgoat pwa install/sync-content` 会保证 `.env` 内含 `MAGENTO_PWA_HOME_IDENTIFIER`，默认写入 `home`。若 Pillar `cms.home.identifier` 提供值（如 `pwa_home`），脚本会自动写入该标识；如需覆盖，也可在 `env_overrides` 中显式设置。
 - 自定义组件统一放在 `@saltgoat/venia-extension` Workspace（模板位于 `modules/pwa/workspaces/saltgoat-venia-extension`），同步时会自动写入 `packages/saltgoat-venia-extension` 并在 intercept 中引用，避免直接改动官方源码。
-- 当 `MAGENTO_PWA_HOME_IDENTIFIER` ≠ `home` 且数据库中不存在对应 CMS 页面时，脚本会自动通过 `bin/magento cms:page:create` 创建一个启用状态的占位页面（Store ID=0，布局 `1column`），并提醒运营在 Page Builder 中编辑内容。
+- 当 `MAGENTO_PWA_HOME_IDENTIFIER` ≠ `home` 且数据库中不存在对应 CMS 页面时，脚本会自动通过 Magento Bootstrap 创建一个启用状态的占位页面（Store ID=0，布局 `1column`），并提醒运营在 Page Builder 中编辑内容。
 - 若 `modules/pwa/templates/cms/<identifier>.html` 存在（例如默认提供的 `pwa_home.html`），安装或同步时会自动将其内容下发到页面；也可在 Pillar `cms.home.template` 指向自定义 HTML。
+- Pillar 可通过 `cms.home.force_template` 控制是否在每次 `install/sync-content` 时强制重写页面内容（默认 `true`，可在运营需要手动维护时改为 `false`，或在执行命令时使用 `--skip-cms`）。
 - 后续计划：
   - 追加 `modules/pwa/templates/` 中的 Page Builder JSON 作为示例，必要时自动覆盖默认内容。
 
 ### 4.4 Showcase 兜底配置
-- 首页默认只渲染 CMS 内容；若需要在 CMS 页面缺失或为空时回退到 `Showcase` 组件（`modules/pwa/workspaces/saltgoat-venia-extension/src/components/HomeContent/Showcase.js`），请在 PWA `.env` 中设置 `SALTGOAT_PWA_SHOWCASE_FALLBACK=auto`。默认值 `off` 会完全禁用兜底，避免与自定义首页同时渲染。
+- 首页默认只渲染 CMS 内容；若需要在 CMS 页面缺失或为空时回退到 `Showcase` 组件（`modules/pwa/workspaces/saltgoat-venia-extension/src/components/HomeContent/Showcase.js`），请在 PWA `.env` 中设置 `SALTGOAT_PWA_SHOWCASE_FALLBACK=auto`。脚本现在会在缺省情况下写入 `auto`，确保首屏不会出现空白；若明确不需要兜底，可在 Pillar `env_overrides` 或 `.env` 中改为 `off`。
 - 可以在 `pwa_studio.env_overrides` 追加：
   ```yaml
   pwa_studio:

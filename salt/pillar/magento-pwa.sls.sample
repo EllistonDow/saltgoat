@@ -52,6 +52,7 @@ magento_pwa:
         ensure: true
         version: "18"
         install_yarn: true
+        provider: nodesource
 
     services:
       install_cron: true
@@ -65,6 +66,7 @@ magento_pwa:
         store_ids:
           - 0
         template: modules/pwa/templates/cms/pwa_home.html
+        force_template: true
 
     pwa_studio:
       enable: false

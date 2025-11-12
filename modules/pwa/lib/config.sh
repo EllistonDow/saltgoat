@@ -85,6 +85,7 @@ prepare_pwa_env() {
     ensure_env_default "$env_file" "MAGENTO_EXPERIENCE_PLATFORM_ENABLED" "false"
     ensure_env_default "$env_file" "MAGENTO_LIVE_SEARCH_ENABLED" "false"
     ensure_env_default "$env_file" "MAGENTO_PWA_HOME_IDENTIFIER" "home"
+    ensure_env_default "$env_file" "SALTGOAT_PWA_SHOWCASE_FALLBACK" "auto"
 
     local root_env="${PWA_STUDIO_DIR%/}/.env"
     local venia_env="${PWA_STUDIO_DIR%/}/packages/venia-concept/.env"
@@ -139,3 +140,6 @@ resolve_home_template_file() {
 # 这些变量由主 CLI 与其他 lib 读取，使用“空操作”保持 ShellCheck 安静
 : "${PWA_WITH_FRONTEND:-}"
 : "${PWA_HOME_TEMPLATE_WARNING:-}"
+: "${PWA_HOME_FORCE_TEMPLATE:-}"
+: "${PWA_HOME_STORE_IDS:-}"
+: "${PWA_NODE_PROVIDER:-}"

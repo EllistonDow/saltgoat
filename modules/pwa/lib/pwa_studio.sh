@@ -21,14 +21,7 @@ ensure_node_yarn() {
     fi
 
     if [[ "$need_node" == "true" ]]; then
-        log_info "安装/升级 Node.js 到 $desired.x ..."
-        if ! command_exists curl; then
-            log_info "安装 curl ..."
-            apt-get update
-            apt-get install -y curl
-        fi
-        curl -fsSL "https://deb.nodesource.com/setup_${desired}.x" | bash -
-        apt-get install -y nodejs
+        install_node_runtime "$desired"
     else
         log_success "Node.js 版本满足要求 ($(node --version))"
     fi
@@ -41,6 +34,40 @@ ensure_node_yarn() {
             npm install -g yarn
         fi
     fi
+}
+
+install_node_runtime() {
+    local desired_major="$1"
+    local provider="${PWA_NODE_PROVIDER:-nodesource}"
+    log_info "安装/升级 Node.js (${provider})..."
+    case "$provider" in
+        nodesource)
+            install_node_via_nodesource "$desired_major"
+            ;;
+        system|distro)
+            install_node_via_system
+            ;;
+        *)
+            log_warning "未知的 node.provider=${provider}，默认使用 nodesource。"
+            install_node_via_nodesource "$desired_major"
+            ;;
+    esac
+}
+
+install_node_via_nodesource() {
+    local desired_major="$1"
+    if ! command_exists curl; then
+        log_info "安装 curl ..."
+        DEBIAN_FRONTEND=noninteractive apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates
+    fi
+    curl -fsSL "https://deb.nodesource.com/setup_${desired_major}.x" | bash -
+    DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+}
+
+install_node_via_system() {
+    DEBIAN_FRONTEND=noninteractive apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs npm
 }
 
 ensure_git() {
@@ -222,6 +249,18 @@ apply_mos_graphql_fixes() {
         sudo -u www-data -H python3 "$PWA_HELPER" sanitize-payment --file "$payment_info" >/dev/null
     fi
 
+    local checkout_fragment
+    checkout_fragment="${PWA_STUDIO_DIR%/}/packages/peregrine/lib/talons/CheckoutPage/checkoutPage.gql.js"
+    if [[ -f "$checkout_fragment" ]]; then
+        sudo -u www-data -H python3 "$PWA_HELPER" sanitize-checkout --file "$checkout_fragment" >/dev/null
+    fi
+
+    local venia_checkout_fragment
+    venia_checkout_fragment="${PWA_STUDIO_DIR%/}/packages/venia-ui/lib/components/CheckoutPage/checkoutPage.gql.js"
+    if [[ -f "$venia_checkout_fragment" ]]; then
+        sudo -u www-data -H python3 "$PWA_HELPER" sanitize-checkout --file "$venia_checkout_fragment" >/dev/null
+    fi
+
     local order_history_files
     order_history_files=$(sudo -u www-data -H find "${PWA_STUDIO_DIR%/}/packages" -name 'orderHistoryPage.gql.js' -print0 2>/dev/null || true)
     if [[ -n "$order_history_files" ]]; then
@@ -293,7 +332,11 @@ prepare_yarn_environment() {
     local npm_cache="$cache_dir/npm"
     local npx_cache="$cache_dir/npx"
     sudo -u www-data -H mkdir -p "$cache_dir" "$yarn_cache" "$yarn_global" "$npm_cache" "$npx_cache"
-    chown -R www-data:www-data "$workdir"
+    for path in "$yarn_cache" "$yarn_global" "$npm_cache" "$npx_cache"; do
+        if [[ -d "$path" ]]; then
+            chown -R www-data:www-data "$path"
+        fi
+    done
 }
 
 ensure_inotify_limits() {
@@ -337,6 +380,10 @@ run_yarn_task() {
 }
 
 build_pwa_frontend() {
+    if ! is_true "${PWA_WITH_FRONTEND:-false}"; then
+        log_info "PWA Studio 未启用，跳过构建。"
+        return 0
+    fi
     sync_pwa_overrides
     log_highlight "构建 PWA Studio ..."
     run_yarn_task "${PWA_STUDIO_INSTALL_COMMAND:-yarn install}"
@@ -345,6 +392,10 @@ build_pwa_frontend() {
 }
 
 ensure_pwa_service() {
+    if ! is_true "${PWA_WITH_FRONTEND:-false}"; then
+        log_info "PWA Studio 未启用，跳过 systemd 服务配置。"
+        return 0
+    fi
     local service_unit
     service_unit="$(pwa_service_unit)"
 

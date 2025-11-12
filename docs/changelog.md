@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.6] - 2025-11-12
+
+### Changes
+- 修改 11 个文件: docs/pwa-project-guide.md, modules/lib/pwa_helpers.py, modules/pwa/install.sh, modules/pwa/lib/cms_apply_page.php, modules/pwa/lib/config.sh 等
+
+
 ## [1.6.5] - 2025-11-12
 
 ### Changes

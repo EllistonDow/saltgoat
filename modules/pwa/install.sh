@@ -107,8 +107,12 @@ install_site() {
     install_cron_if_needed
     configure_valkey_if_needed
     configure_rabbitmq_if_needed
-    build_pwa_frontend
-    ensure_pwa_service
+    if is_true "${PWA_WITH_FRONTEND:-false}"; then
+        build_pwa_frontend
+        ensure_pwa_service
+    else
+        log_info "当前站点未启用 PWA Studio，跳过前端构建与服务创建。"
+    fi
     summarize_install
 }
 
@@ -119,8 +123,9 @@ sync_site_content() {
     local skip_cms="$4"
     load_site_config "$site"
 
-    if ! is_true "${PWA_WITH_FRONTEND:-false}" && ! is_true "${PWA_STUDIO_ENABLE:-false}"; then
-        log_warning "Pillar 未启用 PWA Studio，但仍尝试同步。"
+    if ! is_true "${PWA_WITH_FRONTEND:-false}"; then
+        log_warning "该站点 Pillar 未启用 PWA Studio，同步流程已跳过。"
+        return 0
     fi
     if [[ ! -d "$PWA_STUDIO_DIR" ]]; then
         if is_true "$do_pull"; then
@@ -129,9 +134,6 @@ sync_site_content() {
             log_warning "未检测到 PWA Studio 目录: ${PWA_STUDIO_DIR}，建议添加 --pull 重新获取仓库。"
         fi
     fi
-
-    local previous_flag="${PWA_WITH_FRONTEND:-false}"
-    PWA_WITH_FRONTEND="true"
 
     if is_true "$do_pull"; then
         prepare_pwa_repo
@@ -167,8 +169,6 @@ sync_site_content() {
     else
         log_warning "同步已结束，但 PWA Studio 目录仍不存在，请检查配置或使用 --pull 重新获取。"
     fi
-
-    PWA_WITH_FRONTEND="$previous_flag"
 }
 
 remove_site() {

@@ -964,6 +964,7 @@ def cmd_load_config(args: argparse.Namespace) -> int:
     emit("PWA_ENSURE_NODE", node_cfg.get("ensure", True))
     emit("PWA_NODE_VERSION", node_cfg.get("version", "18"))
     emit("PWA_INSTALL_YARN", node_cfg.get("install_yarn", True))
+    emit("PWA_NODE_PROVIDER", node_cfg.get("provider", "nodesource"))
 
     services = cfg.get("services") or {}
     emit("PWA_INSTALL_CRON", services.get("install_cron", True))
@@ -1007,6 +1008,7 @@ def cmd_load_config(args: argparse.Namespace) -> int:
     emit("PWA_HOME_TEMPLATE", cms_cfg.get("template", ""))
     emit("PWA_HOME_STORE_IDS", ",".join(normalize_store_ids(cms_cfg.get("store_ids"))))
     emit("PWA_HOME_IDENTIFIER", cms_cfg.get("identifier", ""))
+    emit("PWA_HOME_FORCE_TEMPLATE", cms_cfg.get("force_template", True))
     return 0
 
 
