@@ -15,8 +15,10 @@
 
     background: var(--sg-header-bg) !important;
     color: var(--sg-header-text) !important;
-    border-bottom: none !important;
-    box-shadow: 0 1px 0 var(--sg-header-border);
+    border-bottom: 1px solid var(--sg-header-border) !important;
+    box-shadow: 0 30px 60px var(--sg-hero-shadow);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
 }
 
 .switchers {
