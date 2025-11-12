@@ -978,6 +978,13 @@ def cmd_load_config(args: argparse.Namespace) -> int:
     emit("PWA_STUDIO_DIR", target_dir)
     emit("PWA_STUDIO_INSTALL_COMMAND", pwa_studio.get("yarn_command", "yarn install"))
     emit("PWA_STUDIO_BUILD_COMMAND", pwa_studio.get("build_command", "yarn build"))
+    emit(
+        "PWA_STUDIO_SERVE_COMMAND",
+        pwa_studio.get(
+            "serve_command",
+            "/usr/bin/env yarn workspace @magento/venia-concept run start",
+        ),
+    )
     emit("PWA_STUDIO_ENV_TEMPLATE", pwa_studio.get("env_template", "packages/venia-concept/.env.dist"))
     env_file_default = pwa_studio.get("env_file", f"{target_dir}/.env")
     emit("PWA_STUDIO_ENV_FILE", env_file_default)

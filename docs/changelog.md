@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.4] - 2025-11-12
+
+### Changes
+- 修改 8 个文件: docs/pwa-project-guide.md, modules/lib/pwa_helpers.py, modules/pwa/lib/pwa_studio.sh, modules/pwa/lib/status.sh, modules/pwa/overrides/packages/peregrine/lib/talons/CheckoutPage/useCheckoutPage.js 等
+
+
 ## [1.6.3] - 2025-11-11
 
 ### Changes

@@ -114,7 +114,7 @@
 .secondaryActions svg,
 .secondaryActions svg * {
     stroke: currentColor !important;
-    fill: currentColor !important;
+    fill: none !important;
 }
 
 .searchFallback {

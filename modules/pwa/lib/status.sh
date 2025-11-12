@@ -1,5 +1,32 @@
 #!/bin/bash
 
+STATUS_LAST_EXIT_CODE=0
+
+status_calculate_exit_code() {
+    local code=0
+    if [[ "$STATUS_SERVICE_EXISTS" != "yes" ]]; then
+        code=1
+    elif [[ "$STATUS_SERVICE_ACTIVE" != "active" ]]; then
+        code=1
+    fi
+    if [[ "$STATUS_PWA_DIR_EXISTS" != "present" ]]; then
+        code=1
+    fi
+    if [[ "$STATUS_ENV_EXISTS" != "present" ]]; then
+        code=1
+    fi
+    if [[ "$PORT_CHECK_STATUS" != "ok" ]]; then
+        code=1
+    fi
+    if [[ "$GRAPHQL_CHECK_STATUS" == "error" ]]; then
+        code=1
+    fi
+    if [[ "$REACT_CHECK_STATUS" != "ok" && "$REACT_CHECK_STATUS" != "skipped" ]]; then
+        code=1
+    fi
+    STATUS_LAST_EXIT_CODE="$code"
+}
+
 collect_status_data() {
     local site="$1"
     local run_graphql="${2:-true}"
@@ -101,10 +128,11 @@ collect_status_data() {
 }
 JSON
 )
+
+    status_calculate_exit_code
 }
 
 print_status_text() {
-    collect_status_data "$1"
     echo "PWA Site: $STATUS_SITE_NAME"
     echo "Magento Root: $STATUS_MAGENTO_ROOT"
     echo "PWA Studio: $STATUS_PWA_STUDIO_DIR ($STATUS_PWA_DIR_EXISTS)"
@@ -121,15 +149,29 @@ print_status_text() {
 }
 
 doctor_site() {
-    collect_status_data "$1"
-    print_status_text "$1"
+    local site="$1"
+    local run_graphql="${2:-true}"
+    local run_react="${3:-true}"
+    collect_status_data "$site" "$run_graphql" "$run_react"
+    print_status_text
 }
 
 status_site() {
-    collect_status_data "$1"
-    if [[ "$2" == "--json" ]]; then
+    local site="$1"
+    local json_flag="${2:-false}"
+    local do_check="${3:-false}"
+    local run_graphql="${4:-true}"
+    local run_react="${5:-true}"
+
+    collect_status_data "$site" "$run_graphql" "$run_react"
+
+    if is_true "$json_flag"; then
         echo "$STATUS_JSON_OUTPUT"
     else
-        print_status_text "$1"
+        print_status_text
     fi
+    if is_true "$do_check"; then
+        return "$STATUS_LAST_EXIT_CODE"
+    fi
+    return 0
 }

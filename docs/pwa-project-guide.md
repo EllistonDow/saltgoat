@@ -24,7 +24,7 @@
 ### 3.1 `saltgoat pwa install <site> [--with-pwa|--no-pwa]`
 - 读取 `salt/pillar/magento-pwa.sls` 中的 `<site>` 配置，安装 Magento 基础、初始化数据库与管理员账号。
 - 依据 Pillar 或 `--with-pwa` 开关决定是否部署 PWA Studio。
-- 自动套用 overrides、生成 `.env`、构建前端并创建 `pwa-frontend-<site>.service`。
+- 自动套用 overrides、生成 `.env`、构建前端并创建 `pwa-frontend-<site>.service`（默认使用 `yarn workspace @magento/venia-concept run start` 以 `NODE_ENV=production` 模式运行 Buildpack 服务器，可在 Pillar `pwa_studio.serve_command` 覆盖）。
 
 ### 3.2 `saltgoat pwa status <site> [--json] [--check] [--no-graphql] [--no-react]`
 - 汇总站点目录、PWA Studio 目录/环境文件是否存在，并检测 systemd 服务状态。

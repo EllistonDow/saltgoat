@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { shape, string, bool, func } from 'prop-types';
 import { useIntl } from 'react-intl';
 
@@ -10,6 +10,18 @@ import Radio from '@magento/venia-ui/lib/components/RadioGroup/radio';
 import defaultClasses from './paymentMethods.module.css';
 import payments from './paymentMethodCollection';
 import GenericPaymentMethod from '@saltgoat/venia-extension/src/components/Payments/Generic';
+
+const normalizeDisabledCodes = () => {
+    const raw =
+        process.env.SALTGOAT_PWA_DISABLED_PAYMENTS ||
+        process.env.NEXT_PUBLIC_SALTGOAT_DISABLED_PAYMENTS ||
+        '';
+    return raw
+        .split(',')
+        .map(code => code.trim())
+        .filter(Boolean)
+        .map(code => code.toLowerCase());
+};
 
 const PaymentMethods = props => {
     const {
@@ -34,23 +46,64 @@ const PaymentMethods = props => {
         isLoading
     } = talonProps;
 
+    const disabledCodes = useMemo(
+        () => normalizeDisabledCodes(),
+        []
+    );
+
+    const filteredPaymentMethods = useMemo(() => {
+        if (!disabledCodes.length) {
+            return availablePaymentMethods;
+        }
+        return availablePaymentMethods.filter(({ code }) => {
+            if (!code) {
+                return true;
+            }
+            return !disabledCodes.includes(code.toLowerCase());
+        });
+    }, [availablePaymentMethods, disabledCodes]);
+
     if (isLoading) {
         return null;
     }
 
+    const resolvedInitialMethod = useMemo(() => {
+        if (
+            currentSelectedPaymentMethod &&
+            filteredPaymentMethods.some(
+                method => method.code === currentSelectedPaymentMethod
+            )
+        ) {
+            return currentSelectedPaymentMethod;
+        }
+        if (
+            initialSelectedMethod &&
+            filteredPaymentMethods.some(
+                method => method.code === initialSelectedMethod
+            )
+        ) {
+            return initialSelectedMethod;
+        }
+        return filteredPaymentMethods[0]?.code || null;
+    }, [
+        currentSelectedPaymentMethod,
+        filteredPaymentMethods,
+        initialSelectedMethod
+    ]);
+
     useEffect(() => {
-        if (!currentSelectedPaymentMethod && initialSelectedMethod) {
+        if (!currentSelectedPaymentMethod && resolvedInitialMethod) {
             handlePaymentMethodSelection({
-                target: { value: initialSelectedMethod }
+                target: { value: resolvedInitialMethod }
             });
         }
     }, [
         currentSelectedPaymentMethod,
-        initialSelectedMethod,
+        resolvedInitialMethod,
         handlePaymentMethodSelection
     ]);
 
-    const radios = availablePaymentMethods
+    const radios = filteredPaymentMethods
         .map(({ code, title }) => {
             const id = `paymentMethod--${code}`;
             const isSelected = currentSelectedPaymentMethod === code;

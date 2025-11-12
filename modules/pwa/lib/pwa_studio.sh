@@ -339,8 +339,9 @@ run_yarn_task() {
 build_pwa_frontend() {
     sync_pwa_overrides
     log_highlight "构建 PWA Studio ..."
-    run_yarn_task "yarn install"
-    run_yarn_task "yarn build"
+    run_yarn_task "${PWA_STUDIO_INSTALL_COMMAND:-yarn install}"
+    run_yarn_task "${PWA_STUDIO_BUILD_COMMAND:-yarn build}"
+    log_success "PWA build 完成，产物位于 packages/venia-concept/dist"
 }
 
 ensure_pwa_service() {
@@ -350,7 +351,8 @@ ensure_pwa_service() {
     local port="${PWA_STUDIO_PORT:-$DEFAULT_PWA_PORT}"
     local host="${PWA_STUDIO_BIND:-0.0.0.0}"
     local node_env="${PWA_NODE_ENV:-production}"
-    local serve_cmd="/usr/bin/yarn workspace @magento/venia-concept run start"
+    local venia_pkg_dir="${PWA_STUDIO_DIR%/}"
+    local serve_cmd="${PWA_STUDIO_SERVE_COMMAND:-/usr/bin/env yarn workspace @magento/venia-concept run start}"
 
     cat <<SERVICE >/etc/systemd/system/"${service_unit}"
 [Unit]
@@ -360,10 +362,11 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=${PWA_STUDIO_DIR}
+WorkingDirectory=${venia_pkg_dir}
 Environment=NODE_ENV=${node_env}
 Environment=PORT=${port}
 Environment=HOST=${host}
+Environment=HOME=${PWA_STUDIO_DIR}
 ExecStart=${serve_cmd}
 Restart=always
 RestartSec=5

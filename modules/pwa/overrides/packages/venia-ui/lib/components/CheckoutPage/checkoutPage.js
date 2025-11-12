@@ -5,6 +5,8 @@ import { AlertCircle as AlertCircleIcon } from 'react-feather';
 import { Link, useHistory } from 'react-router-dom';
 
 import { useWindowSize, useToasts } from '@magento/peregrine';
+import { useTypePolicies } from '@magento/peregrine/lib/hooks/useTypePolicies';
+import BrowserPersistence from '@magento/peregrine/lib/util/simplePersistence';
 import {
     CHECKOUT_STEP,
     useCheckoutPage
@@ -33,10 +35,50 @@ import ScrollAnchor from '../ScrollAnchor/scrollAnchor';
 
 const errorIcon = <Icon src={AlertCircleIcon} size={20} />;
 
+const mergeCartItemPrices = {
+    merge(existing = {}, incoming = {}) {
+        return { ...existing, ...incoming };
+    }
+};
+
+const CART_ITEM_PRICE_POLICIES = {
+    CartItemInterface: {
+        fields: {
+            prices: mergeCartItemPrices
+        }
+    },
+    SimpleCartItem: {
+        fields: {
+            prices: mergeCartItemPrices
+        }
+    },
+    ConfigurableCartItem: {
+        fields: {
+            prices: mergeCartItemPrices
+        }
+    },
+    BundleCartItem: {
+        fields: {
+            prices: mergeCartItemPrices
+        }
+    },
+    VirtualCartItem: {
+        fields: {
+            prices: mergeCartItemPrices
+        }
+    },
+    DownloadableCartItem: {
+        fields: {
+            prices: mergeCartItemPrices
+        }
+    }
+};
+
 const CheckoutPage = props => {
     const history = useHistory();
     const { classes: propClasses } = props;
     const { formatMessage } = useIntl();
+    useTypePolicies(CART_ITEM_PRICE_POLICIES);
     const talonProps = useCheckoutPage();
 
     const {
@@ -83,15 +125,16 @@ const CheckoutPage = props => {
     } = talonProps;
 
     const [, { addToast }] = useToasts();
-    const orderCount = localStorage.getItem('orderCount');
     useEffect(() => {
         if (isGuestCheckout && !orderDetailsData) {
+            const storage = new BrowserPersistence();
+            const orderCount = storage.getRawItem('orderCount') || '0';
             if (orderCount === '1') {
                 history.push('/');
-                localStorage.setItem('orderCount', '0');
+                storage.setItem('orderCount', '0');
             }
         }
-    }, [isGuestCheckout, history, orderDetailsData, orderCount]);
+    }, [isGuestCheckout, history, orderDetailsData]);
     useEffect(() => {
         if (hasError) {
             const message =
