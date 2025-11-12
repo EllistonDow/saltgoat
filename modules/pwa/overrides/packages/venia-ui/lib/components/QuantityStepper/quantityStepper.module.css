@@ -84,7 +84,16 @@
     composes: input from '../TextInput/textInput.module.css';
 
     composes: text-center from global;
-    background: transparent;
+    background: rgba(255, 255, 255, 0.92);
     border-color: var(--sg-card-border);
+    color: var(--sg-text);
+}
+
+:global(body[data-theme='dark']) :local(.input),
+:global(body.sg-theme-dark) :local(.input),
+:global(:root[data-theme='dark']) :local(.input),
+:global(:root.sg-theme-dark) :local(.input) {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
     color: var(--sg-text);
 }
