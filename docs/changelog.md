@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.7] - 2025-11-12
+
+### Changes
+- 修改 1 个文件: modules/pwa/overrides/packages/peregrine/lib/talons/OrderHistoryPage/orderHistoryPage.gql.js
+
+
 ## [1.6.6] - 2025-11-12
 
 ### Changes
