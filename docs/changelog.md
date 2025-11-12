@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.16] - 2025-11-12
+
+### Changes
+- 修改 4 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/FilterModal/CurrentFilters/currentFilter.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/FilterModal/CurrentFilters/currentFilters.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/FilterModal/filterBlock.module.css, modules/pwa/workspaces/saltgoat-venia-extension/src/styles/theme.global.module.css
+
+
 ## [1.6.15] - 2025-11-12
 
 ### Changes

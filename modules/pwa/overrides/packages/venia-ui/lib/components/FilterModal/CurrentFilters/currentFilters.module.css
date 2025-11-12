@@ -1,0 +1,17 @@
+.root {
+    composes: px-xs from global;
+    composes: py-0 from global;
+    composes: overflow-auto from global;
+    composes: empty_hidden from global;
+    color: var(--sg-text);
+}
+
+.item {
+    composes: float-left from global;
+    composes: pb-0 from global;
+    composes: pl-0 from global;
+    composes: pr-xs from global;
+    composes: pt-xs from global;
+    list-style: none;
+    color: inherit;
+}

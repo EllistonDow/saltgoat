@@ -8,6 +8,7 @@
     composes: grid from global;
     border-color: var(--sg-card-border);
     color: var(--sg-text);
+    background: transparent;
 }
 
 .header {
@@ -17,6 +18,7 @@
     composes: items-center from global;
     composes: min-h-[3.125rem] from global;
     border-bottom: 1px solid var(--sg-card-border);
+    gap: 0.5rem;
 }
 
 .name {
@@ -24,9 +26,43 @@
     composes: text-left from global;
     color: var(--sg-text);
     font-weight: 600;
+    transition: color 0.2s ease;
 }
 
 .list {
     composes: empty_hidden from global;
     color: var(--sg-text);
+}
+
+.trigger {
+    composes: w-full from global;
+    composes: text-left from global;
+    composes: bg-transparent from global;
+    composes: border-0 from global;
+    composes: cursor-pointer from global;
+    padding: 0;
+    color: inherit;
+    background: transparent;
+    transition: color 0.2s ease;
+}
+
+.trigger:focus-visible {
+    outline: 2px solid var(--sg-focus-ring);
+    border-radius: 16px;
+}
+
+.trigger:hover .name {
+    color: var(--sg-primary);
+}
+
+.header svg {
+    stroke: currentColor;
+    color: currentColor;
+    opacity: 0.7;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.trigger:hover .header svg {
+    opacity: 1;
+    color: var(--sg-primary);
 }
