@@ -316,10 +316,25 @@
                     </div>
                 </div>
             </div>
-            <div
-                class="sg-hero-media"
-                style="background-image: url('https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80');"
-            >
+            <div class="sg-hero-media">
+                <picture>
+                    <source
+                        srcset="
+                            https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2000&q=80 2000w,
+                            https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80 1200w,
+                            https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80   800w
+                        "
+                        sizes="(min-width: 1280px) 640px, (min-width: 768px) 50vw, 90vw"
+                    />
+                    <img
+                        src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"
+                        alt="SaltGoat showcase studio"
+                        loading="lazy"
+                        decoding="async"
+                        width="1280"
+                        height="720"
+                    />
+                </picture>
                 <div class="sg-hero-media-caption">
                     <span>Live Commerce</span>
                     <strong>下一场直播 20:00 准时开播</strong>
@@ -330,23 +345,23 @@
         <section class="sg-card">
             <span class="sg-section-heading">精选系列</span>
             <h2 class="sg-section-title">用沉浸式卡片呈现新品矩阵</h2>
-            <div class="sg-grid">
-                <a class="sg-collection" href="{{store url='collections/holographic'}}">
-                    <img src="https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=900&q=70" alt="Holographic Drop" />
+            <div class="sg-grid" role="list">
+                <a class="sg-collection" href="{{store url='collections/holographic'}}" role="listitem">
+                    <img src="https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=900&q=70" alt="Holographic Drop" loading="lazy" decoding="async" width="640" height="420" />
                     <div>
                         <span>Holographic Drop</span>
                         <strong>立体新品矩阵</strong>
                     </div>
                 </a>
-                <a class="sg-collection" href="{{store url='collections/motion'}}">
-                    <img src="https://images.unsplash.com/photo-1505740421141-36b729a2cb51?auto=format&fit=crop&w=900&q=70" alt="Motion Lab" />
+                <a class="sg-collection" href="{{store url='collections/motion'}}" role="listitem">
+                    <img src="https://images.unsplash.com/photo-1505740421141-36b729a2cb51?auto=format&fit=crop&w=900&q=70" alt="Motion Lab" loading="lazy" decoding="async" width="640" height="420" />
                     <div>
                         <span>Motion Lab</span>
                         <strong>运动性能实验室</strong>
                     </div>
                 </a>
-                <a class="sg-collection" href="{{store url='collections/living'}}">
-                    <img src="https://images.unsplash.com/photo-1493666438817-866a91353ca9?auto=format&fit=crop&w=900&q=70" alt="Living Flow" />
+                <a class="sg-collection" href="{{store url='collections/living'}}" role="listitem">
+                    <img src="https://images.unsplash.com/photo-1493666438817-866a91353ca9?auto=format&fit=crop&w=900&q=70" alt="Living Flow" loading="lazy" decoding="async" width="640" height="420" />
                     <div>
                         <span>Living Flow</span>
                         <strong>家居生活流</strong>
@@ -380,23 +395,23 @@
         <section class="sg-card">
             <span class="sg-section-heading">实时活动</span>
             <h2 class="sg-section-title">滑动查看最新上线 / 直播 / 推广</h2>
-            <div class="sg-slider">
-                <article class="sg-slide">
+            <div class="sg-slider" role="list">
+                <article class="sg-slide" role="listitem">
                     <span>LIVE</span>
                     <strong>星耀新品夜场</strong>
                     <p>20:00 · 主播 Zoe 讲解 PWA 新系列，前 300 名下单赠送限量礼。扫描直播二维码即可加入。</p>
                 </article>
-                <article class="sg-slide">
+                <article class="sg-slide" role="listitem">
                     <span>DEPLOY</span>
                     <strong>Edge CDN 灯塔升级</strong>
                     <p>SaltGoat 自动调度完成 18 台节点的配置刷新，首屏延时下降 24%。滚动观察 Grafana 仪表。</p>
                 </article>
-                <article class="sg-slide">
+                <article class="sg-slide" role="listitem">
                     <span>OPS</span>
                     <strong>自愈巡检日报</strong>
                     <p>Valkey 命中率 99.3%，RabbitMQ 消息延迟 &lt; 80ms，3 条 WAF 告警已自动处理，无需人工干预。</p>
                 </article>
-                <article class="sg-slide">
+                <article class="sg-slide" role="listitem">
                     <span>MARKETING</span>
                     <strong>PWA 会员房开放</strong>
                     <p>使用 Page Builder 布局的 VIP 空间现已上线，可在 PWA 专区预约私享日，支持多 Store View 定制。</p>

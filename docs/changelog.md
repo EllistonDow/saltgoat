@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.8] - 2025-11-12
+
+### Changes
+- 修改 5 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/AccountMenu/accountMenuItems.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/MyAccount/myAccount.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/OrderHistoryPage/orderHistoryPage.module.css, modules/pwa/templates/cms/pwa_home.html, modules/pwa/workspaces/saltgoat-venia-extension/src/styles/theme.global.module.css
+
+
 ## [1.6.7] - 2025-11-12
 
 ### Changes

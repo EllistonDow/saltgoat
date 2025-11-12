@@ -1,33 +1,41 @@
 .root {
-    composes: gap-y-sm from global;
-    composes: grid from global;
-    composes: grid-flow-row from global;
-    composes: justify-stretch from global;
-    composes: p-sm from global;
+    composes: flex from global;
+    composes: flex-col from global;
+    composes: gap-y-xs from global;
+    composes: w-full from global;
     color: var(--sg-text);
 }
 
 .link {
-    composes: cursor-pointer from global;
-    composes: font-semibold from global;
     composes: inline-flex from global;
     composes: items-center from global;
-    composes: justify-start from global;
-    composes: leading-tight from global;
-    composes: max-w-full from global;
+    composes: justify-between from global;
     composes: no-underline from global;
-    composes: pointer-events-auto from global;
-    composes: text-subtle from global;
+    composes: text-left from global;
+    border: 1px solid transparent;
+    border-radius: 20px;
+    padding: 12px 18px;
+    font-weight: 600;
     color: var(--sg-text) !important;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+    background: rgba(255, 255, 255, 0.02);
+}
 
-    composes: hover_text-colorDefault from global;
+.link::after {
+    content: '↗';
+    font-size: 0.9rem;
+    opacity: 0.5;
+}
+
+.link:hover {
+    border-color: var(--sg-card-border);
+    background: var(--sg-muted-surface);
+    transform: translateX(3px);
 }
 
 .signOut {
     composes: link;
-    composes: border-t-2 from global;
-    composes: border-solid from global;
-    composes: border-light from global;
-    composes: pt-xs from global;
-    border-color: var(--sg-card-border) !important;
+    border-color: var(--sg-card-border);
+    background: var(--sg-error-surface);
+    color: var(--sg-error) !important;
 }

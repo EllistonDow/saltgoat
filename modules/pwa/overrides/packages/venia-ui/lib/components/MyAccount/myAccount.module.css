@@ -1,0 +1,12 @@
+.root {
+    composes: grid from global;
+    composes: gap-y-sm from global;
+    composes: w-full from global;
+    composes: max-w-[26rem] from global;
+    background: var(--sg-overlay-bg);
+    border: 1px solid var(--sg-overlay-border);
+    border-radius: 28px;
+    box-shadow: 0 32px 80px var(--sg-overlay-shadow);
+    padding: clamp(20px, 3vw, 28px);
+    backdrop-filter: blur(16px);
+}

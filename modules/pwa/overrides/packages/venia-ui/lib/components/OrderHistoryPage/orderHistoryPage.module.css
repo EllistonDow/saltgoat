@@ -2,40 +2,46 @@
     composes: grid from global;
     composes: gap-y-md from global;
     composes: px-sm from global;
-    composes: py-md from global;
-
+    composes: py-lg from global;
     composes: lg_px-lg from global;
     color: var(--sg-text);
 }
 
 .heading {
     composes: font-bold from global;
-    composes: font-serif from global;
-    composes: justify-self-center from global;
-    composes: capitalize from global;
-    color: var(--sg-text);
+    composes: text-center from global;
+    composes: text-2xl from global;
+    letter-spacing: -0.02em;
+    color: var(--sg-heading-text);
 }
 
 .emptyHistoryMessage {
     composes: text-center from global;
+    border-radius: 24px;
+    padding: clamp(16px, 3vw, 32px);
+    border: 1px dashed var(--sg-card-border);
+    background: var(--sg-card-bg);
     color: var(--sg-subtext);
+    box-shadow: 0 20px 50px var(--sg-tile-shadow);
 }
 
 .orderHistoryTable {
     composes: grid from global;
-    composes: gap-y-xs from global;
+    composes: gap-y-sm from global;
 }
 
 .filterRow {
     composes: flex from global;
     composes: flex-col from global;
-    composes: gap-y-xs from global;
-    composes: items-start from global;
-    composes: justify-between from global;
-
+    composes: gap-y-sm from global;
     composes: lg_flex-row from global;
-    composes: lg_gap-y-0 from global;
     composes: lg_items-center from global;
+    composes: lg_gap-x-md from global;
+    background: var(--sg-card-bg);
+    border: 1px solid var(--sg-card-border);
+    border-radius: 24px;
+    padding: clamp(16px, 3vw, 28px);
+    box-shadow: 0 20px 50px var(--sg-tile-shadow);
 }
 
 .pageInfo {
@@ -44,24 +50,15 @@
 }
 
 .search {
-    composes: gap-2xs from global;
     composes: grid from global;
-    composes: grid-flow-col from global;
-    composes: justify-self-center from global;
+    composes: gap-2xs from global;
     composes: w-full from global;
-
-    composes: lg_gap-xs from global;
-    composes: lg_justify-self-left from global;
     composes: lg_w-[22rem] from global;
-    color: var(--sg-text);
 }
 
 .searchButton {
     composes: root_highPriority from '../Button/button.module.css';
-
-    composes: h-[2rem] from global;
-    @apply min-w-[5rem];
-    composes: w-[5rem] from global;
+    composes: h-[2.5rem] from global;
 }
 
 .submitIcon {
@@ -70,6 +67,6 @@
 
 .loadMoreButton {
     composes: root_lowPriority from '../Button/button.module.css';
-
     composes: justify-self-center from global;
+    composes: mt-sm from global;
 }
