@@ -194,6 +194,12 @@
     box-shadow: none;
 }
 
+.description::after,
+.details::after,
+.detailsPageBuilder::after {
+    content: none;
+}
+
 .detailsPageBuilder {
     composes: my-0 from global;
     composes: mx-sm from global;

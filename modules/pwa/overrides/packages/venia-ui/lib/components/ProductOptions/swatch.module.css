@@ -61,3 +61,27 @@
     composes: after_w-swatch from global;
     composes: after_-rotate-45 from global;
 }
+
+:global(body[data-theme='dark']) :local(.root),
+:global(body.sg-theme-dark) :local(.root),
+:global(:root[data-theme='dark']) :local(.root),
+:global(:root.sg-theme-dark) :local(.root) {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--sg-text);
+}
+
+:global(body[data-theme='dark']) :local(.root_selected),
+:global(body.sg-theme-dark) :local(.root_selected),
+:global(:root[data-theme='dark']) :local(.root_selected),
+:global(:root.sg-theme-dark) :local(.root_selected) {
+    border-color: rgba(124, 194, 255, 0.9);
+    background: linear-gradient(
+            135deg,
+            rgba(124, 194, 255, 0.2),
+            rgba(78, 125, 255, 0.25)
+        ),
+        var(--venia-swatch-bg);
+    color: #d7e8ff;
+    box-shadow: 0 24px 42px rgba(5, 8, 18, 0.65);
+}

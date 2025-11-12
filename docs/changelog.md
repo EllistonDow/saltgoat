@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.14] - 2025-11-12
+
+### Changes
+- 修改 3 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/ProductFullDetail/productFullDetail.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/ProductOptions/swatch.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/ProductOptions/tile.module.css
+
+
 ## [1.6.13] - 2025-11-12
 
 ### Changes
