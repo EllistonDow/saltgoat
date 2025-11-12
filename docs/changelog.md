@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.12] - 2025-11-12
+
+### Changes
+- 修改 1 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/ProductFullDetail/productFullDetail.module.css
+
+
 ## [1.6.11] - 2025-11-12
 
 ### Changes

@@ -79,10 +79,16 @@
     composes: leading-normal from global;
     @apply py-xs;
     grid-area: title;
-    background: var(--sg-card-bg);
-    border-color: var(--sg-card-border);
+    background: transparent;
+    border: none;
     color: var(--sg-heading-text);
-    box-shadow: 0 12px 30px var(--sg-tile-shadow);
+    box-shadow: none;
+}
+
+.title::after,
+.quantity::after,
+.actions::after {
+    content: none;
 }
 
 .productName {
@@ -132,9 +138,9 @@
 .quantity {
     composes: section;
     grid-area: quantity;
-    background: var(--sg-card-bg);
-    border-color: var(--sg-card-border);
-    box-shadow: 0 8px 24px var(--sg-tile-shadow);
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 .quantityTitle {
@@ -149,9 +155,9 @@
     composes: section;
     grid-area: cart;
     composes: lg_border-b-0 from global;
-    background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(240,244,255,0.75));
-    border-color: var(--sg-card-border);
-    box-shadow: 0 12px 30px var(--sg-tile-shadow);
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 .description {
