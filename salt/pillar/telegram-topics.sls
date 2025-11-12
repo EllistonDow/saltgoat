@@ -22,3 +22,4 @@ telegram_topics:
   saltgoat/doctor/ns510140.ip-192-99-45.net: 2942
   saltgoat/monitor/resources/ns510140.ip-192-99-45.net: 2901
   saltgoat/security/fail2ban/sshd: 2916
+  saltgoat/storage/minio/ns510140.ip-192-99-45.net: 3046

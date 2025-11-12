@@ -9,7 +9,7 @@
     composes: right-0 from global;
     top: 80px;
     box-shadow: 0 30px 60px var(--sg-hero-shadow);
-    background: var(--sg-card-bg) !important;
+    background: var(--sg-flyout-bg) !important;
     color: var(--sg-text) !important;
 
     composes: before_content-empty from global;

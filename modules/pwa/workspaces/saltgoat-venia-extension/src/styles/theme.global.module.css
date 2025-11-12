@@ -8,8 +8,13 @@
     --sg-heading-text: #0b1220;
     --sg-body-text: #2a3145;
     --sg-card-bg: rgba(255, 255, 255, 0.9);
+    --sg-dropdown-bg: rgba(255, 255, 255, 0.95);
     --sg-card-border: rgba(15, 23, 42, 0.08);
     --sg-card-hover-border: rgba(31, 107, 255, 0.45);
+    --sg-flyout-bg: rgba(255, 255, 255, 0.95);
+    --sg-flyout-border: rgba(15, 23, 42, 0.12);
+    --sg-flyout-bg: rgba(255, 255, 255, 0.95);
+    --sg-flyout-border: rgba(15, 23, 42, 0.12);
     --sg-primary: #1f6bff;
     --sg-primary-strong: #4e7dff;
     --sg-primary-text: #ffffff;
@@ -109,8 +114,11 @@
     --sg-heading-text: #f3f6ff;
     --sg-body-text: #d4dcf6;
     --sg-card-bg: rgba(9, 14, 25, 0.85);
+    --sg-dropdown-bg: rgba(5, 8, 18, 0.8);
     --sg-card-border: rgba(255, 255, 255, 0.08);
     --sg-card-hover-border: rgba(141, 220, 255, 0.6);
+    --sg-flyout-bg: rgba(5, 8, 18, 0.85);
+    --sg-flyout-border: rgba(255, 255, 255, 0.12);
     --sg-primary: #8ddcff;
     --sg-primary-strong: #4bbdfc;
     --sg-primary-text: #0b1220;
@@ -339,10 +347,11 @@
 :global(:is([data-cy='Header-root'], [class*='header-root' i]) .dropdown),
 :global(:is([data-cy='Header-root'], [class*='header-root' i]) .menu),
 :global(:is([data-cy='Header-root'], [class*='header-root' i]) .sheet) {
-    background: var(--sg-overlay-bg) !important;
-    border: 1px solid var(--sg-overlay-border) !important;
+    background: var(--sg-flyout-bg) !important;
+    border: 1px solid var(--sg-flyout-border) !important;
     color: var(--sg-text) !important;
     box-shadow: 0 30px 60px var(--sg-overlay-shadow);
+    backdrop-filter: blur(14px);
 }
 
 :global(:is([data-cy='AccountMenu-root'], [class*='accountmenu-root' i]) .contents),
@@ -351,10 +360,11 @@
 :global(:is([data-cy='SearchBar-root'], [class*='searchbar-root' i]) form),
 :global(:is([data-cy='SearchBar-root'], [class*='searchbar-root' i]) ul),
 :global(:is([data-cy='SearchBar-root'], [class*='searchbar-root' i]) li) {
-    background: var(--sg-overlay-bg) !important;
-    border: 1px solid var(--sg-overlay-border) !important;
+    background: var(--sg-flyout-bg) !important;
+    border: 1px solid var(--sg-flyout-border) !important;
     color: var(--sg-text) !important;
     box-shadow: 0 30px 60px var(--sg-overlay-shadow);
+    backdrop-filter: blur(14px);
 }
 
 :global(:is([data-cy='SearchBar-root'], [class*='searchbar-root' i]) input) {

@@ -42,10 +42,11 @@
     transition-duration: 192ms;
     transition-property: transform;
     transition-timing-function: var(--venia-global-anim-out);
-    background: var(--sg-card-bg) !important;
+    background: var(--sg-flyout-bg) !important;
     color: var(--sg-text) !important;
-    border: 1px solid var(--sg-card-border);
-    box-shadow: 0 30px 60px var(--sg-hero-shadow);
+    border: 1px solid var(--sg-flyout-border);
+    box-shadow: 0 30px 60px var(--sg-overlay-shadow);
+    backdrop-filter: blur(14px);
 }
 
 .contents_open {
@@ -80,7 +81,7 @@
     composes: overflow-y-auto from global;
     composes: p-sm from global;
     min-height: 10rem;
-    background: var(--sg-card-bg);
+    background: transparent;
     color: inherit;
 }
 
@@ -99,8 +100,8 @@
     composes: p-xs from global;
     composes: text-sm from global;
     min-height: 3rem;
-    border-color: var(--sg-card-border) !important;
-    background: var(--sg-card-bg);
+    border-color: var(--sg-flyout-border) !important;
+    background: transparent;
 }
 
 .checkoutButton {

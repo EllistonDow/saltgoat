@@ -23,8 +23,8 @@
     composes: rounded-sm from global;
     composes: shadow-menu from global;
     composes: w-[8rem] from global;
-    background: var(--sg-card-bg) !important;
-    border-color: var(--sg-card-border) !important;
+    background: var(--sg-flyout-bg) !important;
+    border-color: var(--sg-flyout-border) !important;
     color: var(--sg-text) !important;
     box-shadow: 0 20px 40px var(--sg-hero-shadow);
 }

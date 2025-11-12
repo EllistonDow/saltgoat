@@ -12,10 +12,13 @@ import payments from './paymentMethodCollection';
 import GenericPaymentMethod from '@saltgoat/venia-extension/src/components/Payments/Generic';
 
 const normalizeDisabledCodes = () => {
+    const envValue =
+        process.env.SALTGOAT_PWA_DISABLED_PAYMENTS ??
+        process.env.NEXT_PUBLIC_SALTGOAT_DISABLED_PAYMENTS;
     const raw =
-        process.env.SALTGOAT_PWA_DISABLED_PAYMENTS ||
-        process.env.NEXT_PUBLIC_SALTGOAT_DISABLED_PAYMENTS ||
-        '';
+        typeof envValue === 'string' && envValue.length > 0
+            ? envValue
+            : 'braintree';
     return raw
         .split(',')
         .map(code => code.trim())
