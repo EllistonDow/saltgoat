@@ -41,11 +41,21 @@
     transition-duration: 192ms;
     transition-property: transform;
     transition-timing-function: var(--venia-global-anim-out);
-    background: var(--sg-flyout-bg) !important;
-    color: var(--sg-text) !important;
-    border: 1px solid var(--sg-flyout-border);
-    box-shadow: 0 30px 60px var(--sg-overlay-shadow);
-    backdrop-filter: blur(14px);
+    padding: 0;
+    background: transparent !important;
+    border: none;
+    box-shadow: none;
+}
+
+.panel {
+    border-radius: 28px;
+    box-shadow: 0 30px 70px var(--sg-overlay-shadow);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    color: var(--sg-text);
+    padding: clamp(20px, 2vw, 28px);
+    display: grid;
+    gap: clamp(12px, 1.5vw, 20px);
 }
 
 .contents_open {

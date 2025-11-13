@@ -22,10 +22,12 @@
     composes: text-left from global;
     composes: top-[110%] from global;
     composes: z-menu from global;
-    background: var(--sg-card-bg);
-    border-color: var(--sg-card-border);
+    background: var(--sg-overlay-bg);
+    border-color: var(--sg-flyout-border);
     color: var(--sg-text);
-    box-shadow: 0 20px 40px var(--sg-tile-shadow);
+    box-shadow: 0 30px 60px var(--sg-overlay-shadow);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
 }
 
 .menuItem {
@@ -34,7 +36,7 @@
     composes: border-subtle from global;
     composes: hover_bg-subtle from global;
     composes: last_border-b-0 from global;
-    border-color: var(--sg-card-border);
+    border-color: rgba(255, 255, 255, 0.06);
 }
 
 .sortButton {

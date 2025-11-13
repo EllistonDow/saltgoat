@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.20] - 2025-11-13
+
+### Changes
+- 修改 9 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/AccountMenu/accountMenu.js, modules/pwa/overrides/packages/venia-ui/lib/components/AccountMenu/accountMenu.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/FilterSidebar/filterSidebar.js, modules/pwa/overrides/packages/venia-ui/lib/components/MegaMenu/submenu.js, modules/pwa/overrides/packages/venia-ui/lib/components/MegaMenu/submenu.module.css 等
+
+
 ## [1.6.19] - 2025-11-13
 
 ### Changes

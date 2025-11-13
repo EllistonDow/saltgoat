@@ -48,37 +48,39 @@ const Submenu = props => {
         );
     });
 
-    const submenuStyle = {
+    const panelStyle = {
+        width: 'min(calc(100% - clamp(24px, 4vw, 96px)), 1280px)',
         background: 'var(--sg-flyout-bg)',
-        borderBottom: '1px solid var(--sg-flyout-border)',
-        boxShadow: '0 30px 70px var(--sg-overlay-shadow)',
+        borderRadius: '32px',
+        boxShadow: '0 40px 90px var(--sg-overlay-shadow)',
+        padding: 'clamp(28px, 3vw, 48px)',
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
-        borderRadius: '28px'
+        border: '1px solid var(--sg-flyout-border)'
     };
 
-    const submenuItemsStyle = {
+    const itemsStyle = {
+        minWidth: mainNavWidth + PADDING_OFFSET,
         background: 'var(--sg-overlay-bg)',
-        border: '1px solid var(--sg-flyout-border)',
-        borderRadius: '30px',
-        boxShadow: '0 40px 90px var(--sg-overlay-shadow)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        minWidth: mainNavWidth + PADDING_OFFSET
+        borderRadius: '24px',
+        padding: 'clamp(12px, 2vw, 20px)',
+        boxShadow: 'inset 0 0 0 1px var(--sg-flyout-border)'
     };
 
     return (
-        <div
-            className={subMenuClassname}
-            style={submenuStyle}
-            data-cy="MegaMenu-submenu"
-        >
+        <div className={subMenuClassname} data-cy="MegaMenu-submenu">
             <div
-                className={classes.submenuItems}
-                style={submenuItemsStyle}
-                data-cy="MegaMenu-submenuItems"
+                className={classes.panel}
+                style={panelStyle}
+                data-cy="MegaMenu-panel"
             >
-                {subMenus}
+                <div
+                    className={classes.submenuItems}
+                    style={itemsStyle}
+                    data-cy="MegaMenu-submenuItems"
+                >
+                    {subMenus}
+                </div>
             </div>
         </div>
     );

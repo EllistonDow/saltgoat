@@ -42,11 +42,11 @@
     transition-duration: 192ms;
     transition-property: transform;
     transition-timing-function: var(--venia-global-anim-out);
-    background: var(--sg-flyout-bg) !important;
-    color: var(--sg-text) !important;
-    border: 1px solid var(--sg-flyout-border);
-    box-shadow: 0 30px 60px var(--sg-overlay-shadow);
-    backdrop-filter: blur(14px);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 .contents_open {
