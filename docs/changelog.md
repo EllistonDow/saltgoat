@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.21] - 2025-11-13
+
+### Changes
+- 修改 3 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/Checkbox/checkbox.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/Newsletter/newsletter.js, modules/pwa/overrides/packages/venia-ui/lib/components/Newsletter/newsletter.module.css
+
+
 ## [1.6.20] - 2025-11-13
 
 ### Changes

@@ -18,14 +18,13 @@
     composes: bg-transparent from global;
     composes: border-2 from global;
     composes: border-solid from global;
-    composes: border-transparent from global;
     composes: cursor-pointer from global;
     composes: h-[1.5rem] from global;
     composes: rounded from global;
     composes: w-[1.5rem] from global;
     grid-area: input;
-    background: var(--sg-card-bg);
-    border-color: var(--sg-card-border);
+    background: transparent;
+    border-color: rgba(15, 23, 42, 0.4);
     transition: border-color 0.2s ease, background 0.2s ease;
 
     /* TODO @TW: review, replaces input:disabled. Check if working. */
@@ -39,8 +38,12 @@
 }
 
 .input:checked {
-    background: var(--sg-primary);
-    border-color: var(--sg-primary);
+    background: linear-gradient(
+        135deg,
+        rgba(31, 107, 255, 0.9),
+        rgba(78, 125, 255, 0.85)
+    );
+    border-color: rgba(31, 107, 255, 0.9);
 }
 
 .icon {
@@ -70,6 +73,10 @@
 
 .input:checked:enabled + .icon {
     --stroke: var(--color-blue-400);
+}
+
+:global(body[data-theme='dark']) :local(.input) {
+    border-color: rgba(255, 255, 255, 0.4);
 }
 
 .input_shimmer {
