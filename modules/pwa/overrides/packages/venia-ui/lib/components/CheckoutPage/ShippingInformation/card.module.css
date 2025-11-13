@@ -3,12 +3,12 @@
     composes: grid from global;
     composes: pt-xs from global;
     composes: text-colorDefault from global;
-    color: var(--sg-text);
+    color: var(--sg-checkout-text);
 }
 
 .address {
     composes: gap-2xs from global;
     composes: grid from global;
     composes: pt-xs from global;
-    color: var(--sg-text);
+    color: var(--sg-checkout-text);
 }

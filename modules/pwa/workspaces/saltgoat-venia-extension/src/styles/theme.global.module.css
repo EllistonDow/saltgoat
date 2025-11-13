@@ -65,6 +65,12 @@
     --sg-overlay-border: rgba(15, 23, 42, 0.12);
     --sg-overlay-shadow: rgba(15, 23, 42, 0.2);
     --sg-muted-surface: rgba(15, 23, 42, 0.04);
+    --sg-checkout-surface: var(--sg-card-bg);
+    --sg-checkout-border: rgba(15, 23, 42, 0.12);
+    --sg-checkout-text: var(--sg-text);
+    --sg-checkout-muted: var(--sg-subtext);
+    --sg-checkout-divider: rgba(15, 23, 42, 0.08);
+    --sg-checkout-glow: rgba(15, 23, 42, 0.18);
     --sg-error: #ff6b81;
     --sg-error-surface: rgba(255, 107, 129, 0.15);
     --sg-focus-ring: rgba(31, 107, 255, 0.25);
@@ -160,6 +166,12 @@
     --sg-timeline-border: rgba(255, 255, 255, 0.05);
     --sg-timeline-shadow: rgba(5, 8, 16, 0.5);
     --sg-muted-surface: rgba(255, 255, 255, 0.05);
+    --sg-checkout-surface: rgba(7, 11, 22, 0.92);
+    --sg-checkout-border: rgba(134, 189, 255, 0.32);
+    --sg-checkout-text: #dfe6ff;
+    --sg-checkout-muted: #a5b9e6;
+    --sg-checkout-divider: rgba(108, 168, 255, 0.22);
+    --sg-checkout-glow: rgba(4, 6, 16, 0.7);
     --sg-error: #ff9fb6;
     --sg-error-surface: rgba(255, 159, 182, 0.2);
     --sg-focus-ring: rgba(141, 220, 255, 0.3);

@@ -6,7 +6,7 @@
     composes: py-md from global;
 
     composes: lg_px-lg from global;
-    color: var(--sg-text);
+    color: var(--sg-checkout-text);
 }
 
 .checkoutContent {
@@ -33,7 +33,7 @@
 
 .heading {
     composes: leading-tight from global;
-    color: var(--sg-text);
+    color: var(--sg-checkout-text);
 }
 
 .cartLink {
@@ -52,8 +52,8 @@
     composes: uppercase from global;
 
     composes: lg_pb-md from global;
-    color: var(--sg-text);
-    border-color: var(--sg-card-border);
+    color: var(--sg-checkout-text);
+    border-color: var(--sg-checkout-divider);
 }
 
 .shipping_method_heading {
@@ -85,14 +85,16 @@
     composes: lg_grid-flow-col from global;
     composes: lg_justify-items-start from global;
     composes: lg_mb-0 from global;
-    background: var(--sg-card-bg);
-    border-color: var(--sg-card-border);
-    color: var(--sg-text);
-    box-shadow: 0 24px 50px var(--sg-tile-shadow);
+    background: var(--sg-checkout-surface);
+    border-color: var(--sg-checkout-border);
+    border-width: 1px;
+    color: var(--sg-checkout-text);
+    box-shadow: 0 24px 50px var(--sg-checkout-glow);
 }
 
 .signInLabel {
     composes: font-semibold from global;
+    color: var(--sg-checkout-text);
 }
 
 .signInButton {

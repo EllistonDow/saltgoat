@@ -6,7 +6,8 @@
     composes: py-3 from global;
     composes: w-full from global;
     background: transparent;
-    border-color: var(--sg-card-border);
+    border-color: var(--sg-checkout-divider);
+    border-top-width: 1px;
 }
 
 .content {

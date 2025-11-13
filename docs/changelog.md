@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.26] - 2025-11-13
+
+### Changes
+- 修改 17 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/ItemsReview/item.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/ItemsReview/itemsReview.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/ItemsReview/showAllButton.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/OrderConfirmationPage/orderConfirmationPage.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/OrderSummary/orderSummary.module.css 等
+
+
 ## [1.6.25] - 2025-11-13
 
 ### Changes

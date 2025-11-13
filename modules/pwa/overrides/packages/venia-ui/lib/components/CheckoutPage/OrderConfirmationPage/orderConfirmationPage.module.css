@@ -13,7 +13,7 @@
     composes: lg_grid-cols-[2fr_1fr] from global;
     composes: lg_px-lg from global;
     composes: lg_py-md from global;
-    color: var(--sg-text);
+    color: var(--sg-checkout-text);
 }
 
 .mainContainer {
@@ -30,18 +30,18 @@
 
     composes: lg_border-0 from global;
     composes: lg_col-start-2 from global;
-    border-color: var(--sg-card-border);
-    background: var(--sg-card-bg);
+    border-color: var(--sg-checkout-border);
+    background: var(--sg-checkout-surface);
 }
 
 .header {
     composes: font-semibold from global;
-    color: var(--sg-text);
+    color: var(--sg-checkout-text);
 }
 
 .text {
     composes: leading-normal from global;
-    color: var(--sg-subtext);
+    color: var(--sg-checkout-muted);
 }
 
 .orderNumber {

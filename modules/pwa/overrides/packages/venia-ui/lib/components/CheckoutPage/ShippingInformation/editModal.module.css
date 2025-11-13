@@ -24,8 +24,8 @@
     composes: lg_max-h-modal from global;
     composes: lg_max-w-[740px] from global;
     composes: lg_top-[5vh] from global;
-    background: var(--sg-card-bg);
-    color: var(--sg-text);
+    background: var(--sg-checkout-surface);
+    color: var(--sg-checkout-text);
 }
 
 @media screen(-lg) {
@@ -67,8 +67,8 @@
     composes: py-2xs from global;
 
     composes: lg_px-md from global;
-    background: var(--sg-card-bg);
-    color: var(--sg-text);
+    background: var(--sg-checkout-surface);
+    color: var(--sg-checkout-text);
 }
 
 .header {
@@ -82,12 +82,12 @@
 
     composes: lg_px-md from global;
     composes: lg_py-3.5 from global;
-    border-color: var(--sg-card-border);
-    color: var(--sg-text);
+    border-color: var(--sg-checkout-divider);
+    color: var(--sg-checkout-text);
 }
 
 .headerText {
     composes: self-center from global;
     composes: text-subtle from global;
-    color: var(--sg-subtext);
+    color: var(--sg-checkout-muted);
 }

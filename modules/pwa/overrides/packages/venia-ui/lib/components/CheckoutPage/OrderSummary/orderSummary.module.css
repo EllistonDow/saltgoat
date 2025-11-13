@@ -11,10 +11,12 @@
     composes: lg_rounded-box from global;
     composes: lg_mt-0 from global;
     composes: lg_p-md from global;
-    background: var(--sg-card-bg);
-    border-color: var(--sg-card-border);
-    color: var(--sg-text);
-    box-shadow: 0 24px 50px var(--sg-tile-shadow);
+    background: var(--sg-checkout-surface);
+    border-color: var(--sg-checkout-border);
+    border-width: 1px;
+    border-top-width: 1px;
+    color: var(--sg-checkout-text);
+    box-shadow: 0 24px 50px var(--sg-checkout-glow);
 }
 
 .title {

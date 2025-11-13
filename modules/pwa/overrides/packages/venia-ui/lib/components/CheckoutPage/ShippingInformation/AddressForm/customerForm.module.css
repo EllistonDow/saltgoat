@@ -23,7 +23,7 @@
 }
 
 .formMessage {
-    color: var(--sg-subtext);
+    color: var(--sg-checkout-muted);
     background: transparent;
 }
 

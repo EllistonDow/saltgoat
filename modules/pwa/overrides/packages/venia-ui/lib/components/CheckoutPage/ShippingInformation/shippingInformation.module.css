@@ -4,10 +4,11 @@
     composes: border-subtle from global;
     composes: p-md from global;
     composes: rounded-box from global;
-    background: var(--sg-card-bg);
-    border-color: var(--sg-card-border);
-    color: var(--sg-text);
-    box-shadow: 0 18px 40px var(--sg-tile-shadow);
+    background: var(--sg-checkout-surface);
+    border-color: var(--sg-checkout-border);
+    border-width: 1px;
+    color: var(--sg-checkout-text);
+    box-shadow: 0 18px 40px var(--sg-checkout-glow);
 }
 
 .root_editMode {
@@ -17,9 +18,11 @@
     @apply border-b-2;
     @apply p-0;
     @apply rounded-none;
-    background: var(--sg-card-bg);
-    border-color: var(--sg-card-border);
-    box-shadow: 0 18px 40px var(--sg-tile-shadow);
+    background: var(--sg-checkout-surface);
+    border-color: var(--sg-checkout-border);
+    border-width: 1px;
+    border-bottom-width: 1px;
+    box-shadow: 0 18px 40px var(--sg-checkout-glow);
 }
 
 .root_updated {
@@ -36,7 +39,7 @@
 
 .cardTitle {
     composes: font-semibold from global;
-    color: var(--sg-text);
+    color: var(--sg-checkout-text);
 }
 
 .editButton {
@@ -57,7 +60,7 @@
 .editTitle {
     composes: font-semibold from global;
     composes: uppercase from global;
-    color: var(--sg-text);
+    color: var(--sg-checkout-text);
 }
 
 .editIcon {

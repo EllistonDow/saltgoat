@@ -176,16 +176,21 @@ const CheckoutPage = props => {
               defaultMessage: 'Checkout'
           });
 
-    if (orderDetailsData && orderNumber) {
+    const showGuestConfirmation =
+        isGuestCheckout && orderDetailsData && orderNumber;
+    const showEmptyCart =
+        isCartEmpty && !placeOrderButtonClicked && !showGuestConfirmation;
+
+    if (showGuestConfirmation) {
         return (
             <OrderConfirmationPage
                 data={orderDetailsData}
                 orderNumber={orderNumber}
             />
         );
-    } else if (isLoading) {
+    } else if (isLoading || placeOrderButtonClicked) {
         return fullPageLoadingIndicator;
-    } else if (isCartEmpty) {
+    } else if (showEmptyCart) {
         checkoutContent = (
             <div className={classes.empty_cart_container}>
                 <div className={classes.heading_container}>

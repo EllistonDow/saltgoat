@@ -6,4 +6,7 @@
     composes: rounded from global;
     composes: px-sm from global;
     composes: py-xs from global;
+    background: var(--sg-checkout-surface);
+    border-color: var(--sg-checkout-divider);
+    color: var(--sg-checkout-muted);
 }

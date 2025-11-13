@@ -2,8 +2,8 @@
     composes: grid from global;
     composes: p-md from global;
     composes: pb-s from global;
-    background: var(--sg-card-bg);
-    color: var(--sg-text);
+    background: var(--sg-checkout-surface);
+    color: var(--sg-checkout-text);
 }
 
 .radio_group {
@@ -16,7 +16,7 @@
     composes: border-subtle from global;
     composes: pb-xs from global;
     composes: pt-xs from global;
-    border-color: var(--sg-card-border);
+    border-color: var(--sg-checkout-divider);
 }
 
 .payment_method:last-of-type {
@@ -26,7 +26,7 @@
 .radio_label {
     composes: font-semibold from global;
     composes: justify-self-start from global;
-    color: var(--sg-text);
+    color: var(--sg-checkout-text);
 }
 
 .payment_errors {
