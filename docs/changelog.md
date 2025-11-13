@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.23] - 2025-11-13
+
+### Changes
+- 修改 2 个文件: modules/pwa/onepage.sh, modules/pwa/pwa.sh
+
+
 ## [1.6.22] - 2025-11-13
 
 ### Changes
