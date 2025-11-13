@@ -7,9 +7,12 @@
     composes: px-4 from global;
     composes: py-5 from global;
     top: 75px;
-    background: var(--sg-flyout-bg);
+    background: var(--sg-flyout-bg) !important;
     color: var(--sg-text);
-    border-bottom: 1px solid transparent;
+    border-bottom: 1px solid var(--sg-flyout-border);
+    box-shadow: 0 30px 70px var(--sg-overlay-shadow);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
     z-index: 15;
 }
 
@@ -42,12 +45,13 @@
     composes: justify-between from global;
     composes: w-full from global;
     composes: max-w-site from global;
-    background: var(--sg-overlay-bg);
+    background: var(--sg-overlay-bg) !important;
     border: 1px solid var(--sg-flyout-border);
     border-radius: 26px;
     box-shadow: 0 35px 80px var(--sg-overlay-shadow);
     padding: clamp(24px, 3vw, 40px);
     backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
 }
 
 .submenuItems a,
@@ -61,4 +65,9 @@
     min-width: 200px;
     padding: 8px 16px;
     border-radius: 18px;
+    transition: transform 0.2s ease;
+}
+
+.submenuItems > *:hover {
+    transform: translateY(-2px);
 }

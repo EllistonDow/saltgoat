@@ -1,0 +1,45 @@
+.megaMenuItem {
+    composes: px-3 from global;
+    composes: py-0 from global;
+}
+
+.megaMenuItem_active {
+    composes: megaMenuItem;
+    composes: flex from global;
+}
+
+.megaMenuLink {
+    composes: items-center from global;
+    composes: inline-flex from global;
+    min-height: 5rem;
+    gap: 0.35rem;
+    color: var(--sg-menu-text);
+    transition: color 0.2s ease;
+}
+
+.megaMenuLinkActive {
+    composes: megaMenuLink;
+    composes: underline from global;
+    color: var(--sg-primary);
+}
+
+.megaMenuItem:hover .megaMenuLink,
+.megaMenuItem:focus-within .megaMenuLink {
+    text-decoration: underline;
+    color: var(--sg-primary);
+}
+
+.arrowDown {
+    composes: leading-[0] from global;
+    composes: pl-2xs from global;
+    color: var(--sg-menu-text);
+    stroke: currentColor;
+    opacity: 0.8;
+    transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.megaMenuItem:hover .arrowDown,
+.megaMenuItem:focus-within .arrowDown {
+    color: var(--sg-primary);
+    opacity: 1;
+}

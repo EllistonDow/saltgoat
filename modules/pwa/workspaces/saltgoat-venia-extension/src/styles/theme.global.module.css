@@ -302,6 +302,10 @@
     border-bottom: 1px solid var(--sg-header-border) !important;
     transition: background 0.3s ease, color 0.3s ease,
         border-color 0.3s ease !important;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    overflow: visible;
 }
 
 :global(:is([data-cy='Header-root'], [class*='header-root' i]) svg),
@@ -310,6 +314,78 @@
     color: var(--sg-header-icon) !important;
     fill: var(--sg-header-icon) !important;
     stroke: var(--sg-header-icon) !important;
+}
+
+:global(:is([data-cy='Header-root'], [class*='header-root' i]))::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 4px;
+    background: linear-gradient(
+        90deg,
+        rgba(79, 123, 255, 0) 0%,
+        rgba(79, 123, 255, 0.6) 25%,
+        rgba(140, 201, 255, 0.85) 50%,
+        rgba(79, 123, 255, 0.6) 75%,
+        rgba(79, 123, 255, 0) 100%
+    );
+    box-shadow: 0 6px 24px rgba(120, 182, 255, 0.55);
+    pointer-events: none;
+}
+
+:global(a[data-cy='MegaMenu-MegaMenuItem-link']) {
+    color: var(--sg-menu-text);
+    transition: color 0.2s ease;
+    gap: 0.4rem;
+}
+
+:global(a[data-cy='MegaMenu-MegaMenuItem-link']:hover),
+:global(a[data-cy='MegaMenu-MegaMenuItem-link']:focus-visible) {
+    color: var(--sg-primary);
+    text-decoration: underline;
+}
+
+:global(a[data-cy='MegaMenu-MegaMenuItem-link'] svg) {
+    color: currentColor;
+    stroke: currentColor;
+    opacity: 0.85;
+    transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+:global(a[data-cy='MegaMenu-MegaMenuItem-link']:hover svg),
+:global(a[data-cy='MegaMenu-MegaMenuItem-link']:focus-visible svg) {
+    opacity: 1;
+}
+
+:global(div[class*='submenu_active']) {
+    background: var(--sg-flyout-bg) !important;
+    border-bottom: 1px solid var(--sg-flyout-border) !important;
+    box-shadow: 0 30px 70px var(--sg-overlay-shadow) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border-radius: 28px;
+}
+
+:global(div[class*='submenuItems']) {
+    background: var(--sg-overlay-bg) !important;
+    border: 1px solid var(--sg-flyout-border) !important;
+    border-radius: 30px;
+    box-shadow: 0 40px 90px var(--sg-overlay-shadow) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+}
+
+:global(div[class*='submenuItems'] > *) {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 22px;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+:global(div[class*='submenuItems'] > *:hover) {
+    background: rgba(124, 194, 255, 0.08);
+    border-color: rgba(124, 194, 255, 0.3);
 }
 
 :global(:is([data-cy='Footer-root'], [class*='footer-root' i])) {

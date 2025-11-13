@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.19] - 2025-11-13
+
+### Changes
+- 修改 6 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/Header/header.js, modules/pwa/overrides/packages/venia-ui/lib/components/Header/header.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/MegaMenu/megaMenuItem.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/MegaMenu/submenu.js, modules/pwa/overrides/packages/venia-ui/lib/components/MegaMenu/submenu.module.css 等
+
+
 ## [1.6.18] - 2025-11-12
 
 ### Changes
