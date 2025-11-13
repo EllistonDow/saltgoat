@@ -15,6 +15,7 @@
 - `modules/pwa/workspaces/`：自定义 Yarn workspace 模板，安装时同步至 PWA Studio（如 `saltgoat-venia-extension`）。
 - `todo/pwa.md`：路线图与未完成事项。
 - `salt/pillar/magento-pwa.sls`：站点参数（根路径、数据库、PWA Studio 配置等）。
+- `modules/pwa/onepage.sh`：生成独立 OnePage Microsite 的脚本（参见 `saltgoat pwa create onepage`）。
 
 > 计划新增的 Page Builder 模板库将放在 `modules/pwa/templates/`，上线时请更新本节。
 
@@ -52,7 +53,34 @@
 - 输出多段式报告（服务摘要、GraphQL、React、端口、最近日志），方便值班人员快速定位问题。
 - 适合在巡检或 `saltgoat doctor` 中调用，若需机器可读结果，可搭配 `pwa status --json --check`。
 
-### 3.6 自定义 Workspace (`@saltgoat/venia-extension`)
+### 3.6 OnePage Microsite (`saltgoat pwa create onepage`)
+- 位置：`modules/pwa/onepage.sh`；提供 `saltgoat pwa create onepage` 子命令，用于生成独立的单页产品站（静态 HTML + Nginx + 自签名证书）。
+- 适用场景：为重磅产品或活动快速创建专属域名，不依赖 Magento/PWA Studio；亦可作为 Landing Page 样板。
+- 用法示例：
+  ```bash
+  sudo saltgoat pwa create onepage \
+    --product "Nebula Flux Rotary System" \
+    --domain pwa-product1.magento.tattoogoat.com \
+    --tagline "Modern rotary kit for bold studios" \
+    --dry-run
+  ```
+  必需参数：
+  - `--product <name>`：页面展示的产品名称；自动用于路径和文案。
+  - `--domain <domain>`：Nginx 站点与证书绑定的域名。
+  可选参数：
+  - `--tagline <text>`：Hero 副标题，默认 “Engineered precision for tattoo artists.”
+  - `--email <addr>`：证书主题中的邮箱，默认 `ops@tattoogoat.com`
+  - `--output-dir <dir>`：根目录前缀，默认 `/var/www/pwa-onepage`
+  - `--force`：若目录/Nginx 站点已存在则覆盖
+  - `--dry-run`：仅输出计划步骤，不落地（`--dry_on` 也被识别）
+- 产出物：
+  - 目录：`/var/www/pwa-onepage/<slug>/index.html` + SVG 资源
+  - SSL：默认生成 `/etc/nginx/ssl/<domain>.crt/.key` 自签名证书（后续可手动运行 certbot 替换）
+  - Nginx：`/etc/nginx/sites-available/<domain>.conf`（HTTP→HTTPS，两段 server），并自动 `nginx -t && systemctl reload nginx`
+  - 页面包含明暗模式切换、Hero、Features、Specs、Gallery、CTA 等 Section，全部为英文文案，可直接编辑 `index.html` 进一步定制
+- 注意：脚本不会自动申请 Let’s Encrypt；若需正式证书，可运行 `certbot certonly --nginx -d <domain>` 后手动替换配置。
+
+### 3.7 自定义 Workspace (`@saltgoat/venia-extension`)
 - `modules/pwa/workspaces/saltgoat-venia-extension/` 保存了所有自研 React 组件（例如新的 `HomeContent`、自定义 talon 等）。
 - `sync-content` 会自动将该目录同步到 PWA Studio 的 `packages/saltgoat-venia-extension/` 并写入 `package.json` 的 `workspaces` 与 `dependencies`。
 - 同步脚本同时会在 `packages/venia-ui/package.json` 与 `packages/venia-concept/package.json` 中写入 `@saltgoat/venia-extension` 依赖（以 `link:../saltgoat-venia-extension` 形式），确保 intercept 注入的 `import` 可被 Yarn 解析。
@@ -63,7 +91,7 @@
   4. 运行 `sudo saltgoat pwa sync-content <site> --rebuild`，查看是否编译通过。
 - **禁止** 直接修改 PWA Studio 仓库原始文件（例如 `packages/venia-ui`），所有自定义都应集中在此 workspace，便于升级和回滚。
 
-### 3.7 健康检查与常规自查
+### 3.8 健康检查与常规自查
 - `saltgoat pwa status --json` 可供 CI/监控解析；`saltgoat pwa doctor` 可直接生成 GraphQL/React/端口/日志报告。
 - 仍建议每次同步后手动验证：
 - 推荐每次同步后手动验证：
