@@ -23,7 +23,9 @@ export const CHECKOUT_STEP = {
 };
 
 const getOrderNumber = placeOrderData =>
-    placeOrderData?.placeOrder?.order?.order_number || null;
+    placeOrderData?.placeOrder?.order?.order_number ||
+    placeOrderData?.placeOrder?.order?.order_id ||
+    null;
 
 const safeSetOrderCount = value => {
     try {
@@ -370,6 +372,9 @@ export const useCheckoutPage = (props = {}) => {
             return;
         }
 
+        const confirmationItems =
+            resolvedOrderDetailsData?.cart?.items || cartItems;
+
         setPlaceOrderButtonClicked(false);
         setReviewOrderButtonClicked(false);
         setCheckoutStep(CHECKOUT_STEP.SHIPPING_ADDRESS);
@@ -378,12 +383,18 @@ export const useCheckoutPage = (props = {}) => {
         if (isSignedIn) {
             history.push('/order-confirmation', {
                 orderNumber,
-                items: cartItems
+                items: confirmationItems
             });
         } else {
             history.push('/checkout');
         }
-    }, [cartItems, history, isSignedIn, placeOrderData]);
+    }, [
+        cartItems,
+        history,
+        isSignedIn,
+        placeOrderData,
+        resolvedOrderDetailsData
+    ]);
 
     return {
         activeContent,

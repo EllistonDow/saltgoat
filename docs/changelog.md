@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.25] - 2025-11-13
+
+### Changes
+- 修改 2 个文件: modules/pwa/overrides/packages/peregrine/lib/talons/CheckoutPage/useCheckoutPage.js, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/checkoutPage.js
+
+
 ## [1.6.24] - 2025-11-13
 
 ### Changes
