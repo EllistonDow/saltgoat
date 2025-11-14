@@ -5,6 +5,7 @@ import RichContent from '@magento/venia-ui/lib/components/RichContent';
 import { useCmsPage } from '@magento/peregrine/lib/talons/Cms/useCmsPage';
 
 import Showcase from './Showcase';
+import NebulaHome from './NebulaHome';
 
 const recordReactDebugInfo = () => {
     if (typeof window === 'undefined') {
@@ -33,6 +34,11 @@ const resolveFallbackMode = () => {
     return 'off';
 };
 
+const getNebulaIdentifier = () => {
+    const raw = process.env.MAGENTO_PWA_ALT_HOME_IDENTIFIER && process.env.MAGENTO_PWA_ALT_HOME_IDENTIFIER.trim();
+    return raw && raw.length ? raw : 'pwa_home_no_pb';
+};
+
 const createHomeContent = OriginalComponent => {
     const PwaHomeContent = props => {
         useEffect(() => {
@@ -43,6 +49,8 @@ const createHomeContent = OriginalComponent => {
             process.env.MAGENTO_PWA_HOME_IDENTIFIER && process.env.MAGENTO_PWA_HOME_IDENTIFIER.trim()
                 ? process.env.MAGENTO_PWA_HOME_IDENTIFIER.trim()
                 : 'home';
+        const nebulaIdentifier = useMemo(() => getNebulaIdentifier(), []);
+        const isNebulaHome = identifier === nebulaIdentifier;
 
         const { cmsPage, shouldShowLoadingIndicator } = useCmsPage({
             identifier
@@ -50,6 +58,10 @@ const createHomeContent = OriginalComponent => {
 
         const cmsContent = useMemo(() => cmsPage?.content?.trim() || '', [cmsPage]);
         const fallbackMode = useMemo(() => resolveFallbackMode(), []);
+
+        if (isNebulaHome) {
+            return React.createElement(NebulaHome, null);
+        }
 
         if (shouldShowLoadingIndicator) {
             return React.createElement(CMSPageShimmer, null);

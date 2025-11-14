@@ -275,6 +275,29 @@
         opacity: 0.7;
     }
 
+    .sg-holo-lab {
+        display: grid;
+        grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
+        gap: 24px;
+        align-items: center;
+    }
+
+    .sg-holo-visual {
+        border-radius: 28px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: radial-gradient(circle at 30% 20%, rgba(140,201,255,0.35), rgba(5,9,21,0.85));
+        box-shadow: inset 0 0 60px rgba(0,0,0,0.45),0 30px 80px rgba(5,8,16,0.75);
+        position: relative;
+        overflow: hidden;
+        min-height: 320px;
+    }
+
+    .sg-holo-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+
     .sg-tech-stack {
         display: grid;
         grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
@@ -351,6 +374,67 @@
         display: grid;
         grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
         gap: 22px;
+    }
+
+    .sg-slider {
+        position: relative;
+        overflow: hidden;
+        padding: 0;
+    }
+
+    .sg-slider-track {
+        display: flex;
+        transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .sg-slide {
+        min-width: 100%;
+        padding: clamp(24px,4vw,40px);
+        border-right: 1px solid rgba(255,255,255,0.08);
+        display: grid;
+        grid-template-columns: repeat(auto-fit,minmax(240px,1fr));
+        gap: 24px;
+        align-items: center;
+    }
+
+    .sg-slide-visual {
+        border-radius: 24px;
+        min-height: 220px;
+        background-size: cover;
+        background-position: center;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .sg-slide-visual::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(0,0,0,0.2), rgba(0,0,0,0.5));
+    }
+
+    .sg-slider-nav {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        padding: 18px 0 28px;
+    }
+
+    .sg-slider-nav button {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,0.2);
+        background: rgba(255,255,255,0.04);
+        color: var(--sg-text);
+        cursor: pointer;
+        transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .sg-slider-nav button:hover {
+        transform: translateY(-2px);
+        background: rgba(255,255,255,0.12);
     }
 
     .sg-tilt {
@@ -454,6 +538,22 @@
             </div>
         </section>
 
+        <section class="sg-card sg-holo-lab sg-reveal">
+            <div>
+                <span class="sg-section-heading">Hologram Lab</span>
+                <h2 class="sg-section-title">Live 3D rituals</h2>
+                <p>We render your hero rigs inside GPU shaders so shoppers can orbit, zoom, and visualize build quality in-browser.</p>
+                <ul>
+                    <li>GLSL-inspired gradients + bloom trails</li>
+                    <li>Auto-rotating tattoo machines with ember sparks</li>
+                    <li>Embeddable across Venia, microsites, and product detail tabs</li>
+                </ul>
+            </div>
+            <div class="sg-holo-visual">
+                <canvas class="sg-holo-canvas" data-cy="Home-holoCanvas"></canvas>
+            </div>
+        </section>
+
         <section class="sg-card sg-reveal">
             <span class="sg-section-heading">Collections</span>
             <h2 class="sg-section-title">Curated for modern artists</h2>
@@ -473,6 +573,39 @@
                     <strong>Hybrid workstations</strong>
                     <p>Glass + aluminum rigs with wireless foot controls.</p>
                 </article>
+            </div>
+        </section>
+
+        <section class="sg-card sg-slider sg-reveal" data-cy="Home-slider">
+            <div class="sg-slider-track">
+                <article class="sg-slide">
+                    <div>
+                        <span class="sg-section-heading">Featured Drop</span>
+                        <h3>Tesla Flux Series</h3>
+                        <p>Graphite frames, dual battery cores, and adaptive stroke memory tuned for all-day conventions.</p>
+                    </div>
+                    <div class="sg-slide-visual" style="background-image:url('https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80');"></div>
+                </article>
+                <article class="sg-slide">
+                    <div>
+                        <span class="sg-section-heading">Studio Mood</span>
+                        <h3>Chromatic Booths</h3>
+                        <p>Neon diffusers and antimicrobial glass panels popping up in 43 flagship studios.</p>
+                    </div>
+                    <div class="sg-slide-visual" style="background-image:url('https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=800&q=80');"></div>
+                </article>
+                <article class="sg-slide">
+                    <div>
+                        <span class="sg-section-heading">Ops Insight</span>
+                        <h3>Supply Telemetry</h3>
+                        <p>Edge dashboards predicting pigment depletion and pushing proactive replenishment cards.</p>
+                    </div>
+                    <div class="sg-slide-visual" style="background-image:url('https://images.unsplash.com/photo-1470246973918-29a93221c455?auto=format&fit=crop&w=800&q=80');"></div>
+                </article>
+            </div>
+            <div class="sg-slider-nav">
+                <button type="button" data-dir="-1">‹</button>
+                <button type="button" data-dir="1">›</button>
             </div>
         </section>
 
@@ -595,5 +728,61 @@
                 card.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg)';
             });
         });
+
+        const holoCanvas = document.querySelector('.sg-holo-canvas');
+        if (holoCanvas) {
+            const ctx = holoCanvas.getContext('2d');
+            const resize = () => {
+                holoCanvas.width = holoCanvas.clientWidth * window.devicePixelRatio;
+                holoCanvas.height = holoCanvas.clientHeight * window.devicePixelRatio;
+            };
+            resize();
+            window.addEventListener('resize', resize);
+            let t = 0;
+            const render = () => {
+                t += 0.01;
+                const { width, height } = holoCanvas;
+                ctx.clearRect(0, 0, width, height);
+                ctx.save();
+                ctx.translate(width / 2, height / 2);
+                const layers = 24;
+                for (let i = 0; i < layers; i++) {
+                    const ratio = i / layers;
+                    const radius = 120 * (1 - ratio * 0.6);
+                    const angle = t * (1 + ratio) + i;
+                    const y = Math.sin(angle) * 60 * (1 - ratio * 0.5);
+                    const color = `rgba(${150 + ratio * 100}, ${200 - ratio * 80}, 255, ${0.25 + (1 - ratio) * 0.5})`;
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 6 * (1 - ratio * 0.8);
+                    ctx.beginPath();
+                    ctx.ellipse(Math.cos(angle) * 20, y, radius, radius * 0.35, angle, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+                requestAnimationFrame(render);
+            };
+            render();
+        }
+
+        const slider = document.querySelector('[data-cy=\"Home-slider\"]');
+        if (slider) {
+            const track = slider.querySelector('.sg-slider-track');
+            const slides = Array.from(track.children);
+            let index = 0;
+            const update = () => {
+                track.style.transform = `translateX(-${index * 100}%)`;
+            };
+            slider.querySelectorAll('.sg-slider-nav button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const dir = parseInt(btn.dataset.dir, 10);
+                    index = (index + dir + slides.length) % slides.length;
+                    update();
+                });
+            });
+            setInterval(() => {
+                index = (index + 1) % slides.length;
+                update();
+            }, 7000);
+        }
     })();
 </script>

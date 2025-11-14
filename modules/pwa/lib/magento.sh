@@ -323,6 +323,7 @@ ensure_pwa_home_cms_page() {
     log_info "同步 CMS 页面 (${identifier})"
     if output=$(apply_cms_template_page "$template" "$identifier" "$page_title" "$stores" 2>&1); then
         log_info "CMS 页面 (${identifier}) 状态: ${output}"
+        reset_page_builder_content "$identifier"
         if [[ "$output" != "unchanged" ]]; then
             magento_clear_cms_cache
         fi
@@ -331,7 +332,61 @@ ensure_pwa_home_cms_page() {
     fi
 }
 
+ensure_pwa_no_pb_cms_page() {
+    local template
+    template="$(resolve_alt_home_template_file)"
+    if [[ -z "$template" ]]; then
+        return
+    fi
+    local identifier
+    identifier="$(read_pwa_env_value "MAGENTO_PWA_ALT_HOME_IDENTIFIER" 2>/dev/null || echo "pwa_home_no_pb")"
+    local stores="${PWA_HOME_STORE_IDS:-0}"
+    local title
+    title="$(read_pwa_env_value "MAGENTO_PWA_ALT_HOME_TITLE" 2>/dev/null || echo "PWA Home (No Page Builder)")"
+    log_info "同步 CMS 页面 (${identifier}) [No Page Builder]"
+    if output=$(apply_cms_template_page "$template" "$identifier" "$title" "$stores" 2>&1); then
+        log_info "CMS 页面 (${identifier}) 状态: ${output}"
+        reset_page_builder_content "$identifier"
+        if [[ "$output" != "unchanged" ]]; then
+            magento_clear_cms_cache
+        fi
+    else
+        log_warning "CMS 页面同步失败 (${identifier}): ${output}"
+    fi
+}
+
 magento_clear_cms_cache() {
     log_info "清理 Magento Cache (block_html,full_page)"
     magento_cli "清理 Cache" "cache:clean" block_html full_page
+}
+
+reset_page_builder_content() {
+    local identifier="$1"
+    local esc_identifier="${identifier//\'/\'\'}"
+    local mysql_cmd=(
+        mysql
+        -h "${PWA_DB_HOST}"
+        -P "${PWA_DB_PORT:-3306}"
+        -u "${PWA_DB_USER}"
+        "${PWA_DB_NAME}"
+    )
+    local column_check
+    column_check=$(MYSQL_PWD="${PWA_DB_PASSWORD}" "${mysql_cmd[@]}" -N -B -e "SHOW COLUMNS FROM cms_page LIKE 'page_builder_content';" 2>/dev/null || true)
+    if [[ -z "$column_check" ]]; then
+        log_info "当前 Magento 版本未启用 page_builder_content 列，跳过缓存重置。"
+        return
+    fi
+    local sql="
+UPDATE cms_page
+SET page_builder_content = NULL,
+    page_builder_preview = NULL
+WHERE identifier = '${esc_identifier}';
+"
+    log_info "重置 Page Builder 内容缓存 (${identifier})"
+    local mysql_output=""
+    if mysql_output=$(MYSQL_PWD="${PWA_DB_PASSWORD}" "${mysql_cmd[@]}" -e "$sql" 2>&1); then
+        log_info "Page Builder 缓存已清空 (${identifier})"
+    else
+        log_warning "重置 Page Builder 缓存失败 (${identifier}): ${mysql_output}"
+    fi
 }

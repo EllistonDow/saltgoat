@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.29] - 2025-11-14
+
+### Changes
+- 修改 9 个文件: modules/pwa/install.sh, modules/pwa/lib/cms_apply_page.php, modules/pwa/lib/config.sh, modules/pwa/lib/magento.sh, modules/pwa/templates/cms/pwa_home.html 等
+
+
 ## [1.6.28] - 2025-11-14
 
 ### Changes

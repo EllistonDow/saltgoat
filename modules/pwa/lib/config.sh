@@ -51,6 +51,23 @@ load_site_config() {
     else
         PWA_HOME_TEMPLATE_PATH=""
     fi
+    if [[ -n "${PWA_ALT_HOME_TEMPLATE:-}" ]]; then
+        if [[ "${PWA_ALT_HOME_TEMPLATE}" != /* ]]; then
+            PWA_ALT_HOME_TEMPLATE_PATH="${SCRIPT_DIR%/}/${PWA_ALT_HOME_TEMPLATE}"
+        else
+            PWA_ALT_HOME_TEMPLATE_PATH="${PWA_ALT_HOME_TEMPLATE}"
+        fi
+        if [[ ! -f "$PWA_ALT_HOME_TEMPLATE_PATH" ]]; then
+            PWA_ALT_HOME_TEMPLATE_WARNING="模板文件未找到: ${PWA_ALT_HOME_TEMPLATE_PATH}"
+        fi
+    else
+        local default_alt="${SCRIPT_DIR%/}/modules/pwa/templates/cms/pwa_home_no_pb.html"
+        if [[ -f "$default_alt" ]]; then
+            PWA_ALT_HOME_TEMPLATE_PATH="$default_alt"
+        else
+            PWA_ALT_HOME_TEMPLATE_PATH=""
+        fi
+    fi
     if is_true "${PWA_STUDIO_ENABLE:-false}"; then
         PWA_WITH_FRONTEND="true"
     else
@@ -86,6 +103,8 @@ prepare_pwa_env() {
     ensure_env_default "$env_file" "MAGENTO_LIVE_SEARCH_ENABLED" "false"
     ensure_env_default "$env_file" "MAGENTO_PWA_HOME_IDENTIFIER" "home"
     ensure_env_default "$env_file" "SALTGOAT_PWA_SHOWCASE_FALLBACK" "auto"
+    ensure_env_default "$env_file" "MAGENTO_PWA_ALT_HOME_IDENTIFIER" "pwa_home_no_pb"
+    ensure_env_default "$env_file" "MAGENTO_PWA_ALT_HOME_TITLE" "PWA Home (No Page Builder)"
 
     local root_env="${PWA_STUDIO_DIR%/}/.env"
     local venia_env="${PWA_STUDIO_DIR%/}/packages/venia-concept/.env"
@@ -127,6 +146,12 @@ log_pwa_home_identifier_hint() {
         identifier="home"
     fi
     log_note "当前 PWA 首页 identifier = ${identifier}" "如需调整，请在 Pillar pwa_studio.env_overrides 中设置 MAGENTO_PWA_HOME_IDENTIFIER。"
+    local alt_identifier
+    alt_identifier="$(read_pwa_env_value "MAGENTO_PWA_ALT_HOME_IDENTIFIER" 2>/dev/null || echo "")"
+    if [[ -z "$alt_identifier" ]]; then
+        alt_identifier="pwa_home_no_pb"
+    fi
+    log_note "可选 No Page Builder 页面 identifier = ${alt_identifier}" "如需启用自由布局，可以让 MAGENTO_PWA_HOME_IDENTIFIER 指向该页面。"
 }
 
 resolve_home_template_file() {
@@ -137,9 +162,19 @@ resolve_home_template_file() {
     fi
 }
 
+resolve_alt_home_template_file() {
+    if [[ -n "$PWA_ALT_HOME_TEMPLATE_PATH" && -f "$PWA_ALT_HOME_TEMPLATE_PATH" ]]; then
+        echo "$PWA_ALT_HOME_TEMPLATE_PATH"
+    else
+        echo ""
+    fi
+}
+
 # 这些变量由主 CLI 与其他 lib 读取，使用“空操作”保持 ShellCheck 安静
 : "${PWA_WITH_FRONTEND:-}"
 : "${PWA_HOME_TEMPLATE_WARNING:-}"
+: "${PWA_ALT_HOME_TEMPLATE_WARNING:-}"
+: "${PWA_ALT_HOME_TEMPLATE_PATH:-}"
 : "${PWA_HOME_FORCE_TEMPLATE:-}"
 : "${PWA_HOME_STORE_IDS:-}"
 : "${PWA_NODE_PROVIDER:-}"

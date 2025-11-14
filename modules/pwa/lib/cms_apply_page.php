@@ -41,6 +41,8 @@ if ($content === false) {
     exit(1);
 }
 $content = trim($content);
+$versionStamp = sprintf("\n<!-- sg-sync:%s -->", gmdate('c'));
+$contentWithStamp = $content . $versionStamp;
 
 $stores = array_values(array_filter(array_map(static function ($value) {
     $value = trim($value);
@@ -80,14 +82,15 @@ $wasExisting = (bool)$page->getId();
 
 $page->setIdentifier($identifier);
 $page->setTitle($title !== '' ? $title : $identifier);
-$page->setContent($content);
+$page->setContent($contentWithStamp);
 $page->setIsActive(1);
 $page->setPageLayout('1column');
 $page->setStores($stores);
 
 $originalContent = trim((string)$page->getOrigData('content'));
+$finalContent = trim($contentWithStamp);
 
-if ($wasExisting && !$forceUpdate && $originalContent === $content) {
+if ($wasExisting && !$forceUpdate && $originalContent === $finalContent) {
     echo "unchanged\n";
     exit(0);
 }

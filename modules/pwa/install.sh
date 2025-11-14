@@ -44,7 +44,7 @@ SaltGoat Magento PWA 安装助手
 用法:
   saltgoat pwa install <site> [--with-pwa|--no-pwa]
   saltgoat pwa status <site>
-  saltgoat pwa sync-content <site> [--pull] [--rebuild] [--skip-cms]
+  saltgoat pwa sync-content <site> [--pull] [--rebuild] [--skip-cms] [--home-id <identifier>]
   saltgoat pwa remove <site> [--purge]
   saltgoat pwa help
 
@@ -53,7 +53,7 @@ SaltGoat Magento PWA 安装助手
   - 首次运行会自动安装 Node/Yarn（如缺失）、创建数据库/用户、生成 Magento 项目并执行 setup:install
   - 可选地调用现有的 Valkey / RabbitMQ / Cron 自动化脚本
   - 如配置中启用 pwa_studio.enable 或追加 --with-pwa，将自动克隆 PWA Studio 并执行 Yarn 构建
-  - `status` 输出站点与前端服务状态；`sync-content` 用于重新应用 overrides/环境变量，按需拉取仓库或重建；`--skip-cms` 可跳过 CMS 模板写入，仅更新前端资源；`remove --purge` 可清理 systemd 服务并删除 PWA Studio 目录
+  - `status` 输出站点与前端服务状态；`sync-content` 用于重新应用 overrides/环境变量，按需拉取仓库或重建；`--skip-cms` 可跳过 CMS 模板写入；`--no-pb` 将首页 identifier 切换到无 Page Builder 版本；`--home-id` 可显式指定 identifier；`remove --purge` 可清理 systemd 服务并删除 PWA Studio 目录
 EOF
 }
 
@@ -83,6 +83,24 @@ EOF
 3. 运行: sudo saltgoat magetools rabbitmq-salt smart ${PWA_SITE_NAME} （如未自动执行）
 4. 如启用 PWA Studio，可将构建产物通过 Nginx/PM2 对外发布，详见 docs/magento-pwa.md。
 EOF
+}
+
+set_pwa_home_identifier() {
+    local identifier="$1"
+    if [[ -z "$identifier" ]]; then
+        return
+    fi
+    local overrides
+    overrides=$(python3 -c 'import json,sys; print(json.dumps({"MAGENTO_PWA_HOME_IDENTIFIER": sys.argv[1]}))' "$identifier")
+    if python3 "$PWA_HELPER" apply-env --file "$PWA_STUDIO_ENV_FILE" --overrides "$overrides"; then
+        local root_env="${PWA_STUDIO_DIR%/}/.env"
+        local venia_env="${PWA_STUDIO_DIR%/}/packages/venia-concept/.env"
+        sync_env_copy "$PWA_STUDIO_ENV_FILE" "$root_env"
+        sync_env_copy "$PWA_STUDIO_ENV_FILE" "$venia_env"
+        log_info "已设置 MAGENTO_PWA_HOME_IDENTIFIER=${identifier}"
+    else
+        log_warning "更新 MAGENTO_PWA_HOME_IDENTIFIER 失败 (${identifier})"
+    fi
 }
 
 install_site() {
@@ -121,6 +139,8 @@ sync_site_content() {
     local do_pull="$2"
     local do_rebuild="$3"
     local skip_cms="$4"
+    local use_alt_home="${5:-false}"
+    local custom_home_identifier="${6:-}"
     load_site_config "$site"
 
     if ! is_true "${PWA_WITH_FRONTEND:-false}"; then
@@ -147,9 +167,13 @@ sync_site_content() {
         sync_pwa_overrides
         apply_mos_graphql_fixes
         prepare_pwa_env
+        if [[ -n "$custom_home_identifier" ]]; then
+            set_pwa_home_identifier "$custom_home_identifier"
+        fi
         prune_unused_pwa_extensions
         if ! is_true "$skip_cms"; then
             ensure_pwa_home_cms_page
+            ensure_pwa_no_pb_cms_page
             log_pwa_home_identifier_hint
         else
             log_info "已根据参数跳过 CMS 模板同步，保留现有后台内容。"
@@ -338,6 +362,7 @@ case "$ACTION" in
         DO_PULL="false"
         DO_REBUILD="false"
         SKIP_CMS="false"
+        CUSTOM_HOME_IDENTIFIER=""
         while [[ $# -gt 0 ]]; do
             case "$1" in
                 --pull)
@@ -351,6 +376,13 @@ case "$ACTION" in
                 --skip-cms)
                     SKIP_CMS="true"
                     shift
+                    ;;
+                --home-id)
+                    if [[ -z "${2:-}" ]]; then
+                        abort "--home-id 需要一个参数"
+                    fi
+                    CUSTOM_HOME_IDENTIFIER="$2"
+                    shift 2
                     ;;
                 --help|-h)
                     usage
@@ -372,7 +404,7 @@ case "$ACTION" in
         if [[ -z "$SITE" ]]; then
             abort "请提供站点名称，例如: saltgoat pwa sync-content pwa"
         fi
-        sync_site_content "$SITE" "$DO_PULL" "$DO_REBUILD" "$SKIP_CMS"
+        sync_site_content "$SITE" "$DO_PULL" "$DO_REBUILD" "$SKIP_CMS" "" "$CUSTOM_HOME_IDENTIFIER"
         ;;
     "remove")
         shift

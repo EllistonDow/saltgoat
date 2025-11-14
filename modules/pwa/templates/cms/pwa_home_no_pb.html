@@ -1,0 +1,458 @@
+<style>
+    :root {
+        --nx-bg: #030712;
+        --nx-bg-alt: #050e1f;
+        --nx-grid: rgba(255, 255, 255, 0.04);
+        --nx-panel: rgba(9, 14, 31, 0.75);
+        --nx-panel-strong: rgba(8, 15, 27, 0.85);
+        --nx-border: rgba(255, 255, 255, 0.08);
+        --nx-text: #f7f9ff;
+        --nx-subtext: rgba(247, 249, 255, 0.75);
+        --nx-accent: #57ffe6;
+        --nx-accent-strong: #7c5dff;
+        --nx-hot: #ff8bd1;
+        --nx-shadow: 0 25px 80px rgba(5, 6, 10, 0.65);
+    }
+
+    .nx-home {
+        min-height: 100vh;
+        font-family: 'Inter', 'Space Grotesk', system-ui, sans-serif;
+        color: var(--nx-text);
+        background: radial-gradient(circle at 20% 20%, rgba(87, 255, 230, 0.2), transparent 55%),
+            radial-gradient(circle at 80% 0%, rgba(124, 93, 255, 0.22), transparent 45%), var(--nx-bg);
+        overflow: hidden;
+        position: relative;
+        width: 100vw;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
+    }
+
+    .nx-glow-grid {
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(to right, var(--nx-grid) 1px, transparent 1px),
+            linear-gradient(to bottom, var(--nx-grid) 1px, transparent 1px);
+        background-size: 80px 80px;
+        opacity: 0.35;
+        mask-image: radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.6), transparent 70%);
+        pointer-events: none;
+    }
+
+    .nx-shell {
+        width: min(96vw, 1800px);
+        margin: 0 auto;
+        padding: clamp(32px, 6vw, 72px);
+        display: flex;
+        flex-direction: column;
+        gap: clamp(48px, 6vw, 96px);
+        position: relative;
+        z-index: 2;
+    }
+
+    .nx-shell > * {
+        width: 100%;
+    }
+
+    .nx-hero {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: clamp(32px, 4vw, 64px);
+        align-items: center;
+        padding: clamp(24px, 4vw, 56px);
+        border-radius: 40px;
+        background: linear-gradient(135deg, rgba(6, 10, 24, 0.95), rgba(7, 13, 30, 0.8));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: var(--nx-shadow);
+    }
+
+    .nx-hero-copy span {
+        font-size: 0.8rem;
+        letter-spacing: 0.6em;
+        color: var(--nx-subtext);
+        text-transform: uppercase;
+    }
+
+    .nx-hero-copy h1 {
+        margin: 16px 0;
+        font-size: clamp(2.8rem, 6vw, 4.8rem);
+        line-height: 1.05;
+        background: linear-gradient(120deg, var(--nx-accent), var(--nx-accent-strong) 60%, var(--nx-hot));
+        -webkit-background-clip: text;
+        color: transparent;
+    }
+
+    .nx-hero-copy p {
+        margin: 0 0 28px;
+        color: var(--nx-subtext);
+        font-size: 1.15rem;
+        line-height: 1.8;
+        max-width: 540px;
+    }
+
+    .nx-hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .nx-btn {
+        border-radius: 999px;
+        padding: 14px 28px;
+        font-weight: 600;
+        border: 1px solid var(--nx-border);
+        background: transparent;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .nx-btn.primary {
+        background-image: linear-gradient(120deg, var(--nx-accent), var(--nx-accent-strong));
+        color: var(--nx-bg);
+        border: none;
+        box-shadow: 0 20px 40px rgba(87, 255, 230, 0.35);
+    }
+
+    .nx-btn:hover {
+        transform: translateY(-3px);
+    }
+
+    .nx-hero-visual {
+        position: relative;
+        padding: 48px;
+        border-radius: 32px;
+        background: var(--nx-panel);
+        border: 1px solid var(--nx-border);
+        box-shadow: var(--nx-shadow);
+        overflow: hidden;
+    }
+
+    .nx-orb,
+    .nx-orb-secondary {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(8px);
+        opacity: 0.55;
+        animation: float 14s ease-in-out infinite;
+    }
+
+    .nx-orb {
+        width: 220px;
+        height: 220px;
+        background: radial-gradient(circle, rgba(87, 255, 230, 0.9), transparent);
+        top: -40px;
+        left: -20px;
+    }
+
+    .nx-orb-secondary {
+        width: 260px;
+        height: 260px;
+        background: radial-gradient(circle, rgba(124, 93, 255, 0.75), transparent);
+        bottom: -60px;
+        right: -20px;
+        animation-delay: 2s;
+    }
+
+    .nx-hero-visual canvas,
+    .nx-hero-visual img {
+        width: 100%;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(3, 7, 18, 0.6);
+        position: relative;
+        z-index: 2;
+        box-shadow: var(--nx-shadow);
+    }
+
+    .nx-bento {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: clamp(24px, 3vw, 40px);
+    }
+
+    .nx-tile {
+        border-radius: 28px;
+        padding: 26px;
+        border: 1px solid var(--nx-border);
+        background: var(--nx-panel-strong);
+        backdrop-filter: blur(22px);
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 180px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .nx-tile::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at top right, rgba(87, 255, 230, 0.15), transparent 55%);
+        pointer-events: none;
+    }
+
+    .nx-tile h3 {
+        margin: 0;
+        font-size: 1.2rem;
+    }
+
+    .nx-tile p {
+        margin: 0;
+        color: var(--nx-subtext);
+        line-height: 1.6;
+    }
+
+    .nx-metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: clamp(18px, 3vw, 36px);
+    }
+
+    .nx-metric {
+        border-radius: 18px;
+        padding: 18px;
+        background: rgba(3, 7, 18, 0.55);
+        border: 1px solid var(--nx-border);
+        text-align: center;
+    }
+
+    .nx-metric strong {
+        font-size: 2rem;
+        display: block;
+    }
+
+    .nx-slider {
+        border-radius: 48px;
+        padding: clamp(28px, 5vw, 64px);
+        border: 1px solid var(--nx-border);
+        background: linear-gradient(120deg, rgba(87, 255, 230, 0.12), rgba(124, 93, 255, 0.12));
+        overflow: hidden;
+        position: relative;
+    }
+
+    .nx-slider::before,
+    .nx-slider::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 120px;
+        pointer-events: none;
+    }
+
+    .nx-slider::before {
+        left: 0;
+        background: linear-gradient(90deg, var(--nx-bg) 0%, transparent 100%);
+    }
+
+    .nx-slider::after {
+        right: 0;
+        background: linear-gradient(270deg, var(--nx-bg) 0%, transparent 100%);
+    }
+
+    .nx-slider-track {
+        display: flex;
+        gap: 18px;
+        animation: marquee 18s linear infinite;
+    }
+
+    .nx-slide {
+        min-width: 280px;
+        border-radius: 24px;
+        padding: 20px;
+        border: 1px solid var(--nx-border);
+        background: rgba(3, 7, 18, 0.7);
+        box-shadow: var(--nx-shadow);
+    }
+
+    .nx-showcase {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: clamp(24px, 4vw, 48px);
+        align-items: center;
+        padding: clamp(24px, 4vw, 48px);
+        border-radius: 32px;
+        border: 1px solid var(--nx-border);
+        background: linear-gradient(135deg, rgba(6, 10, 24, 0.9), rgba(7, 13, 30, 0.75));
+        box-shadow: var(--nx-shadow);
+    }
+
+    .nx-split-card {
+        border-radius: 28px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(5, 7, 15, 0.9);
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-shadow: var(--nx-shadow);
+    }
+
+    .nx-cta {
+        border-radius: 36px;
+        padding: clamp(32px, 5vw, 64px);
+        text-align: center;
+        background: linear-gradient(120deg, rgba(87, 255, 230, 0.18), rgba(124, 93, 255, 0.25), rgba(255, 139, 209, 0.28));
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        box-shadow: var(--nx-shadow);
+    }
+
+    .nx-cta h2 {
+        margin: 0 0 12px;
+        font-size: clamp(2.2rem, 4vw, 3.4rem);
+    }
+
+    .nx-cta p {
+        margin: 0 0 24px;
+        color: var(--nx-subtext);
+    }
+
+    @keyframes float {
+        0% {
+            transform: translate3d(0, 0, 0);
+        }
+        50% {
+            transform: translate3d(20px, -20px, 0);
+        }
+        100% {
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+    @keyframes marquee {
+        0% {
+            transform: translateX(0);
+        }
+        100% {
+            transform: translateX(-50%);
+        }
+    }
+
+    @media (max-width: 1024px) {
+        .nx-home {
+            width: 100%;
+            margin-left: 0;
+            margin-right: 0;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .nx-hero-actions {
+            flex-direction: column;
+        }
+        .nx-slider {
+            padding: 24px 18px;
+        }
+    }
+</style>
+
+<section class="nx-home">
+    <div class="nx-glow-grid"></div>
+    <div class="nx-shell">
+        <header class="nx-hero">
+            <div class="nx-hero-copy">
+                <span>Saltgoat · Tattoo Commerce OS</span>
+                <h1>Next.js energy for every tattoo supply drop.</h1>
+                <p>
+                    We rebuilt the Magento PWA home as a full-width experience: cinematic gradients, floating light cores, story-driven modules, and micro-interactions
+                    that match the boldness of studio work.
+                </p>
+                <div class="nx-hero-actions">
+                    <a class="nx-btn primary" href="/products">Browse tattoo tech</a>
+                    <a class="nx-btn" href="/contact">Talk to our architects</a>
+                </div>
+            </div>
+            <div class="nx-hero-visual">
+                <div class="nx-orb"></div>
+                <div class="nx-orb-secondary"></div>
+                <img src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=1200&q=80" alt="Hero showcase" />
+            </div>
+        </header>
+
+        <section class="nx-bento">
+            <article class="nx-tile">
+                <h3>Realtime creative supply</h3>
+                <p>Streaming inventory, artist wishlists, and curated drops all sync through SaltGoat’s automation layer.</p>
+            </article>
+            <article class="nx-tile">
+                <h3>Immersive storytelling</h3>
+                <p>Hero sliders, Lottie motion, and shader overlays feel like a Next.js site but run inside Magento.</p>
+            </article>
+            <article class="nx-tile">
+                <h3>One-page launchpads</h3>
+                <p>Spin up standalone product microsites with glass panels and automatic SSL via one CLI command.</p>
+            </article>
+            <article class="nx-tile">
+                <h3>Dark/light duality</h3>
+                <p>Precise palettes for both modes with balanced typography, refined borders, and vivid call-to-actions.</p>
+            </article>
+        </section>
+
+        <section class="nx-metric-grid">
+            <div class="nx-metric">
+                <strong>0.8s</strong>
+                <span>First Contentful Paint</span>
+            </div>
+            <div class="nx-metric">
+                <strong>+48%</strong>
+                <span>Repeat checkout rate</span>
+            </div>
+            <div class="nx-metric">
+                <strong>24/7</strong>
+                <span>Orchestration CLI</span>
+            </div>
+        </section>
+
+        <section class="nx-slider">
+            <div class="nx-slider-track">
+                <div class="nx-slide">
+                    <h4>Canvas commerce</h4>
+                    <p>Hover-active hero layers that showcase coils, pigments, and studio rigs.</p>
+                </div>
+                <div class="nx-slide">
+                    <h4>Checkout glow</h4>
+                    <p>Guided steps with low-contrast dividers and friendly validation states.</p>
+                </div>
+                <div class="nx-slide">
+                    <h4>Artist portals</h4>
+                    <p>Order analytics, subscriptions, and booking updates in a glass dashboard.</p>
+                </div>
+                <div class="nx-slide">
+                    <h4>Supply graph</h4>
+                    <p>RFID telemetry shown as animated arcs across the grid.</p>
+                </div>
+                <div class="nx-slide">
+                    <h4>OnePage drops</h4>
+                    <p>Instant microsites per flagship machine with cinematic scroll.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="nx-showcase">
+            <article class="nx-split-card">
+                <h3>3D narrative blocks</h3>
+                <p>Use layered gradients, parallax textures, and typographic scale to highlight tattoo tech in motion.</p>
+            </article>
+            <article class="nx-split-card">
+                <h3>Glass mega menus</h3>
+                <p>Dropdowns inherit the same frosted blur and subtle neon edges as the sticky header.</p>
+            </article>
+            <article class="nx-split-card">
+                <h3>Streaming CMS</h3>
+                <p>Switch between Page Builder and this code-driven home by using `--home-id` during `saltgoat pwa sync-content`.</p>
+            </article>
+        </section>
+
+        <section class="nx-cta">
+            <h2>Deploy a Next.js-grade tattoo storefront.</h2>
+            <p>SaltGoat orchestrates Magento, Venia, and custom one-page launches under a single automation banner.</p>
+            <div class="nx-hero-actions" style="justify-content: center;">
+                <a class="nx-btn primary" href="mailto:hello@saltgoat.com">Book a design session</a>
+                <a class="nx-btn" href="/docs">Read the playbook</a>
+            </div>
+        </section>
+    </div>
+</section>
