@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.7.2] - 2025-11-14
+
+### Changes
+- 修改 1 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/MiniCart/miniCart.module.css
+
+
 ## [1.7.1] - 2025-11-14
 
 ### Changes
