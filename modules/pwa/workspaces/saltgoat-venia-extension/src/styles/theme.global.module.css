@@ -310,6 +310,13 @@
     backdrop-filter: blur(16px);
 }
 
+:global(:is(html, body)[data-theme='light'] .sg-glass) {
+    background: rgba(255, 255, 255, 0.94) !important;
+    border: 1px solid rgba(15, 23, 42, 0.12) !important;
+    box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18) !important;
+    color: var(--sg-text, #101828) !important;
+}
+
 :global(:is([data-cy='Header-root'], [class*='header-root' i])) {
     background: var(--sg-header-bg) !important;
     color: var(--sg-header-text) !important;
@@ -381,6 +388,20 @@
     padding: clamp(28px, 3vw, 48px);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
+}
+
+:global(body[data-theme='light'] [data-cy='MegaMenu-panel']),
+:global(body[data-theme='light'] [data-cy='AccountMenu-panel']),
+:global(body[data-theme='light'] [data-cy='MiniCart-contents']) {
+    background: rgba(255, 255, 255, 0.94) !important;
+    border: 1px solid rgba(15, 23, 42, 0.12) !important;
+    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.18) !important;
+    color: var(--sg-text, #101828) !important;
+}
+
+:global(body[data-theme='light'] [data-cy='MegaMenu-submenuItems']) {
+    background: rgba(247, 249, 255, 0.96) !important;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06) !important;
 }
 
 :global([data-cy='MegaMenu-submenuItems']) {

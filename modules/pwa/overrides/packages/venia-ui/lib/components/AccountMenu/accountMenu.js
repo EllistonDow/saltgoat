@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { shape, string } from 'prop-types';
 import { useAccountMenu } from '@magento/peregrine/lib/talons/Header/useAccountMenu';
 
@@ -8,6 +8,7 @@ import SignIn from '../SignIn/signIn';
 import AccountMenuItems from './accountMenuItems';
 import ForgotPassword from '../ForgotPassword';
 import defaultClasses from './accountMenu.module.css';
+import { ThemeContext } from '@saltgoat/venia-extension/src/components/ThemeProvider';
 
 const AccountMenu = React.forwardRef((props, ref) => {
     const {
@@ -31,6 +32,7 @@ const AccountMenu = React.forwardRef((props, ref) => {
     } = talonProps;
 
     const classes = useStyle(defaultClasses, props.classes);
+    const { theme } = useContext(ThemeContext);
     const rootClass = accountMenuIsOpen
         ? classes.root_open
         : classes.root_closed;
@@ -83,13 +85,29 @@ const AccountMenu = React.forwardRef((props, ref) => {
         }
     }
 
+    const glassTone =
+        theme === 'light'
+            ? {
+                  bg: 'rgba(255, 255, 255, 0.94)',
+                  border: 'rgba(15, 23, 42, 0.12)',
+                  shadow: '0 30px 80px rgba(15, 23, 42, 0.16)',
+                  text: '#101828'
+              }
+            : {
+                  bg: 'rgba(7, 11, 22, 0.92)',
+                  border: 'rgba(255, 255, 255, 0.12)',
+                  shadow: '0 30px 70px rgba(5, 8, 16, 0.6)',
+                  text: '#f4f6fb'
+              };
+
     const panelStyle = {
-        background: 'var(--sg-overlay-bg, rgba(7, 11, 22, 0.92))',
+        background: glassTone.bg,
         borderRadius: '28px',
-        boxShadow: '0 30px 70px var(--sg-overlay-shadow, rgba(5, 8, 16, 0.6))',
+        boxShadow: glassTone.shadow,
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid var(--sg-flyout-border, rgba(255, 255, 255, 0.12))'
+        border: `1px solid ${glassTone.border}`,
+        color: glassTone.text
     };
 
     return (

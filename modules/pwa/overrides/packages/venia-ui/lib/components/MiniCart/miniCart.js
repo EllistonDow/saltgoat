@@ -1,4 +1,4 @@
-import React, { Fragment, useEffect } from 'react';
+import React, { Fragment, useContext, useEffect } from 'react';
 import { FormattedMessage } from 'react-intl';
 import {
     Lock as LockIcon,
@@ -16,6 +16,7 @@ import StockStatusMessage from '../StockStatusMessage';
 import ProductList from './ProductList';
 import defaultClasses from './miniCart.module.css';
 import operations from './miniCart.gql';
+import { ThemeContext } from '@saltgoat/venia-extension/src/components/ThemeProvider';
 
 const errorIcon = <Icon src={AlertCircleIcon} size={20} />;
 
@@ -45,6 +46,7 @@ const MiniCart = React.forwardRef((props, ref) => {
     } = talonProps;
 
     const classes = useStyle(defaultClasses, props.classes);
+    const { theme } = useContext(ThemeContext);
     const rootClass = isOpen ? classes.root_open : classes.root_closed;
     const contentsClass = isOpen ? classes.contents_open : classes.contents;
     const quantityClassName = loading
@@ -174,14 +176,29 @@ const MiniCart = React.forwardRef((props, ref) => {
         </Fragment>
     );
 
+    const glassTone =
+        theme === 'light'
+            ? {
+                  bg: 'rgba(255, 255, 255, 0.94)',
+                  border: 'rgba(15, 23, 42, 0.12)',
+                  shadow: '0 30px 80px rgba(15, 23, 42, 0.16)',
+                  text: '#101828'
+              }
+            : {
+                  bg: 'rgba(7, 11, 22, 0.92)',
+                  border: 'rgba(255, 255, 255, 0.12)',
+                  shadow: '0 30px 70px rgba(5, 8, 16, 0.6)',
+                  text: '#f4f6fb'
+              };
+
     const panelStyle = {
-        background: 'var(--sg-overlay-bg, rgba(7, 11, 22, 0.92))',
+        background: glassTone.bg,
         borderRadius: '28px',
-        boxShadow: '0 30px 70px var(--sg-overlay-shadow, rgba(5, 8, 16, 0.6))',
-        border: '1px solid var(--sg-flyout-border, rgba(255, 255, 255, 0.12))',
+        boxShadow: glassTone.shadow,
+        border: `1px solid ${glassTone.border}`,
         backdropFilter: 'blur(18px)',
         WebkitBackdropFilter: 'blur(18px)',
-        color: 'var(--sg-text, #f4f6fb)'
+        color: glassTone.text
     };
 
     return (

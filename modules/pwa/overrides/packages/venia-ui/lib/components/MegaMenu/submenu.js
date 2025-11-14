@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import PropTypes from 'prop-types';
 
 import { useSubMenu } from '@magento/peregrine/lib/talons/MegaMenu/useSubMenu';
 
 import { useStyle } from '../../classify';
 import defaultClasses from './submenu.module.css';
+import { ThemeContext } from '@saltgoat/venia-extension/src/components/ThemeProvider';
 import SubmenuColumn from './submenuColumn';
 
 const Submenu = props => {
@@ -19,6 +20,26 @@ const Submenu = props => {
     } = props;
     const PADDING_OFFSET = 20;
     const classes = useStyle(defaultClasses, props.classes);
+    const { theme } = useContext(ThemeContext);
+
+    const glassTone =
+        theme === 'light'
+            ? {
+                  panelBg: 'rgba(255, 255, 255, 0.95)',
+                  panelBorder: 'rgba(15, 23, 42, 0.12)',
+                  panelShadow: '0 40px 90px rgba(15, 23, 42, 0.16)',
+                  itemsBg: 'rgba(247, 249, 255, 0.96)',
+                  itemsBorder: 'rgba(15, 23, 42, 0.08)',
+                  text: '#101828'
+              }
+            : {
+                  panelBg: 'rgba(5, 8, 18, 0.9)',
+                  panelBorder: 'rgba(255, 255, 255, 0.12)',
+                  panelShadow: '0 40px 90px rgba(5, 8, 18, 0.65)',
+                  itemsBg: 'rgba(7, 11, 22, 0.92)',
+                  itemsBorder: 'rgba(255, 255, 255, 0.08)',
+                  text: '#f4f6fb'
+              };
 
     const talonProps = useSubMenu({
         isFocused,
@@ -50,22 +71,23 @@ const Submenu = props => {
 
     const panelStyle = {
         width: 'min(calc(100% - clamp(24px, 4vw, 96px)), 1280px)',
-        background: 'var(--sg-flyout-bg, rgba(5, 8, 18, 0.9))',
+        background: glassTone.panelBg,
         borderRadius: '32px',
-        boxShadow: '0 40px 90px var(--sg-overlay-shadow, rgba(5, 8, 18, 0.6))',
+        boxShadow: glassTone.panelShadow,
         padding: 'clamp(28px, 3vw, 48px)',
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
-        border: '1px solid var(--sg-flyout-border, rgba(255, 255, 255, 0.08))'
+        border: `1px solid ${glassTone.panelBorder}`,
+        color: glassTone.text
     };
 
     const itemsStyle = {
         minWidth: mainNavWidth + PADDING_OFFSET,
-        background: 'var(--sg-overlay-bg, rgba(7, 11, 22, 0.92))',
+        background: glassTone.itemsBg,
         borderRadius: '24px',
         padding: 'clamp(12px, 2vw, 20px)',
-        boxShadow:
-            'inset 0 0 0 1px var(--sg-flyout-border, rgba(255, 255, 255, 0.08))'
+        boxShadow: `inset 0 0 0 1px ${glassTone.itemsBorder}`,
+        color: glassTone.text
     };
 
     return (
