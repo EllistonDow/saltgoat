@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.6.28] - 2025-11-14
+
+### Changes
+- 修改 8 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/AccountMenu/accountMenu.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/PaymentInformation/paymentMethods.js, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/PaymentInformation/paymentMethods.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/ShippingInformation/shippingInformation.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/MiniCart/miniCart.module.css 等
+
+
 ## [1.6.27] - 2025-11-13
 
 ### Changes

@@ -42,13 +42,18 @@
     transition-property: transform;
     transition-timing-function: var(--venia-global-anim-out);
     padding: 0;
-    background: transparent !important;
-    border: none;
-    box-shadow: none;
+    background: var(--sg-menu-bg);
+    border: 1px solid var(--sg-flyout-border);
+    box-shadow: 0 30px 70px var(--sg-overlay-shadow);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
 }
 
 .panel {
     border-radius: 28px;
+    background: rgba(255, 255, 255, 0.75);
+    background: var(--sg-menu-bg);
+    border: 1px solid var(--sg-flyout-border);
     box-shadow: 0 30px 70px var(--sg-overlay-shadow);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);

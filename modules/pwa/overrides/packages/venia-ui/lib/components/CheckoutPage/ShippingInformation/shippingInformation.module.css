@@ -5,7 +5,7 @@
     composes: p-md from global;
     composes: rounded-box from global;
     background: var(--sg-checkout-surface);
-    border: none;
+    border: 1px solid var(--sg-checkout-outline);
     color: var(--sg-checkout-text);
     box-shadow: 0 18px 40px var(--sg-checkout-glow);
 }
@@ -19,7 +19,7 @@
     @apply rounded-none;
     background: var(--sg-checkout-surface);
     border: none;
-    border-bottom: 1px solid var(--sg-checkout-divider);
+    border-bottom: 1px solid var(--sg-checkout-outline);
     box-shadow: 0 18px 40px var(--sg-checkout-glow);
 }
 

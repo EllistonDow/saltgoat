@@ -29,6 +29,17 @@
     color: var(--sg-checkout-text);
 }
 
+.payment_method :global(.icon svg) {
+    @apply stroke-current;
+    stroke: var(--sg-checkout-muted);
+    transition: stroke 0.2s ease;
+}
+
+.payment_method :global(.input:checked + .icon svg) {
+    @apply stroke-current;
+    stroke: var(--sg-primary);
+}
+
 .payment_errors {
     composes: grid from global;
     composes: gap-2xs from global;

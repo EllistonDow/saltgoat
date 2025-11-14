@@ -131,7 +131,8 @@ const PaymentMethods = props => {
                         label={title}
                         value={code}
                         classes={{
-                            label: classes.radio_label
+                            label: classes.radio_label,
+                            icon: classes.radio_icon
                         }}
                         checked={isSelected}
                         onChange={handlePaymentMethodSelection}

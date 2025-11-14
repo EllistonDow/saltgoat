@@ -42,11 +42,12 @@
     transition-duration: 192ms;
     transition-property: transform;
     transition-timing-function: var(--venia-global-anim-out);
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    background: var(--sg-menu-bg);
+    border: 1px solid var(--sg-flyout-border);
+    box-shadow: 0 30px 70px var(--sg-overlay-shadow);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    color: var(--sg-text);
 }
 
 .contents_open {
@@ -82,7 +83,7 @@
     composes: p-sm from global;
     min-height: 10rem;
     background: transparent;
-    color: inherit;
+    color: var(--sg-text);
 }
 
 .footer {

@@ -1,102 +1,151 @@
 <style>
     .sg-pwa-home {
-        font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+        font-family: 'Inter','Space Grotesk','Helvetica Neue',Arial,sans-serif;
         color: var(--sg-text);
-        background: var(--sg-home-gradient);
-        padding: clamp(32px, 4vw, 72px);
+        background: radial-gradient(circle at top, rgba(124,194,255,0.35), rgba(5,9,21,0)) 0 0/100% 60%,
+            var(--sg-home-gradient);
+        padding: clamp(32px,4vw,72px);
+        overflow: hidden;
+        position: relative;
     }
 
-    .sg-pwa-home a {
-        color: inherit;
-        text-decoration: none;
+    .sg-reveal {
+        opacity: 1;
+        transform: none;
+        transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .sg-reveal.sg-reveal-pending {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    .sg-reveal-active {
+        opacity: 1 !important;
+        transform: translateY(0) !important;
     }
 
     .sg-pwa-shell {
-        max-width: 1200px;
+        max-width: 1240px;
         margin: 0 auto;
         display: flex;
         flex-direction: column;
-        gap: clamp(32px, 4vw, 56px);
+        gap: clamp(36px,4vw,64px);
+        position: relative;
+        z-index: 2;
+    }
+
+    .sg-floating-grid {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 20% 20%, rgba(79,123,255,0.25), transparent 45%),
+            radial-gradient(circle at 80% 10%, rgba(255,118,179,0.25), transparent 55%),
+            repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 80px),
+            repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 80px);
+        opacity: 0.65;
+        filter: blur(0.4px);
+        pointer-events: none;
     }
 
     .sg-card {
         border-radius: 28px;
-        border: 1px solid var(--sg-card-border);
-        background: var(--sg-card-bg);
-        padding: clamp(24px, 3vw, 48px);
-        box-shadow: 0 24px 70px var(--sg-tile-shadow);
-        transition: background 0.3s ease, color 0.3s ease;
+        border: 1px solid rgba(255,255,255,0.1);
+        background: color-mix(in srgb, var(--sg-card-bg) 70%, rgba(255,255,255,0.05));
+        padding: clamp(24px,3vw,46px);
+        box-shadow: 0 24px 70px rgba(8,12,24,0.5);
         color: var(--sg-text);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .sg-card::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0));
+        pointer-events: none;
     }
 
     .sg-hero {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: clamp(24px, 4vw, 40px);
+        grid-template-columns: repeat(auto-fit,minmax(300px,1fr));
+        gap: clamp(24px,4vw,56px);
         align-items: center;
     }
 
     .sg-hero h1 {
-        font-size: clamp(2.2rem, 5vw, 3.4rem);
+        font-size: clamp(2.4rem,5vw,3.8rem);
         margin: 0 0 16px;
-        line-height: 1.1;
-        color: var(--sg-text);
+        line-height: 1.05;
     }
 
     .sg-hero p {
         color: var(--sg-subtext);
-        margin: 0 0 20px;
-        line-height: 1.6;
-        font-size: 1.05rem;
+        margin: 0 0 24px;
+        line-height: 1.65;
+        font-size: 1.1rem;
+    }
+
+    .sg-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.08);
+        font-size: 0.9rem;
+        letter-spacing: 0.1em;
     }
 
     .sg-hero-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
+        gap: 14px;
+        margin-bottom: 28px;
     }
 
     .sg-button-primary,
-    .sg-button-secondary {
+    .sg-button-ghost {
         border-radius: 999px;
         padding: 14px 28px;
         font-weight: 600;
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        gap: 8px;
+        gap: 10px;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
     }
 
     .sg-button-primary {
         background-image: linear-gradient(120deg, var(--sg-primary), var(--sg-primary-strong));
         color: var(--sg-primary-text);
-        box-shadow: 0 18px 32px rgba(79, 123, 255, 0.35);
+        box-shadow: 0 18px 32px rgba(79,123,255,0.35);
     }
 
-    .sg-button-secondary {
-        border: 1px solid var(--sg-secondary-border);
+    .sg-button-ghost {
+        border: 1px solid rgba(255,255,255,0.25);
         color: var(--sg-text);
         background: transparent;
     }
 
     .sg-button-primary:hover,
-    .sg-button-secondary:hover {
+    .sg-button-ghost:hover {
         transform: translateY(-2px);
     }
 
     .sg-hero-metrics {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        grid-template-columns: repeat(auto-fit,minmax(140px,1fr));
         gap: 16px;
-        margin-top: 18px;
     }
 
     .sg-hero-metric {
         padding: 16px;
         border-radius: 18px;
-        border: 1px solid var(--sg-card-border);
-        background: var(--sg-card-bg);
+        border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.02);
     }
 
     .sg-hero-metric strong {
@@ -105,32 +154,69 @@
         color: var(--sg-metric-accent);
     }
 
-    .sg-hero-media {
-        border-radius: 32px;
-        overflow: hidden;
+    .sg-hero-visual {
+        min-height: 360px;
+        perspective: 1200px;
         position: relative;
-        min-height: 320px;
-        background-size: cover;
-        background-position: center;
     }
 
-    .sg-hero-media::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(180deg, rgba(3, 7, 18, 0) 40%, rgba(3, 7, 18, 0.75) 100%);
+    .sg-orbit-stage {
+        width: 100%;
+        height: 100%;
+        border-radius: 32px;
+        background: radial-gradient(circle, rgba(124,194,255,0.25), rgba(6,9,20,0.9));
+        box-shadow: inset 0 0 80px rgba(0,0,0,0.45),0 30px 80px rgba(7,10,20,0.8);
+        position: relative;
+        overflow: hidden;
     }
 
-    .sg-hero-media-caption {
+    .sg-orbit-core {
         position: absolute;
-        bottom: 20px;
-        left: 20px;
-        right: 20px;
-        color: #ffffff;
-        z-index: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+        inset: 50% auto auto 50%;
+        transform: translate(-50%,-50%);
+        width: 140px;
+        height: 140px;
+        border-radius: 40% 60% 70% 30%;
+        background: linear-gradient(135deg, rgba(255,255,255,0.85), rgba(140,201,255,0.3));
+        box-shadow: 0 25px 50px rgba(0,0,0,0.6);
+        filter: drop-shadow(0 12px 35px rgba(124,194,255,0.35));
+        animation: sg-orbit-core 6s ease-in-out infinite;
+    }
+
+    .sg-orbit-ring {
+        position: absolute;
+        inset: 50% auto auto 50%;
+        border-radius: 50%;
+        border: 1px dashed rgba(255,255,255,0.25);
+        animation: sg-orbit-spin 12s linear infinite;
+        transform-origin: center;
+    }
+
+    .sg-orbit-ring:nth-child(1) {
+        width: 240px;
+        height: 240px;
+        animation-duration: 16s;
+    }
+
+    .sg-orbit-ring:nth-child(2) {
+        width: 320px;
+        height: 320px;
+    }
+
+    .sg-orbit-ring:nth-child(3) {
+        width: 400px;
+        height: 400px;
+        animation-duration: 20s;
+    }
+
+    .sg-orbit-spark {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #8ddcff;
+        box-shadow: 0 0 18px rgba(141,220,255,0.9);
+        animation: sg-spark 4s ease-in-out infinite;
     }
 
     .sg-section-heading {
@@ -138,285 +224,376 @@
         letter-spacing: 0.32em;
         font-size: 0.85rem;
         color: var(--sg-subtext);
-        margin-bottom: 8px;
+        margin-bottom: 12px;
         display: block;
     }
 
     .sg-section-title {
-        font-size: clamp(1.6rem, 3vw, 2.4rem);
-        margin: 0 0 24px;
-        color: var(--sg-text);
+        font-size: clamp(1.8rem,3.2vw,2.6rem);
+        margin: 0 0 18px;
     }
 
     .sg-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        grid-template-columns: repeat(auto-fit,minmax(260px,1fr));
         gap: 24px;
     }
 
     .sg-collection {
-        position: relative;
         border-radius: 24px;
-        overflow: hidden;
-        min-height: 240px;
-        color: #ffffff;
-        border: 1px solid var(--sg-collection-border);
-        box-shadow: 0 30px 45px var(--sg-collection-shadow);
-    }
-
-    .sg-collection img {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        transition: transform 0.6s ease;
-    }
-
-    .sg-collection > div {
+        padding: 24px;
+        min-height: 220px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0));
+        border: 1px solid rgba(255,255,255,0.08);
         position: relative;
-        z-index: 1;
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-        min-height: 100%;
-        background: linear-gradient(180deg, rgba(3, 6, 12, 0), rgba(3, 6, 12, 0.85));
+        overflow: hidden;
     }
 
-    .sg-collection span {
-        font-size: 0.75rem;
-        letter-spacing: 0.3em;
-        opacity: 0.85;
+    .sg-collection::after {
+        content: '';
+        position: absolute;
+        inset: -30% -10% auto;
+        height: 140%;
+        background: radial-gradient(circle, rgba(255,255,255,0.35), transparent 60%);
+        opacity: 0;
+        transition: opacity 0.35s ease;
+    }
+
+    .sg-collection:hover::after {
+        opacity: 1;
     }
 
     .sg-collection strong {
-        font-size: 1.4rem;
-        margin-top: 6px;
+        font-size: 1.3rem;
+        display: block;
+        margin-bottom: 8px;
     }
 
-    .sg-collection:hover img {
-        transform: scale(1.08);
+    .sg-collection span {
+        font-size: 0.8rem;
+        letter-spacing: 0.3em;
+        opacity: 0.7;
     }
 
-    .sg-services {
+    .sg-tech-stack {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
         gap: 18px;
     }
 
-    .sg-service-card {
+    .sg-tech-card {
         border-radius: 20px;
-        border: 1px solid var(--sg-card-border);
-        padding: 20px;
-        background: var(--sg-card-bg);
-        box-shadow: 0 18px 30px var(--sg-tile-shadow);
+        padding: 22px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.03);
+        position: relative;
+        overflow: hidden;
     }
 
-    .sg-service-card span {
-        display: inline-block;
-        padding: 6px 12px;
-        border-radius: 999px;
-        background: rgba(79, 123, 255, 0.12);
-        color: var(--sg-primary);
-        font-size: 0.8rem;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-    }
-
-    .sg-service-card h3 {
-        margin: 14px 0 8px;
-        font-size: 1.25rem;
-    }
-
-    .sg-service-card p {
-        margin: 0;
-        color: var(--sg-subtext);
-        line-height: 1.5;
-    }
-
-    .sg-slider {
+    .sg-tech-pills {
         display: flex;
-        gap: 16px;
-        overflow-x: auto;
-        padding-bottom: 8px;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
     }
 
-    .sg-slide {
-        flex: 0 0 280px;
-        border-radius: 20px;
-        border: 1px solid var(--sg-card-border);
-        background: var(--sg-card-bg);
+    .sg-tech-pills span {
+        padding: 6px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.15);
+        font-size: 0.85rem;
+    }
+
+    .sg-workflow {
+        display: grid;
+        grid-template-columns: repeat(auto-fit,minmax(180px,1fr));
+        gap: 20px;
+        position: relative;
+    }
+
+    .sg-workflow::before {
+        content: '';
+        position: absolute;
+        top: 32px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, rgba(141,220,255,0), rgba(141,220,255,0.7), rgba(255,118,179,0));
+    }
+
+    .sg-step {
         padding: 20px;
-        scroll-snap-align: start;
-        box-shadow: 0 18px 40px var(--sg-tile-shadow);
+        border-radius: 18px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(13,19,40,0.55);
+        position: relative;
     }
 
-    .sg-slide strong {
-        font-size: 1.1rem;
+    .sg-step strong {
+        font-size: 1.05rem;
         display: block;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
     }
 
-    .sg-slide span {
+    .sg-step span {
         display: inline-flex;
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.08);
         align-items: center;
-        gap: 6px;
-        font-size: 0.8rem;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-        color: var(--sg-subtext);
+        justify-content: center;
         margin-bottom: 12px;
+        font-weight: 600;
     }
 
-    .sg-slide p {
-        margin: 0;
-        color: var(--sg-subtext);
-        line-height: 1.6;
+    .sg-showcase {
+        display: grid;
+        grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
+        gap: 22px;
     }
 
-    @media (max-width: 720px) {
-        .sg-pwa-home {
-            padding: 24px 16px 48px;
-        }
+    .sg-tilt {
+        border-radius: 24px;
+        padding: 24px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.03);
+        transform-style: preserve-3d;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
 
-        .sg-card {
-            padding: 24px;
+    .sg-tilt h3 {
+        margin: 0 0 12px;
+    }
+
+    .sg-cta {
+        text-align: center;
+        padding: clamp(28px,4vw,48px);
+        border-radius: 32px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: linear-gradient(135deg, rgba(31,107,255,0.35), rgba(141,220,255,0.12));
+        box-shadow: 0 40px 90px rgba(8,12,20,0.65);
+    }
+
+    .sg-cta h2 {
+        margin: 0 0 14px;
+        font-size: clamp(2rem,4vw,2.8rem);
+    }
+
+    .sg-cta p {
+        margin: 0 0 26px;
+        color: rgba(255,255,255,0.85);
+        font-size: 1.1rem;
+    }
+
+    @keyframes sg-orbit-spin {
+        from { transform: translate(-50%,-50%) rotate(0deg); }
+        to { transform: translate(-50%,-50%) rotate(360deg); }
+    }
+
+    @keyframes sg-orbit-core {
+        0%,100% { transform: translate(-50%,-50%) rotateX(0deg) rotateY(0deg); }
+        50% { transform: translate(-50%,-50%) rotateX(12deg) rotateY(-14deg); }
+    }
+
+    @keyframes sg-spark {
+        0%,100% { opacity: 0; transform: scale(0.4); }
+        40%,70% { opacity: 1; transform: scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .sg-orbit-ring,
+        .sg-orbit-core,
+        .sg-tilt,
+        .sg-spark {
+            animation: none!important;
         }
     }
 </style>
 
-<div class="sg-pwa-home">
+<section class="sg-pwa-home">
+    <div class="sg-floating-grid"></div>
     <div class="sg-pwa-shell">
-        <section class="sg-card sg-hero">
+        <section class="sg-card sg-hero sg-reveal">
             <div>
-            <span class="sg-section-heading">Tattoo Supply Superstore</span>
-            <h1>{{config path="general/store_information/name"}} · Pro Tattoo Essentials</h1>
-            <p>
-                Streamline every session with premium needles, eco-friendly cartridges, long-run power units, and sterile aftercare. Our PWA storefront keeps fresh drops, live workshops, and ops updates in sync so your studio never misses a beat.
-            </p>
-            <div class="sg-hero-actions">
-                <a class="sg-button-primary" href="{{store url='collections/tattoo-supplies'}}">Shop Tattoo Supplies</a>
-                <a class="sg-button-secondary" href="{{store url='pro-services'}}">View Studio Services</a>
-            </div>
-            <div class="sg-hero-metrics">
-                <div class="sg-hero-metric">
-                        <strong>2K+</strong>
-                        <span>Studios Equipped</span>
+                <span class="sg-pill">Tattoo Supply Cloud · One Stack</span>
+                <h1>Launch daring storefronts with cinematic commerce.</h1>
+                <p>
+                    SaltGoat PWA stitches together ultra-fast Venia storefronts, intelligent content, and
+                    deep automation so tattoo studios can ship limited drops, manage bulk replenishment, and wow
+                    artists everywhere.
+                </p>
+                <div class="sg-hero-actions">
+                    <a href="/products" class="sg-button-primary">Explore Tattoo Gear</a>
+                    <a href="/contact" class="sg-button-ghost">Talk to a strategist →</a>
+                </div>
+                <div class="sg-hero-metrics">
+                    <div class="sg-hero-metric">
+                        <strong>45ms</strong>
+                        <small>Edge-rendered LCP</small>
                     </div>
                     <div class="sg-hero-metric">
-                        <strong>48h</strong>
-                        <span>Fulfillment Window</span>
+                        <strong>99.95%</strong>
+                        <small>Inventory accuracy</small>
                     </div>
                     <div class="sg-hero-metric">
-                        <strong>38</strong>
-                        <span>Countries Served</span>
+                        <strong>+68%</strong>
+                        <small>Conversion uplift</small>
                     </div>
                 </div>
             </div>
-            <div class="sg-hero-media">
-                <picture>
-                    <source
-                        srcset="
-                            https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2000&q=80 2000w,
-                            https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80 1200w,
-                            https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80   800w
-                        "
-                        sizes="(min-width: 1280px) 640px, (min-width: 768px) 50vw, 90vw"
-                    />
-                    <img
-                        src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"
-                        alt="Tattoo workspace showcase"
-                        loading="lazy"
-                        decoding="async"
-                        width="1280"
-                        height="720"
-                    />
-                </picture>
-                <div class="sg-hero-media-caption">
-                    <span>Studio Broadcast</span>
-                    <strong>Live needle calibration demo tonight</strong>
+            <div class="sg-hero-visual sg-reveal">
+                <div class="sg-orbit-stage">
+                    <div class="sg-orbit-core"></div>
+                    <div class="sg-orbit-ring"></div>
+                    <div class="sg-orbit-ring"></div>
+                    <div class="sg-orbit-ring"></div>
+                    <div class="sg-orbit-spark" style="top:10%;left:60%;"></div>
+                    <div class="sg-orbit-spark" style="bottom:15%;right:25%;animation-delay:1.2s;"></div>
                 </div>
             </div>
         </section>
 
-        <section class="sg-card">
-            <span class="sg-section-heading">精选系列</span>
-            <h2 class="sg-section-title">Collections built for artists and apprentices</h2>
-            <div class="sg-grid" role="list">
-                <a class="sg-collection" href="{{store url='collections/holographic'}}" role="listitem">
-                    <img src="https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=900&q=70" alt="Holographic Drop" loading="lazy" decoding="async" width="640" height="420" />
-                    <div>
-                        <span>Needle Lab</span>
-                        <strong>Precision magnums & liners</strong>
-                    </div>
-                </a>
-                <a class="sg-collection" href="{{store url='collections/motion'}}" role="listitem">
-                    <img src="https://images.unsplash.com/photo-1505740421141-36b729a2cb51?auto=format&fit=crop&w=900&q=70" alt="Motion Lab" loading="lazy" decoding="async" width="640" height="420" />
-                    <div>
-                        <span>Power Suite</span>
-                        <strong>Foot pedals & smart supplies</strong>
-                    </div>
-                </a>
-                <a class="sg-collection" href="{{store url='collections/living'}}" role="listitem">
-                    <img src="https://images.unsplash.com/photo-1493666438817-866a91353ca9?auto=format&fit=crop&w=900&q=70" alt="Living Flow" loading="lazy" decoding="async" width="640" height="420" />
-                    <div>
-                        <span>Studio Living</span>
-                        <strong>Furniture & hygiene flow</strong>
-                    </div>
-                </a>
-            </div>
-        </section>
-
-        <section class="sg-card">
-            <span class="sg-section-heading">自动化驱动</span>
-            <h2 class="sg-section-title">Why studios partner with TattooGoat PWA</h2>
-            <div class="sg-services">
-                <article class="sg-service-card">
-                    <span>Fulfillment</span>
-                    <h3>Same-day pick & pack</h3>
-                    <p>Needles, grips, ink, and PPE ship straight from climate-controlled hubs with traceable lots and sterilization records.</p>
+        <section class="sg-card sg-reveal">
+            <span class="sg-section-heading">Collections</span>
+            <h2 class="sg-section-title">Curated for modern artists</h2>
+            <div class="sg-grid">
+                <article class="sg-collection sg-tilt">
+                    <span>NEEDLE LAB</span>
+                    <strong>Precision modules</strong>
+                    <p>Modular cartridges, sterilized and sensor-tracked.</p>
                 </article>
-                <article class="sg-service-card">
-                    <span>Compliance</span>
-                    <h3>Hygiene & documentation</h3>
-                    <p>Auto-generated MSDS packs, batch certifications, and expiry alerts keep your studio audit-ready at all times.</p>
+                <article class="sg-collection sg-tilt">
+                    <span>INK ENGINE</span>
+                    <strong>Chromatic vault</strong>
+                    <p>AI-assisted pigment search with safe batch recall.</p>
                 </article>
-                <article class="sg-service-card">
-                    <span>Enablement</span>
-                    <h3>Pro studio onboarding</h3>
-                    <p>Starter bundles, layout planning, and livestream coaching help apprentices grow alongside veteran artists.</p>
+                <article class="sg-collection sg-tilt">
+                    <span>STUDIO CORE</span>
+                    <strong>Hybrid workstations</strong>
+                    <p>Glass + aluminum rigs with wireless foot controls.</p>
                 </article>
             </div>
         </section>
 
-        <section class="sg-card">
-            <span class="sg-section-heading">实时活动</span>
-            <h2 class="sg-section-title">Up next: releases, workshops, and operations</h2>
-            <div class="sg-slider" role="list">
-                <article class="sg-slide" role="listitem">
-                    <span>LIVE</span>
-                    <strong>Needle Craft Night</strong>
-                    <p>20:00 · Artist Ava demonstrates new 0.30mm textured liners. Early viewers unlock sample packs and Q&A access.</p>
+        <section class="sg-card sg-reveal">
+            <span class="sg-section-heading">Tech Lab</span>
+            <h2 class="sg-section-title">Modern stack for fearless releases</h2>
+            <div class="sg-tech-stack">
+                <article class="sg-tech-card">
+                    <h3>MagmaEdge PWA</h3>
+                    <p>Venia + GraphQL streaming + service workers tuned for tattoo-grade imagery.</p>
+                    <div class="sg-tech-pills">
+                        <span>React 18</span>
+                        <span>GraphQL</span>
+                        <span>Cloudflare Edge</span>
+                    </div>
                 </article>
-                <article class="sg-slide" role="listitem">
-                    <span>DEPLOY</span>
-                    <strong>Supply chain refresh</strong>
-                    <p>Cold-chain inks now mirror across EU + APAC warehouses, cutting pigment lead time by 24%. Track Grafana panels live.</p>
+                <article class="sg-tech-card">
+                    <h3>Realtime Ops Grid</h3>
+                    <p>Live stock beacons, RFID check-in, and predictive restock per studio zone.</p>
+                    <div class="sg-tech-pills">
+                        <span>MQTT</span>
+                        <span>Salt Pillars</span>
+                        <span>Rust workers</span>
+                    </div>
                 </article>
-                <article class="sg-slide" role="listitem">
-                    <span>OPS</span>
-                    <strong>Autopilot status</strong>
-                    <p>Valkey hit ratio 99.3%, RabbitMQ latency &lt; 80 ms, WAF auto-resolved three spikes—no manual intervention required.</p>
-                </article>
-                <article class="sg-slide" role="listitem">
-                    <span>MARKETING</span>
-                    <strong>Studio member lounge</strong>
-                    <p>Book private flash critiques and pigment labs directly inside the PWA VIP area—multi-store view ready.</p>
+                <article class="sg-tech-card">
+                    <h3>Creative Automation</h3>
+                    <p>CMS + Shader-driven assets generate hero visuals and drop teasers automatically.</p>
+                    <div class="sg-tech-pills">
+                        <span>Storyblok</span>
+                        <span>WebGL</span>
+                        <span>Lottie</span>
+                    </div>
                 </article>
             </div>
+        </section>
+
+        <section class="sg-card sg-reveal">
+            <span class="sg-section-heading">Workflow</span>
+            <h2 class="sg-section-title">Drop-ready automation</h2>
+            <div class="sg-workflow">
+                <article class="sg-step">
+                    <span>01</span>
+                    <strong>Ideate</strong>
+                    <p>Design sonic-inspired palettes in our shader playground.</p>
+                </article>
+                <article class="sg-step">
+                    <span>02</span>
+                    <strong>Sync</strong>
+                    <p>Salt Pillars push stock + pricing into Venia + one-page microsites.</p>
+                </article>
+                <article class="sg-step">
+                    <span>03</span>
+                    <strong>Launch</strong>
+                    <p>Edge workers gate VIP queues, animate media, and notify fans.</p>
+                </article>
+                <article class="sg-step">
+                    <span>04</span>
+                    <strong>Replenish</strong>
+                    <p>Telemetry loops trigger auto-manufacture and Studio drops.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="sg-card sg-showcase sg-reveal">
+            <div class="sg-tilt">
+                <h3>Immersive showcases</h3>
+                <p>Embed spinning rigs and particle inks with WebGL scenes hosted on SaltGoat OnePage.</p>
+            </div>
+            <div class="sg-tilt">
+                <h3>Adaptive theming</h3>
+                <p>Dark/light palettes, glassmorphism, and gradient DNA cascade across Venia + Checkout.</p>
+            </div>
+            <div class="sg-tilt">
+                <h3>Ops observability</h3>
+                <p>Real-time diagnostics overlay on checkout + account to surface friction instantly.</p>
+            </div>
+        </section>
+
+        <section class="sg-card sg-cta sg-reveal">
+            <h2>Ready to orchestrate legendary drops?</h2>
+            <p>Spin up a Venia concept, a cinematic OnePage story, or a full tattoo supply marketplace in days.</p>
+            <a class="sg-button-primary" href="mailto:hello@saltgoat.com">Book a build session</a>
         </section>
     </div>
-</div>
+</section>
+
+<script>
+    (function () {
+        const reveals = document.querySelectorAll('.sg-reveal');
+        if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('sg-reveal-active');
+                        entry.target.classList.remove('sg-reveal-pending');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.15 });
+            reveals.forEach(el => {
+                el.classList.add('sg-reveal-pending');
+                observer.observe(el);
+            });
+        } else {
+            reveals.forEach(el => el.classList.add('sg-reveal-active'));
+        }
+
+        const tilts = document.querySelectorAll('.sg-tilt');
+        tilts.forEach(card => {
+            card.addEventListener('pointermove', e => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const rotateY = ((x / rect.width) - 0.5) * 8;
+                const rotateX = ((y / rect.height) - 0.5) * -8;
+                card.style.transform = `perspective(900px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+            });
+            card.addEventListener('pointerleave', () => {
+                card.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg)';
+            });
+        });
+    })();
+</script>

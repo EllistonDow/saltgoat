@@ -59,6 +59,7 @@
     --sg-checkout-muted: var(--sg-subtext);
     --sg-checkout-divider: rgba(15, 23, 42, 0.08);
     --sg-checkout-glow: rgba(15, 23, 42, 0.18);
+    --sg-checkout-outline: rgba(15, 23, 42, 0.18);
     --sg-error: #ff6b81;
     --sg-error-surface: rgba(255, 107, 129, 0.15);
     --sg-focus-ring: rgba(31, 107, 255, 0.25);
@@ -135,6 +136,7 @@
     --sg-checkout-muted: #a5b9e6;
     --sg-checkout-divider: rgba(108, 168, 255, 0.22);
     --sg-checkout-glow: rgba(4, 6, 16, 0.7);
+    --sg-checkout-outline: rgba(134, 189, 255, 0.45);
     --sg-error: #ff9fb6;
     --sg-error-surface: rgba(255, 159, 182, 0.2);
     --sg-focus-ring: rgba(141, 220, 255, 0.3);
@@ -189,4 +191,15 @@
     border-radius: 20px;
     border: 1px dashed var(--sg-card-border);
     color: var(--sg-subtext);
+}
+
+:global([data-cy='AccountMenu-panel']),
+:global([data-cy='MiniCart-contents']) {
+    background: var(--sg-menu-bg) !important;
+    border: 1px solid var(--sg-flyout-border) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 30px 70px var(--sg-overlay-shadow) !important;
+    backdrop-filter: blur(18px) !important;
+    -webkit-backdrop-filter: blur(18px) !important;
+    color: var(--sg-text) !important;
 }
