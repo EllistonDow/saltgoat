@@ -84,19 +84,19 @@ const AccountMenu = React.forwardRef((props, ref) => {
     }
 
     const panelStyle = {
-        background: 'var(--sg-overlay-bg)',
+        background: 'var(--sg-overlay-bg, rgba(7, 11, 22, 0.92))',
         borderRadius: '28px',
-        boxShadow: '0 30px 70px var(--sg-overlay-shadow)',
+        boxShadow: '0 30px 70px var(--sg-overlay-shadow, rgba(5, 8, 16, 0.6))',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid var(--sg-flyout-border)'
+        border: '1px solid var(--sg-flyout-border, rgba(255, 255, 255, 0.12))'
     };
 
     return (
         <aside className={rootClass} data-cy="AccountMenu-root">
             <div ref={ref} className={contentsClass}>
                 <div
-                    className={classes.panel}
+                    className={`${classes.panel} sg-glass`}
                     style={panelStyle}
                     data-cy="AccountMenu-panel"
                 >

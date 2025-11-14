@@ -50,32 +50,33 @@ const Submenu = props => {
 
     const panelStyle = {
         width: 'min(calc(100% - clamp(24px, 4vw, 96px)), 1280px)',
-        background: 'var(--sg-flyout-bg)',
+        background: 'var(--sg-flyout-bg, rgba(5, 8, 18, 0.9))',
         borderRadius: '32px',
-        boxShadow: '0 40px 90px var(--sg-overlay-shadow)',
+        boxShadow: '0 40px 90px var(--sg-overlay-shadow, rgba(5, 8, 18, 0.6))',
         padding: 'clamp(28px, 3vw, 48px)',
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
-        border: '1px solid var(--sg-flyout-border)'
+        border: '1px solid var(--sg-flyout-border, rgba(255, 255, 255, 0.08))'
     };
 
     const itemsStyle = {
         minWidth: mainNavWidth + PADDING_OFFSET,
-        background: 'var(--sg-overlay-bg)',
+        background: 'var(--sg-overlay-bg, rgba(7, 11, 22, 0.92))',
         borderRadius: '24px',
         padding: 'clamp(12px, 2vw, 20px)',
-        boxShadow: 'inset 0 0 0 1px var(--sg-flyout-border)'
+        boxShadow:
+            'inset 0 0 0 1px var(--sg-flyout-border, rgba(255, 255, 255, 0.08))'
     };
 
     return (
         <div className={subMenuClassname} data-cy="MegaMenu-submenu">
             <div
-                className={classes.panel}
+                className={`${classes.panel} sg-glass`}
                 style={panelStyle}
                 data-cy="MegaMenu-panel"
             >
                 <div
-                    className={classes.submenuItems}
+                    className={`${classes.submenuItems} sg-glass`}
                     style={itemsStyle}
                     data-cy="MegaMenu-submenuItems"
                 >

@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.7.0] - 2025-11-14
+
+### Changes
+- 修改 3 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/AccountMenu/accountMenu.js, modules/pwa/overrides/packages/venia-ui/lib/components/MegaMenu/submenu.js, modules/pwa/overrides/packages/venia-ui/lib/components/MiniCart/miniCart.js
+
+
 ## [1.6.29] - 2025-11-14
 
 ### Changes
