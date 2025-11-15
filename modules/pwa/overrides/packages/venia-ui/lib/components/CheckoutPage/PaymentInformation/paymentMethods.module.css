@@ -16,44 +16,84 @@
 .payment_method {
     composes: grid from global;
     composes: gap-xs from global;
-    composes: items-center from global;
-    composes: border-b from global;
-    composes: border-solid from global;
-    composes: border-subtle from global;
-    composes: pb-xs from global;
-    composes: pt-xs from global;
-    grid-template-columns: auto 1fr;
-    border-color: var(--sg-checkout-divider);
+    border-bottom: 1px solid color-mix(in srgb, var(--sg-checkout-divider) 80%, transparent);
+    padding-bottom: var(--venia-global-padding-xSmall);
 }
 
-.payment_method input[type='radio'] {
+.payment_method:last-of-type {
+    border-bottom: 0;
+}
+
+.radio_root {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--venia-global-padding-small);
+    align-items: center;
+    padding: var(--venia-global-padding-xSmall);
+    border-radius: 16px;
+    border: 1px solid color-mix(in srgb, var(--sg-checkout-border) 65%, transparent);
+    background: color-mix(in srgb, var(--sg-checkout-surface) 90%, rgba(255, 255, 255, 0.02));
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.radio_root:focus-within {
+    border-color: var(--sg-checkout-outline);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--sg-checkout-outline) 50%, transparent);
+}
+
+.radio_input {
     position: absolute;
     opacity: 0;
     pointer-events: none;
 }
 
-.payment_method:last-of-type {
-    @apply border-b-0;
+.radio_icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    border: 2px solid color-mix(in srgb, var(--sg-checkout-muted) 70%, transparent);
+    background: color-mix(in srgb, var(--sg-checkout-surface) 85%, rgba(255, 255, 255, 0.05));
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    position: relative;
+}
+
+.radio_icon::after {
+    content: '';
+    position: absolute;
+    width: 0.35rem;
+    height: 0.75rem;
+    border: 2px solid transparent;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg) scale(0.9);
+    transition: border-color 0.2s ease;
+}
+
+.radio_icon svg {
+    display: none;
 }
 
 .radio_label {
     composes: font-semibold from global;
     composes: text-base from global;
+    color: var(--sg-checkout-muted);
+    transition: color 0.2s ease;
+}
+
+.payment_method input:checked + .radio_icon {
+    border-color: var(--sg-checkout-text);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--sg-checkout-glow) 65%, transparent);
+}
+
+.payment_method input:checked + .radio_icon::after {
+    border-color: var(--sg-checkout-text);
+}
+
+.payment_method input:checked + .radio_icon + .radio_label {
     color: var(--sg-checkout-text);
-}
-
-.radio_icon {
-    composes: h-[1.5rem] from global;
-    composes: w-[1.5rem] from global;
-}
-
-.radio_icon svg {
-    stroke: var(--sg-checkout-muted);
-    transition: stroke 0.2s ease;
-}
-
-.payment_method input:checked + .radio_icon svg {
-    stroke: var(--sg-checkout-text);
 }
 
 .payment_errors {
