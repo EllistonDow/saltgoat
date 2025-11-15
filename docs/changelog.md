@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.7.8] - 2025-11-15
+
+### Changes
+- 修改 2 个文件: modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/PaymentInformation/paymentMethods.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/checkoutPage.js
+
+
 ## [1.7.7] - 2025-11-15
 
 ### Changes

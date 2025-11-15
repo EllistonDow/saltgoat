@@ -186,7 +186,10 @@ const CheckoutPage = props => {
     const showGuestConfirmation =
         isGuestCheckout && orderDetailsData && orderNumber;
     const showEmptyCart =
-        isCartEmpty && !placeOrderButtonClicked && !showGuestConfirmation;
+        isCartEmpty &&
+        !placeOrderButtonClicked &&
+        !showGuestConfirmation &&
+        activeContent === 'checkout';
 
     if (showGuestConfirmation) {
         return (
