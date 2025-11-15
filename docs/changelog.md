@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.7.4] - 2025-11-15
+
+### Changes
+- 修改 5 个文件: docs/pwa-project-guide.md, modules/pwa/install.sh, modules/pwa/lib/pwa_studio.sh, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/PaymentInformation/paymentInformation.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/PaymentInformation/paymentMethods.module.css
+
+
 ## [1.7.3] - 2025-11-14
 
 ### Changes

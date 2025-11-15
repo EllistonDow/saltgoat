@@ -182,6 +182,7 @@
 ## 5. 覆盖与模板管理
 - 对官方源码的替换仅保留必要的 intercept、GraphQL 片段（位于 `modules/pwa/overrides/`）。组件级别的扩展统一放在 `@saltgoat/venia-extension` workspace。
 - 安装流程会自动裁剪 checkout `selected_payment_method` / `available_payment_methods` GraphQL 片段，只保留 MOS 可用字段，防止支付方式接口报错。
+- Checkout 支付模块新增 `paymentMethods.js` 覆盖，默认引用 `@saltgoat/venia-extension` 中的 Generic Payment 组件，即便未注册任何特定 payment intercept 也能渲染 Magento 返回的支付方式；需要特定交互时再通过 intercept 注册自定义组件。
 - 新增覆盖时：
   1. 优先考虑在 workspace 内编写组件/Hook，通过 intercept 注入；
   2. 若必须直接 patch 官方源码，放在 `modules/pwa/overrides`，并在 `apply_mos_graphql_fixes` 中写明操作逻辑；

@@ -165,6 +165,7 @@ sync_site_content() {
     if [[ -d "$PWA_STUDIO_DIR" ]]; then
         ensure_saltgoat_extension_workspace
         sync_pwa_overrides
+        ensure_checkout_payment_override
         apply_mos_graphql_fixes
         prepare_pwa_env
         if [[ -n "$custom_home_identifier" ]]; then

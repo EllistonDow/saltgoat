@@ -112,6 +112,20 @@ sync_pwa_overrides() {
     sudo chown -R www-data:www-data "${PWA_STUDIO_DIR%/}"
 }
 
+ensure_checkout_payment_override() {
+    local override_src="${SCRIPT_DIR}/modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/PaymentInformation/paymentMethods.js"
+    local override_dst="${PWA_STUDIO_DIR%/}/packages/venia-ui/lib/components/CheckoutPage/PaymentInformation/paymentMethods.js"
+    if [[ ! -f "$override_src" || ! -f "$override_dst" ]]; then
+        return
+    fi
+    if grep -Fq "@saltgoat/venia-extension/src/components/Payments/Generic" "$override_dst" 2>/dev/null; then
+        return
+    fi
+    log_warning "检测到 checkout 支付组件仍为官方默认实现，将重新应用 Generic fallback 覆盖。"
+    sudo rsync -a "$override_src" "$override_dst"
+    sudo chown www-data:www-data "$override_dst"
+}
+
 ensure_saltgoat_extension_workspace() {
     local workspace_src="${SCRIPT_DIR}/modules/pwa/workspaces/saltgoat-venia-extension"
     if [[ ! -d "$workspace_src" ]]; then
