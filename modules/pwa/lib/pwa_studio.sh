@@ -275,10 +275,14 @@ apply_mos_graphql_fixes() {
         sudo -u www-data -H python3 "$PWA_HELPER" sanitize-checkout --file "$venia_checkout_fragment" >/dev/null
     fi
 
-    local order_history_files
-    order_history_files=$(sudo -u www-data -H find "${PWA_STUDIO_DIR%/}/packages" -name 'orderHistoryPage.gql.js' -print0 2>/dev/null || true)
+    local order_history_root="${PWA_STUDIO_DIR%/}/packages"
+    local order_history_files=""
+    if [[ -d "$order_history_root" ]]; then
+        order_history_files=$(sudo -u www-data -H python3 "$PWA_HELPER" list-files --root "$order_history_root" --pattern "orderHistoryPage.gql.js" 2>/dev/null || true)
+    fi
     if [[ -n "$order_history_files" ]]; then
-        while IFS= read -r -d '' file; do
+        while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
             local patch_status
             patch_status=$(sudo -u www-data -H python3 "$PWA_HELPER" fix-order-history --file "$file" 2>/dev/null || true)
             if [[ "$patch_status" == "patched" ]]; then

@@ -400,6 +400,16 @@ def cmd_list_graphql_files(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_list_files(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    if not root.exists():
+        return 0
+    pattern = args.pattern or "*"
+    for path in root.rglob(pattern):
+        print(path)
+    return 0
+
+
 def cmd_sanitize_graphql(args: argparse.Namespace) -> int:
     path = Path(args.file).resolve()
     try:
@@ -959,6 +969,7 @@ def cmd_load_config(args: argparse.Namespace) -> int:
     emit("PWA_USE_SECURE_ADMIN", options.get("use_secure_admin", True))
     emit("PWA_USE_REWRITES", options.get("use_rewrites", True))
     emit("PWA_CLEANUP_DATABASE", options.get("cleanup_database", True))
+    emit("PWA_HTTP_CACHE_HOSTS", options.get("http_cache_hosts", "127.0.0.1:6081"))
 
     node_cfg = cfg.get("node") or {}
     emit("PWA_ENSURE_NODE", node_cfg.get("ensure", True))
@@ -1300,6 +1311,11 @@ def build_parser() -> argparse.ArgumentParser:
     list_graphql = sub.add_parser("list-graphql-files", help="List GraphQL fragment sources under root")
     list_graphql.add_argument("--root", required=True)
     list_graphql.set_defaults(func=cmd_list_graphql_files)
+
+    list_files = sub.add_parser("list-files", help="List files matching glob pattern under root")
+    list_files.add_argument("--root", required=True)
+    list_files.add_argument("--pattern", required=True)
+    list_files.set_defaults(func=cmd_list_files)
 
     sanitize_graphql = sub.add_parser("sanitize-graphql", help="Remove Commerce-only GraphQL fields")
     sanitize_graphql.add_argument("--file", required=True)

@@ -123,18 +123,25 @@ const CheckoutPage = props => {
         toggleAddressBookContent,
         toggleSignInContent
     } = talonProps;
+    const resolvedPaymentMethods = Array.isArray(availablePaymentMethods)
+        ? availablePaymentMethods
+        : [];
 
     const [, { addToast }] = useToasts();
     useEffect(() => {
+        if (isGuestCheckout && orderDetailsData && orderNumber) {
+            return;
+        }
+        const storage = new BrowserPersistence();
+        storage.getRawItem('orderCount');
+
         if (isGuestCheckout && !orderDetailsData) {
-            const storage = new BrowserPersistence();
             const orderCount = storage.getRawItem('orderCount') || '0';
             if (orderCount === '1') {
-                history.push('/');
                 storage.setItem('orderCount', '0');
             }
         }
-    }, [isGuestCheckout, history, orderDetailsData]);
+    }, [isGuestCheckout, orderDetailsData, orderNumber]);
     useEffect(() => {
         if (hasError) {
             const message =
@@ -258,8 +265,8 @@ const CheckoutPage = props => {
 
         // SaltGoat: 允许任意支付方式通过（即便我们没有专门组件，也会用 GenericFallback 渲染）
         const isPaymentAvailable =
-            availablePaymentMethods.length > 0 ||
-            !!availablePaymentMethods.find(({ code }) =>
+            resolvedPaymentMethods.length > 0 ||
+            !!resolvedPaymentMethods.find(({ code }) =>
                 paymentMethods.includes(code)
             );
 

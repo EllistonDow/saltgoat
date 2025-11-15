@@ -380,14 +380,16 @@ export const useCheckoutPage = (props = {}) => {
         setCheckoutStep(CHECKOUT_STEP.SHIPPING_ADDRESS);
         setActiveContent('checkout');
 
+        const confirmationState = {
+            orderNumber,
+            items: confirmationItems
+        };
         if (isSignedIn) {
-            history.push('/order-confirmation', {
-                orderNumber,
-                items: confirmationItems
-            });
+            history.push('/order-confirmation', confirmationState);
         } else {
-            history.push('/checkout');
+            setOrderDetailsSnapshot(resolvedOrderDetailsData);
         }
+        safeSetOrderCount('0');
     }, [
         cartItems,
         history,
@@ -399,7 +401,7 @@ export const useCheckoutPage = (props = {}) => {
     return {
         activeContent,
         availablePaymentMethods:
-            checkoutData?.cart?.available_payment_methods || null,
+            checkoutData?.cart?.available_payment_methods || [],
         cartItems,
         checkoutStep,
         customer,

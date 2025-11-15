@@ -126,6 +126,8 @@ install_site() {
     configure_valkey_if_needed
     configure_rabbitmq_if_needed
     if is_true "${PWA_WITH_FRONTEND:-false}"; then
+        prepare_pwa_repo
+        ensure_saltgoat_extension_workspace
         build_pwa_frontend
         ensure_pwa_service
     else
@@ -170,6 +172,14 @@ sync_site_content() {
         prepare_pwa_env
         if [[ -n "$custom_home_identifier" ]]; then
             set_pwa_home_identifier "$custom_home_identifier"
+        elif is_true "$use_alt_home"; then
+            local fallback_identifier
+            fallback_identifier="$(read_pwa_env_value "MAGENTO_PWA_ALT_HOME_IDENTIFIER" 2>/dev/null || echo "pwa_home_no_pb")"
+            if [[ -z "$fallback_identifier" ]]; then
+                fallback_identifier="pwa_home_no_pb"
+            fi
+            log_info "已根据 --no-pb 将首页 Identifier 切换为 ${fallback_identifier}"
+            set_pwa_home_identifier "$fallback_identifier"
         fi
         prune_unused_pwa_extensions
         if ! is_true "$skip_cms"; then
@@ -363,6 +373,7 @@ case "$ACTION" in
         DO_PULL="false"
         DO_REBUILD="false"
         SKIP_CMS="false"
+        USE_ALT_HOME="false"
         CUSTOM_HOME_IDENTIFIER=""
         while [[ $# -gt 0 ]]; do
             case "$1" in
@@ -376,6 +387,10 @@ case "$ACTION" in
                     ;;
                 --skip-cms)
                     SKIP_CMS="true"
+                    shift
+                    ;;
+                --no-pb)
+                    USE_ALT_HOME="true"
                     shift
                     ;;
                 --home-id)
@@ -405,7 +420,7 @@ case "$ACTION" in
         if [[ -z "$SITE" ]]; then
             abort "请提供站点名称，例如: saltgoat pwa sync-content pwa"
         fi
-        sync_site_content "$SITE" "$DO_PULL" "$DO_REBUILD" "$SKIP_CMS" "" "$CUSTOM_HOME_IDENTIFIER"
+        sync_site_content "$SITE" "$DO_PULL" "$DO_REBUILD" "$SKIP_CMS" "$USE_ALT_HOME" "$CUSTOM_HOME_IDENTIFIER"
         ;;
     "remove")
         shift

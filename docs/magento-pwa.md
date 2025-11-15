@@ -16,9 +16,10 @@ SaltGoat 在 `v1.2.x` 起新增 `saltgoat magetools pwa install`，用于在全�
    - `admin.*`：后台管理员账号信息
    - `db.*`：数据库名称、用户与密码
    - `composer.repo_*`：Magento Marketplace 公钥/私钥
-   - `opensearch.*`：OpenSearch 连接信息（可关闭 `enable_auth`）
-   - `options`：是否在安装时启用 HTTPS/Rewrite/cleanup-database
-   - `node`：是否自动安装/升级 Node、Yarn 及目标版本
+  - `opensearch.*`：OpenSearch 连接信息（可关闭 `enable_auth`）
+  - `options`：是否在安装时启用 HTTPS/Rewrite/cleanup-database
+  - `options.http_cache_hosts`：HTTP Cache/Varnish 地址，安装时会自动执行 `bin/magento --no-interaction setup:config:set --http-cache-hosts=<值>`，默认 `127.0.0.1:6081`
+  - `node`：是否自动安装/升级 Node、Yarn 及目标版本
    - `services`：是否自动安装 Cron、执行 `valkey-setup`、`rabbitmq-salt`
    - `pwa_studio`：如需同时检出 PWA Studio 可设 `enable: true`
 

@@ -1,0 +1,64 @@
+.root {
+    composes: grid from global;
+    composes: gap-xs from global;
+    composes: rounded-box from global;
+    composes: p-sm from global;
+    background: var(--sg-checkout-surface);
+    border: 1px solid var(--sg-checkout-border);
+    color: var(--sg-checkout-text);
+}
+
+.radio_group {
+    composes: grid from global;
+    composes: gap-xs from global;
+}
+
+.payment_method {
+    composes: grid from global;
+    composes: gap-xs from global;
+    composes: items-center from global;
+    composes: border-b from global;
+    composes: border-solid from global;
+    composes: border-subtle from global;
+    composes: pb-xs from global;
+    composes: pt-xs from global;
+    grid-template-columns: auto 1fr;
+    border-color: var(--sg-checkout-divider);
+}
+
+.payment_method input[type='radio'] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.payment_method:last-of-type {
+    @apply border-b-0;
+}
+
+.radio_label {
+    composes: font-semibold from global;
+    composes: text-base from global;
+    color: var(--sg-checkout-text);
+}
+
+.radio_icon {
+    composes: h-[1.5rem] from global;
+    composes: w-[1.5rem] from global;
+}
+
+.radio_icon svg {
+    stroke: var(--sg-checkout-muted);
+    transition: stroke 0.2s ease;
+}
+
+.payment_method input:checked + .radio_icon svg {
+    stroke: var(--sg-checkout-text);
+}
+
+.payment_errors {
+    composes: grid from global;
+    composes: gap-2xs from global;
+    composes: text-sm from global;
+    color: var(--sg-error);
+}

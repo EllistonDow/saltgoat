@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.7.5] - 2025-11-15
+
+### Changes
+- 修改 18 个文件: docs/magento-pwa.md, docs/pwa-project-guide.md, modules/lib/pwa_helpers.py, modules/pwa/install.sh, modules/pwa/lib/cms_apply_page.php 等
+
+
 ## [1.7.4] - 2025-11-15
 
 ### Changes

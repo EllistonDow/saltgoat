@@ -207,6 +207,7 @@ magento_command_exists() {
 post_install_tasks() {
     log_highlight "执行 Magento 部署后操作..."
     pushd "$PWA_ROOT" >/dev/null || return 1
+    ensure_http_cache_hosts
     sudo -u www-data -H php bin/magento deploy:mode:set production || true
     sudo -u www-data -H php bin/magento cache:enable || true
     sudo -u www-data -H php bin/magento indexer:reindex || true
@@ -274,6 +275,14 @@ magento_cli() {
         fi
     done
     sudo -u www-data -H bash -lc "cd '$PWA_ROOT' && $rendered"
+}
+
+ensure_http_cache_hosts() {
+    local hosts="${PWA_HTTP_CACHE_HOSTS:-127.0.0.1:6081}"
+    if [[ -z "$hosts" ]]; then
+        return
+    fi
+    magento_cli "配置 HTTP Cache Hosts (${hosts})" "--no-interaction" "setup:config:set" "--http-cache-hosts=${hosts}"
 }
 
 apply_cms_template_page() {
@@ -356,8 +365,8 @@ ensure_pwa_no_pb_cms_page() {
 }
 
 magento_clear_cms_cache() {
-    log_info "清理 Magento Cache (block_html,full_page)"
-    magento_cli "清理 Cache" "cache:clean" block_html full_page
+    log_info "清理 Magento Cache (block_html,full_page,graphql_query_resolver_result)"
+    magento_cli "清理 Cache" "cache:clean" block_html full_page graphql_query_resolver_result
 }
 
 reset_page_builder_content() {

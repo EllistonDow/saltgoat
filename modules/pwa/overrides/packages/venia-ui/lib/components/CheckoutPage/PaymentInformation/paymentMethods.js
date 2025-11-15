@@ -14,12 +14,9 @@ import GenericPaymentMethod from '@saltgoat/venia-extension/src/components/Payme
 const normalizeDisabledCodes = () => {
     const envValue =
         process.env.SALTGOAT_PWA_DISABLED_PAYMENTS ??
-        process.env.NEXT_PUBLIC_SALTGOAT_DISABLED_PAYMENTS;
-    const raw =
-        typeof envValue === 'string' && envValue.length > 0
-            ? envValue
-            : 'braintree';
-    return raw
+        process.env.NEXT_PUBLIC_SALTGOAT_DISABLED_PAYMENTS ??
+        '';
+    return envValue
         .split(',')
         .map(code => code.trim())
         .filter(Boolean)
@@ -42,12 +39,16 @@ const PaymentMethods = props => {
     const talonProps = usePaymentMethods({});
 
     const {
-        availablePaymentMethods,
+        availablePaymentMethods: rawPaymentMethods,
         currentSelectedPaymentMethod,
         handlePaymentMethodSelection,
         initialSelectedMethod,
         isLoading
     } = talonProps;
+
+    const availablePaymentMethods = Array.isArray(rawPaymentMethods)
+        ? rawPaymentMethods
+        : [];
 
     const disabledCodes = useMemo(
         () => normalizeDisabledCodes(),

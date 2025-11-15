@@ -25,8 +25,8 @@
 ### 3.1 `saltgoat pwa install <site> [--with-pwa|--no-pwa]`
 - 读取 `salt/pillar/magento-pwa.sls` 中的 `<site>` 配置，安装 Magento 基础、初始化数据库与管理员账号。
 - 依据 Pillar 或 `--with-pwa` 开关决定是否部署 PWA Studio。
-- 自动套用 overrides、生成 `.env`、构建前端并创建 `pwa-frontend-<site>.service`（默认使用 `yarn workspace @magento/venia-concept run start` 以 `NODE_ENV=production` 模式运行 Buildpack 服务器，可在 Pillar `pwa_studio.serve_command` 覆盖）。
-- Node.js 安装来源由 `node.provider` 控制：`nodesource`（默认，使用 NodeSource 脚本拉取指定主版本）或 `system`（直接安装发行版 `nodejs`/`npm`，无需 `curl | bash`），可按安全策略灵活切换。
+- 自动套用 overrides、生成 `.env`、构建前端并创建 `pwa-frontend-<site>.service`（默认使用 `yarn workspace @magento/venia-concept run start` 以 Buildpack 服务 PWA，可在 Pillar `pwa_studio.serve_command` 覆盖）。
+- Node.js 安装来源由 `node.provider` 控制：`nodesource`（默认，使用 NodeSource 官方脚本拉取指定主版本）或 `system`（直接安装发行版 `nodejs`/`npm`），可按安全策略灵活切换。
 
 ### 3.2 `saltgoat pwa status <site> [--json] [--check] [--no-graphql] [--no-react]`
 - 汇总站点目录、PWA Studio 目录/环境文件是否存在，并检测 systemd 服务状态。
@@ -39,6 +39,7 @@
 - `--pull`：强制拉取/克隆 PWA Studio 仓库。
 - `--rebuild`：在环境变量齐全时执行 `yarn install` + `yarn build`。
 - `--skip-cms`：跳过 `pwa_home` 模板写入，避免覆盖运营在后台的临时改动；仅同步前端代码与 systemd 服务。
+- `--no-pb`：将首页 identifier 切换为 `MAGENTO_PWA_ALT_HOME_IDENTIFIER`（默认 `pwa_home_no_pb`），用于快速启用无 Page Builder 模板；可与 `--home-id` 并用，后者优先生效。
 - 后续接入 Page Builder 模板同步逻辑时，也会在此命令中处理。
 - 若 `pwa_studio.enable=false`（或 `saltgoat pwa install <site> --no-pwa`），该命令会直接返回并提示未启用 PWA Studio。
 

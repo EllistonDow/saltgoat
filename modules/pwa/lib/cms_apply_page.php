@@ -41,7 +41,8 @@ if ($content === false) {
     exit(1);
 }
 $content = trim($content);
-$versionStamp = sprintf("\n<!-- sg-sync:%s -->", gmdate('c'));
+$signature = substr(hash('sha256', $content), 0, 16);
+$versionStamp = sprintf("\n<!-- sg-sync:%s -->", $signature);
 $contentWithStamp = $content . $versionStamp;
 
 $stores = array_values(array_filter(array_map(static function ($value) {
@@ -96,5 +97,15 @@ if ($wasExisting && !$forceUpdate && $originalContent === $finalContent) {
 }
 
 $page->save();
+
+/** @var \Magento\Framework\App\ResourceConnection $resource */
+$resource = $objectManager->get(\Magento\Framework\App\ResourceConnection::class);
+$connection = $resource->getConnection();
+$tableName = $resource->getTableName('cms_page');
+$connection->update(
+    $tableName,
+    ['content' => $contentWithStamp],
+    ['page_id = ?' => (int)$page->getId()]
+);
 
 echo $wasExisting ? "updated\n" : "created\n";

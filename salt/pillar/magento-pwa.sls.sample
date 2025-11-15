@@ -47,6 +47,7 @@ magento_pwa:
         use_secure_admin: true
         use_rewrites: true
         cleanup_database: true
+        http_cache_hosts: 127.0.0.1:6081
 
       node:
         ensure: true
@@ -54,22 +55,22 @@ magento_pwa:
         install_yarn: true
         provider: nodesource
 
-    services:
-      install_cron: true
-      configure_valkey: true
-      configure_rabbitmq: true
+      services:
+        install_cron: true
+        configure_valkey: true
+        configure_rabbitmq: true
 
-    cms:
-      home:
-        identifier: pwa_home
-        title: PWA Home
-        store_ids:
-          - 0
-        template: modules/pwa/templates/cms/pwa_home.html
-        force_template: true
+      cms:
+        home:
+          identifier: pwa_home
+          title: PWA Home
+          store_ids:
+            - 0
+          template: modules/pwa/templates/cms/pwa_home.html
+          force_template: true
 
-    pwa_studio:
-      enable: false
+      pwa_studio:
+        enable: false
         repo: https://github.com/magento/pwa-studio.git
         branch: release/14.3.1
         target_dir: /var/www/pwa/pwa-studio
@@ -79,6 +80,7 @@ magento_pwa:
         # 建议使用项目根目录的 .env 作为唯一来源，脚本会自动同步到 packages/venia-concept/.env
         env_file: /var/www/pwa/pwa-studio/.env
         serve_port: 8082
+        serve_command: "/usr/bin/env yarn workspace @magento/venia-concept run start"
         env_overrides:
           MAGENTO_BACKEND_URL: https://pwa.magento.example.com/
           MAGENTO_BACKEND_EDITION: MOS

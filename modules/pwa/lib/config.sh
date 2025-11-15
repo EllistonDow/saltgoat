@@ -47,6 +47,7 @@ load_site_config() {
         fi
         if [[ ! -f "$PWA_HOME_TEMPLATE_PATH" ]]; then
             PWA_HOME_TEMPLATE_WARNING="模板文件未找到: ${PWA_HOME_TEMPLATE_PATH}"
+            log_warning "$PWA_HOME_TEMPLATE_WARNING"
         fi
     else
         PWA_HOME_TEMPLATE_PATH=""
@@ -59,6 +60,7 @@ load_site_config() {
         fi
         if [[ ! -f "$PWA_ALT_HOME_TEMPLATE_PATH" ]]; then
             PWA_ALT_HOME_TEMPLATE_WARNING="模板文件未找到: ${PWA_ALT_HOME_TEMPLATE_PATH}"
+            log_warning "$PWA_ALT_HOME_TEMPLATE_WARNING"
         fi
     else
         local default_alt="${SCRIPT_DIR%/}/modules/pwa/templates/cms/pwa_home_no_pb.html"
@@ -66,6 +68,7 @@ load_site_config() {
             PWA_ALT_HOME_TEMPLATE_PATH="$default_alt"
         else
             PWA_ALT_HOME_TEMPLATE_PATH=""
+            log_warning "未找到默认的 pwa_home_no_pb.html 模板 (期望路径: ${default_alt})"
         fi
     fi
     if is_true "${PWA_STUDIO_ENABLE:-false}"; then

@@ -3,6 +3,7 @@ import React, { useEffect, useMemo } from 'react';
 import CMSPageShimmer from '@magento/venia-ui/lib/RootComponents/CMS/cms.shimmer';
 import RichContent from '@magento/venia-ui/lib/components/RichContent';
 import { useCmsPage } from '@magento/peregrine/lib/talons/Cms/useCmsPage';
+import useRichContentHtml from '../../hooks/useRichContentHtml';
 
 import Showcase from './Showcase';
 import NebulaHome from './NebulaHome';
@@ -56,7 +57,9 @@ const createHomeContent = OriginalComponent => {
             identifier
         });
 
-        const cmsContent = useMemo(() => cmsPage?.content?.trim() || '', [cmsPage]);
+        const cmsContent = useRichContentHtml(cmsPage?.content?.trim() || '', html =>
+            html?.trim() || ''
+        );
         const fallbackMode = useMemo(() => resolveFallbackMode(), []);
 
         if (isNebulaHome) {
