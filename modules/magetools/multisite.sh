@@ -38,6 +38,11 @@ PHP_POOL_WEIGHT=""
 PHP_POOL_BASE_WEIGHT=1
 PHP_POOL_PER_STORE=1
 PHP_POOL_MAX_WEIGHT=""
+PHP_FPM_VERSION="8.3"
+PHP_POOL_MAX_CHILDREN=12
+PHP_POOL_START_SERVERS=6
+PHP_POOL_MIN_SPARE=4
+PHP_POOL_MAX_SPARE=8
 
 usage() {
     cat <<'EOF'
@@ -457,8 +462,80 @@ apply_php_pool_state() {
         log_info "[dry-run] 重新渲染 core.php Salt state。"
         return
     fi
-    run_cli_command "重新应用 core.php（PHP-FPM 池）" \
-        sudo salt-call --local state.apply core.php
+    if ! sudo salt-call --local state.apply core.php >/dev/null; then
+        log_warning "Salt core.php 状态失败，尝试直接重载 php${PHP_FPM_VERSION}-fpm。"
+        sudo systemctl reload "php${PHP_FPM_VERSION}-fpm" || sudo systemctl restart "php${PHP_FPM_VERSION}-fpm"
+    fi
+}
+
+php_pool_conf_path() {
+    local pool_name="$1"
+    printf '/etc/php/%s/fpm/pool.d/%s.conf' "$PHP_FPM_VERSION" "$pool_name"
+}
+
+php_pool_listen_path() {
+    local pool_name="$1"
+    printf '/run/php/php%s-fpm-%s.sock' "$PHP_FPM_VERSION" "$pool_name"
+}
+
+ensure_php_pool_conf() {
+    local pool_name="$1"
+    local conf_path
+    conf_path=$(php_pool_conf_path "$pool_name")
+    local listen_path
+    listen_path=$(php_pool_listen_path "$pool_name")
+    local slowlog_path="/var/log/php${PHP_FPM_VERSION}-fpm-${pool_name}.slow.log"
+    if (( DRY_RUN )); then
+        log_info "[dry-run] 写入 PHP-FPM 池配置 ${conf_path}"
+        return 0
+    fi
+    sudo tee "$conf_path" >/dev/null <<EOF
+[$pool_name]
+user = www-data
+group = www-data
+listen = $listen_path
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0660
+pm = dynamic
+pm.max_children = $PHP_POOL_MAX_CHILDREN
+pm.start_servers = $PHP_POOL_START_SERVERS
+pm.min_spare_servers = $PHP_POOL_MIN_SPARE
+pm.max_spare_servers = $PHP_POOL_MAX_SPARE
+pm.max_requests = 1500
+ping.path = /ping
+ping.response = pong
+pm.status_path = /status
+slowlog = $slowlog_path
+request_slowlog_timeout = 10s
+request_terminate_timeout = 330s
+catch_workers_output = yes
+chdir = /
+clear_env = yes
+php_admin_value[memory_limit] = 2048M
+EOF
+}
+
+remove_php_pool_conf() {
+    local pool_name="$1"
+    local conf_path
+    conf_path=$(php_pool_conf_path "$pool_name")
+    if (( DRY_RUN )); then
+        log_info "[dry-run] 删除 PHP-FPM 池配置 ${conf_path}"
+        return
+    fi
+    sudo rm -f "$conf_path"
+}
+
+reload_php_fpm() {
+    if (( DRY_RUN )); then
+        log_info "[dry-run] reload php${PHP_FPM_VERSION}-fpm"
+        return
+    fi
+    if ! sudo systemctl reload "php${PHP_FPM_VERSION}-fpm"; then
+        log_warning "php${PHP_FPM_VERSION}-fpm reload 失败，尝试 restart"
+        sudo systemctl restart "php${PHP_FPM_VERSION}-fpm"
+    fi
 }
 
 adjust_php_pool() {
@@ -471,39 +548,102 @@ adjust_php_pool() {
         log_warning "未找到 PHP 池 helper: ${PHP_POOL_HELPER}"
         return
     fi
-    if (( DRY_RUN )); then
-        log_info "[dry-run] PHP-FPM 池(${ROOT_SITE}) 将执行 ${action} 调整。"
-        return
+    local apply_state=0
+    local explicit_weight="${PHP_POOL_WEIGHT:-}"
+
+    run_pool_helper() {
+        local site_id="$1" pool_name="$2" primary_store="$3" store_code="$4" weight_arg="$5" helper_action="$6"
+        local -a cmd=(
+            sudo python3 "$PHP_POOL_HELPER" adjust
+            --site "$site_id"
+            --site-root "$MAGENTO_CURRENT"
+            --pool-name "$pool_name"
+            --pillar "$PHP_POOL_PILLAR"
+            --primary-store "$primary_store"
+            --action "$helper_action"
+        )
+        if [[ -n "$store_code" ]]; then
+            cmd+=(--store-code "$store_code")
+        fi
+        if [[ -n "$weight_arg" ]]; then
+            cmd+=(--set-weight "$weight_arg")
+        else
+            cmd+=(--base-weight "$PHP_POOL_BASE_WEIGHT" --per-store "$PHP_POOL_PER_STORE")
+            if [[ -n "$PHP_POOL_MAX_WEIGHT" ]]; then
+                cmd+=(--max-weight "$PHP_POOL_MAX_WEIGHT")
+            fi
+        fi
+        if (( DRY_RUN )); then
+            log_info "[dry-run] PHP-FPM 池 ${pool_name} (${site_id}) 将执行 ${helper_action}."
+            return 0
+        fi
+        local out
+        if ! out="$("${cmd[@]}")"; then
+            log_error "PHP-FPM 池调整失败 (${pool_name})."
+            return 1
+        fi
+        log_info "PHP 池状态(${pool_name}): ${out}"
+        apply_state=1
+        return 0
+    }
+
+    remove_pool_entry() {
+        local site_id="$1"
+        if (( DRY_RUN )); then
+            log_info "[dry-run] 将从 Pillar 移除 PHP 池 ${site_id}."
+            return
+        fi
+        sudo python3 - "$PHP_POOL_PILLAR" "$site_id" <<'PY'
+import sys, yaml, pathlib
+path = pathlib.Path(sys.argv[1])
+site_id = sys.argv[2]
+data = {}
+if path.exists():
+    data = yaml.safe_load(path.read_text()) or {}
+if not isinstance(data, dict):
+    data = {}
+opt = data.get('magento_optimize', {}) or {}
+sites = opt.get('sites', {}) or {}
+if site_id in sites:
+    sites.pop(site_id, None)
+    opt['sites'] = sites
+    data['magento_optimize'] = opt
+    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False))
+PY
+        apply_state=1
+    }
+
+    if [[ -n "$STORE_CODE" && "$STORE_CODE" != "$ROOT_SITE" ]]; then
+        run_pool_helper "$ROOT_SITE" "magento-${ROOT_SITE}" "$ROOT_SITE" "$STORE_CODE" "" "remove" || true
     fi
-    local pool_name="magento-${ROOT_SITE}"
-    local -a cmd=(
-        sudo python3 "$PHP_POOL_HELPER" adjust
-        --site "$ROOT_SITE"
-        --site-root "$MAGENTO_CURRENT"
-        --pool-name "$pool_name"
-        --pillar "$PHP_POOL_PILLAR"
-        --action "$action"
-        --primary-store "$ROOT_SITE"
-    )
-    if [[ -n "$STORE_CODE" ]]; then
-        cmd+=(--store-code "$STORE_CODE")
-    fi
-    if [[ -n "$PHP_POOL_WEIGHT" ]]; then
-        cmd+=(--set-weight "$PHP_POOL_WEIGHT")
-    else
-        cmd+=(--base-weight "$PHP_POOL_BASE_WEIGHT" --per-store "$PHP_POOL_PER_STORE")
-        if [[ -n "$PHP_POOL_MAX_WEIGHT" ]]; then
-            cmd+=(--max-weight "$PHP_POOL_MAX_WEIGHT")
+    run_pool_helper "$ROOT_SITE" "magento-${ROOT_SITE}" "$ROOT_SITE" "$ROOT_SITE" "$explicit_weight" "add" || true
+
+    local store_pool_name="magento-${STORE_CODE}"
+    local pool_conf_changed=0
+
+    if [[ -n "$STORE_CODE" && "$STORE_CODE" != "$ROOT_SITE" ]]; then
+        if [[ "$action" == "remove" ]]; then
+            remove_pool_entry "$STORE_CODE"
+            remove_php_pool_conf "$store_pool_name"
+            pool_conf_changed=1
+        else
+            run_pool_helper "$STORE_CODE" "$store_pool_name" "$STORE_CODE" "$STORE_CODE" "$explicit_weight" "$action" || true
+            ensure_php_pool_conf "$store_pool_name"
+            pool_conf_changed=1
         fi
     fi
-    log_info "自动调整 PHP-FPM 池 ${pool_name} (模式: ${action})"
-    local helper_output
-    if ! helper_output="$("${cmd[@]}")"; then
-        log_error "PHP-FPM 池调整失败，请检查日志。"
-        return
+
+    if (( pool_conf_changed )); then
+        reload_php_fpm
     fi
-    log_info "PHP 池状态: ${helper_output}"
-    apply_php_pool_state
+
+    if (( apply_state )); then
+        if (( DRY_RUN )); then
+            log_info "[dry-run] 将重新渲染 PHP-FPM 池。"
+        else
+            apply_php_pool_state
+        fi
+    fi
 }
 
 magento_cli() {
@@ -557,14 +697,19 @@ provision_nginx_and_ssl() {
         return
     fi
 
-    local doc_root
-    doc_root="$(determine_doc_root)"
+    local doc_root="$MAGENTO_CURRENT"
+    if [[ -z "$doc_root" || ! -d "$doc_root" ]]; then
+        doc_root="$(determine_doc_root)"
+    fi
+    local php_pool_name="magento-${STORE_CODE}"
 
     if nginx_site_exists; then
         log_warning "检测到现有 Nginx 站点 ${NGINX_SITE}，跳过创建。"
     else
         run_cli_command "创建 Nginx 站点 ${NGINX_SITE}" \
-            "$SALTGOAT_BIN" nginx create "$NGINX_SITE" "$DOMAIN" --root "$doc_root" --magento
+            "$SALTGOAT_BIN" nginx create "$NGINX_SITE" "$DOMAIN" --root "$doc_root" --magento \
+            --magento-run-type website --magento-run-code "$WEBSITE_CODE" \
+            --php-pool "$php_pool_name"
     fi
 
     if (( SKIP_SSL )); then
@@ -623,7 +768,7 @@ get_entity_id() {
     local code_escaped
     code_escaped=$(php_escape "$code")
     local script
-    read -r -d '' script <<PHP
+    read -r -d '' script <<PHP || true
 \$entity = '${entity_escaped}';
 \$code = '${code_escaped}';
 \$id = 0;
@@ -829,24 +974,42 @@ delete_magento_entity() {
     local entity_escaped
     entity_escaped=$(php_escape "$entity")
     local script
-    read -r -d '' script <<PHP
+    read -r -d '' script <<PHP || true
 \$entity = '${entity_escaped}';
 \$id = (int) ${id};
+\$registry = \$objectManager->get(\Magento\Framework\Registry::class);
+if (!\$registry->registry('isSecureArea')) {
+    \$registry->register('isSecureArea', true);
+}
+
 try {
     switch (\$entity) {
         case 'website':
-            \$repo = \$objectManager->get(\Magento\Store\Api\WebsiteRepositoryInterface::class);
-            \$repo->deleteById(\$id);
+            \$resource = \$objectManager->get(\Magento\Store\Model\ResourceModel\Website::class);
+            \$model = \$objectManager->create(\Magento\Store\Model\Website::class);
+            \$resource->load(\$model, \$id);
+            if (!\$model->getId()) { echo "MISSING"; break; }
+            if (method_exists(\$model, 'setIsDeleteAllowed')) { \$model->setIsDeleteAllowed(true); }
+            \$resource->delete(\$model);
             echo "OK";
             break;
         case 'store_group':
-            \$repo = \$objectManager->get(\Magento\Store\Api\GroupRepositoryInterface::class);
-            \$repo->deleteById(\$id);
+            \$resource = \$objectManager->get(\Magento\Store\Model\ResourceModel\Group::class);
+            \$model = \$objectManager->create(\Magento\Store\Model\Group::class);
+            \$resource->load(\$model, \$id);
+            if (!\$model->getId()) { echo "MISSING"; break; }
+            if (method_exists(\$model, 'setIsDeleteAllowed')) { \$model->setIsDeleteAllowed(true); }
+            \$resource->delete(\$model);
             echo "OK";
             break;
         case 'store':
-            \$repo = \$objectManager->get(\Magento\Store\Api\StoreRepositoryInterface::class);
-            \$repo->deleteById(\$id);
+            \$resource = \$objectManager->get(\Magento\Store\Model\ResourceModel\Store::class);
+            \$model = \$objectManager->create(\Magento\Store\Model\Store::class);
+            \$resource->load(\$model, \$id);
+            if (!\$model->getId()) { echo "MISSING"; break; }
+            if (method_exists(\$model, 'setIsDeleteAllowed')) { \$model->setIsDeleteAllowed(true); }
+            if (method_exists(\$model, 'setForceDelete')) { \$model->setForceDelete(true); }
+            \$resource->delete(\$model);
             echo "OK";
             break;
         default:
@@ -856,6 +1019,10 @@ try {
     echo "MISSING";
 } catch (\Exception \$e) {
     echo "ERROR:" . \$e->getMessage();
+} finally {
+    if (\$registry->registry('isSecureArea')) {
+        \$registry->unregister('isSecureArea');
+    }
 }
 PHP
     local result
@@ -1034,11 +1201,53 @@ delete_config_scope() {
     local scope="$1"
     local scope_code="$2"
     local path="$3"
-    run_magento_cmd "删除配置 ${path} (${scope}:${scope_code})" \
-        config:delete \
-        --scope="$scope" \
-        --scope-code="$scope_code" \
-        "$path"
+    if magento_command_exists "config:delete"; then
+        run_magento_cmd "删除配置 ${path} (${scope}:${scope_code})" \
+            config:delete \
+            --scope="$scope" \
+            --scope-code="$scope_code" \
+            "$path"
+        return
+    fi
+
+    if (( DRY_RUN )); then
+        log_info "[dry-run] 将通过 PHP 删除配置 ${path} (${scope}:${scope_code})"
+        return
+    fi
+
+    local php_scope
+    php_scope=$(php_escape "$scope")
+    local php_scope_code
+    php_scope_code=$(php_escape "$scope_code")
+    local php_path
+    php_path=$(php_escape "$path")
+    local script
+    read -r -d '' script <<PHP || true
+\$scope = '${php_scope}';
+\$scopeCode = '${php_scope_code}';
+\$path = '${php_path}';
+\$scopeId = 0;
+if (\$scope === 'websites') {
+    \$website = \$objectManager->create(\Magento\Store\Model\Website::class);
+    \$website->load(\$scopeCode, 'code');
+    \$scopeId = (int) \$website->getId();
+} elseif (\$scope === 'stores') {
+    \$store = \$objectManager->create(\Magento\Store\Model\Store::class);
+    \$store->load(\$scopeCode, 'code');
+    \$scopeId = (int) \$store->getId();
+}
+/** @var \Magento\Config\Model\ResourceModel\Config \$configResource */
+\$configResource = \$objectManager->get(\Magento\Config\Model\ResourceModel\Config::class);
+\$configResource->deleteConfig(\$path, \$scope, \$scopeId);
+echo 'OK';
+PHP
+    local result
+    result="$(magento_eval "$script" | tr -d $'\r')"
+    if [[ "$result" == OK* ]]; then
+        log_info "通过 PHP 删除配置 ${path} (${scope}:${scope_code})"
+    else
+        log_warning "通过 PHP 删除配置 ${path} (${scope}:${scope_code}) 结果: ${result}"
+    fi
 }
 
 rollback_multisite() {

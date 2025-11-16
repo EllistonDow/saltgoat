@@ -96,35 +96,6 @@ nginx:
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
-    duobank:
-      enabled: true
-      server_name:
-      - duobank.magento.tattoogoat.com
-      listen:
-      - port: 80
-      - port: 443
-        ssl: true
-      root: /var/www/bank
-      index:
-      - index.php
-      - index.html
-      php:
-        enabled: true
-        pool: magento-bank
-      magento_run:
-        type: store
-        code: duobank
-      headers:
-        X-Frame-Options: SAMEORIGIN
-        X-Content-Type-Options: nosniff
-      magento: true
-      ssl:
-        enabled: true
-        cert: /etc/letsencrypt/live/duobank.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/duobank.magento.tattoogoat.com/privkey.pem
-        protocols: TLSv1.2 TLSv1.3
-        prefer_server_ciphers: false
-        redirect: true
     tank:
       enabled: true
       server_name:
@@ -151,35 +122,6 @@ nginx:
         enabled: true
         cert: /etc/letsencrypt/live/tank.magento.tattoogoat.com/fullchain.pem
         key: /etc/letsencrypt/live/tank.magento.tattoogoat.com/privkey.pem
-        protocols: TLSv1.2 TLSv1.3
-        prefer_server_ciphers: false
-        redirect: true
-    treebank:
-      enabled: true
-      server_name:
-      - treebank.magento.tattoogoat.com
-      listen:
-      - port: 80
-      - port: 443
-        ssl: true
-      root: /var/www/bank
-      index:
-      - index.php
-      - index.html
-      php:
-        enabled: true
-        pool: magento-bank
-      headers:
-        X-Frame-Options: SAMEORIGIN
-        X-Content-Type-Options: nosniff
-      magento: true
-      magento_run:
-        type: store
-        code: treebank
-      ssl:
-        enabled: true
-        cert: /etc/letsencrypt/live/treebank.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/treebank.magento.tattoogoat.com/privkey.pem
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
@@ -320,6 +262,64 @@ nginx:
         enabled: true
         cert: /etc/letsencrypt/live/matomo.magento.tattoogoat.com/fullchain.pem
         key: /etc/letsencrypt/live/matomo.magento.tattoogoat.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    duobank:
+      enabled: true
+      server_name:
+      - duobank.magento.tattoogoat.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/bank
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        pool: magento-duobank
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      magento_run:
+        type: website
+        code: duobank_ws
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/duobank.magento.tattoogoat.com/fullchain.pem
+        key: /etc/letsencrypt/live/duobank.magento.tattoogoat.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    treebank:
+      enabled: true
+      server_name:
+      - treebank.magento.tattoogoat.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/bank
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        pool: magento-treebank
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      magento_run:
+        type: website
+        code: treebank_ws
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/treebank.magento.tattoogoat.com/fullchain.pem
+        key: /etc/letsencrypt/live/treebank.magento.tattoogoat.com/privkey.pem
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true

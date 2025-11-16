@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.7.9] - 2025-11-16
+
+### Changes
+- 修改 9 个文件: modules/lib/nginx_pillar.py, modules/magetools/multisite.sh, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/ShippingInformation/shippingInformation.module.css, modules/pwa/overrides/packages/venia-ui/lib/components/CheckoutPage/ShippingMethod/shippingMethod.module.css, modules/pwa/templates/cms/pwa_home.html 等
+
+
 ## [1.7.8] - 2025-11-15
 
 ### Changes

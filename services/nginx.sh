@@ -432,6 +432,11 @@ cmd_create() {
     local domains_arg="$2"
     local root_path="${3:-}"
     local magento_flag="${4:-0}"
+    local php_pool="${5:-}"
+    local php_fastcgi="${6:-}"
+    local magento_run_type="${7:-}"
+    local magento_run_code="${8:-}"
+    local magento_run_mode="${9:-}"
     ensure_pillar_file
     local normalized_domains="${domains_arg//,/ }"
     local -a domains=()
@@ -449,6 +454,21 @@ cmd_create() {
     fi
     if [[ "$magento_flag" == "1" ]]; then
         args+=("--magento")
+    fi
+    if [[ -n "$magento_run_type" ]]; then
+        args+=("--magento-run-type" "$magento_run_type")
+    fi
+    if [[ -n "$magento_run_code" ]]; then
+        args+=("--magento-run-code" "$magento_run_code")
+    fi
+    if [[ -n "$magento_run_mode" ]]; then
+        args+=("--magento-run-mode" "$magento_run_mode")
+    fi
+    if [[ -n "$php_pool" ]]; then
+        args+=("--php-pool" "$php_pool")
+    fi
+    if [[ -n "$php_fastcgi" ]]; then
+        args+=("--php-fastcgi" "$php_fastcgi")
     fi
     pillar_cli "${args[@]}"
     log_success "站点 ${site} 已写入 pillar。"
@@ -537,6 +557,11 @@ _nginx_dispatch() {
             fi
             local root=""
             local magento_flag=0
+            local php_pool=""
+            local php_fastcgi=""
+            local magento_run_type=""
+            local magento_run_code=""
+            local magento_run_mode="production"
             shift 3
             while [[ $# -gt 0 ]]; do
                 case "$1" in
@@ -551,6 +576,26 @@ _nginx_dispatch() {
                         fi
                         root="$1"
                         ;;
+                    --php-pool)
+                        shift
+                        php_pool="${1:-}"
+                        ;;
+                    --php-fastcgi)
+                        shift
+                        php_fastcgi="${1:-}"
+                        ;;
+                    --magento-run-type)
+                        shift
+                        magento_run_type="${1:-}"
+                        ;;
+                    --magento-run-code)
+                        shift
+                        magento_run_code="${1:-}"
+                        ;;
+                    --magento-run-mode)
+                        shift
+                        magento_run_mode="${1:-}"
+                        ;;
                     *)
                         if [[ -z "$root" ]]; then
                             root="$1"
@@ -561,7 +606,7 @@ _nginx_dispatch() {
                 esac
                 shift
             done
-            cmd_create "$site" "$domains_arg" "$root" "$magento_flag"
+            cmd_create "$site" "$domains_arg" "$root" "$magento_flag" "$php_pool" "$php_fastcgi" "$magento_run_type" "$magento_run_code" "$magento_run_mode"
             ;;
         delete)
             local site="${2:-}"

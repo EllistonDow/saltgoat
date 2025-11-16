@@ -267,7 +267,7 @@ write_php_pool_runtime:
     - mode: 0640
     - makedirs: True
     - contents: |
-{{ runtime_json | indent(8) }}
+{{ runtime_json | indent(8, True) }}
     - require:
       - file: ensure_saltgoat_runtime_dir
 

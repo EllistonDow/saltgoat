@@ -49,7 +49,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     if not domains:
         raise ValueError("至少提供一个域名")
     root = args.root or f"/var/www/{args.site}"
-    entry = {
+    entry: Dict[str, Any] = {
         "enabled": True,
         "server_name": domains,
         "listen": [{"port": 80}],
@@ -64,8 +64,23 @@ def cmd_create(args: argparse.Namespace) -> int:
             "X-Content-Type-Options": "nosniff",
         },
     }
+    php_cfg = entry["php"]
+    if args.php_pool:
+        php_cfg.pop("fastcgi_pass", None)
+        php_cfg["pool"] = args.php_pool
+    elif args.php_fastcgi:
+        php_cfg["fastcgi_pass"] = args.php_fastcgi
+
     if args.magento:
         entry["magento"] = True
+    if args.magento_run_code:
+        run_ctx: Dict[str, Any] = {
+            "type": args.magento_run_type or "store",
+            "code": args.magento_run_code,
+        }
+        if args.magento_run_mode:
+            run_ctx["mode"] = args.magento_run_mode
+        entry["magento_run"] = run_ctx
     sites[args.site] = entry
     save_pillar(args.pillar, pillar)
     return 0
@@ -255,6 +270,11 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--email", help="SSL 邮箱，可选")
     create.add_argument("--ssl-domain", help="SSL 域名，默认取第一个域名")
     create.add_argument("--magento", action="store_true", help="标记站点为 Magento")
+    create.add_argument("--magento-run-type", help="Magento run type，例如 store 或 website")
+    create.add_argument("--magento-run-code", help="Magento run code，例如 default/duobank_ws")
+    create.add_argument("--magento-run-mode", default="production", help="Magento MAGE_MODE，默认 production")
+    create.add_argument("--php-pool", help="关联 PHP-FPM 池名 (magento-xxx)")
+    create.add_argument("--php-fastcgi", help="自定义 fastcgi_pass，覆盖默认值")
     create.set_defaults(func=cmd_create)
 
     delete = sub.add_parser("delete", help="删除站点")
