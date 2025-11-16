@@ -1,3 +1,7 @@
+{% set dropbox_root = salt['pillar.get']('saltgoat:dropbox_root', '/home/doge/Dropbox') %}
+{% set dropbox_root = dropbox_root.rstrip('/') %}
+{% set mysql_backup_root = dropbox_root + '/backups/mysql' %}
+
 # Magento mysqldump Salt Schedule（默认空列表，按需配置）
 
 magento_schedule:
@@ -5,13 +9,13 @@ magento_schedule:
     - name: bankmage-dump-hourly
       cron: '0 * * * *'
       database: bankmage
-      backup_dir: /home/doge/Dropbox/bank/databases
+      backup_dir: {{ mysql_backup_root }}/bank
       repo_owner: doge
       site: bank
     - name: tankmage-dump-every-2h
       cron: '0 */2 * * *'
       database: tankmage
-      backup_dir: /home/doge/Dropbox/tank/databases
+      backup_dir: {{ mysql_backup_root }}/tank
       repo_owner: doge
       site: tank
   api_watchers:

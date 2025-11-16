@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.7.10] - 2025-11-16
+
+### Changes
+- 修改 2 个文件: salt/pillar/magento-schedule.sls, salt/pillar/secret/restic.sls.example
+
+
 ## [1.7.9] - 2025-11-16
 
 ### Changes
