@@ -386,6 +386,8 @@ pick_available_db() {
         [[ -n "$value" ]] && skip["$value"]=1
     done
 
+    # 收集候选并随机挑选，避免总是命中相同编号
+    local -a candidates=()
     for ((db = DB_MIN; db <= DB_MAX; db++)); do
         if [[ -n "${skip[$db]:-}" ]]; then
             continue
@@ -396,11 +398,20 @@ pick_available_db() {
         if [[ "$REUSE_EXISTING" != true && -n "${USED_BY_SELF[$db]:-}" ]]; then
             continue
         fi
-        echo "$db"
-        return 0
+        candidates+=("$db")
     done
 
-    return 1
+    if (( ${#candidates[@]} == 0 )); then
+        return 1
+    fi
+
+    if command -v shuf >/dev/null 2>&1; then
+        db="$(printf '%s\n' "${candidates[@]}" | shuf -n1)"
+    else
+        db="${candidates[0]}"
+    fi
+    echo "$db"
+    return 0
 }
 
 assign_databases() {
