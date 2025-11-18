@@ -1,4 +1,9 @@
-# PHP 8.3 安装和配置
+{% set php_version = salt['pillar.get']('saltgoat:versions:php', '8.3') %}
+{% set php_pkg = 'php{}'.format(php_version) %}
+{% set php_fpm_pkg = php_pkg ~ '-fpm' %}
+{% set php_etc_dir = '/etc/php/{}/fpm'.format(php_version) %}
+
+# PHP 安装和配置（锁定主版本）
 
 include:
   - core.php-fpm-pools
@@ -10,19 +15,19 @@ add_php_repository:
     - name: |
         add-apt-repository ppa:ondrej/php -y
         apt update
-    - unless: apt-cache policy php8.3 | grep -q ondrej
+    - unless: apt-cache policy {{ php_pkg }} | grep -q ondrej
 
-# 安装 PHP 8.3
+# 安装 PHP
 install_php:
   pkg.installed:
-    - name: php8.3
+    - name: {{ php_pkg }}
     - require:
       - cmd: add_php_repository
 
 # 安装 PHP-FPM
 install_php_fpm:
   pkg.installed:
-    - name: php8.3-fpm
+    - name: {{ php_fpm_pkg }}
     - require:
       - pkg: install_php
 
@@ -30,24 +35,24 @@ install_php_fpm:
 install_php_extensions:
   pkg.installed:
     - names:
-      - php8.3-bcmath
-      - php8.3-curl
-      - php8.3-gd
-      - php8.3-intl
-      - php8.3-mbstring
-      - php8.3-mysql
-      - php8.3-opcache
-      - php8.3-soap
-      - php8.3-xml
-      - php8.3-xsl
-      - php8.3-zip
+      - {{ php_pkg }}-bcmath
+      - {{ php_pkg }}-curl
+      - {{ php_pkg }}-gd
+      - {{ php_pkg }}-intl
+      - {{ php_pkg }}-mbstring
+      - {{ php_pkg }}-mysql
+      - {{ php_pkg }}-opcache
+      - {{ php_pkg }}-soap
+      - {{ php_pkg }}-xml
+      - {{ php_pkg }}-xsl
+      - {{ php_pkg }}-zip
     - require:
       - pkg: install_php
 
 # 配置 PHP
 configure_php:
   file.managed:
-    - name: /etc/php/8.3/fpm/php.ini
+    - name: {{ php_etc_dir }}/php.ini
     - source: salt://core/php.ini
     - require:
       - pkg: install_php_fpm
@@ -55,7 +60,7 @@ configure_php:
 # 配置 PHP-FPM
 configure_php_fpm:
   file.managed:
-    - name: /etc/php/8.3/fpm/pool.d/www.conf
+    - name: {{ php_etc_dir }}/pool.d/www.conf
     - source: salt://core/php-fpm.conf
     - template: jinja
     - require:
@@ -63,14 +68,14 @@ configure_php_fpm:
 
 php_fpm_override_dir:
   file.directory:
-    - name: /etc/systemd/system/php8.3-fpm.service.d
+    - name: /etc/systemd/system/{{ php_fpm_pkg }}.service.d
     - user: root
     - group: root
     - mode: 0755
 
 php_fpm_override_conf:
   file.managed:
-    - name: /etc/systemd/system/php8.3-fpm.service.d/override.conf
+    - name: /etc/systemd/system/{{ php_fpm_pkg }}.service.d/override.conf
     - user: root
     - group: root
     - mode: 0644
@@ -94,7 +99,7 @@ php_fpm_override_reload:
 # 启动 PHP-FPM 服务
 start_php_fpm:
   service.running:
-    - name: php8.3-fpm
+    - name: {{ php_fpm_pkg }}
     - enable: true
     - require:
       - file: configure_php
@@ -132,7 +137,7 @@ configure_nginx_php:
     - contents: |
         location ~ \.php$ {
             include fastcgi_params;
-            fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+            fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
             fastcgi_index index.php;
             fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         }

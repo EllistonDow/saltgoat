@@ -80,6 +80,18 @@ restic_directories:
     - require:
       - pkg: restic_package
 
+{% if repo_dir %}
+restic_repo_dir:
+  file.directory:
+    - name: {{ repo_dir }}
+    - user: {{ repo_owner }}
+    - group: {{ repo_owner }}
+    - mode: '0750'
+    - makedirs: True
+    - require:
+      - pkg: restic_package
+{% endif %}
+
 restic_include_file:
   file.managed:
     - name: {{ include_file }}

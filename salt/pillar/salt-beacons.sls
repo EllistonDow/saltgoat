@@ -4,12 +4,8 @@
 {% set load_max_15m = (cpu_count * 1.1) %}
 {% set mem_warn_percent = 78 %}
 {% set disk_root_percent = 88 %}
-{% import_yaml 'secret/telegram.sls' as telegram_secret %}
 {% set secrets = pillar.get('secrets', {}) %}
 {% set telegram_cfg = secrets.get('telegram', {}).get('primary', {}) %}
-{% if not telegram_cfg and telegram_secret is mapping %}
-{%   set telegram_cfg = telegram_secret.get('secrets', {}).get('telegram', {}).get('primary', {}) %}
-{% endif %}
 {% set accept_from = telegram_cfg.get('accept_from', []) %}
 {% if not accept_from %}
 {% set accept_from = [123456789] %}
@@ -46,15 +42,18 @@ saltgoat:
           - 0.0
           - {{ ('%.2f' % load_max_15m)|float }}
     memusage:
+      - validate: False
       - percent: {{ ('%.2f' % mem_warn_percent)|float }}
       - interval: 60
       - onchangeonly: False
       - emitatstartup: False
     diskusage:
-      interval: 120
-      percent:
-        /: {{ ('%.2f' % disk_root_percent)|float }}
+      - validate: False
+      - interval: 120
+      - percent:
+          /: {{ ('%.2f' % disk_root_percent)|float }}
     inotify:
+      - validate: False
       - files:
           /etc/nginx/nginx.conf:
             mask:
@@ -85,6 +84,7 @@ saltgoat:
         - rabbitmq-server
         - opensearch
     telegram_bot_msg:
+      - validate: False
       - token: "{{ telegram_cfg.get('token', '') }}"
       - accept_from:
 {% for chat in accept_from %}
@@ -99,6 +99,7 @@ saltgoat:
           saltgoat/backup/xtrabackup: 4
           saltgoat/backup/restic: 5
     watchdog:
+      - validate: False
       - directories:
           /var/www:
             mask:

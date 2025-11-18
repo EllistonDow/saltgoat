@@ -1,5 +1,5 @@
-# OpenSearch 2.19 安装和配置
-
+{# OpenSearch 固定版本，默认 2.19.4，可通过 pillar saltgoat:versions:opensearch 覆盖 #}
+{% set opensearch_version = salt['pillar.get']('saltgoat:versions:opensearch', '2.19.4') %}
 
 # 添加 OpenSearch 仓库
 add_opensearch_repository:
@@ -25,6 +25,7 @@ install_java:
 install_opensearch:
   pkg.installed:
     - name: opensearch
+    - version: {{ opensearch_version }}
     - require:
       - cmd: update_package_list
       - pkg: install_java

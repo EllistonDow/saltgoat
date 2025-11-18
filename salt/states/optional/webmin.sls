@@ -9,7 +9,7 @@ install_webmin:
         rm -f /tmp/webmin.deb
     - creates: /usr/share/webmin
 
-# 配置 Webmin
+# 配置 Webmin（覆盖官方默认配置，包含 SSL 等加固选项）
 configure_webmin:
   file.managed:
     - name: /etc/webmin/miniserv.conf
@@ -47,6 +47,6 @@ configure_webmin_firewall:
 # 测试 Webmin 连接
 test_webmin_connection:
   cmd.run:
-    - name: curl -s http://localhost:10000 | grep -q "401.*Unauthorized" && echo "Webmin is running"
+    - name: curl -ks https://localhost:10000/ | grep -qi "Webmin" && echo "Webmin is running"
     - require:
       - service: start_webmin

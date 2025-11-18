@@ -81,3 +81,5 @@ salt/cache/
 
 # 内存监控日志
 /var/log/saltgoat/
+# Local pillar overrides
+salt/pillar/secret/magento-schedule.sls

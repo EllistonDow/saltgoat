@@ -1,21 +1,30 @@
-# Varnish 7.6 安装和配置
+{% set varnish_version = salt['pillar.get']('saltgoat:versions:varnish', '7.6.5-1~noble') %}
+# Varnish 安装和配置（锁定 7.6 系列）
 
-# 添加官方 Varnish 7.6 仓库
+# 添加官方 Varnish 7.6 仓库（使用 signed-by 避免 apt-key 失败）
+varnish_repo_key:
+  cmd.run:
+    - name: |
+        curl -fsSL https://packagecloud.io/varnishcache/varnish76/gpgkey \
+          | gpg --dearmor -o /usr/share/keyrings/varnishcache-76.gpg
+    - unless: test -f /usr/share/keyrings/varnishcache-76.gpg
+
 varnish_package_repo:
-  pkgrepo.managed:
-    - name: deb https://packagecloud.io/varnishcache/varnish76/ubuntu/ {{ grains['oscodename'] }} main
-    - file: /etc/apt/sources.list.d/varnishcache_varnish76.list
-    - key_url: https://packagecloud.io/varnishcache/varnish76/gpgkey
-    - require_in:
-        - pkg: install_varnish
+  file.managed:
+    - name: /etc/apt/sources.list.d/varnishcache_varnish76.list
+    - contents: |
+        deb [signed-by=/usr/share/keyrings/varnishcache-76.gpg] https://packagecloud.io/varnishcache/varnish76/ubuntu/ {{ grains['oscodename'] }} main
+    - require:
+      - cmd: varnish_repo_key
 
 # 安装 / 更新 Varnish（使用官方仓库，默认获取 7.6+）
 install_varnish:
-  pkg.latest:
+  pkg.installed:
     - name: varnish
+    - version: {{ varnish_version }}
     - refresh: true
     - require:
-      - pkgrepo: varnish_package_repo
+      - file: varnish_package_repo
 
 # 配置 Varnish
 configure_varnish:

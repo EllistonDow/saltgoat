@@ -279,7 +279,7 @@ show_nginx_help() {
     echo ""
 
     help_subtitle "快速建站"
-    help_command "create <site> \"dom1 dom2\" [path] [--magento]" "创建站点，支持多域名；加 --magento 自动套用 Magento 模板"
+    help_command "create --site <site> --domain <dom1 dom2> [--root <path>] [--magento]" "创建站点，支持多域名；加 --magento 自动套用 Magento 模板"
     help_command "list"                               "列出站点、根目录与证书状态"
     help_command "enable|disable <site>"              "立即切换站点上线/下线"
     help_command "delete <site>"                      "移除站点配置并清理符号链接"
@@ -288,7 +288,7 @@ show_nginx_help() {
     help_subtitle "运行操作"
     help_command "reload"                             "平滑重载 nginx，保持现有连接"
     help_command "test"                               "执行 nginx -t 语法检查"
-    help_command "add-ssl <site> [domain] [email] [-dry-on]"   "申请或续期 Let's Encrypt（默认读取 Pillar 邮箱）"
+    help_command "add-ssl --site <site> [--domain <dom1 dom2>] [--email addr] [--dry-run]"   "申请或续期 Let's Encrypt（默认读取 Pillar 邮箱）"
     help_note "邮箱默认取自 salt/pillar/nginx.sls 的 ssl_email，可在命令后追加覆盖。"
     echo ""
 
@@ -300,8 +300,8 @@ show_nginx_help() {
     echo ""
 
     help_subtitle "常用示例"
-    help_command "saltgoat nginx create shop \"shop.com www.shop.com\" --magento" "建站 + Magento 配置模板"
-    help_command "saltgoat nginx add-ssl shop \"shop.com\""             "申请 Let's Encrypt 证书"
+    help_command "saltgoat nginx create --site shop --domain shop.com www.shop.com --magento" "建站 + Magento 配置模板"
+    help_command "saltgoat nginx add-ssl --site shop --domain shop.com www.shop.com"             "申请 Let's Encrypt 证书"
     help_command "saltgoat nginx modsecurity level 7"                  "一键切换至严格 WAF"
     help_command "saltgoat nginx csp status"                           "检查 CSP 是否生效"
     help_note "需要自定义邮箱或 DNS 验证时，可先运行 \`saltgoat pillar show\` 确认 ssl_email。"

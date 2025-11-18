@@ -1,10 +1,35 @@
 {# Nginx 安装与站点管理（Salt 原生） #}
 {% from "services/nginx/map.jinja" import settings with context %}
 {% set settings_serialized = salt['slsutil.serialize']('json', settings) %}
+{% set generate_stub_ssl = settings.get('generate_stub_ssl', True) %}
+{% set stub_cert = settings.get('stub_ssl_cert', '/etc/ssl/certs/saltgoat-selfsigned.pem') %}
+{% set stub_key = settings.get('stub_ssl_key', '/etc/ssl/private/saltgoat-selfsigned.key') %}
+{% set stub_subject = settings.get('stub_ssl_subject', '/CN=saltgoat.local') %}
+{% set stub_cert_dir = stub_cert.rsplit('/', 1)[0] %}
+{% set stub_key_dir = stub_key.rsplit('/', 1)[0] %}
+{% set ssl_sites = [] %}
+{% for name, site in settings.sites.items() %}
+  {% set ssl_cfg = site.get('ssl', {}) or {} %}
+  {% if ssl_cfg.get('enabled') and ssl_cfg.get('cert') and ssl_cfg.get('key') %}
+    {% set _ = ssl_sites.append({'name': name, 'cert': ssl_cfg.get('cert'), 'key': ssl_cfg.get('key')}) %}
+  {% endif %}
+{% endfor %}
+
+nginx_repo_prereq:
+  pkg.installed:
+    - name: software-properties-common
+
+nginx_ppa:
+  pkgrepo.managed:
+    - ppa: ondrej/nginx
+    - require:
+      - pkg: nginx_repo_prereq
 
 nginx_pkg:
-  pkg.installed:
+  pkg.latest:
     - name: {{ settings.package }}
+    - require:
+      - pkgrepo: nginx_ppa
 
 nginx_directories:
   file.directory:
@@ -30,6 +55,66 @@ nginx_log_permissions:
     - mode: 750
     - require:
       - file: nginx_directories
+
+{% if generate_stub_ssl and ssl_sites %}
+saltgoat_stub_ssl_cert_dir:
+  file.directory:
+    - name: {{ stub_cert_dir }}
+    - makedirs: True
+    - mode: 755
+    - user: root
+    - group: root
+
+saltgoat_stub_ssl_key_dir:
+  file.directory:
+    - name: {{ stub_key_dir }}
+    - makedirs: True
+    - mode: 750
+    - user: root
+    - group: root
+
+saltgoat_stub_ssl_cert:
+  cmd.run:
+    - name: openssl req -x509 -nodes -newkey rsa:2048 -subj '{{ stub_subject }}' -keyout {{ stub_key }} -out {{ stub_cert }} -days 3650
+    - creates: {{ stub_cert }}
+    - require:
+      - file: saltgoat_stub_ssl_cert_dir
+      - file: saltgoat_stub_ssl_key_dir
+
+{% for ssl_site in ssl_sites %}
+{{ ssl_site.name }}_ssl_cert_dir:
+  file.directory:
+    - name: {{ ssl_site.cert.rsplit('/', 1)[0] }}
+    - makedirs: True
+    - mode: 755
+    - user: root
+    - group: root
+
+{{ ssl_site.name }}_ssl_key_dir:
+  file.directory:
+    - name: {{ ssl_site.key.rsplit('/', 1)[0] }}
+    - makedirs: True
+    - mode: 750
+    - user: root
+    - group: root
+
+{{ ssl_site.name }}_stub_ssl_cert_copy:
+  cmd.run:
+    - name: install -D -m 644 {{ stub_cert }} {{ ssl_site.cert }}
+    - unless: test -f {{ ssl_site.cert }}
+    - require:
+      - cmd: saltgoat_stub_ssl_cert
+      - file: {{ ssl_site.name }}_ssl_cert_dir
+
+{{ ssl_site.name }}_stub_ssl_key_copy:
+  cmd.run:
+    - name: install -D -m 600 {{ stub_key }} {{ ssl_site.key }}
+    - unless: test -f {{ ssl_site.key }}
+    - require:
+      - cmd: saltgoat_stub_ssl_cert
+      - file: {{ ssl_site.name }}_ssl_key_dir
+{% endfor %}
+{% endif %}
 
 {% if not settings.get('default_site', True) %}
 nginx_default_site_cleanup_enabled:

@@ -14,6 +14,7 @@ RABBIT_HELPER="${SCRIPT_DIR}/modules/lib/rabbitmq_helper.py"
 NGINX_CONTEXT="${SCRIPT_DIR}/modules/lib/nginx_context.py"
 
 RMQ_MODE="smart"
+MODE_OVERRIDE=0
 SITE_NAME=""
 THREADS=1
 THREADS_OVERRIDE=0
@@ -143,6 +144,40 @@ auto_detect_threads() {
     fi
 }
 
+auto_detect_mode() {
+    if [[ "$ACTION" != "check" ]]; then
+        return
+    fi
+    if [[ "$MODE_OVERRIDE" -eq 1 ]]; then
+        return
+    fi
+    if [[ "$SITE_NAME" == "__ALL__" ]]; then
+        return
+    fi
+    local extras=(
+        product_action_attribute.website.update
+        catalog_website_attribute_value_sync
+        inventory.source.items.cleanup
+        inventory.mass.update
+        inventory.reservations.cleanup
+        inventory.reservations.updateSalabilityStatus
+        inventory.indexer.sourceItem
+        media.gallery.renditions.update
+        media.gallery.synchronization
+        codegeneratorProcessor
+        sales.rule.quote.trigger.recollect
+    )
+    local unit_list
+    unit_list="$(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}')"
+    for consumer in "${extras[@]}"; do
+        if grep -q "^magento-consumer@${SITE_NAME}-${consumer}-" <<<"$unit_list"; then
+            RMQ_MODE="all"
+            log_info "检测到扩展消费者 ${consumer}，自动切换 RabbitMQ 检测模式为 all"
+            return
+        fi
+    done
+}
+
 ensure_threads_integer() {
     if ! [[ "$THREADS" =~ ^[0-9]+$ ]]; then
         abort "线程数必须为正整数"
@@ -193,10 +228,10 @@ parse_args() {
                 THREADS="$val"; THREADS_OVERRIDE=1; shift 2 ;;
             --mode)
                 val="${2-}"; [[ -z "$val" ]] && abort "--mode 需要一个值 (all|smart)";
-                RMQ_MODE="$val"; shift 2 ;;
+                RMQ_MODE="$val"; MODE_OVERRIDE=1; shift 2 ;;
             --mode=*)
                 val="${1#*=}"; [[ -z "$val" ]] && abort "--mode 需要一个值 (all|smart)";
-                RMQ_MODE="$val"; shift ;;
+                RMQ_MODE="$val"; MODE_OVERRIDE=1; shift ;;
             --amqp-host)
                 val="${2-}"; [[ -z "$val" ]] && abort "--amqp-host 需要一个值";
                 AMQP_HOST="$val"; shift 2 ;;
@@ -335,6 +370,9 @@ main() {
     fi
     if [[ "$ACTION" == "check" && "$THREADS_OVERRIDE" -eq 0 ]]; then
         auto_detect_threads
+    fi
+    if [[ "$ACTION" == "check" ]]; then
+        auto_detect_mode
     fi
     if [[ "$ACTION" != "remove" && "$ACTION" != "list" ]]; then
         ensure_threads_integer

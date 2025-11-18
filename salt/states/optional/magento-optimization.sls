@@ -367,6 +367,17 @@ php_fpm_conf_error_log_comment:
     - ignore_if_missing: True
 
 {% if not has_dedicated_pools %}
+{# 计算 PHP-FPM 池并发参数，确保 start_servers 落在 min/max 间 #}
+{% set pool_min_spare = php_pool_config.get('min_spare', 3) %}
+{% set pool_max_spare = php_pool_config.get('max_spare', 20) %}
+{% set pool_start_servers = php_pool_config.get('start_servers', pool_min_spare) %}
+{% if pool_start_servers < pool_min_spare %}
+  {% set pool_start_servers = pool_min_spare %}
+{% endif %}
+{% if pool_start_servers > pool_max_spare %}
+  {% set pool_start_servers = pool_max_spare %}
+{% endif %}
+
 php_fpm_pool_memory_limit_cleanup:
   file.replace:
     - name: {{ php_pool_conf }}
@@ -386,6 +397,7 @@ php_fpm_pool_settings:
           pm.max_requests: "{{ php_pool_config.get('max_requests', 500) }}"
           pm.min_spare_servers: "{{ php_pool_config.get('min_spare', 3) }}"
           pm.max_spare_servers: "{{ php_pool_config.get('max_spare', 20) }}"
+          pm.start_servers: "{{ pool_start_servers }}"
     - require:
       - file: php_fpm_pool_memory_limit_cleanup
 {% endif %}

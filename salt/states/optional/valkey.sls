@@ -1,5 +1,6 @@
-# Valkey 8.0.5 安装和配置
-
+{% set valkey_version = salt['pillar.get']('saltgoat:versions:valkey', '8.0.5') %}
+{% set valkey_tar = '{}.tar.gz'.format(valkey_version) %}
+# Valkey {{ valkey_version }} 安装和配置
 
 # 安装编译依赖
 install_build_dependencies:
@@ -14,18 +15,18 @@ install_build_dependencies:
       - libhiredis-dev
       - libjemalloc-dev
 
-# 下载 Valkey 8.0.5 源码
+# 下载 Valkey 源码
 download_valkey_source:
   cmd.run:
     - name: |
         cd /tmp
-        wget https://github.com/valkey-io/valkey/archive/refs/tags/8.0.5.tar.gz
-        tar -xzf 8.0.5.tar.gz
-        mv valkey-8.0.5 valkey
+        wget https://github.com/valkey-io/valkey/archive/refs/tags/{{ valkey_version }}.tar.gz -O {{ valkey_tar }}
+        tar -xzf {{ valkey_tar }}
+        mv valkey-{{ valkey_version }} valkey
     - cwd: /tmp
     - unless: test -d /tmp/valkey
 
-# 编译安装 Valkey 8.0.5
+# 编译安装 Valkey
 compile_valkey:
   cmd.run:
     - name: |
@@ -70,7 +71,7 @@ configure_valkey:
   file.managed:
     - name: /etc/valkey/valkey.conf
     - contents: |
-        # Valkey 8.0.5 基本配置
+        # Valkey {{ valkey_version }} 基本配置
         # 主要配置通过命令行参数设置
         bind 127.0.0.1
         port 6379
@@ -157,6 +158,6 @@ configure_valkey_firewall:
 test_valkey_connection:
   cmd.run:
     - name: |
-        valkey-cli -a SaltGoat2024! ping
+        valkey-cli -a {{ valkey_pass }} ping
     - require:
       - service: start_valkey

@@ -177,7 +177,14 @@ ensure_ssl_certificate() {
     fi
 
     if [[ -n "$override_domain" ]]; then
-        domains=("$override_domain" "${domains[@]}")
+        local sanitized="${override_domain//,/ }"
+        local -a override_list=()
+        read -ra override_list <<<"$sanitized"
+        for (( idx=${#override_list[@]}-1; idx>=0; idx-- )); do
+            local od="${override_list[idx]}"
+            [[ -z "$od" ]] && continue
+            domains=("$od" "${domains[@]}")
+        done
     fi
 
     # 去重，保留顺序
@@ -445,10 +452,8 @@ cmd_create() {
         log_error "请至少提供一个域名。"
         return 1
     fi
-    local -a args=(create --site "$site")
-    for domain in "${domains[@]}"; do
-        [[ -n "$domain" ]] && args+=("--domains" "$domain")
-    done
+    local -a args=(create --site "$site" --domains)
+    args+=("${domains[@]}")
     if [[ -n "$root_path" ]]; then
         args+=("--root" "$root_path")
     fi
@@ -505,7 +510,14 @@ cmd_ssl() {
     local dry_run="${4:-0}"
     ensure_pillar_file
     local -a args=(ssl --site "$site")
-    [[ -n "$domain" ]] && args+=("--domain" "$domain")
+    if [[ -n "$domain" ]]; then
+        local sanitized="${domain//,/ }"
+        local -a domain_tokens=()
+        read -ra domain_tokens <<<"$sanitized"
+        if (( ${#domain_tokens[@]} > 0 )); then
+            args+=("--domain" "${domain_tokens[0]}")
+        fi
+    fi
     [[ -n "$email" ]] && args+=("--email" "$email")
     pillar_cli "${args[@]}"
     log_info "已更新站点 ${site} 的 SSL 信息。"
@@ -525,11 +537,11 @@ nginx_cli_help() {
 用法:
   saltgoat nginx apply                     # 套用 core.nginx Salt 状态
   saltgoat nginx list                      # 查看所有站点
-  saltgoat nginx create <站点> "<域名 ...>" [根目录|--root <路径>] [--magento]
+  saltgoat nginx create --site <站点> --domain <域名 ...> [--root <路径>] [--magento]
   saltgoat nginx delete <站点>
   saltgoat nginx enable <站点>
   saltgoat nginx disable <站点>
-  saltgoat nginx add-ssl <站点> [域名] [email] [-dry-on]
+  saltgoat nginx add-ssl --site <站点> [--domain <域名 ...>] [--email <邮箱>] [--dry-run]
   saltgoat nginx csp level <0-5>           # 设置/禁用 CSP 等级
   saltgoat nginx csp status|disable
   saltgoat nginx modsecurity level <0-10> [--admin-path /admin]
@@ -549,63 +561,127 @@ _nginx_dispatch() {
             cmd_list
             ;;
         create)
-            local site="${2:-}"
-            local domains_arg="${3:-}"
-            if [[ -z "$site" || -z "$domains_arg" ]]; then
-                log_error "用法: saltgoat nginx create <站点> \"<域名 ...>\" [根目录|--root <路径>] [--magento]"
-                exit 1
-            fi
+            shift
+            local site=""
+            local -a domains_input=()
             local root=""
             local magento_flag=0
             local php_pool=""
             local php_fastcgi=""
             local magento_run_type=""
             local magento_run_code=""
-            local magento_run_mode="production"
-            shift 3
+            local magento_run_mode=""
+            local -a leftover=()
             while [[ $# -gt 0 ]]; do
                 case "$1" in
+                    --site)
+                        site="${2:-}"
+                        shift 2
+                        ;;
+                    --site=*)
+                        site="${1#*=}"
+                        shift
+                        ;;
+                    --domains)
+                        domains_input+=("${2:-}")
+                        shift 2
+                        ;;
+                    --domains=*)
+                        domains_input+=("${1#*=}")
+                        shift
+                        ;;
+                    --domain)
+                        shift
+                        while [[ $# -gt 0 ]]; do
+                            local possible="$1"
+                            if [[ -z "$possible" ]]; then
+                                shift
+                                continue
+                            fi
+                            if [[ "$possible" == -* ]]; then
+                                break
+                            fi
+                            domains_input+=("$possible")
+                            shift
+                        done
+                        continue
+                        ;;
+                    --domain=*)
+                        domains_input+=("${1#*=}")
+                        shift
+                        ;;
                     --magento)
                         magento_flag=1
+                        shift
                         ;;
                     --root)
+                        root="${2:-}"
+                        shift 2
+                        ;;
+                    --root=*)
+                        root="${1#*=}"
                         shift
-                        if [[ $# -eq 0 ]]; then
-                            log_error "--root 需要指定路径"
-                            exit 1
-                        fi
-                        root="$1"
                         ;;
                     --php-pool)
+                        php_pool="${2:-}"
+                        shift 2
+                        ;;
+                    --php-pool=*)
+                        php_pool="${1#*=}"
                         shift
-                        php_pool="${1:-}"
                         ;;
                     --php-fastcgi)
+                        php_fastcgi="${2:-}"
+                        shift 2
+                        ;;
+                    --php-fastcgi=*)
+                        php_fastcgi="${1#*=}"
                         shift
-                        php_fastcgi="${1:-}"
                         ;;
                     --magento-run-type)
+                        magento_run_type="${2:-}"
+                        shift 2
+                        ;;
+                    --magento-run-type=*)
+                        magento_run_type="${1#*=}"
                         shift
-                        magento_run_type="${1:-}"
                         ;;
                     --magento-run-code)
+                        magento_run_code="${2:-}"
+                        shift 2
+                        ;;
+                    --magento-run-code=*)
+                        magento_run_code="${1#*=}"
                         shift
-                        magento_run_code="${1:-}"
                         ;;
                     --magento-run-mode)
+                        magento_run_mode="${2:-}"
+                        shift 2
+                        ;;
+                    --magento-run-mode=*)
+                        magento_run_mode="${1#*=}"
                         shift
-                        magento_run_mode="${1:-}"
                         ;;
                     *)
-                        if [[ -z "$root" ]]; then
-                            root="$1"
-                        else
-                            log_warning "忽略未知参数: $1"
-                        fi
+                        leftover+=("$1")
+                        shift
                         ;;
                 esac
-                shift
             done
+            if [[ -z "$site" && ${#leftover[@]} -ge 1 ]]; then
+                site="${leftover[0]}"
+            fi
+            if [[ ${#domains_input[@]} -eq 0 && ${#leftover[@]} -ge 2 ]]; then
+                domains_input+=("${leftover[1]}")
+            fi
+            if [[ -z "$root" && ${#leftover[@]} -ge 3 ]]; then
+                root="${leftover[2]}"
+            fi
+            if [[ -z "$site" || ${#domains_input[@]} -eq 0 ]]; then
+                log_error "用法: saltgoat nginx create --site <站点> --domain <域名...> [--root <路径>] [--magento]"
+                exit 1
+            fi
+            local domains_arg="${domains_input[*]}"
             cmd_create "$site" "$domains_arg" "$root" "$magento_flag" "$php_pool" "$php_fastcgi" "$magento_run_type" "$magento_run_code" "$magento_run_mode"
             ;;
         delete)
@@ -625,36 +701,87 @@ _nginx_dispatch() {
             cmd_enable_disable "$action" "$site"
             ;;
         add-ssl)
-            local site="${2:-}"
-            if [[ -z "$site" ]]; then
-                log_error "用法: saltgoat nginx add-ssl <站点> [域名] [email] [-dry-on]"
-                exit 1
-            fi
-            local domain=""
+            shift
+            local site=""
+            local -a override_domains=()
             local email=""
             local dry_run=0
-            shift 2
+            local -a leftover_ssl=()
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    -dry-on)
+                    --site)
+                        site="${2:-}"
+                        shift 2
+                        ;;
+                    --site=*)
+                        site="${1#*=}"
+                        shift
+                        ;;
+                    --domains)
+                        override_domains+=("${2:-}")
+                        shift 2
+                        ;;
+                    --domains=*)
+                        override_domains+=("${1#*=}")
+                        shift
+                        ;;
+                    --domain)
+                        shift
+                        while [[ $# -gt 0 ]]; do
+                            local next="$1"
+                            if [[ -z "$next" ]]; then
+                                shift
+                                continue
+                            fi
+                            if [[ "$next" == -* ]]; then
+                                break
+                            fi
+                            override_domains+=("$next")
+                            shift
+                        done
+                        continue
+                        ;;
+                    --domain=*)
+                        override_domains+=("${1#*=}")
+                        shift
+                        ;;
+                    --email)
+                        email="${2:-}"
+                        shift 2
+                        ;;
+                    --email=*)
+                        email="${1#*=}"
+                        shift
+                        ;;
+                    -dry-on|--dry-run)
                         dry_run=1
+                        shift
                         ;;
                     -*)
                         log_warning "忽略未知参数: $1"
+                        shift
                         ;;
                     *)
-                        if [[ -z "$domain" ]]; then
-                            domain="$1"
-                        elif [[ -z "$email" ]]; then
-                            email="$1"
-                        else
-                            log_warning "忽略多余参数: $1"
-                        fi
+                        leftover_ssl+=("$1")
+                        shift
                         ;;
                 esac
-                shift
             done
-            cmd_ssl "$site" "$domain" "$email" "$dry_run"
+            if [[ -z "$site" && ${#leftover_ssl[@]} -ge 1 ]]; then
+                site="${leftover_ssl[0]}"
+            fi
+            if [[ ${#override_domains[@]} -eq 0 && ${#leftover_ssl[@]} -ge 2 ]]; then
+                override_domains+=("${leftover_ssl[1]}")
+            fi
+            if [[ -z "$email" && ${#leftover_ssl[@]} -ge 3 ]]; then
+                email="${leftover_ssl[2]}"
+            fi
+            if [[ -z "$site" ]]; then
+                log_error "用法: saltgoat nginx add-ssl --site <站点> [--domain <域名...>] [--email addr] [--dry-run]"
+                exit 1
+            fi
+            local domain_override="${override_domains[*]}"
+            cmd_ssl "$site" "$domain_override" "$email" "$dry_run"
             ;;
         reload)
             cmd_reload

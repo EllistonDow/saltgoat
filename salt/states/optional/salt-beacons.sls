@@ -36,16 +36,6 @@
     - mode: 750
     - makedirs: True
 
-/etc/saltgoat/telegram.json:
-  file.managed:
-    - user: root
-    - group: root
-    - mode: 640
-    - source: salt://templates/telegram_config.json.jinja
-    - template: jinja
-    - require:
-      - file: /etc/saltgoat
-
 /etc/saltgoat/chatops.json:
   file.managed:
     - user: root
@@ -149,6 +139,8 @@ salt-beacon-system-packages:
       - python3-requests
       - python3-twilio
 
+{% set onedir_sitepkg = '/opt/saltstack/salt/lib/python3.10/site-packages' %}
+{% if salt['file.directory_exists'](onedir_sitepkg) %}
 /opt/saltstack/salt/lib/python3.10/site-packages/telegram:
   file.directory:
     - user: root
@@ -175,6 +167,7 @@ salt-beacon-onedir-packages:
       - pyinotify
       - pyroute2
       - twilio
+{% endif %}
 
 /opt/saltgoat-telegram/telegram:
   file.directory:

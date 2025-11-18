@@ -637,6 +637,7 @@ set +a
 "$RESTIC_BIN_PATH" init
 EOF
     log_success "Restic 仓库已初始化: ${INSTALL_REPO}"
+    ensure_dir_ownerships "$INSTALL_REPO_OWNER" "$INSTALL_REPO"
 }
 
 create_systemd_units() {

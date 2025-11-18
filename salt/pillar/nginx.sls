@@ -1,170 +1,17 @@
 nginx:
+  package: nginx
+  service: nginx
+  default_site: true
   sites:
-    pwas:
+    bdgy:
       enabled: true
       server_name:
-      - pwas.magento.tattoogoat.com
-      ssl_email: ssl@tschenfeng.com
+      - www.bdgy.com
       listen:
       - port: 80
       - port: 443
         ssl: true
-      root: /var/www/pwas
-      index:
-      - index.php
-      - index.html
-      php:
-        enabled: true
-        pool: magento-pwas
-      headers:
-        X-Frame-Options: SAMEORIGIN
-        X-Content-Type-Options: nosniff
-      magento: true
-      ssl:
-        enabled: true
-        cert: /etc/letsencrypt/live/pwas.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/pwas.magento.tattoogoat.com/privkey.pem
-        protocols: TLSv1.2 TLSv1.3
-        prefer_server_ciphers: false
-        redirect: true
-    pwa-frontend:
-      enabled: true
-      server_name:
-      - pwa.magento.tattoogoat.com
-      listen:
-      - port: 80
-      - port: 443
-        ssl: true
-      root: /var/www/pwas/pwa-studio/packages/venia-concept/.proxy-root
-      index:
-      - index.html
-      php:
-        enabled: false
-      locations:
-        /:
-          raw: 'proxy_pass http://127.0.0.1:8082;
-
-            proxy_set_header Host $host;
-
-            proxy_set_header X-Real-IP $remote_addr;
-
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-
-            proxy_set_header X-Forwarded-Proto $scheme;
-
-            proxy_http_version 1.1;
-
-            proxy_set_header Connection "";
-
-            '
-      headers:
-        X-Frame-Options: SAMEORIGIN
-        X-Content-Type-Options: nosniff
-      ssl:
-        enabled: true
-        cert: /etc/letsencrypt/live/pwa.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/pwa.magento.tattoogoat.com/privkey.pem
-        protocols: TLSv1.2 TLSv1.3
-        prefer_server_ciphers: false
-        redirect: true
-    bank:
-      enabled: true
-      server_name:
-      - bank.magento.tattoogoat.com
-      listen:
-      - port: 80
-      - port: 443
-        ssl: true
-      root: /var/www/bank
-      index:
-      - index.php
-      - index.html
-      php:
-        enabled: true
-        pool: magento-bank
-      headers:
-        X-Frame-Options: SAMEORIGIN
-        X-Content-Type-Options: nosniff
-      magento: true
-      magento_run:
-        type: store
-        code: default
-      ssl:
-        enabled: true
-        cert: /etc/letsencrypt/live/bank.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/bank.magento.tattoogoat.com/privkey.pem
-        protocols: TLSv1.2 TLSv1.3
-        prefer_server_ciphers: false
-        redirect: true
-    tank:
-      enabled: true
-      server_name:
-      - tank.magento.tattoogoat.com
-      listen:
-      - port: 80
-      - port: 443
-        ssl: true
-      root: /var/www/tank
-      index:
-      - index.php
-      - index.html
-      php:
-        enabled: true
-        pool: magento-tank
-      magento: true
-      magento_run:
-        type: store
-        code: en
-      headers:
-        X-Frame-Options: SAMEORIGIN
-        X-Content-Type-Options: nosniff
-      ssl:
-        enabled: true
-        cert: /etc/letsencrypt/live/tank.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/tank.magento.tattoogoat.com/privkey.pem
-        protocols: TLSv1.2 TLSv1.3
-        prefer_server_ciphers: false
-        redirect: true
-    uptime-kuma:
-      enabled: true
-      server_name:
-      - status.magento.tattoogoat.com
-      listen:
-      - port: 80
-      - port: 443
-        ssl: true
-      root: /var/www/uptime-kuma
-      php:
-        enabled: false
-      headers:
-        X-Frame-Options: SAMEORIGIN
-        X-Content-Type-Options: nosniff
-      ssl:
-        enabled: true
-        cert: /etc/letsencrypt/live/status.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/status.magento.tattoogoat.com/privkey.pem
-        protocols: TLSv1.2 TLSv1.3
-        prefer_server_ciphers: false
-        redirect: true
-      locations:
-        /:
-          directives:
-          - proxy_pass http://127.0.0.1:18080
-          - proxy_set_header Host $host
-          - proxy_set_header X-Real-IP $remote_addr
-          - proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for
-          - proxy_set_header X-Forwarded-Proto $scheme
-        /.well-known/acme-challenge/:
-          directives:
-          - alias /var/www/uptime-kuma/.well-known/acme-challenge/
-          - try_files $uri =404
-    foo:
-      enabled: true
-      server_name:
-      - foo.com
-      listen:
-      - port: 80
-      root: /var/www/foo
+      root: /var/www/bdgy
       index:
       - index.php
       - index.html
@@ -174,81 +21,58 @@ nginx:
       headers:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
-    mattermost:
-      enabled: true
-      server_name:
-      - chat.magento.tattoogoat.com
-      listen:
-      - port: 80
-      - port: 443
-        ssl: true
-      root: /var/www/mattermost
-      php:
-        enabled: false
-      headers:
-        X-Frame-Options: SAMEORIGIN
-        X-Content-Type-Options: nosniff
+      magento: true
+      csp:
+        enabled: true
+        policy: 'default-src ''self''; script-src ''self'' ''unsafe-inline'' ''unsafe-eval''
+          https:; style-src ''self'' ''unsafe-inline'' https:; img-src ''self'' data:
+          https:; font-src ''self'' data: https:; connect-src ''self'' https:; frame-ancestors
+          ''self'';'
       ssl:
         enabled: true
-        cert: /etc/letsencrypt/live/chat.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/chat.magento.tattoogoat.com/privkey.pem
+        cert: /etc/letsencrypt/live/bdgyoo.com/fullchain.pem
+        key: /etc/letsencrypt/live/bdgyoo.com/privkey.pem
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
-      locations:
-        /:
-          directives:
-          - proxy_pass http://127.0.0.1:18080
-          - proxy_set_header Host $host
-          - proxy_set_header X-Real-IP $remote_addr
-          - proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for
-          - proxy_set_header X-Forwarded-Proto $scheme
-        /.well-known/acme-challenge/:
-          directives:
-          - alias /var/www/mattermost/.well-known/acme-challenge/
-          - try_files $uri =404
-    mastodon-bankpost:
+    sava:
       enabled: true
       server_name:
-      - bankpost.magento.tattoogoat.com
+      - savageneedles.com
+      - www.savageneedles.com
       listen:
       - port: 80
       - port: 443
         ssl: true
-      root: /var/www/mastodon-bankpost
+      root: /var/www/sava
+      index:
+      - index.php
+      - index.html
       php:
-        enabled: false
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+        pool: magento-sava
       headers:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
+      magento: true
       ssl:
         enabled: true
-        cert: /etc/letsencrypt/live/bankpost.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/bankpost.magento.tattoogoat.com/privkey.pem
+        cert: /etc/letsencrypt/live/savageneedles.com/fullchain.pem
+        key: /etc/letsencrypt/live/savageneedles.com/privkey.pem
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
-      locations:
-        /:
-          directives:
-          - proxy_pass http://127.0.0.1:18080
-          - proxy_set_header Host $host
-          - proxy_set_header X-Real-IP $remote_addr
-          - proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for
-          - proxy_set_header X-Forwarded-Proto $scheme
-        /.well-known/acme-challenge/:
-          directives:
-          - alias /var/www/mastodon-bankpost/.well-known/acme-challenge/
-          - try_files $uri =404
-    matomo:
+    ipwa:
       enabled: true
       server_name:
-      - matomo.magento.tattoogoat.com
+      - ipowerwatch.com
+      - www.ipowerwatch.com
       listen:
       - port: 80
       - port: 443
         ssl: true
-      root: /var/www/matomo/matomo
+      root: /var/www/ipwa
       index:
       - index.php
       - index.html
@@ -258,69 +82,48 @@ nginx:
       headers:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
+      magento: true
       ssl:
         enabled: true
-        cert: /etc/letsencrypt/live/matomo.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/matomo.magento.tattoogoat.com/privkey.pem
+        cert: /etc/letsencrypt/live/ipowerwatch.com/fullchain.pem
+        key: /etc/letsencrypt/live/ipowerwatch.com/privkey.pem
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
-    duobank:
+    ntca:
       enabled: true
       server_name:
-      - duobank.magento.tattoogoat.com
+      - nucleartattooca.com
+      - www.nucleartattooca.com
       listen:
       - port: 80
       - port: 443
         ssl: true
-      root: /var/www/bank
+      root: /var/www/ntca
       index:
       - index.php
       - index.html
       php:
         enabled: true
-        pool: magento-duobank
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
       headers:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
       magento: true
-      magento_run:
-        type: website
-        code: duobank_ws
       ssl:
         enabled: true
-        cert: /etc/letsencrypt/live/duobank.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/duobank.magento.tattoogoat.com/privkey.pem
+        cert: /etc/letsencrypt/live/nucleartattooca.com/fullchain.pem
+        key: /etc/letsencrypt/live/nucleartattooca.com/privkey.pem
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
-    treebank:
-      enabled: true
-      server_name:
-      - treebank.magento.tattoogoat.com
-      listen:
-      - port: 80
-      - port: 443
-        ssl: true
-      root: /var/www/bank
-      index:
-      - index.php
-      - index.html
-      php:
-        enabled: true
-        pool: magento-treebank
-      headers:
-        X-Frame-Options: SAMEORIGIN
-        X-Content-Type-Options: nosniff
-      magento: true
-      magento_run:
-        type: website
-        code: treebank_ws
-      ssl:
-        enabled: true
-        cert: /etc/letsencrypt/live/treebank.magento.tattoogoat.com/fullchain.pem
-        key: /etc/letsencrypt/live/treebank.magento.tattoogoat.com/privkey.pem
-        protocols: TLSv1.2 TLSv1.3
-        prefer_server_ciphers: false
-        redirect: true
+  modsecurity:
+    enabled: true
+    level: 5
+    admin_path: /admin_tattoo
+  csp:
+    enabled: true
+    level: 3
+    policy: 'default-src ''self'' http: https: data: blob: ''unsafe-inline''; script-src
+      ''self'' ''unsafe-inline'' ''unsafe-eval''; style-src ''self'' ''unsafe-inline'''
   ssl_email: ssl@tschenfeng.com

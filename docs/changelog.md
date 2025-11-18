@@ -1,5 +1,12 @@
 # [1.3.19] - 2025-11-04
 
+## [1.8.0] - 2025-11-18
+
+### Changes
+- 自动化 PHP-FPM 池与 Schedule：启用站点自动探测、收敛 `core.php-fpm-pools` 并扩展 Restic/备份任务，新增站点无需手工配置即可获得独立池与备份任务。
+- RabbitMQ 与通知增强：修复 `rabbitmq-salt check` 误报、同步新增站点的 API Watch/Restic/XtraBackup，初始化 Telegram 话题并生成 `/etc/saltgoat/telegram.json`，确保告警/备份推送到对应线程。
+- 运行时改进：新增 `php_fpm_pool_service` 以便单独执行 state、为 beacon 添加 `validate: False` 降噪，并把 `SCRIPT_STATIC_VERSION` 提升到 1.8.0 以对齐本次发布。
+
 ## [1.7.10] - 2025-11-16
 
 ### Changes

@@ -1,5 +1,22 @@
 # Fail2ban 安装和配置
-# Fail2ban 已经在 common/security.sls 中安装，这里只做额外配置
+
+# 确保 Fail2ban 已安装
+fail2ban_package:
+  pkg.installed:
+    - name: fail2ban
+
+# 确保配置目录存在
+fail2ban_directories:
+  file.directory:
+    - names:
+        - /etc/fail2ban/jail.d
+        - /etc/fail2ban/filter.d
+    - user: root
+    - group: root
+    - mode: 755
+    - makedirs: True
+    - require:
+        - pkg: fail2ban_package
 
 # 创建 LEMP 特定的 jail 配置
 configure_fail2ban_lemp:
@@ -41,6 +58,8 @@ configure_fail2ban_lemp:
         maxretry = 3
         bantime = 3600
         findtime = 600
+    - require:
+        - file: fail2ban_directories
 
 # 创建自定义过滤器
 create_fail2ban_filters:
@@ -50,6 +69,8 @@ create_fail2ban_filters:
         [Definition]
         failregex = limiting requests, excess: .* by zone .*, client: <HOST>
         ignoreregex =
+    - require:
+        - file: fail2ban_directories
 
 # 重启 Fail2ban 服务
 restart_fail2ban:
@@ -58,6 +79,7 @@ restart_fail2ban:
     - enable: true
     - reload: true
     - require:
+      - pkg: fail2ban_package
       - file: configure_fail2ban_lemp
       - file: create_fail2ban_filters
 

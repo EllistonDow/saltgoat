@@ -22,7 +22,7 @@ nginx-acme-webroot-{{ site }}:
 nginx-acme-clean-{{ site }}:
   file.replace:
     - name: /etc/nginx/sites-available/{{ site }}
-    - pattern: '\n# SALTGOAT-ACME-{{ site }}-START[\s\S]*?# SALTGOAT-ACME-{{ site }}-END'
+    - pattern: '\n\s*# SALTGOAT-ACME-{{ site }}-START[\s\S]*?# SALTGOAT-ACME-{{ site }}-END'
     - repl: ''
 
 nginx-acme-snippet-{{ site }}:

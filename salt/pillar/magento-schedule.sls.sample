@@ -1,43 +1,29 @@
-# Magento mysqldump Salt Schedule 示例
-# 复制为 `salt/pillar/magento-schedule.sls` 并按站点填写
+# Magento 定时任务模板：按需复制到 pillar 或 secret 并填入真实站点
+# Dropbox 根可通过 pillar saltgoat:dropbox_root 覆盖
+
+{% set dropbox_root = salt['pillar.get']('saltgoat:dropbox_root', '/home/doge/Dropbox') %}
+{% set dropbox_root = dropbox_root.rstrip('/') %}
+{% macro dropbox_db(site) -%}
+{{ dropbox_root }}/{{ site }}/databases
+{%- endmacro %}
+{% macro dropbox_restic(site) -%}
+{{ dropbox_root }}/{{ site }}/restic-backups
+{%- endmacro %}
 
 magento_schedule:
   mysql_dump_jobs:
-    - name: site1-dump-hourly
+    - name: <site>mage-dump-hourly
       cron: '0 * * * *'
-      database: site1_db
-      backup_dir: /var/backups/mysql/site1
-      repo_owner: site1user
-      # 使用单个站点字段时，只有匹配 pillar.site_name 的主机会安装
-      site: site1
-    - name: site2-dump-every-2h
-      cron: '0 */2 * * *'
-      database: site2_db
-      backup_dir: /var/backups/mysql/site2
-      repo_owner: site2user
-      # 可选：通过 sites 列表同时匹配多个站点（如生产 + Staging）
-      sites:
-        - site2
-        - site2-staging
-  api_watchers:
-    - name: site1-orders
-      cron: '*/5 * * * *'
-      site: site1
-      kinds:
-        - orders
-        - customers
-  stats_jobs:
-    - name: site1-stats-daily
-      cron: '5 6 * * *'
-      site: site1
-      period: daily
-      telegram_thread: 2
-      # 可选：关闭 Telegram 推送，仅生成日志
-      no_telegram: false
-    - name: site2-stats-weekly
-      cron: '15 6 * * 1'
-      sites:
-        - site2
-        - site2-staging
-      period: weekly
-      page_size: 500
+      database: <site>mage
+      backup_dir: {{ dropbox_db('<site>') }}
+      repo_owner: doge
+      site: <site>
+  api_watchers: []
+  stats_jobs: []
+  restic_jobs:
+    - name: <site>-restic-daily
+      cron: '40 4 * * *'
+      site: <site>
+      repo: {{ dropbox_restic('<site>') }}
+      paths:
+        - /var/www/<site>

@@ -20,4 +20,5 @@ base:
     - optional.webmin
     - optional.phpmyadmin
     - optional.certbot
+    - optional.salt-master
     - schedules.saltgoat

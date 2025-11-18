@@ -259,10 +259,52 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
                 args.extend(str(part) for part in extra_args)
         stats_jobs[name] = " ".join(shlex.quote(arg) for arg in args)
 
+    raw_restic_jobs = config.get("restic_jobs", []) or []
+    restic_jobs_config = [job for job in raw_restic_jobs if isinstance(job, dict)]
+    restic_jobs: Dict[str, str] = {}
+    for restic_job in restic_jobs_config:
+        name = restic_job.get("name")
+        if not name:
+            continue
+        if not _job_matches_site(restic_job, site):
+            continue
+        parts: List[str] = [
+            "saltgoat",
+            "magetools",
+            "backup",
+            "restic",
+            "run",
+            "--site",
+            restic_job.get("site_override", site),
+        ]
+        if restic_job.get("repo"):
+            parts.extend(["--backup-dir", str(restic_job["repo"])])
+        paths = restic_job.get("paths")
+        if isinstance(paths, (list, tuple, set)):
+            if paths:
+                joined = ",".join(str(p) for p in paths)
+                parts.extend(["--paths", joined])
+        elif isinstance(paths, str) and paths:
+            parts.extend(["--paths", paths])
+        tags = restic_job.get("tags")
+        if isinstance(tags, (list, tuple, set)):
+            for tag in tags:
+                parts.extend(["--tag", str(tag)])
+        elif isinstance(tags, str) and tags:
+            parts.extend(["--tag", tags])
+        extra = restic_job.get("extra_args")
+        if extra:
+            if isinstance(extra, str):
+                parts.extend(shlex.split(extra))
+            elif isinstance(extra, (list, tuple, set)):
+                parts.extend(str(part) for part in extra)
+        restic_jobs[name] = " ".join(shlex.quote(arg) for arg in parts)
+
     auto_schedule_raw = {
         "mysql_dump_jobs": dump_jobs_config,
         "api_watchers": api_watchers_config,
         "stats_jobs": stats_jobs_config,
+        "restic_jobs": restic_jobs_config,
     }
     auto_schedule = json.loads(json.dumps(auto_schedule_raw))
 
@@ -271,6 +313,7 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
     expected_commands.update(dump_jobs)
     expected_commands.update(api_watchers)
     expected_commands.update(stats_jobs)
+    expected_commands.update(restic_jobs)
     expected_commands["saltgoat_schedule_auto"] = "saltgoat magetools schedule auto"
     expected_commands["saltgoat_daily_summary"] = "saltgoat monitor report daily"
 

@@ -83,7 +83,7 @@ python_warnings: false
 EOF
 	
 	# 刷新 pillar（不阻断）
-	sudo salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || true
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || true
 	log_success "Salt minion 配置完成"
 }
 
@@ -219,7 +219,7 @@ EOF
 	sudo chmod 600 "$target_file"
 
 	# 刷新 Pillar，以便后续 state 读取到更新内容
-	sudo salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || true
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || true
 
 	log_success "Pillar 配置更新完成"
 }
@@ -231,17 +231,21 @@ install_all() {
 	# 加载环境配置
 	load_install_config "$@"
 
+	# 安装系统依赖
+	install_system_deps || return 1
+
+	# 安装 Salt，后续命令依赖 salt-call
+	install_salt || return 1
+
 	# 配置 salt minion（确保能读取项目 pillar）
 	configure_salt_minion
-	
+
 	# 设置SaltGoat项目目录grain
-	salt-call --local grains.set saltgoat_project_dir "${SCRIPT_DIR}"
-
-	# 安装系统依赖
-	install_system_deps
-
-	# 安装 Salt
-	install_salt
+	if command_exists salt-call; then
+		salt-call --local grains.set saltgoat_project_dir "${SCRIPT_DIR}"
+	else
+		log_warning "salt-call 不可用，无法设置 saltgoat_project_dir grain"
+	fi
 
 	# 安装核心组件
 	install_core
@@ -326,10 +330,10 @@ install_core() {
 	log_info "安装核心组件..."
 
 	# 应用核心状态
-	sudo salt-call --local state.apply core.nginx
-	sudo salt-call --local state.apply core.php
-	sudo salt-call --local state.apply core.mysql pillar='{"mysql_password":"'"$MYSQL_PASSWORD"'"}'
-	sudo salt-call --local state.apply core.composer
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.nginx
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.php
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.mysql pillar='{"mysql_password":"'"$MYSQL_PASSWORD"'"}'
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.composer
 
 	log_success "核心组件安装完成"
 }
@@ -339,14 +343,14 @@ install_optional() {
 	log_info "安装可选组件..."
 
 	# 应用可选状态
-	sudo salt-call --local state.apply optional.valkey
-	sudo salt-call --local state.apply optional.opensearch
-	sudo salt-call --local state.apply optional.rabbitmq
-	sudo salt-call --local state.apply optional.varnish
-	sudo salt-call --local state.apply optional.fail2ban
-	sudo salt-call --local state.apply optional.webmin
-	sudo salt-call --local state.apply optional.phpmyadmin
-	sudo salt-call --local state.apply optional.certbot
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.valkey
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.opensearch
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.rabbitmq
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.varnish
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.fail2ban
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.webmin
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.phpmyadmin
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.certbot
 
 	log_success "可选组件安装完成"
 }
@@ -355,13 +359,19 @@ install_optional() {
 install_system_deps() {
 	log_info "安装系统依赖..."
 
-	# 更新包列表
-	sudo salt-call --local cmd.run "apt update"
+	if sudo apt-get update; then
+		log_info "APT 软件包列表已更新"
+	else
+		log_warning "apt-get update 失败，可稍后手动运行 'sudo apt-get update'"
+	fi
 
-	# 安装基础包（使用 pkgs 列表，避免位置参数被误解析为 fromrepo 等字段）
-	sudo salt-call --local pkg.install pkgs='["curl", "wget", "git", "unzip"]'
-
-	log_success "系统依赖安装完成"
+	local deps=(curl wget git unzip openssl python3-venv ca-certificates)
+	if sudo apt-get install -y "${deps[@]}"; then
+		log_success "系统依赖安装完成"
+	else
+		log_error "安装系统依赖失败，请检查网络或软件源后重试"
+		return 1
+	fi
 }
 
 # 安装 Salt
@@ -374,8 +384,11 @@ install_salt() {
 		return
 	fi
 
-	# 安装 Salt
-	salt-call --local cmd.run "curl -L https://bootstrap.saltproject.io | sudo sh -s -- -M -N"
-
-	log_success "Salt 安装完成"
+	local bootstrap_script="https://bootstrap.saltproject.io"
+	if curl -fsSL "$bootstrap_script" | sudo sh -s -- -M -N; then
+		log_success "Salt 安装完成"
+	else
+		log_error "Salt 安装失败，请检查网络或参考 https://repo.saltproject.io/ 手动安装"
+		return 1
+	fi
 }

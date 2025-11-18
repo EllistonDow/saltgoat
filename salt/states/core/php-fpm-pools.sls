@@ -2,7 +2,7 @@
   基于 Pillar `magento_optimize:sites`（或自动检测的 Magento 根目录）生成 PHP-FPM 池。
   每个站点可在 `php_pool` 下覆盖默认值，未设置时根据系统资源自动计算。
 -#}
-{% set php_version = salt['pillar.get']('saltgoat:php_version', '8.3') %}
+{% set php_version = salt['pillar.get']('saltgoat:versions:php', salt['pillar.get']('saltgoat:php_version', '8.3')) %}
 {% set pool_dir = '/etc/php/{}/fpm/pool.d'.format(php_version) %}
 {% set runtime_dir = '/etc/saltgoat/runtime' %}
 {% set runtime_file = runtime_dir + '/php-fpm-pools.json' %}
@@ -228,6 +228,7 @@ ensure_saltgoat_runtime_dir:
     - mode: 750
     - user: root
     - group: root
+    - makedirs: True
 
 ensure_php_fpm_pool_dir:
   file.directory:
@@ -235,6 +236,7 @@ ensure_php_fpm_pool_dir:
     - mode: 755
     - user: root
     - group: root
+    - makedirs: True
 
 ensure_php_fpm_log_dir:
   file.directory:
@@ -242,6 +244,7 @@ ensure_php_fpm_log_dir:
     - mode: 750
     - user: www-data
     - group: www-data
+    - makedirs: True
 
 {% for pool in pool_items %}
 manage_php_pool_{{ pool.pool_name }}:
@@ -256,7 +259,7 @@ manage_php_pool_{{ pool.pool_name }}:
       - file: ensure_saltgoat_runtime_dir
       - file: ensure_php_fpm_pool_dir
     - watch_in:
-      - service: start_php_fpm
+      - service: php_fpm_pool_service
 {% endfor %}
 
 write_php_pool_runtime:
@@ -309,5 +312,10 @@ update_magento_sample_memory_limit_{{ pool.pool_name }}:
     {% endif %}
   {% endif %}
 {% endfor %}
+
+php_fpm_pool_service:
+  service.running:
+    - name: php{{ php_version }}-fpm
+    - enable: True
 
 {% endif %}

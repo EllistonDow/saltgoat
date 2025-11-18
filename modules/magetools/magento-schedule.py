@@ -136,6 +136,16 @@ def base_site_name(name: str) -> str:
 
 
 def ensure_telegram_topics(sites: Iterable[str]) -> None:
+    def load_telegram_from_pillar() -> Dict[str, object]:
+        code, out, _, parsed = run_salt([
+            "pillar.get",
+            "telegram",
+        ], json_out=True)
+        if code != 0:
+            return {}
+        data = parsed.get("local") if isinstance(parsed, dict) else None
+        return data if isinstance(data, dict) else {}
+
     script = SCRIPTS_DIR / "setup-telegram-topics.py"
     site_list = sorted({site for site in sites if site})
     if not site_list:
@@ -143,6 +153,23 @@ def ensure_telegram_topics(sites: Iterable[str]) -> None:
     if not script.exists():
         warning(f"未找到 Telegram 话题脚本: {script}")
         return
+    cfg_path = Path("/etc/saltgoat/telegram.json")
+    data: Dict[str, object] = {}
+
+    # 优先读取 Pillar，兼容 secret/telegram.sls
+    data = load_telegram_from_pillar()
+    if not data and cfg_path.exists():
+        try:
+            data = json.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception:
+            warning("Telegram 配置无法解析，已跳过话题创建。请修复 /etc/saltgoat/telegram.json 或 Pillar 后再运行。")
+            return
+
+    entries = data.get("entries") if isinstance(data, dict) else None
+    if not entries:
+        info("Telegram 配置为空，已跳过话题创建。可在 /etc/saltgoat/telegram.json 或 pillar secret/telegram.sls 中补充 profile。")
+        return
+
     cmd = ["sudo", "python3", str(script), "--sites", ",".join(site_list)]
     result = subprocess.run(cmd, text=True, capture_output=True, env=ENV)
     if result.returncode != 0:
@@ -243,6 +270,16 @@ def expected_job_names(site: SiteRecord, config: Dict[str, object]) -> Set[str]:
                 f"{label}-stats-monthly",
             }
         )
+
+    restic_jobs = config.get("restic_jobs")
+    if isinstance(restic_jobs, list):
+        for restic_job in restic_jobs:
+            if not isinstance(restic_job, dict):
+                continue
+            name = restic_job.get("name")
+            if not name or not _job_applies(restic_job, site.site):
+                continue
+            jobs.add(str(name))
 
     return jobs
 

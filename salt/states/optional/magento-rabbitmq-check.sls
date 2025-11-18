@@ -102,21 +102,25 @@ rabbitmq_magento_check:
         fi
 
         # 2) vhost/user/permission 检查
-        if sudo rabbitmqctl list_vhosts 2>/dev/null | grep -qx -- "$VHOST"; then
+        # 直接捕获输出再匹配，避免 grep 提前退出导致 rabbitmqctl 因 SIGPIPE 返回非零
+        vhosts="$(sudo rabbitmqctl list_vhosts 2>/dev/null)"
+        if grep -Fxq -- "$VHOST" <<<"$vhosts"; then
           echo "[SUCCESS] vhost 存在: $VHOST"
         else
           echo "[ERROR] vhost 不存在: $VHOST"
           err=$((err+1))
         fi
 
-        if sudo rabbitmqctl list_users 2>/dev/null | awk '{print $1}' | grep -qx -- "$USER"; then
+        users="$(sudo rabbitmqctl list_users 2>/dev/null | awk 'NR>1 {print $1}')"
+        if grep -Fxq -- "$USER" <<<"$users"; then
           echo "[SUCCESS] 用户存在: $USER"
         else
           echo "[ERROR] 用户不存在: $USER"
           err=$((err+1))
         fi
 
-        if sudo rabbitmqctl list_permissions -p "$VHOST" 2>/dev/null | awk '{print $1}' | grep -qx -- "$USER"; then
+        perms="$(sudo rabbitmqctl list_permissions -p "$VHOST" 2>/dev/null | awk '{print $1}')"
+        if grep -Fxq -- "$USER" <<<"$perms"; then
           echo "[SUCCESS] 用户权限已设置 (vhost=$VHOST)"
         else
           echo "[ERROR] 用户权限缺失 (vhost=$VHOST)"

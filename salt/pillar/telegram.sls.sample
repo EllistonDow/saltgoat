@@ -1,0 +1,11 @@
+# 填写后复制到 salt/pillar/secret/telegram.sls （不会入库）
+telegram:
+  profiles:
+    primary:
+      # Telegram Bot API Token，例如 123456:ABCDEF...
+      token: 'REPLACE_WITH_YOUR_BOT_TOKEN'
+      # 目标聊天（群/频道）的 chat_id，论坛模式建议用 -100 开头的超级群 ID
+      chat_ids:
+        - '-1001234567890'
+      # 可选：指定每个类别的 Topic ID（已启用论坛/话题的群）
+      threads: {}
