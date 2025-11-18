@@ -414,22 +414,36 @@ assign_databases() {
     CACHE_PREFIX="${CACHE_PREFIX_OVERRIDE:-${EXISTING_CACHE_PREFIX:-${SITE_NAME}_cache_}}"
     SESSION_PREFIX="${SESSION_PREFIX_OVERRIDE:-${EXISTING_SESSION_PREFIX:-${SITE_NAME}_session_}}"
 
+    sanitize_existing_db() {
+        local label="$1" value="$2"
+        if [[ -z "$value" ]]; then
+            echo ""
+            return
+        fi
+        if ! validate_integer "$value" || (( value < DB_MIN || value > DB_MAX )); then
+            log_warning "${label} 数据库编号 ${value} 不在 ${DB_MIN}-${DB_MAX} 范围，已自动重新分配"
+            echo ""
+            return
+        fi
+        echo "$value"
+    }
+
     if [[ -n "$CACHE_DB_OVERRIDE" ]]; then
         CACHE_DB="$CACHE_DB_OVERRIDE"
     elif [[ "$REUSE_EXISTING" == true && "$EXISTING_REDIS" == true && -n "$EXISTING_CACHE_DB" ]]; then
-        CACHE_DB="$EXISTING_CACHE_DB"
+        CACHE_DB="$(sanitize_existing_db '缓存' "$EXISTING_CACHE_DB")"
     fi
 
     if [[ -n "$PAGE_DB_OVERRIDE" ]]; then
         PAGE_DB="$PAGE_DB_OVERRIDE"
     elif [[ "$REUSE_EXISTING" == true && "$EXISTING_REDIS" == true && -n "$EXISTING_PAGE_DB" ]]; then
-        PAGE_DB="$EXISTING_PAGE_DB"
+        PAGE_DB="$(sanitize_existing_db '页面缓存' "$EXISTING_PAGE_DB")"
     fi
 
     if [[ -n "$SESSION_DB_OVERRIDE" ]]; then
         SESSION_DB="$SESSION_DB_OVERRIDE"
     elif [[ "$REUSE_EXISTING" == true && -n "$EXISTING_SESSION_DB" ]]; then
-        SESSION_DB="$EXISTING_SESSION_DB"
+        SESSION_DB="$(sanitize_existing_db '会话' "$EXISTING_SESSION_DB")"
     fi
 
     if [[ -z "$CACHE_DB" ]]; then
