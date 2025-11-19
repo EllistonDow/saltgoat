@@ -81,17 +81,34 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
     if UNIT_TEST:
         print(json.dumps({"tag": tag, "payload": payload}, ensure_ascii=False))
         return
-    # 短时去重：同一 tag 同一秒只发一次，避免 reactor/多订阅导致重复通知
+    # 短时去重（跨进程）：同一 tag + payload 在 3 秒内只发一次
+    dedup_dir = Path("/var/run/saltgoat/notify_dedup")
+    try:
+        dedup_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
     now_sec = int(datetime.now(timezone.utc).timestamp())
-    dedup_cache: Dict[Tuple[str, int], Dict[str, str]] = getattr(_send, "_dedup", {})
-    current_hash = json.dumps({"plain": plain, "html": html, "payload": payload}, sort_keys=True)
-    key = (tag, now_sec)
-    if key in dedup_cache and dedup_cache[key].get("hash") == current_hash:
-        return
-    dedup_cache[key] = {"hash": current_hash}
-    cutoff = now_sec - 5
-    dedup_cache = {k: v for k, v in dedup_cache.items() if k[1] >= cutoff}
-    setattr(_send, "_dedup", dedup_cache)
+    msg_hash = json.dumps({"plain": plain, "html": html, "payload": payload}, sort_keys=True)
+    tag_hash = json.dumps(tag, sort_keys=True)
+    key_file = dedup_dir / ("%s.dedup" % abs(hash(tag_hash)) )
+    try:
+        if key_file.exists():
+            try:
+                stored = json.loads(key_file.read_text(encoding="utf-8"))
+            except Exception:
+                stored = {}
+            if (
+                stored.get("hash") == msg_hash
+                and isinstance(stored.get("ts"), int)
+                and stored.get("ts", 0) >= now_sec - 3
+            ):
+                return
+    except Exception:
+        pass
+    try:
+        key_file.write_text(json.dumps({"ts": now_sec, "hash": msg_hash}), encoding="utf-8")
+    except Exception:
+        pass
 
     if not notif.should_send(tag, severity, site):
         _log(f"{tag}/skip", {"reason": "filtered", "severity": severity})
