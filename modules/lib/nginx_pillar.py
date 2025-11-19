@@ -15,11 +15,24 @@ except ImportError as exc:  # pragma: no cover
     sys.stderr.write(f"[ERROR] 需要 PyYAML: {exc}\n")
     sys.exit(1)
 
+try:
+    from jinja2 import Environment, FileSystemLoader  # type: ignore
+except ImportError:  # pragma: no cover
+    Environment = None  # type: ignore
+
 
 def load_pillar(path: Path) -> Dict:
     if not path.exists():
         return {}
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    raw = path.read_text(encoding="utf-8")
+    rendered = raw
+    if "{%" in raw or "{{" in raw or raw.lstrip().startswith("#!jinja"):
+        if Environment is None:
+            raise RuntimeError("pillar 含 Jinja 语法，请先安装 jinja2 (pip install jinja2)")
+        env = Environment(loader=FileSystemLoader(str(path.parent)))
+        template = env.get_template(path.name)
+        rendered = template.render()
+    data = yaml.safe_load(rendered) or {}
     if not isinstance(data, dict):
         raise ValueError("pillar 文件必须是 YAML 对象")
     return data

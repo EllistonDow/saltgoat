@@ -1,2 +1,147 @@
-#!jinja|yaml
-{% include 'secret/nginx.sls' ignore missing %}
+nginx:
+  package: nginx
+  service: nginx
+  default_site: true
+  sites:
+    bdgy:
+      enabled: true
+      server_name:
+      - www.bdgy.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/bdgy
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      csp:
+        enabled: true
+        policy: 'default-src ''self''; script-src ''self'' ''unsafe-inline'' ''unsafe-eval''
+          https:; style-src ''self'' ''unsafe-inline'' https:; img-src ''self'' data:
+          https:; font-src ''self'' data: https:; connect-src ''self'' https:; frame-ancestors
+          ''self'';'
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/bdgyoo.com/fullchain.pem
+        key: /etc/letsencrypt/live/bdgyoo.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    sava:
+      enabled: true
+      server_name:
+      - savageneedles.com
+      - www.savageneedles.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/sava
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+        pool: magento-sava
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/savageneedles.com/fullchain.pem
+        key: /etc/letsencrypt/live/savageneedles.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    ipwa:
+      enabled: true
+      server_name:
+      - ipowerwatch.com
+      - www.ipowerwatch.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/ipwa
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/ipowerwatch.com/fullchain.pem
+        key: /etc/letsencrypt/live/ipowerwatch.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    ntca:
+      enabled: true
+      server_name:
+      - nucleartattooca.com
+      - www.nucleartattooca.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/ntca
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/nucleartattooca.com/fullchain.pem
+        key: /etc/letsencrypt/live/nucleartattooca.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    ambi:
+      enabled: true
+      server_name:
+      - ambitiontattoosupply.com
+      - www.ambitiontattoosupply.com
+      listen:
+      - port: 80
+      root: /var/www/ambi
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+  modsecurity:
+    enabled: true
+    level: 5
+    admin_path: /admin_tattoo
+  csp:
+    enabled: true
+    level: 3
+    policy: 'default-src ''self'' http: https: data: blob: ''unsafe-inline''; script-src
+      ''self'' ''unsafe-inline'' ''unsafe-eval''; style-src ''self'' ''unsafe-inline'''
+  ssl_email: ssl@tschenfeng.com
