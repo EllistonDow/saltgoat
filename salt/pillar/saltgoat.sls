@@ -1,8 +1,2 @@
-mysql_password: 'Linksys@2010!'
-valkey_password: 'Linksys@2010!'
-rabbitmq_password: 'Linksys@2010!'
-webmin_password: 'Linksys@2010!'
-phpmyadmin_password: 'Linksys@2010!'
-ssl_email: 'ssl@tschenfeng.com'
-timezone: 'America/Los_Angeles'
-language: 'en_US.UTF-8'
+#!jinja|yaml
+{% include 'secret/saltgoat.sls' ignore missing %}

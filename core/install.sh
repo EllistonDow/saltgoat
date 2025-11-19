@@ -194,7 +194,7 @@ update_pillar_config() {
 	log_info "更新 Salt Pillar 配置..."
 
 	# 创建临时 Pillar 文件
-	local pillar_dir="${SCRIPT_DIR}/salt/pillar"
+	local pillar_dir="${SCRIPT_DIR}/salt/pillar/secret"
 	local target_file="${pillar_dir}/saltgoat.sls"
 
 	sudo mkdir -p "$pillar_dir"
@@ -388,8 +388,10 @@ install_salt() {
 	fi
 
 	local bootstrap_script="https://bootstrap.saltproject.io"
-	if curl -fsSL "$bootstrap_script" | sudo sh -s -- -M -N; then
+	# 安装 master + minion（-M 安装 master，默认包含 minion，不使用 -N）
+	if curl -fsSL "$bootstrap_script" | sudo sh -s -- -M; then
 		log_success "Salt 安装完成"
+		sudo systemctl enable --now salt-master salt-minion
 	else
 		log_error "Salt 安装失败，请检查网络或参考 https://repo.saltproject.io/ 手动安装"
 		return 1
