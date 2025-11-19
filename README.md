@@ -103,6 +103,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    # 秘钥模板位于 salt/pillar/secret/*.sls.example，复制后填入真实密码
    # 其它 Pillar 也提供 *.sample 文件，可按需复制后修改
    ```
+> 💡 **无需担心遗漏**：若跳过此步骤，`sudo saltgoat install all` 会在首次运行时自动生成 `salt/pillar/secret/saltgoat.sls` 并写入随机强密码，同时刷新 Pillar 缓存；`pillar init` 仍可帮助你在安装前审阅和覆盖默认值。
 > ⚠️ **权限提示**  
    > 除 `help`、`git`、`lint`、`format` 等只读命令外，SaltGoat 会访问 `/etc`、`/var/lib/saltgoat` 以及 Salt Caller 接口。请默认使用 `sudo saltgoat …`，CLI 也会在需要时自动尝试用 sudo 重新执行。
 
@@ -111,12 +112,19 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    sudo saltgoat install all
    sudo saltgoat install all --optimize-magento      # 安装完立即执行 Magento 优化
    ```
+   > 安装流程会自动完成：
+   > - 通过 Salt 官方 bootstrap 安装 `salt-master`/`salt-minion`（3007.8），并写入 `file_client: local` 与 `state_queue: True`
+   > - 生成/更新 `salt/pillar/secret/*.sls`（含随机强密码）并刷新 Pillar
+   > - 部署 Restic 0.16.3、Percona XtraBackup 8.4 及其 systemd timer
+   > - 收敛 Pillar `salt-beacons`/`salt-reactor`，启用 CSP Level 3 + ModSecurity Level 5
+   > - 自动执行 `saltgoat monitor enable-beacons`、`saltgoat magetools schedule auto` 及 Telegram 话题同步
 4. **启用事件驱动（可选）**
    ```bash
    sudo saltgoat monitor enable-beacons
    sudo saltgoat monitor beacons-status
    sudo saltgoat magetools cron <site> install       # 下发 Salt Schedule；若缺少 salt-minion 会自动写 /etc/cron.d/
    ```
+   > `install all` 已在收尾阶段执行过 `saltgoat monitor enable-beacons`，此命令主要用于后续更新 Pillar 或在调试场景下手动重载。
 
 更多安装细节、Matomo 部署与 Pillar 示例请参考 [`docs/install.md`](docs/install.md)。
 

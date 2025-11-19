@@ -5,6 +5,7 @@
 # 抑制 Salt DeprecationWarning 警告
 export PYTHONWARNINGS="ignore::DeprecationWarning"
 export PYTHONPATH="/usr/local/lib/python3.12/dist-packages:$PYTHONPATH"
+export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -17,10 +18,26 @@ warnings.filterwarnings('ignore', message='.*crypt.*')
 warnings.filterwarnings('ignore', message='.*spwd.*')
 " 2>/dev/null || true
 
+# Salt 本地执行上下文
+SALT_FILE_ROOT="${SCRIPT_DIR}/salt/states"
+SALT_PILLAR_ROOT="${SCRIPT_DIR}/salt/pillar"
+SALT_CALL_COMMON=(--local "--file-root=${SALT_FILE_ROOT}" "--pillar-root=${SALT_PILLAR_ROOT}")
+
 # 安装时可选的优化参数
 OPTIMIZE_MAGENTO_ENABLED=false
 OPTIMIZE_MAGENTO_PROFILE=""
 OPTIMIZE_MAGENTO_SITE=""
+
+salt_call() {
+    sudo PYTHONWARNINGS="ignore::DeprecationWarning" \
+        salt-call "${SALT_CALL_COMMON[@]}" "$@"
+}
+
+salt_call_state() {
+    local state="$1"
+    shift || true
+    salt_call state.apply "$state" "$@"
+}
 
 # 加载安装配置
 load_install_config() {
@@ -72,6 +89,9 @@ configure_salt_minion() {
 pillar_roots:
   base:
     - $pillar_dir
+file_client: local
+state_queue: True
+renderer: jinja|yaml
 EOF
 	
 	# 配置警告抑制
@@ -83,7 +103,9 @@ python_warnings: false
 EOF
 	
 	# 刷新 pillar（不阻断）
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || true
+	if command_exists salt-call; then
+		salt_call saltutil.refresh_pillar >/dev/null 2>&1 || true
+	fi
 	log_success "Salt minion 配置完成"
 }
 
@@ -229,10 +251,13 @@ language: '$LANGUAGE'
 EOF
 
 	sudo mv "$tmp_file" "$target_file"
+	sudo chown root:root "$target_file"
 	sudo chmod 600 "$target_file"
 
 	# 刷新 Pillar，以便后续 state 读取到更新内容
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local saltutil.refresh_pillar >/dev/null 2>&1 || true
+	if command_exists salt-call; then
+		salt_call saltutil.refresh_pillar >/dev/null 2>&1 || true
+	fi
 
 	log_success "Pillar 配置更新完成"
 }
@@ -257,7 +282,7 @@ install_all() {
 
 	# 设置SaltGoat项目目录grain
 	if command_exists salt-call; then
-		salt-call --local grains.set saltgoat_project_dir "${SCRIPT_DIR}"
+		salt_call grains.set saltgoat_project_dir "${SCRIPT_DIR}"
 	else
 		log_warning "salt-call 不可用，无法设置 saltgoat_project_dir grain"
 	fi
@@ -311,8 +336,7 @@ install_all() {
 		log_info "提示: 安装完成后可运行 'sudo saltgoat magetools schedule auto' 规划 Magento Salt Schedule"
 	fi
 
-	if command -v saltgoat >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1 \
-		&& systemctl list-unit-files | grep -q '^salt-minion\\.service'; then
+	if command -v saltgoat >/dev/null 2>&1; then
 		log_highlight "启用 Salt Beacons/Reactors..."
 		if beacon_output=$(sudo saltgoat monitor enable-beacons 2>&1); then
 			summary_beacons_enabled=true
@@ -372,15 +396,15 @@ install_all() {
 install_core() {
 	log_info "安装核心组件..."
 
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.salt-roots
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply pillar.secret-init
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.restic
+	salt_call_state core.salt-roots
+	salt_call_state pillar.secret-init
+	salt_call_state core.restic
 
 	# 应用核心状态
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.nginx
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.php
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.mysql pillar='{"mysql_password":"'"$MYSQL_PASSWORD"'"}'
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.composer
+	salt_call_state core.nginx
+	salt_call_state core.php
+	salt_call_state core.mysql pillar='{"mysql_password":"'"$MYSQL_PASSWORD"'"}'
+	salt_call_state core.composer
 
 	log_success "核心组件安装完成"
 }
@@ -390,16 +414,16 @@ install_optional() {
 	log_info "安装可选组件..."
 
 	# 应用可选状态
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.valkey
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.opensearch
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.rabbitmq
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.varnish
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.fail2ban
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.webmin
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.phpmyadmin
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.certbot
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.backup-restic
-	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.mysql-backup
+	salt_call_state optional.valkey
+	salt_call_state optional.opensearch
+	salt_call_state optional.rabbitmq
+	salt_call_state optional.varnish
+	salt_call_state optional.fail2ban
+	salt_call_state optional.webmin
+	salt_call_state optional.phpmyadmin
+	salt_call_state optional.certbot
+	salt_call_state optional.backup-restic
+	salt_call_state optional.mysql-backup
 
 	log_success "可选组件安装完成"
 }
@@ -415,7 +439,7 @@ install_system_deps() {
 	fi
 
 	local deps=(curl wget git unzip openssl python3-venv ca-certificates)
-	if sudo apt-get install -y "${deps[@]}"; then
+	if sudo apt-get install -yq -o Dpkg::Options::='--force-confnew' "${deps[@]}"; then
 		log_success "系统依赖安装完成"
 	else
 		log_error "安装系统依赖失败，请检查网络或软件源后重试"

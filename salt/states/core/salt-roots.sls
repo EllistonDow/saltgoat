@@ -5,10 +5,17 @@
 {% set repo_root = pillar_root.rsplit('/salt/pillar', 1)[0] %}
 {% set file_roots = [repo_root + '/salt/states', repo_root + '/salt'] %}
 
+/etc/salt/master.d:
+  file.directory:
+    - user: root
+    - group: salt
+    - mode: 750
+    - makedirs: True
+
 /etc/salt/master.d/saltgoat.conf:
   file.managed:
     - user: root
-    - group: root
+    - group: salt
     - mode: 640
     - makedirs: True
     - contents: |

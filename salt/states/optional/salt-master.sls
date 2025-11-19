@@ -6,13 +6,13 @@
 /etc/salt/master.d:
   file.directory:
     - user: root
-    - group: root
-    - mode: 755
+    - group: salt
+    - mode: 750
 
 /etc/salt/master.d/saltgoat.conf:
   file.managed:
     - user: root
-    - group: root
+    - group: salt
     - mode: 640
     - contents: |
         # Managed by SaltGoat

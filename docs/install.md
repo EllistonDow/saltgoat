@@ -42,6 +42,8 @@ nano salt/pillar/saltgoat.sls
 sudo saltgoat pillar refresh
 ```
 
+> 💡 **自动兜底**：若跳过 `pillar init/refresh`，`sudo saltgoat install all` 会在首次运行时生成 `salt/pillar/secret/saltgoat.sls`（以及其他 `secret/*.sls`），写入随机强密码并自动刷新 Pillar。
+
 #### Pillar 管理命令
 - `sudo saltgoat pillar init`：生成 `salt/pillar/saltgoat.sls` 模板，自动写入随机密码与默认通知邮箱。
 - `sudo saltgoat pillar show`：以只读方式输出当前 Pillar 内容，便于安装前核对。
@@ -62,25 +64,24 @@ sudo saltgoat install all --optimize-magento
 sudo saltgoat install all --optimize-magento-profile high --optimize-magento-site mystore
 ```
 
-#### 4. （可选）启用事件驱动组件
+安装流程会自动执行以下任务：
 
-SaltGoat 的 Beacon/Reactor 与 Salt Schedule 功能依赖正在运行的 `salt-minion`（本机）以及可访问的 `salt-master`（可在本机或中心节点部署）。若暂未安装，命令会自动回退到系统 Cron；若想启用事件驱动自动化，可执行：
+- 通过 Salt 官方 bootstrap 安装 `salt-master`/`salt-minion`（版本 3007.8），并写入 `file_client: local`、`state_queue: True` 等基础配置。
+- 生成/更新 `salt/pillar/secret/*.sls` 并填入随机强密码，随后刷新 Pillar 缓存。
+- 安装 Restic 0.16.3、Percona XtraBackup 8.4，启用 `saltgoat-restic-backup.timer` 与 `saltgoat-mysql-backup.timer`。
+- 应用 `optional.salt-beacons`/`optional.salt-reactor`，默认启用 CSP Level 3 与 ModSecurity Level 5。
+- 自动执行 `saltgoat magetools schedule auto`、`saltgoat monitor auto-sites` 与 `saltgoat monitor enable-beacons`，并同步 Telegram 话题。
+
+#### 4. （可选）重新应用事件驱动组件
+
+`sudo saltgoat install all` 已自动安装/启用 Salt Master & Minion，并在收尾阶段执行了 `saltgoat monitor enable-beacons`。若后续修改 Pillar、需要重新下发 Beacon/Reactors 或在集中式 master 上部署，可手动重复以下命令：
 
 ```bash
-# 安装并启动 salt-minion（Debian/Ubuntu 示例）
-sudo apt update
-sudo apt install -y salt-minion
-sudo systemctl enable --now salt-minion
-
-# （可选）在本机调试 Reactor
-sudo apt install -y salt-master
-sudo systemctl enable --now salt-master
-
-# 应用 Beacon/ Reactor 配置
 sudo saltgoat monitor enable-beacons
+sudo saltgoat monitor beacons-status
 ```
 
-> **提示**：部分发行版默认仓库可能缺少最新 Salt，可参考官方文档 <https://repo.saltproject.io/> 添加源后再安装。即便暂未安装 `salt-minion`，SaltGoat 也会自动降级至系统 Cron/脚本方案，不影响基础功能。
+> **提示**：若在集中式环境运行多台 minion，可使用相同仓库在 master 上运行 `salt-run saltgoat.enable_beacons` 进行远程收敛；缺少 Salt 服务时，SaltGoat 会自动回退到 Cron 方案。
 
 ### 🛠 自动化脚本与计划任务
 

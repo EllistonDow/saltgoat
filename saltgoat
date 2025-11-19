@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore', message='.*spwd.*')
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_STATIC_VERSION="1.8.2"
+SCRIPT_STATIC_VERSION="1.8.3"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
@@ -52,6 +52,14 @@ detect_script_version() {
 SCRIPT_VERSION="$(detect_script_version)"
 if [[ -z "$SCRIPT_VERSION" ]]; then
     SCRIPT_VERSION="$SCRIPT_STATIC_VERSION"
+else
+    # 若静态版本号更高，优先显示静态值，避免未打 tag 时版本倒退
+    if [[ -n "$SCRIPT_STATIC_VERSION" ]]; then
+        latest_version="$(printf '%s\n%s\n' "$SCRIPT_VERSION" "$SCRIPT_STATIC_VERSION" | sort -V | tail -n1)"
+        if [[ "$latest_version" == "$SCRIPT_STATIC_VERSION" ]]; then
+            SCRIPT_VERSION="$SCRIPT_STATIC_VERSION"
+        fi
+    fi
 fi
 
 # 加载公共库
@@ -161,52 +169,83 @@ show_status() {
     fi
 }
 
+pkg_version() {
+    dpkg-query -W -f='${Version}' "$1" 2>/dev/null || true
+}
+
 show_versions() {
     log_info "版本信息:"
     echo "SaltGoat: $SCRIPT_VERSION"
-    echo "Salt: $(salt-call --version | head -1)"
+    if command -v salt-call >/dev/null 2>&1; then
+        echo "Salt: $(salt-call --version | head -1)"
+    else
+        echo "Salt: 未安装"
+    fi
+
     if command -v nginx >/dev/null 2>&1; then
         echo "Nginx: $(nginx -v 2>&1 | head -1)"
     else
         echo "Nginx: 未安装"
     fi
-    echo "MySQL: $(mysql --version)"
-    echo "PHP: $(php -v | head -1)"
-    echo "Valkey: $(valkey-server --version)"
-    
-    # OpenSearch 版本（从包管理器获取）
-    if dpkg -l | grep -q "^ii.*opensearch "; then
-        echo "OpenSearch: $(dpkg -l | grep "^ii.*opensearch " | awk '{print $3}')"
+
+    if command -v mysql >/dev/null 2>&1; then
+        echo "MySQL: $(mysql --version)"
+    else
+        echo "MySQL: 未安装"
     fi
-    
-    # RabbitMQ 版本（使用 rabbitmqctl）
+
+    if command -v php >/dev/null 2>&1; then
+        echo "PHP: $(php -v | head -1)"
+    else
+        echo "PHP: 未安装"
+    fi
+
+    if command -v valkey-server >/dev/null 2>&1; then
+        echo "Valkey: $(valkey-server --version 2>&1 | head -1)"
+    else
+        echo "Valkey: 未安装"
+    fi
+
+    local opensearch_ver
+    opensearch_ver="$(pkg_version opensearch)"
+    if [[ -n "$opensearch_ver" ]]; then
+        echo "OpenSearch: $opensearch_ver"
+    else
+        echo "OpenSearch: 未安装"
+    fi
+
     if command -v rabbitmqctl >/dev/null 2>&1; then
         echo "RabbitMQ: $(rabbitmqctl version)"
+    else
+        echo "RabbitMQ: 未安装"
     fi
-    
-    # Varnish 版本
+
     if command -v varnishd >/dev/null 2>&1; then
         echo "Varnish: $(varnishd -V 2>&1 | head -1)"
+    else
+        echo "Varnish: 未安装"
     fi
-    
-    # Webmin 版本
-    if command -v webmin >/dev/null 2>&1; then
-        echo "Webmin: $(dpkg -l | grep "^ii.*webmin " | awk '{print $3}')"
-    fi
-    
-    # phpMyAdmin 版本
-    if dpkg -l | grep -q "^ii.*phpmyadmin "; then
-        echo "phpMyAdmin: $(dpkg -l | grep "^ii.*phpmyadmin " | awk '{print $3}')"
-    fi
+
+    local webmin_ver
+    webmin_ver="$(pkg_version webmin)"
+    echo "Webmin: ${webmin_ver:-未安装}"
+
+    local pma_ver
+    pma_ver="$(pkg_version phpmyadmin)"
+    echo "phpMyAdmin: ${pma_ver:-未安装}"
 
     if command -v restic >/dev/null 2>&1; then
         echo "Restic: $(restic version | head -1)"
+    else
+        echo "Restic: 未安装"
     fi
 
     if command -v xtrabackup >/dev/null 2>&1; then
         local xb_version
-        xb_version="$(xtrabackup --version 2>&1 | grep -m1 -i 'xtrabackup')"
+        xb_version="$(xtrabackup --version 2>&1 | grep -m1 -i 'xtrabackup version' | sed 's/^ *//')"
         echo "Percona XtraBackup: ${xb_version:-unknown}"
+    else
+        echo "Percona XtraBackup: 未安装"
     fi
 }
 

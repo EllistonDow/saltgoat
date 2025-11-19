@@ -11,6 +11,18 @@
 {% set email_accounts = secrets.get('email_accounts', {}) %}
 {% set primary_email = email_accounts.get('primary', {}) %}
 {% set secondary_email = email_accounts.get('secondary', {}) %}
+{% set default_nginx_version = pillar.get('nginx_version', '1.29.3-1~noble') %}
+{% set default_modsec_level = pillar.get('nginx_modsecurity_level', 5) %}
+{% set default_modsec_enabled = pillar.get('nginx_modsecurity_enabled', True) %}
+{% set default_csp_level = pillar.get('nginx_csp_level', 3) %}
+{% set csp_policy_map = {
+  1: "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'",
+  2: "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  3: "default-src 'self' http: https: data: blob: 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'",
+  4: "default-src 'self' http: https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' http: https: data:; font-src 'self' http: https: data:",
+  5: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' http: https: data:; font-src 'self' http: https: data:; connect-src 'self' http: https:; frame-src 'self'"
+} %}
+{% set default_csp_policy = pillar.get('nginx_csp_policy', csp_policy_map.get(default_csp_level, csp_policy_map[3])) %}
 
 # 系统配置
 system:
@@ -80,16 +92,16 @@ php:
 
 # Nginx 配置（使用 apt 安装官方包）
 nginx:
-  version: '1.28.0-1~noble'
+  version: {{ default_nginx_version|yaml_dquote }}
   worker_processes: {{ pillar.get('nginx_worker_processes', 'auto') }}
   modsecurity:
-    enabled: {{ pillar.get('nginx_modsecurity_enabled', False) }}
-    level: {{ pillar.get('nginx_modsecurity_level', 0) }}
+    enabled: {{ default_modsec_enabled }}
+    level: {{ default_modsec_level }}
     admin_path: {{ pillar.get('nginx_modsecurity_admin_path', '/admin') }}
   csp:
-    enabled: {{ pillar.get('nginx_csp_enabled', False) }}
-    level: {{ pillar.get('nginx_csp_level', 0) }}
-    policy: {{ pillar.get('nginx_csp_policy', "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'") }}
+    enabled: {{ pillar.get('nginx_csp_enabled', True) }}
+    level: {{ default_csp_level }}
+    policy: {{ default_csp_policy|yaml_dquote }}
 
 # Composer 配置
 composer:

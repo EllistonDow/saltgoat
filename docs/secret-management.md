@@ -33,6 +33,7 @@ salt/pillar/secret/
    cp salt/pillar/secret/smtp.sls.example   salt/pillar/secret/smtp.sls
    cp salt/pillar/secret/telegram.sls.example salt/pillar/secret/telegram.sls
    ```
+   > 自 1.8.3 起，`sudo saltgoat install all` 会在检测到缺失时自动生成 `salt/pillar/secret/saltgoat.sls` 等核心文件并写入随机密码；如需集中式或多环境管理，仍可按上述方式复制 `.example` 模板。
 
    然后编辑 `.sls` 文件，将占位值（`ChangeMe*`）替换为真实密码。示例：
 

@@ -1,5 +1,15 @@
 # [1.3.19] - 2025-11-04
 
+## [1.8.3] - 2025-11-19
+
+### Changes
+- `sudo saltgoat install all` 现在强制通过 Salt 官方 bootstrap 安装 3007.8 的 master/minion，并为 `salt-call` 注入 `--file-root`/`--pillar-root`，即使全新克隆也不会再报 “Specified SLS not available”。
+- 新增 `salt_call()`/`salt_call_state()` helper 与 root-owned secret 写入逻辑，自动生成 `salt/pillar/secret/saltgoat.sls`（随机强密码）、刷新 Pillar 并把 `salt-master`/`salt-minion` grain 与 `state_queue`、`file_client: local` 等配置落地。
+- 修复 `salt-master` 读取 `master.d/*.conf` 时的权限错误：所有 master 配置改为 `root:salt 0640`，安装流程结束立即启用 `optional.salt-beacons`/`optional.salt-reactor` 并重启服务，`saltgoat status` 不再提示 failed。
+- Nginx state 默认移除 `ppa:ondrej/nginx`、从官方 mainline 仓库按 Pillar 版本安装并 `pkg.hold`，同时 Pillar 默认启用 CSP Level 3 与 ModSecurity Level 5，保持 `/usr/lib/nginx/modules/ngx_http_modsecurity_module.so` 与主版本一致。
+- `saltgoat versions` 新增缺省检测与守护：所有组件均在缺失时输出 “未安装”，Percona XtraBackup 版本行只展示 `xtrabackup version …`，避免冗长日志刷屏。
+- 文档同步更新：README/`docs/install.md`/`docs/secret-management.md` 阐明自动生成 secret、Restic/XtraBackup 开箱即用以及安装流程已经默认执行 `saltgoat monitor enable-beacons`。
+
 ## [1.8.2] - 2025-11-19
 
 ### Changes

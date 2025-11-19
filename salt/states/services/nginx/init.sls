@@ -21,6 +21,18 @@ nginx_repo_prereq:
       - ca-certificates
       - curl
 
+nginx_remove_ondrej_repo:
+  pkgrepo.absent:
+    - name: ppa:ondrej/nginx
+    - require:
+      - pkg: nginx_repo_prereq
+
+nginx_remove_ondrej_sources:
+  file.absent:
+    - name: /etc/apt/sources.list.d/ondrej-ubuntu-nginx-{{ grains['oscodename'] }}.sources
+    - require:
+      - pkg: nginx_repo_prereq
+
 nginx_repo_mainline:
   pkgrepo.managed:
     - name: deb [signed-by=/etc/apt/keyrings/nginx.gpg] http://nginx.org/packages/mainline/ubuntu/ {{ grains['oscodename'] }} nginx
@@ -33,10 +45,24 @@ nginx_repo_mainline:
       - pkg: nginx_repo_prereq
 
 nginx_pkg:
-  pkg.latest:
+  pkg.installed:
     - name: {{ settings.package }}
     - require:
       - pkgrepo: nginx_repo_mainline
+      - pkgrepo: nginx_remove_ondrej_repo
+      - file: nginx_remove_ondrej_sources
+{% if settings.get('version') %}
+    - version: {{ settings.get('version') }}
+{% endif %}
+
+{% if settings.get('version') %}
+nginx_pkg_hold:
+  pkg.hold:
+    - name: {{ settings.package }}
+    - require:
+      - pkg: nginx_pkg
+{% endif %}
+      - pkgrepo: nginx_remove_ondrej_repo
 
 nginx_directories:
   file.directory:
