@@ -1,5 +1,12 @@
 # [1.3.19] - 2025-11-04
 
+## [1.8.2] - 2025-11-19
+
+### Changes
+- 切换 Nginx 到官方 mainline 仓库并自动构建 ModSecurity 模块（含 PCRE 兼容与 patchelf 处理），默认启用 CSP Level 3 与 ModSecurity Level 5，`sudo saltgoat install all` 可直接收敛。
+- 新增 `core.salt-roots`、`core.otp`、`pillar.secret-init` 等 state，自动下发 Salt roots、编译 OTP 26.2.5、为 RabbitMQ 4.1.4 提供版本守卫。
+- 统一 Pillar 机密管理：真实配置迁入 `salt/pillar/secret/`，仅提交 `.sample` 模板，`install` 会自动生成占位文件，并修复 apt `signed-by` 警告。
+
 ## [1.8.0] - 2025-11-18
 
 ### Changes
