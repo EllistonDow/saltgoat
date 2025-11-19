@@ -439,7 +439,7 @@ install_system_deps() {
 		log_warning "apt-get update 失败，可稍后手动运行 'sudo apt-get update'"
 	fi
 
-	local deps=(curl wget git unzip openssl python3-venv ca-certificates)
+	local deps=(curl wget git unzip openssl python3-venv ca-certificates python3-pymysql python3-mysqldb)
 	if sudo apt-get install -yq -o Dpkg::Options::='--force-confnew' "${deps[@]}"; then
 		log_success "系统依赖安装完成"
 	else

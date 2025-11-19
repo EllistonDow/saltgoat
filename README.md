@@ -117,6 +117,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    > - 通过 Salt 官方 bootstrap 安装 `salt-master`/`salt-minion`（3007.8），并写入 `file_client: local` 与 `state_queue: True`
    > - 生成/更新 `salt/pillar/secret/*.sls`（含随机强密码）并刷新 Pillar
    > - 部署 Restic 0.16.3、Percona XtraBackup 8.4 及其 systemd timer
+   > - 自动安装 `python3-pymysql` / `python3-mysqldb`，确保 `salt-call mysql.*` 与 `saltgoat magetools mysql` 可直接执行
    > - 收敛 Pillar `salt-beacons`/`salt-reactor`，启用 CSP Level 3 + ModSecurity Level 5
    > - 自动执行 `saltgoat monitor enable-beacons`、`saltgoat magetools schedule auto` 及 Telegram 话题同步
 4. **启用事件驱动（可选）**

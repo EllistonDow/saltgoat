@@ -1,5 +1,18 @@
 # [1.3.19] - 2025-11-04
 
+# [1.3.19] - 2025-11-04
+
+## [1.8.5] - 2025-11-19
+
+### Changes
+- `core/install.sh` 额外安装 `python3-pymysql` 与 `python3-mysqldb`，并在 Salt onedir venv 中预装 PyMySQL，确保 `salt-call mysql.*`、`saltgoat magetools mysql create` 在全新环境下不会再报 “No python mysql client installed”。
+- README / docs/install.md 更新，明确安装流程涵盖 MySQL Python 驱动，方便同事理解依赖。
+
+## [1.8.4] - 2025-11-19
+
+### Changes
+- 添加 Dropbox systemd watchdog + Beacon/ Reactor 集成（systemd `Restart=always` + `saltgoat monitor autoheal` 双保险）。
+
 ## [1.8.3] - 2025-11-19
 
 ### Changes

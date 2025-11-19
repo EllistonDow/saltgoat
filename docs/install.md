@@ -69,6 +69,7 @@ sudo saltgoat install all --optimize-magento-profile high --optimize-magento-sit
 - 通过 Salt 官方 bootstrap 安装 `salt-master`/`salt-minion`（版本 3007.8），并写入 `file_client: local`、`state_queue: True` 等基础配置。
 - 生成/更新 `salt/pillar/secret/*.sls` 并填入随机强密码，随后刷新 Pillar 缓存。
 - 安装 Restic 0.16.3、Percona XtraBackup 8.4，启用 `saltgoat-restic-backup.timer` 与 `saltgoat-mysql-backup.timer`。
+- 安装 `python3-pymysql` / `python3-mysqldb`，保证 Salt MySQL execution module 与 `saltgoat magetools mysql` 开箱即用。
 - 应用 `optional.salt-beacons`/`optional.salt-reactor`，默认启用 CSP Level 3 与 ModSecurity Level 5。
 - 自动执行 `saltgoat magetools schedule auto`、`saltgoat monitor auto-sites` 与 `saltgoat monitor enable-beacons`，并同步 Telegram 话题。
 
