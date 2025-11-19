@@ -227,6 +227,8 @@ EOF
 # 安装所有组件
 install_all() {
 	log_info "开始安装所有 SaltGoat 组件..."
+	local summary_beacons_enabled=false
+	local summary_beacons_message=""
 
 	# 加载环境配置
 	load_install_config "$@"
@@ -300,9 +302,12 @@ install_all() {
 		&& systemctl list-unit-files | grep -q '^salt-minion\\.service'; then
 		log_highlight "启用 Salt Beacons/Reactors..."
 		if beacon_output=$(sudo saltgoat monitor enable-beacons 2>&1); then
+			summary_beacons_enabled=true
+			summary_beacons_message="$beacon_output"
 			log_success "Salt Beacons/Reactors 已启用"
 			printf '%s\n' "$beacon_output"
 		else
+			summary_beacons_message="$beacon_output"
 			log_warning "自动启用 Salt Beacons 失败，可稍后手动执行 'sudo saltgoat monitor enable-beacons'"
 			printf '%s\n' "$beacon_output"
 		fi
@@ -322,6 +327,31 @@ install_all() {
 		optimize_magento "${optimize_args[@]}"
 	else
 		log_info "提示: 可运行 'saltgoat optimize magento' 以应用 Magento 调优"
+	fi
+
+	log_highlight "自动启用组件"
+	if systemctl is-active --quiet salt-master 2>/dev/null; then
+		log_info "- Salt master: active"
+	else
+		log_warning "- Salt master 未运行，可执行 'sudo systemctl restart salt-master'"
+	fi
+	if systemctl is-active --quiet salt-minion 2>/dev/null; then
+		log_info "- Salt minion: active"
+	else
+		log_warning "- Salt minion 未运行，可执行 'sudo systemctl restart salt-minion'"
+	fi
+	if [[ -f "${SCRIPT_DIR}/salt/pillar/secret/saltgoat.sls" ]]; then
+		log_info "- Pillar secrets: 已写入 salt/pillar/secret/saltgoat.sls"
+	else
+		log_warning "- Pillar secrets: 未检测到 salt/pillar/secret/saltgoat.sls"
+	fi
+	if [[ "$summary_beacons_enabled" == true ]]; then
+		log_info "- Salt Beacons/Reactors: 已启用"
+	else
+		log_warning "- Salt Beacons/Reactors: 需手动运行 'sudo saltgoat monitor enable-beacons'"
+		if [[ -n "$summary_beacons_message" ]]; then
+			printf '%s\n' "$summary_beacons_message"
+		fi
 	fi
 }
 
