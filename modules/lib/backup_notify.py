@@ -81,6 +81,17 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
     if UNIT_TEST:
         print(json.dumps({"tag": tag, "payload": payload}, ensure_ascii=False))
         return
+    # 短时去重：同一 tag 同一秒只发一次，避免 reactor/多订阅导致重复通知
+    now_sec = int(datetime.now(timezone.utc).timestamp())
+    dedup_cache: Dict[Tuple[str, int], bool] = getattr(_send, "_dedup", {})
+    key = (tag, now_sec)
+    if dedup_cache.get(key):
+        return
+    dedup_cache[key] = True
+    cutoff = now_sec - 5
+    dedup_cache = {k: v for k, v in dedup_cache.items() if k[1] >= cutoff}
+    setattr(_send, "_dedup", dedup_cache)
+
     if not notif.should_send(tag, severity, site):
         _log(f"{tag}/skip", {"reason": "filtered", "severity": severity})
         return
