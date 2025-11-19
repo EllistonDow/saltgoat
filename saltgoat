@@ -204,7 +204,9 @@ show_versions() {
     fi
 
     if command -v xtrabackup >/dev/null 2>&1; then
-        echo "Percona XtraBackup: $(xtrabackup --version 2>&1 | head -1)"
+        local xb_version
+        xb_version="$(xtrabackup --version 2>&1 | grep -m1 -i 'xtrabackup')"
+        echo "Percona XtraBackup: ${xb_version:-unknown}"
     fi
 }
 
