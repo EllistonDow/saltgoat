@@ -17,11 +17,18 @@
 
 nginx_repo_prereq:
   pkg.installed:
-    - name: software-properties-common
+    - names:
+      - ca-certificates
+      - curl
 
-nginx_ppa:
+nginx_repo_mainline:
   pkgrepo.managed:
-    - ppa: ondrej/nginx
+    - name: deb http://nginx.org/packages/mainline/ubuntu/ {{ grains['oscodename'] }} nginx
+    - file: /etc/apt/sources.list.d/nginx.list
+    - key_url: https://nginx.org/keys/nginx_signing.key
+    - clean_file: True
+    - dist: {{ grains['oscodename'] }}
+    - refresh: True
     - require:
       - pkg: nginx_repo_prereq
 
@@ -29,7 +36,7 @@ nginx_pkg:
   pkg.latest:
     - name: {{ settings.package }}
     - require:
-      - pkgrepo: nginx_ppa
+      - pkgrepo: nginx_repo_mainline
 
 nginx_directories:
   file.directory:
@@ -263,12 +270,17 @@ nginx_csp_config_cleanup:
 {% set modsec_module_path = modsec_cfg.get('module_path', '/usr/lib/nginx/modules/ngx_http_modsecurity_module.so') %}
 {% if modsec_cfg.get('enabled', False) and modsec_cfg.get('level', 0) %}
 {% set user_defined_packages = 'packages' in modsec_cfg %}
-{% set modsec_packages = modsec_cfg.get('packages', []) %}
-{% if not user_defined_packages and not modsec_module_path and salt['grains.get']('os_family', '') == 'Debian' %}
-{% if 'libnginx-mod-http-modsecurity' not in modsec_packages %}
-{% set modsec_packages = modsec_packages + ['libnginx-mod-http-modsecurity'] %}
-{% endif %}
-{% endif %}
+{% set modsec_packages = [
+  'libmodsecurity3t64',
+  'libmodsecurity-dev',
+  'build-essential',
+  'pkg-config',
+  'libpcre3-dev',
+  'zlib1g-dev',
+  'git',
+  'cmake',
+  'patchelf'
+] + modsec_cfg.get('packages', []) %}
 {% set modsec_has_packages = modsec_packages | length > 0 %}
 {% if modsec_has_packages %}
 nginx_modsecurity_packages:
@@ -277,6 +289,8 @@ nginx_modsecurity_packages:
 {% for pkg in modsec_packages %}
       - {{ pkg }}
 {% endfor %}
+    - require:
+      - pkg: nginx_pkg
 {% endif %}
 
 {% if settings.get('modules_enabled_dir') %}
@@ -299,12 +313,66 @@ nginx_modsecurity_module_loader:
     - require:
       - file: nginx_directories
       - file: nginx_modsecurity_module_loader_cleanup
+      - cmd: nginx_modsecurity_module_build
 {% if modsec_has_packages %}
       - pkg: nginx_modsecurity_packages
 {% endif %}
     - watch_in:
       - cmd: nginx_configtest
 {% endif %}
+
+nginx_modsecurity_marker_dir:
+  file.directory:
+    - name: /var/lib/saltgoat/cache
+    - user: root
+    - group: root
+    - mode: 755
+    - makedirs: True
+
+nginx_modsecurity_module_build:
+  cmd.run:
+    - name: |
+        set -euo pipefail
+        mkdir -p /usr/local/src
+        cd /usr/local/src
+        nginx_version="$({{ settings.binary }} -v 2>&1 | sed -E 's/.*nginx\/([^ ]+).*/\1/')"
+        if [ -z "$nginx_version" ]; then
+          echo "无法获取 Nginx 版本" >&2
+          exit 1
+        fi
+        src_tar="nginx-${nginx_version}.tar.gz"
+        curl -fsSL -o "$src_tar" "https://nginx.org/download/${src_tar}"
+        rm -rf "nginx-${nginx_version}"
+        tar -xf "$src_tar"
+        if [ ! -d pcre-8.45 ]; then
+          curl -fsSL -o pcre-8.45.tar.gz https://ftp.pcre.org/pub/pcre/pcre-8.45.tar.gz || curl -fsSL -o pcre-8.45.tar.gz https://sourceforge.net/projects/pcre/files/pcre/8.45/pcre-8.45.tar.gz/download
+          tar -xf pcre-8.45.tar.gz
+        fi
+        if [ -d ModSecurity-nginx ]; then
+          cd ModSecurity-nginx
+          git fetch --depth=1 origin v1.0.3
+          git checkout -q v1.0.3
+          cd ..
+        else
+          git clone --depth=1 --branch v1.0.3 https://github.com/SpiderLabs/ModSecurity-nginx.git ModSecurity-nginx
+        fi
+        cd "nginx-${nginx_version}"
+        ./configure --with-compat --add-dynamic-module=../ModSecurity-nginx --with-pcre=../pcre-8.45
+        make modules
+        install -d -m 755 "$(dirname {{ modsec_module_path }})"
+        install -m 644 objs/ngx_http_modsecurity_module.so {{ modsec_module_path }}
+        if command -v patchelf >/dev/null 2>&1; then
+          patchelf --add-needed libpcre.so.3 {{ modsec_module_path }} || true
+          patchelf --remove-needed libpcre2-8.so.0 {{ modsec_module_path }} || true
+        fi
+        echo "$nginx_version" > /var/lib/saltgoat/cache/nginx_modsecurity_module.version
+    - unless: test -f {{ modsec_module_path }} && test -f /var/lib/saltgoat/cache/nginx_modsecurity_module.version && grep -qx "$( {{ settings.binary }} -v 2>&1 | sed -E 's/.*nginx\/([^ ]+).*/\1/' )" /var/lib/saltgoat/cache/nginx_modsecurity_module.version
+    - require:
+      - pkg: nginx_pkg
+      - pkg: nginx_modsecurity_packages
+      - file: nginx_modsecurity_marker_dir
+    - watch_in:
+      - cmd: nginx_configtest
 
 nginx_modsecurity_rules:
   file.managed:

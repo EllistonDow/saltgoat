@@ -329,6 +329,9 @@ install_all() {
 install_core() {
 	log_info "安装核心组件..."
 
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.salt-roots
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply pillar.secret-init
+
 	# 应用核心状态
 	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.nginx
 	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.php

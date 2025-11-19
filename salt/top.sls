@@ -3,6 +3,9 @@
 
 base:
   '*':
+    - core.salt-roots
+    - core.otp
+    - pillar.secret-init
     - common.system
     - common.packages
     - common.security

@@ -1,10 +1,20 @@
 {# RabbitMQ manual install from upstream tarball to keep version 4.1.x #}
+{# 默认 4.1.x，需要 Erlang/OTP 26+；如需 LTS 3.12，可在 pillar 中将 rabbitmq_version 调低。 #}
 {% set rabbitmq_version = salt['pillar.get']('saltgoat:versions:rabbitmq', salt['pillar.get']('rabbitmq_version', '4.1.4')) %}
 {% set rabbitmq_cookie = salt['pillar.get']('rabbitmq_cookie', 'RabbitCookie2024!') %}
 {% set archive_name = 'rabbitmq-server-generic-unix-{}.tar.xz'.format(rabbitmq_version) %}
 {% set archive_url = 'https://github.com/rabbitmq/rabbitmq-server/releases/download/v{}/{}'.format(rabbitmq_version, archive_name) %}
 {% set install_dir = '/opt/rabbitmq_server-{}'.format(rabbitmq_version) %}
 {% set current_link = '/opt/rabbitmq' %}
+
+include:
+  - core.otp
+
+rabbitmq_version_guard:
+  test.fail_without_changes:
+    - name: RabbitMQ 版本 {{ rabbitmq_version }} 低于支持的最小版本 4.1.4
+    - onlyif:
+      - dpkg --compare-versions {{ rabbitmq_version }} lt 4.1.4
 
 rabbitmq_user:
   user.present:
@@ -68,6 +78,14 @@ rabbitmq_cli_symlink_diag:
   file.symlink:
     - name: /usr/local/bin/rabbitmq-diagnostics
     - target: {{ current_link }}/sbin/rabbitmq-diagnostics
+    - force: True
+    - require:
+      - file: rabbitmq_current_symlink
+
+rabbitmq_cli_symlink_env:
+  file.symlink:
+    - name: /usr/local/bin/rabbitmq-env
+    - target: {{ current_link }}/sbin/rabbitmq-env
     - force: True
     - require:
       - file: rabbitmq_current_symlink
