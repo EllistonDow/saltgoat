@@ -1,0 +1,24 @@
+[Unit]
+Description={{ description | yaml_dquote }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ user }}
+Group={{ group }}
+WorkingDirectory={{ working_dir | yaml_dquote }}
+ExecStart={{ exec_start | yaml_dquote }}
+Restart={{ restart }}
+RestartSec={{ restart_sec }}
+TimeoutStartSec=15
+IOSchedulingClass=2
+Nice=5
+{% if environment %}
+{% for key, value in environment.items() %}
+Environment="{{ key }}={{ value }}"
+{% endfor %}
+{% endif %}
+
+[Install]
+WantedBy=multi-user.target

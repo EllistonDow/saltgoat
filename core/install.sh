@@ -422,6 +422,7 @@ install_optional() {
 	salt_call_state optional.webmin
 	salt_call_state optional.phpmyadmin
 	salt_call_state optional.certbot
+	salt_call_state optional.dropbox
 	salt_call_state optional.backup-restic
 	salt_call_state optional.mysql-backup
 

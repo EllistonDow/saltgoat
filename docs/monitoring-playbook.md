@@ -66,6 +66,38 @@
    - 脚本会追加 `[AUTOSCALE]` 记录到 `/var/log/saltgoat/alerts.log`，并发送 `saltgoat/autoscale/<host>` 事件；如需跳过，可在命令中添加 `--no-adjust-php-pool`。
    - 调整成功后会自动执行 `sudo salt-call --local state.apply core.php`，确保 `/etc/php/8.3/fpm/pool.d/` 与 `/etc/saltgoat/runtime/php-fpm-pools.json` 同步；若需要强制特定 weight，可使用 `--php-pool-weight <int>`。
 
+### 2.1 Dropbox 常驻与自愈
+
+1. 创建或更新 `salt/pillar/secret/dropbox.sls`：
+
+   ```yaml
+   dropbox:
+     enabled: true
+     manage_unit: true
+     unit_name: dropbox.service
+     user: doge
+     working_dir: /home/doge
+     exec: /usr/bin/dropbox start -i
+     restart: always
+     beacon_interval: 30
+   ```
+
+   - `manage_unit: true` 表示 Salt 会写入 `/etc/systemd/system/dropbox.service` 并设定 `Restart=always`；如已由官方包提供 unit，可改为 `false`。
+   - 如需自定义环境变量，可追加 `environment:` 映射，例如 `PATH`、`LANG`。
+
+2. 应用 Pillar 并收敛：
+
+   ```bash
+   sudo saltgoat pillar refresh
+   sudo saltgoat install all          # 或单独运行 sudo salt-call --local state.apply optional.dropbox
+   ```
+
+3. 验证 systemd / Beacon / Reactor：
+
+   - `systemctl status dropbox` 应显示 `active (running)`，`Restart`/`RestartSec` 与 Pillar 一致。
+   - `sudo saltgoat monitor beacons-status` 会显示 `service` Beacon 中的 `dropbox`；停止服务 (`sudo systemctl stop dropbox`) 后，几秒内应看到 Reactor 触发自动重启并在 `/var/log/saltgoat/alerts.log` 记录 `[AUTOHEAL] dropbox`。
+   - 同时可在 Telegram 话题 `saltgoat/monitor/resources/<host>` 中收到服务重启通知。
+
 ## 3. 通知与日志验证
 
 1. 检查 Telegram 推送是否进入正确话题：

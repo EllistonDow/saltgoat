@@ -2,6 +2,8 @@
 
 saltgoat:
   monitor:
+    autoheal_services:
+      - dropbox
     sites:
       - name: example-frontend
         url: "https://example.com/"
@@ -26,9 +28,21 @@ saltgoat:
   beacons:
     service:
       services:
+        dropbox:
+          interval: 30
         nginx:
           interval: 20
         php8.3-fpm:
           interval: 20
         varnish:
           interval: 20
+
+  reactor:
+    autorestart_services:
+      services:
+        - dropbox
+        - nginx
+        - mysql
+        - php8.3-fpm
+        - valkey
+        - rabbitmq

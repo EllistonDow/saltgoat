@@ -32,6 +32,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - **事件驱动自动化（可选）**：启用 `salt-minion`/`salt-master` 后，`sudo saltgoat monitor enable-beacons` 下发服务自愈、资源阈值告警、配置变更处理等 Reactor，Salt Schedule 自动替换 Cron。
 - **自动降级策略**：检测到缺失 `salt-minion` 时，所有计划任务会写入 `/etc/cron.d/`；Reactor 命令也会提示降级状态，保证功能可用。
 - **多层备份**：Restic + S3 兼容对象存储快照、Percona XtraBackup 热备、单库 mysqldump（含 Salt Schedule 示例），并通过 Telegram / Salt event 写日志。`sudo saltgoat install all` 会自动安装 Restic 最新稳定版与 Percona XtraBackup 8.4，无需额外步骤。
+- **Dropbox 自愈守护**：在 `salt/pillar/secret/dropbox.sls` 启用配置后，安装流程会下发自带的 systemd unit（`Restart=always`）并将 `dropbox` 加入 Beacon/ Reactor，自检失败会由 Salt 自动重启，同时推送 Telegram 告警。
 - **完善的维护体系**：`sudo saltgoat magetools maintenance` 日/周/月任务、健康检查、权限修复，全部附带 Telegram 通知和日志。
 
 ### 🛠 智能自愈与巡检

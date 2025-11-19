@@ -2,6 +2,8 @@ saltgoat:
   beacons:
     service:
       - services:
+          dropbox:
+            interval: 30
           nginx:
             interval: 30
           mysql:
@@ -110,6 +112,7 @@ saltgoat:
   reactor:
     autorestart_services:
       services:
+        - dropbox
         - nginx
         - mysql
         - php8.3-fpm
