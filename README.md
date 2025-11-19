@@ -31,7 +31,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 - **模块化 CLI**：`sudo saltgoat install | maintenance | magetools | monitor | automation …` 覆盖安装、巡检、备份、安全、性能调优等日常操作。
 - **事件驱动自动化（可选）**：启用 `salt-minion`/`salt-master` 后，`sudo saltgoat monitor enable-beacons` 下发服务自愈、资源阈值告警、配置变更处理等 Reactor，Salt Schedule 自动替换 Cron。
 - **自动降级策略**：检测到缺失 `salt-minion` 时，所有计划任务会写入 `/etc/cron.d/`；Reactor 命令也会提示降级状态，保证功能可用。
-- **多层备份**：Restic + S3 兼容对象存储快照、Percona XtraBackup 热备、单库 mysqldump（含 Salt Schedule 示例），并通过 Telegram / Salt event 写日志。
+- **多层备份**：Restic + S3 兼容对象存储快照、Percona XtraBackup 热备、单库 mysqldump（含 Salt Schedule 示例），并通过 Telegram / Salt event 写日志。`sudo saltgoat install all` 会自动安装 Restic 最新稳定版与 Percona XtraBackup 8.4，无需额外步骤。
 - **完善的维护体系**：`sudo saltgoat magetools maintenance` 日/周/月任务、健康检查、权限修复，全部附带 Telegram 通知和日志。
 
 ### 🛠 智能自愈与巡检
@@ -67,6 +67,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
 |------|------|
 | 基础系统 | Ubuntu 24.04 (x86_64)，拥有 `sudo` 权限。 |
 | 基础工具 | `git`, `bash`, `systemd`（其余依赖由 SaltGoat 自动安装）。 |
+| 备份工具 | SaltGoat 会自动安装 **Percona XtraBackup 8.4** 与 **Restic 最新稳定版**，无需手动准备。 |
 | 事件驱动（可选） | `salt-minion`（本机），如需 Reactor/多机协同再安装 `salt-master`。未满足时会自动退回 Cron + CLI 流程。 |
 
 > **安装 Salt Minion（可选）**  

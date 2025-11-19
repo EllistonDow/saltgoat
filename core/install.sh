@@ -374,6 +374,7 @@ install_core() {
 
 	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.salt-roots
 	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply pillar.secret-init
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.restic
 
 	# 应用核心状态
 	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply core.nginx
@@ -397,6 +398,8 @@ install_optional() {
 	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.webmin
 	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.phpmyadmin
 	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.certbot
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.backup-restic
+	sudo PYTHONWARNINGS="ignore::DeprecationWarning" salt-call --local state.apply optional.mysql-backup
 
 	log_success "可选组件安装完成"
 }
