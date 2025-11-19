@@ -685,17 +685,55 @@ _nginx_dispatch() {
             cmd_create "$site" "$domains_arg" "$root" "$magento_flag" "$php_pool" "$php_fastcgi" "$magento_run_type" "$magento_run_code" "$magento_run_mode"
             ;;
         delete)
-            local site="${2:-}"
+            shift
+            local site=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --site)
+                        site="${2:-}"
+                        shift 2
+                        ;;
+                    --site=*)
+                        site="${1#*=}"
+                        shift
+                        ;;
+                    *)
+                        if [[ -z "$site" ]]; then
+                            site="$1"
+                        fi
+                        shift
+                        ;;
+                esac
+            done
             if [[ -z "$site" ]]; then
-                log_error "用法: saltgoat nginx delete <站点>"
+                log_error "用法: saltgoat nginx delete --site <站点>"
                 exit 1
             fi
             cmd_delete "$site"
             ;;
         enable|disable)
-            local site="${2:-}"
+            shift
+            local site=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --site)
+                        site="${2:-}"
+                        shift 2
+                        ;;
+                    --site=*)
+                        site="${1#*=}"
+                        shift
+                        ;;
+                    *)
+                        if [[ -z "$site" ]]; then
+                            site="$1"
+                        fi
+                        shift
+                        ;;
+                esac
+            done
             if [[ -z "$site" ]]; then
-                log_error "用法: saltgoat nginx $action <站点>"
+                log_error "用法: saltgoat nginx $action --site <站点>"
                 exit 1
             fi
             cmd_enable_disable "$action" "$site"
