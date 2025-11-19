@@ -1,0 +1,132 @@
+saltgoat:
+  beacons:
+    service:
+      - services:
+          nginx:
+            interval: 30
+          mysql:
+            interval: 30
+          php8.3-fpm:
+            interval: 30
+          valkey:
+            interval: 30
+          rabbitmq:
+            interval: 45
+          opensearch:
+            interval: 45
+      - disable_during_state_run: true
+      - onchangeonly: true
+    load:
+      averages:
+        1m:
+          - 0.0
+          - 1.50
+        5m:
+          - 0.0
+          - 1.25
+        15m:
+          - 0.0
+          - 1.10
+    memusage:
+      - validate: false
+      - percent: 78
+      - interval: 60
+      - onchangeonly: false
+      - emitatstartup: false
+    diskusage:
+      - validate: false
+      - interval: 120
+      - percent:
+          /: 88
+    inotify:
+      - validate: false
+      - files:
+          /etc/nginx/nginx.conf:
+            mask:
+              - modify
+              - close_write
+          /etc/mysql/mysql.conf.d/mysqld.cnf:
+            mask:
+              - modify
+              - close_write
+          /var/www:
+            mask:
+              - create
+              - close_write
+              - attrib
+            recurse: true
+            if_missing: warn
+            auto_add: true
+            sls_whitelist:
+              - optional.magento-permissions
+        interval: 60
+    pkg:
+      interval: 3600
+      pkgs:
+        - nginx
+        - mysql-server
+        - php8.3-fpm
+        - valkey
+        - rabbitmq-server
+        - opensearch
+    telegram_bot_msg:
+      - validate: false
+      - token: ''
+      - accept_from:
+          - 123456789
+      - chat_id: 123456789
+      - interval: 10
+      - name: primary
+      - topics:
+          saltgoat/business/order: 2
+          saltgoat/business/customer: 3
+          saltgoat/backup/xtrabackup: 4
+          saltgoat/backup/restic: 5
+    watchdog:
+      - validate: false
+      - directories:
+          /var/www:
+            mask:
+              - create
+              - modify
+              - delete
+              - move
+      - interval: 15
+  beacons_blacklist:
+    - adb
+    - aix_account
+    - avahi_announce
+    - bonjour_announce
+    - glxinfo
+    - vmadm
+    - twilio_txt_msg
+    - haproxy
+    - journald
+    - network_settings
+    - sensehat
+    - smartos_imgadm
+    - smartos_vmadm
+    - imgadm
+  reactor:
+    autorestart_services:
+      services:
+        - nginx
+        - mysql
+        - php8.3-fpm
+        - valkey
+        - rabbitmq
+        - opensearch
+    resource_alerts:
+      log_path: /var/log/saltgoat/alerts.log
+    backups:
+      log_path: /var/log/saltgoat/alerts.log
+    config_watch:
+      auto_permissions: true
+      monitored_paths:
+        - /etc/nginx/nginx.conf
+        - /etc/mysql/mysql.conf.d/mysqld.cnf
+        - /var/www
+      site_path: /var/www/example
+    pkg_updates:
+      log_path: /var/log/saltgoat/alerts.log
+      auto_refresh: true

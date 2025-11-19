@@ -1,0 +1,7 @@
+telegram_topics:
+  saltgoat/backup/restic:
+    chat_id: 123456789
+    topic_id: 5
+  saltgoat/business/order:
+    chat_id: 123456789
+    topic_id: 2

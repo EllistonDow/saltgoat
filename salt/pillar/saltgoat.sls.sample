@@ -1,0 +1,8 @@
+mysql_password: 'ChangeMeRoot!'
+valkey_password: 'ChangeMeValkey!'
+rabbitmq_password: 'ChangeMeRabbit!'
+webmin_password: 'ChangeMeWebmin!'
+phpmyadmin_password: 'ChangeMePhpMyAdmin!'
+ssl_email: 'admin@example.com'
+timezone: 'America/Los_Angeles'
+language: 'en_US.UTF-8'

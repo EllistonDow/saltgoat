@@ -1,0 +1,11 @@
+notifications:
+  telegram:
+    enabled: true
+    min_severity: INFO
+  webhook:
+    enabled: false
+    endpoints:
+      - name: example
+        url: https://hooks.example.com/token
+        headers:
+          Content-Type: application/json

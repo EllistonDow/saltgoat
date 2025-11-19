@@ -1,24 +1,2 @@
-telegram_topics:
-  saltgoat/autoscale/ns536602.ip-144-217-67.net: 4055
-  saltgoat/backup/mysql_dump/bdgy: 4037
-  saltgoat/backup/mysql_dump/ipwa: 4042
-  saltgoat/backup/mysql_dump/ntca: 4047
-  saltgoat/backup/mysql_dump/sava: 4052
-  saltgoat/backup/restic/bdgy: 4038
-  saltgoat/backup/restic/ipwa: 4043
-  saltgoat/backup/restic/ntca: 4048
-  saltgoat/backup/restic/sava: 4053
-  saltgoat/business/customer/bdgy: 4035
-  saltgoat/business/customer/ipwa: 4040
-  saltgoat/business/customer/ntca: 4045
-  saltgoat/business/customer/sava: 4050
-  saltgoat/business/order/bdgy: 4034
-  saltgoat/business/order/ipwa: 4039
-  saltgoat/business/order/ntca: 4044
-  saltgoat/business/order/sava: 4049
-  saltgoat/business/summary/bdgy: 4036
-  saltgoat/business/summary/ipwa: 4041
-  saltgoat/business/summary/ntca: 4046
-  saltgoat/business/summary/sava: 4051
-  saltgoat/doctor/ns536602.ip-144-217-67.net: 4056
-  saltgoat/monitor/resources/ns536602.ip-144-217-67.net: 4054
+#!jinja|yaml
+{% include 'secret/telegram-topics.sls' ignore missing %}

@@ -1,1 +1,2 @@
-/home/doge/saltgoat/salt/pillar/secret/magento-schedule.sls
+#!jinja|yaml
+{% include 'secret/magento-schedule.sls' ignore missing %}
