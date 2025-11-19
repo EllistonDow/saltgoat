@@ -169,16 +169,29 @@ parse_install_args() {
 	done
 }
 
+# 生成随机强密码（24 位，含大小写和数字符号）
+generate_random_password() {
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -base64 32 | tr -d '\n' | cut -c1-24
+    else
+        python3 - <<'PY'
+import secrets, string
+alphabet = string.ascii_letters + string.digits + '!@#$%_-+'
+print(''.join(secrets.choice(alphabet) for _ in range(24)))
+PY
+    fi
+}
+
 # 验证安装配置
 validate_install_config() {
-	log_info "验证安装配置..."
+    log_info "验证安装配置..."
 
-	# 设置默认值
-	MYSQL_PASSWORD="${MYSQL_PASSWORD:-SaltGoat2024!}"
-	VALKEY_PASSWORD="${VALKEY_PASSWORD:-Valkey2024!}"
-	RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-RabbitMQ2024!}"
-	WEBMIN_PASSWORD="${WEBMIN_PASSWORD:-Webmin2024!}"
-	PHPMYADMIN_PASSWORD="${PHPMYADMIN_PASSWORD:-phpMyAdmin2024!}"
+    # 自动生成随机密码
+    MYSQL_PASSWORD="${MYSQL_PASSWORD:-$(generate_random_password)}"
+    VALKEY_PASSWORD="${VALKEY_PASSWORD:-$(generate_random_password)}"
+    RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(generate_random_password)}"
+    WEBMIN_PASSWORD="${WEBMIN_PASSWORD:-$(generate_random_password)}"
+    PHPMYADMIN_PASSWORD="${PHPMYADMIN_PASSWORD:-$(generate_random_password)}"
 	SSL_EMAIL="${SSL_EMAIL:-admin@example.com}"
 	TIMEZONE="${TIMEZONE:-America/Los_Angeles}"
 	LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
