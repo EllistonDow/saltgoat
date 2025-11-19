@@ -83,11 +83,12 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
         return
     # 短时去重：同一 tag 同一秒只发一次，避免 reactor/多订阅导致重复通知
     now_sec = int(datetime.now(timezone.utc).timestamp())
-    dedup_cache: Dict[Tuple[str, int], bool] = getattr(_send, "_dedup", {})
+    dedup_cache: Dict[Tuple[str, int], Dict[str, str]] = getattr(_send, "_dedup", {})
+    current_hash = json.dumps({"plain": plain, "html": html, "payload": payload}, sort_keys=True)
     key = (tag, now_sec)
-    if dedup_cache.get(key):
+    if key in dedup_cache and dedup_cache[key].get("hash") == current_hash:
         return
-    dedup_cache[key] = True
+    dedup_cache[key] = {"hash": current_hash}
     cutoff = now_sec - 5
     dedup_cache = {k: v for k, v in dedup_cache.items() if k[1] >= cutoff}
     setattr(_send, "_dedup", dedup_cache)
