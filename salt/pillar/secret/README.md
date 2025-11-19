@@ -47,3 +47,4 @@ secrets:
 
 照新文档操作——复制 salt/pillar/secret/*.sls.example 为实际 .sls，填入密码后执行 `sudo saltgoat pillar refresh`，再按照对应服务命令（如
   `bash scripts/sync-passwords.sh`、`sudo saltgoat postfix --smtp …`、`sudo saltgoat magetools backup restic install` 等）同步到系统。
+- magento_api.sls.example
