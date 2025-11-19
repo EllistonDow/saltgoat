@@ -147,6 +147,18 @@ show_status() {
     echo "Valkey: $(systemctl is-active valkey 2>/dev/null || echo 'inactive')"
     echo "OpenSearch: $(systemctl is-active opensearch 2>/dev/null || echo 'inactive')"
     echo "RabbitMQ: $(systemctl is-active rabbitmq 2>/dev/null || echo 'inactive')"
+    if systemctl list-unit-files 2>/dev/null | grep -q '^salt-master\.service'; then
+        echo "Salt master: $(systemctl is-active salt-master 2>/dev/null || echo 'inactive')"
+    fi
+    if systemctl list-unit-files 2>/dev/null | grep -q '^salt-minion\.service'; then
+        echo "Salt minion: $(systemctl is-active salt-minion 2>/dev/null || echo 'inactive')"
+    fi
+    if systemctl list-unit-files 2>/dev/null | grep -q '^saltgoat-restic-backup\.timer'; then
+        echo "Restic timer: $(systemctl is-active saltgoat-restic-backup.timer 2>/dev/null || echo 'inactive')"
+    fi
+    if systemctl list-unit-files 2>/dev/null | grep -q '^saltgoat-mysql-backup\.timer'; then
+        echo "XtraBackup timer: $(systemctl is-active saltgoat-mysql-backup.timer 2>/dev/null || echo 'inactive')"
+    fi
 }
 
 show_versions() {
@@ -185,6 +197,14 @@ show_versions() {
     # phpMyAdmin 版本
     if dpkg -l | grep -q "^ii.*phpmyadmin "; then
         echo "phpMyAdmin: $(dpkg -l | grep "^ii.*phpmyadmin " | awk '{print $3}')"
+    fi
+
+    if command -v restic >/dev/null 2>&1; then
+        echo "Restic: $(restic version | head -1)"
+    fi
+
+    if command -v xtrabackup >/dev/null 2>&1; then
+        echo "Percona XtraBackup: $(xtrabackup --version 2>&1 | head -1)"
     fi
 }
 
