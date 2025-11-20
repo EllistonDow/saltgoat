@@ -1,116 +1,62 @@
-# SaltGoat Telegram 话题索引
+# Telegram 话题配置指南
 
-记录 `SaltGoat Notification` 超级群及其话题对应的 `chat_id` / `message_thread_id`，便于通知脚本或 ChatOps 精准推送。
+SaltGoat 目前完全通过 **Pillar** 维护 Telegram Bot 与话题映射，不再生成 `/etc/saltgoat/telegram.json`。所有通知（Restic/XtraBackup、资源告警、Fail2ban、API Watch、`goat_pulse`、`smoke-suite` 等）都会直接读取以下 Pillar：
 
-## 群组信息
+1. `telegram`：定义 Bot Token、目标 chat_id、可选线程 ID。
+2. `telegram_topics`：为常见事件 tag（例如 `saltgoat/backup/restic/<site>`）指定话题 ID。
 
-| 字段 | 数值 | 说明 |
-|------|------|------|
-| 群组名称 | `SaltGoat Notification` | 已开启论坛模式 |
-| 群组 `chat_id` | `-1003210805906` | 所有话题共享同一个 `chat_id` |
+## 1. 配置 Telegram Bot
 
-## 话题列表
-
-| 话题名称 | `message_thread_id` | 用途建议 |
-|-----------|--------------------|-----------|
-| General (默认) | _(无)_ | 临时公告 / 未分类通知（未带 `message_thread_id` 即落在 General） |
-| New Orders | `2` | Magento 新订单事件 (`saltgoat/business/order`) |
-| New Customers | `3` | Magento 新客户事件 (`saltgoat/business/customer`) |
-| Xtrabackups | `4` | XtraBackup 安装 / 任务状态、备份完成/失败通知 |
-| Restic Backups | `5` | Restic 备份结果、仓库检查、告警 |
-| bank-orders | `2639` | `saltgoat/business/order/bank`（BANK 站点事件） |
-| bank-customers | `2640` | `saltgoat/business/customer/bank` |
-| bank-summary | `2634` | `saltgoat/business/summary/bank` |
-| bank-mysql-backup | `2641` | `saltgoat/backup/mysql_dump/bank` |
-| bank-restic-backup | `2642` | `saltgoat/backup/restic/bank` |
-| pwas-orders | `2643` | `saltgoat/business/order/pwas` |
-| pwas-customers | `2644` | `saltgoat/business/customer/pwas` |
-| pwas-summary | `2635` | `saltgoat/business/summary/pwas` |
-| pwas-mysql-backup | `2645` | `saltgoat/backup/mysql_dump/pwas` |
-| pwas-restic-backup | `2646` | `saltgoat/backup/restic/pwas` |
-| tank-orders | `2647` | `saltgoat/business/order/tank` |
-| tank-customers | `2648` | `saltgoat/business/customer/tank` |
-| tank-summary | `2636` | `saltgoat/business/summary/tank` |
-| tank-mysql-backup | `2649` | `saltgoat/backup/mysql_dump/tank` |
-| tank-restic-backup | `2650` | `saltgoat/backup/restic/tank` |
-| ns510140…-resources | `2658` | `saltgoat/monitor/resources/ns510140…`（主机级资源告警） |
-| ns510140…-autoscale | `2659` | `saltgoat/autoscale/ns510140…`（主机级自愈动作） |
-
-> 获取方式：
-> ```bash
-> curl -s "https://api.telegram.org/bot<token>/getUpdates" | jq
-> ```
-> 其中 `message_thread_id` 字段即为话题 ID。
-
-## 事件分类建议
-
-| SaltGoat 事件 | 推送话题 | 说明 |
-|---------------|----------|------|
-| `saltgoat/business/order` | New Orders (`thread_id=2`) | 只关注新增订单，避免刷屏时可在 watcher 中调整阈值/合并消息 |
-| `saltgoat/business/customer` | New Customers (`thread_id=3`) | 新会员注册、激活状态变化 |
-| `saltgoat/backup/xtrabackup/*` | Xtrabackups (`thread_id=4`) | XtraBackup 运行成功/失败、定时器状态 |
-| `saltgoat/backup/restic/*` | Restic Backups (`thread_id=5`) | Restic 任务结果、仓库健康、锁文件告警 |
-| `saltgoat/monitor/resources/<host>` | `<host>-resources` | 主机维度资源告警 |
-| `saltgoat/autoscale/<host>` | `<host>-autoscale` | 自愈动作、自动扩容日志 |
-| 其它（密码同步、部署流程） | General 或按需新建话题 | 可继续扩展如 `Deployments`、`Security Alerts` 等 |
-
-## Pillar 配置示例
-
-`scripts/setup-telegram-topics.py` 会自动生成 `/etc/saltgoat/telegram.json` 与 `salt/pillar/telegram-topics.sls`。若需手动维护，可参考以下结构：
+在 `salt/pillar/secret/telegram.sls`（或其它受保护的 Pillar）中创建 profile：
 
 ```yaml
-saltgoat:
-  beacons:
-    telegram_bot_msg:
-      - token: "{{ token }}"
-      - chat_id: -1003210805906
-      - name: primary
-      - topics:
-          saltgoat/business/order: 2
-          saltgoat/business/customer: 3
-          saltgoat/backup/xtrabackup: 4
-          saltgoat/backup/restic: 5
+telegram:
+  profiles:
+    primary:
+      enabled: true
+      token: "123456789:ABCDEFG-YourBotToken"
+      targets:
+        - chat_id: "-1003210805906"   # 超级群/频道 ID
+          thread_id: 12345           # 可选：默认话题
+      threads:
+        saltgoat/doctor: 23456       # 可选：为单个 profile 的特定 tag 指定话题
 ```
 
-应用 Pillar (`sudo saltgoat pillar refresh`) 后，通知脚本会根据事件标签自动选择对应话题，无需额外参数。
+多个群组可通过增加 `profiles.<name>` 或在 `targets` 列表中追加 `chat_id`。
 
-## 后续工作
+## 2. 维护话题映射
 
-1. **模板扩展**：更新 `telegram_config.json.jinja` 与 `reactor_common.broadcast_telegram`，使每个 profile 的 target 支持 `message_thread_id`（如 `{"chat_id": -100..., "thread_id": 2}`）。
-2. **脚本适配**：
-   - `modules/magetools/magento_api_watch.py` 发送订单/客户事件时携带对应 `thread_id`。
-   - 备份 / 资源告警脚本根据事件类型选用适当话题。
-3. **Pillar 配置**：在 `salt/pillar/chatops.sls` 或新的通知配置中维护话题映射，方便环境迁移时统一管理。
+在 `salt/pillar/telegram-topics.sls` 中（或通过 `secret/telegram-topics.sls` include）维护全局映射。结构示例：
 
-完成以上改造后，所有通知即可根据事件类型自动路由到指定话题，实现 Telegram 群内的可视化分类。
+```yaml
+telegram_topics:
+  saltgoat/backup/restic/ambi: 11111
+  saltgoat/backup/restic/hawk: 11112
+  saltgoat/backup/mysql_dump/ambi: 12221
+  saltgoat/monitor/resources/ns521244: 13331
+  saltgoat/autoscale/ns521244: 13332
+  saltgoat/doctor/ns521244: 14441
+```
 
-## 自动化维护流程
+规则：
 
-SaltGoat 现已将话题与 Pillar 配置串联进日常运维脚本：
+- key 为完整 tag 前缀，例如 `saltgoat/backup/restic/<site>`；会匹配子路径（如 `saltgoat/backup/restic/ambi/manual`）。
+- value 为 Telegram `message_thread_id`（数字）。
+- 可使用通配 `saltgoat/doctor` 为所有 doctor 报告提供统一话题。
 
-- `saltgoat monitor auto-sites` 自动生成站点健康检查配置，同时触发 `scripts/setup-telegram-topics.py`，为新站点创建 `${site}-{orders,customers,summary,mysql-backup,restic-backup}` 等话题；注销站点时会同步清理。
-- `saltgoat magetools schedule auto` 安装/验收站点 Salt Schedule，复用同一话题命名规范，确保巡检、备份、自愈通知均落在对应分组。
-- `scripts/setup-telegram-topics.py` 会落盘 `/etc/saltgoat/telegram.json` 与 `salt/pillar/telegram-topics.sls`，并支持幂等更新。推荐在变更群组或站点后运行一次（被上述命令自动调用）。
-- 通知过滤规则统一写入 `salt/pillar/notifications.sls`，通过 `notifications:telegram:{min_severity,disabled_tags,site_overrides}` 控制推送级别；所有脚本改用 `modules.lib.notification` 的 `should_send` / `format_pre_block`。
+## 3. 刷新 Pillar
 
-> 验证流程建议：
-> 1. 调整站点池或资源触发一次自愈（`sudo python3 modules/monitoring/resource_alert.py`）。
-> 2. 执行 `saltgoat monitor auto-sites`、`saltgoat magetools schedule auto` 检查 Pillar 与话题是否同步。
-> 3. 使用 `./scripts/setup-telegram-topics.py --dry-run` 查看 Telegram 话题差异，确认无误后正式应用。
+编辑完成后执行：
 
-以上步骤将站点、计划任务、通知话题联动起来，新建或扩容站点时只需运行自动化命令即可完成监控/通知闭环。
+```bash
+sudo saltgoat pillar refresh
+```
 
-## 新站点通知接入流程
+通知脚本会在下一次运行时自动读取新配置，无需重启任何服务。
 
-1. 在 `/var/www/<site>` 或部署流程中创建站点目录与 `app/etc/env.php`，确保 `monitor auto-sites` 能识别。若使用 Symlink (`current/`)，同样会自动跟踪。
-2. 配置 Nginx（`/etc/nginx/sites-enabled/<site>`）并包含正确的 `root` / `server_name`。自动生成的健康检查 URL 将以第一个域名为基准；未匹配时默认回落到 `http://127.0.0.1/<site>/`。
-3. 运行 `sudo saltgoat monitor auto-sites`（或依赖 Deployment Pipeline 自动调用），它会：
-   - 更新 `salt/pillar/monitoring.sls`、备份旧版本。
-   - 触发 `scripts/setup-telegram-topics.py` 为新站点补齐 `orders/customers/summary/mysql-backup/restic-backup` 等话题。
-   - 刷新 Pillar / 启用 Beacon（测试环境可通过 `SALTGOAT_SKIP_REFRESH=1` 跳过）。
-4. 执行 `sudo saltgoat magetools schedule auto` 让 Salt Schedule 与 Telegram 话题保持一致，确保 API Watch / 备份 / 健康检查都启用。
-5. 在 Telegram 群里确认生成的新话题是否就绪；如需预览，可运行 `sudo python3 scripts/setup-telegram-topics.py --dry-run` 查看差异。
-6. 验证通知：
-   - `sudo python3 modules/monitoring/resource_alert.py`（触发资源巡检、自愈与告警）。
-   - `sudo saltgoat magetools maintenance <site> health` 或下单测试，确认订单/备份通知命中正确话题。
-7. 收尾：将更新同步进版本库（`salt/pillar/monitoring.sls` 等），并记录在变更文档/变更单中。
+## 4. 验证
+
+- 运行一次 Restic/备份/doctor 命令，确认 Telegram 话题收到消息。
+- 查看 `/var/log/saltgoat/alerts.log` 是否包含 `TELEGRAM send_ok`；若出现 `config_missing/config_error`，说明 Pillar 尚未配置或格式有误。
+
+如需完全停用 Telegram，只需在 Pillar 将 `telegram.profiles.*.enabled` 设为 `false` 或移除 profile。其他通知（Webhook、日志）仍会照常运行。

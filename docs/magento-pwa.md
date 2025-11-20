@@ -59,7 +59,7 @@ sudo saltgoat magetools pwa install pwas
   sudo saltgoat magetools valkey-check pwa
   sudo saltgoat magetools rabbitmq-salt check pwa
   ```
-- **检查 cron / schedule**：
+- **检查 Salt Schedule**：
   ```bash
   sudo saltgoat magetools cron pwa status
   sudo saltgoat magetools salt-schedule pwa status
@@ -79,7 +79,7 @@ sudo saltgoat magetools pwa install pwas
 
 1. 站点目录 (`rm -rf /var/www/pwa`)
 2. 数据库与用户 (`DROP DATABASE pwamage; DROP USER 'pwa'@'localhost';`)
-3. Cron/Salt Schedule（`saltgoat magetools cron pwa uninstall`）
+3. Salt Schedule（`saltgoat magetools cron pwa uninstall`）
 4. Valkey / RabbitMQ 配置（`valkey-setup ... --no-reuse`、`rabbitmq-salt remove pwa`）
 
 完成清理后重新执行 `sudo saltgoat magetools pwa install pwa` 即可。

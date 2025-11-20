@@ -69,17 +69,12 @@ class NotificationQueueTestCase(unittest.TestCase):
 
     def test_backup_notify_queue_failure_on_telegram_error(self) -> None:
         original_unit_test = backup_notify.UNIT_TEST
-        original_path_exists = backup_notify._path_exists
         original_reactor = backup_notify.reactor_common
         original_log = backup_notify._log
         original_dispatch = notification.dispatch_webhooks
         original_should_send = notification.should_send
         original_parse_mode = notification.get_parse_mode
         queue_dir = tempfile.TemporaryDirectory()
-        temp_dir = tempfile.TemporaryDirectory()
-        original_config = backup_notify.TELEGRAM_CONFIG
-        backup_notify.TELEGRAM_CONFIG = Path(temp_dir.name) / "telegram.json"
-        backup_notify.TELEGRAM_CONFIG.write_text("{}", encoding="utf-8")
         notification_queue_dir = Path(queue_dir.name)
         original_queue_dir = notification.QUEUE_DIR
 
@@ -94,7 +89,6 @@ class NotificationQueueTestCase(unittest.TestCase):
 
         try:
             backup_notify.UNIT_TEST = False
-            backup_notify._path_exists = lambda _path: True  # type: ignore[assignment]
             backup_notify._log = lambda *args, **kwargs: None  # type: ignore[assignment]
             backup_notify.reactor_common = DummyReactor()
             notification.dispatch_webhooks = lambda *args, **kwargs: 0  # type: ignore[assignment]
@@ -121,16 +115,13 @@ class NotificationQueueTestCase(unittest.TestCase):
             self.assertIn("telegram down", data["error"])
         finally:
             backup_notify.UNIT_TEST = original_unit_test
-            backup_notify._path_exists = original_path_exists  # type: ignore[assignment]
             backup_notify.reactor_common = original_reactor
             backup_notify._log = original_log  # type: ignore[assignment]
-            backup_notify.TELEGRAM_CONFIG = original_config
             notification.dispatch_webhooks = original_dispatch  # type: ignore[assignment]
             notification.should_send = original_should_send  # type: ignore[assignment]
             notification.get_parse_mode = original_parse_mode  # type: ignore[assignment]
             notification.QUEUE_DIR = original_queue_dir
             queue_dir.cleanup()
-            temp_dir.cleanup()
 
 
 if __name__ == "__main__":

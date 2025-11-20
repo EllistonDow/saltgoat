@@ -22,7 +22,6 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 
 LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
-DEFAULT_TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 
 
 def shell_exists(path: Path) -> bool:
@@ -71,8 +70,8 @@ def log_to_file(tag: str, log_path: Path, payload: Dict[str, Any]) -> None:
         pass
 
 
-def telegram_notify(message: str, payload: Dict[str, Any], log_path: Path, config_path: Path) -> None:
-    if not TELEGRAM_AVAILABLE or not shell_exists(config_path):
+def telegram_notify(message: str, payload: Dict[str, Any], log_path: Path) -> None:
+    if not TELEGRAM_AVAILABLE:
         return
 
     def _log(kind: str, info: Dict[str, Any]) -> None:
@@ -80,7 +79,7 @@ def telegram_notify(message: str, payload: Dict[str, Any], log_path: Path, confi
         log_to_file(payload.get("tag", "saltgoat/service/autoheal"), log_path, merged)
 
     try:
-        profiles = reactor_common.load_telegram_profiles(str(config_path), _log)  # type: ignore[attr-defined]
+        profiles = reactor_common.load_telegram_profiles(None, _log)  # type: ignore[attr-defined]
     except Exception as exc:  # pragma: no cover
         _log("config_error", {"error": str(exc)})
         return
@@ -227,7 +226,6 @@ def main() -> int:
     parser.add_argument("--allowed", default="[]", help="JSON list of auto-heal services")
     parser.add_argument("--allowed-b64", required=False, help="Base64 encoded JSON list of auto-heal services")
     parser.add_argument("--log-path", default="/var/log/saltgoat/alerts.log")
-    parser.add_argument("--telegram-config", default=str(DEFAULT_TELEGRAM_CONFIG))
     parser.add_argument("--minion", default="")
     parser.add_argument("--no-telegram", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -284,7 +282,6 @@ def main() -> int:
     details = []
     severity = "WARNING"
     log_path = Path(args.log_path)
-    config_path = Path(args.telegram_config)
 
     result_payload: Dict[str, Any] = {
         "host": host,
@@ -353,7 +350,7 @@ def main() -> int:
     emit_event(tag, result_payload)
 
     if not args.no_telegram:
-        telegram_notify(message, result_payload, log_path, config_path)
+        telegram_notify(message, result_payload, log_path)
 
     print(message)
     return 0

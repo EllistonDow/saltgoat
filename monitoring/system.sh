@@ -870,17 +870,10 @@ monitor_auto_sites() {
         return 0
     fi
 
-    local topics_script="${SCRIPT_DIR}/scripts/setup-telegram-topics.py"
     if [[ "${SALTGOAT_SKIP_TELEGRAM:-0}" == "1" ]]; then
-        log_info "跳过 Telegram 话题同步（SALTGOAT_SKIP_TELEGRAM=1）"
-    elif [[ -x "$topics_script" ]]; then
-        log_highlight "同步站点相关的 Telegram 话题..."
-        if topics_output=$(sudo python3 "$topics_script" 2>&1); then
-            printf '%s\n' "$topics_output"
-        else
-            log_warning "Telegram 话题同步失败，可稍后运行 'sudo python3 scripts/setup-telegram-topics.py'"
-            printf '%s\n' "$topics_output"
-        fi
+        log_info "跳过 Telegram 话题提示（SALTGOAT_SKIP_TELEGRAM=1）"
+    else
+        log_info "请在 Pillar `telegram_topics` 中维护每个站点的线程映射（原脚本已移除）。"
     fi
 
     if [[ "${SALTGOAT_SKIP_REFRESH:-0}" == "1" ]]; then

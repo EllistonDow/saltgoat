@@ -327,47 +327,43 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
     ret["changes"] = state_result
 
     schedule_entries = _schedule_entries()
-    if isinstance(schedule_entries, dict) and schedule_entries:
-        ret["mode"] = "schedule"
-        ret["comment"] = (
-            "Salt Schedule entries rendered; ensure salt-minion service is running."
-        )
+    if not (isinstance(schedule_entries, dict) and schedule_entries):
+        ret["result"] = False
+        ret["comment"] = "Salt Schedule not available; please ensure salt-minion is installed and running."
+        return ret
 
-        removed: List[str] = []
-        for job_name, details in schedule_entries.items():
-            if job_name in expected_commands:
-                continue
-            if not isinstance(details, dict):
-                continue
-            args = details.get("args") or details.get("job_args")
-            command = ""
-            if isinstance(args, list) and args:
-                command = " ".join(str(item) for item in args)
-            elif isinstance(args, str):
-                command = args
-            if not command:
-                continue
-            if (
-                f"--site {site}" in command
-                or f"/var/www/{site}" in command
-                or (
-                    command.strip().startswith("saltgoat magetools xtrabackup mysql dump")
-                    and site in command
-                )
-                or any(command.strip() == expected.strip() for expected in expected_commands.values())
-            ):
-                try:
-                    if __salt__["schedule.delete"](job_name):
-                        removed.append(job_name)
-                except Exception:  # noqa: BLE001
-                    pass
-        if removed:
-            ret.setdefault("changes", {}).setdefault("removed_extra", removed)
-    else:
-        ret["mode"] = "cron"
-        ret["comment"] = (
-            "/etc/cron.d/magento-maintenance written (Salt Schedule unavailable)."
-        )
+    ret["comment"] = "Salt Schedule entries rendered; ensure salt-minion service remains active."
+
+    removed: List[str] = []
+    for job_name, details in schedule_entries.items():
+        if job_name in expected_commands:
+            continue
+        if not isinstance(details, dict):
+            continue
+        args = details.get("args") or details.get("job_args")
+        command = ""
+        if isinstance(args, list) and args:
+            command = " ".join(str(item) for item in args)
+        elif isinstance(args, str):
+            command = args
+        if not command:
+            continue
+        if (
+            f"--site {site}" in command
+            or f"/var/www/{site}" in command
+            or (
+                command.strip().startswith("saltgoat magetools xtrabackup mysql dump")
+                and site in command
+            )
+            or any(command.strip() == expected.strip() for expected in expected_commands.values())
+        ):
+            try:
+                if __salt__["schedule.delete"](job_name):
+                    removed.append(job_name)
+            except Exception:  # noqa: BLE001
+                pass
+    if removed:
+        ret.setdefault("changes", {}).setdefault("removed_extra", removed)
 
     return ret
 
@@ -389,7 +385,7 @@ def magento_schedule_uninstall(site: str = "tank") -> Dict[str, Any]:
 
     ret: Dict[str, Any] = {
         "site": site,
-        "mode": "schedule" if _has_schedule() else "cron",
+        "mode": "schedule",
         "changes": {"schedule": {}, "cron_removed": False},
         "result": True,
         "comment": "",
@@ -524,7 +520,6 @@ def enable_beacons() -> Dict[str, Any]:
 
 
 AUTOMATION_DEFAULT_BASE = "/srv/saltgoat/automation"
-AUTOMATION_ALLOWED_BACKENDS = {"schedule", "cron"}
 
 
 def _state_success(state_result: Dict[str, Any]) -> bool:
@@ -564,8 +559,6 @@ def _automation_paths(overrides: Optional[Dict[str, Any]] = None) -> Dict[str, A
     logs_mode = overrides.get("logs_mode") or config.get("logs_mode") or "750"
     script_mode = overrides.get("script_mode") or config.get("script_mode") or "755"
     job_file_mode = overrides.get("job_file_mode") or config.get("job_file_mode") or "640"
-    cron_user = overrides.get("cron_user") or config.get("cron_user") or owner
-
     return {
         "base_dir": base_dir,
         "scripts_dir": scripts_dir,
@@ -577,7 +570,6 @@ def _automation_paths(overrides: Optional[Dict[str, Any]] = None) -> Dict[str, A
         "logs_mode": logs_mode,
         "script_mode": script_mode,
         "job_file_mode": job_file_mode,
-        "cron_user": cron_user,
     }
 
 
@@ -626,18 +618,17 @@ def _apply_job_state(job_payload: Dict[str, Any], paths: Dict[str, Any]) -> Dict
     return __salt__["state.apply"](
         "optional.automation.job",
         pillar={
-            "automation": {
-                "base_dir": paths["base_dir"],
-                "scripts_dir": paths["scripts_dir"],
-                "jobs_dir": paths["jobs_dir"],
-                "logs_dir": paths["logs_dir"],
-                "owner": paths["owner"],
-                "group": paths["group"],
-                "cron_user": paths["cron_user"],
-                "job": job_payload,
-            }
-        },
-    )
+        "automation": {
+            "base_dir": paths["base_dir"],
+            "scripts_dir": paths["scripts_dir"],
+            "jobs_dir": paths["jobs_dir"],
+            "logs_dir": paths["logs_dir"],
+            "owner": paths["owner"],
+            "group": paths["group"],
+            "job": job_payload,
+        }
+    },
+)
 
 
 def _automation_script_body(name: str, logs_dir: str) -> str:
@@ -703,14 +694,9 @@ def _save_job_data(name: str, data: Dict[str, Any], paths: Dict[str, Any]) -> No
 
 
 def _resolve_backend(requested: Optional[str]) -> str:
-    choice = (requested or "auto").lower()
-    if choice == "auto":
-        return "schedule" if _has_schedule() else "cron"
-    if choice in AUTOMATION_ALLOWED_BACKENDS:
-        if choice == "schedule" and not _has_schedule():
-            return "cron"
-        return choice
-    return "cron"
+    if not _has_schedule():
+        raise RuntimeError("Salt Schedule 不可用，请先确保 salt-minion 服务正在运行。")
+    return "schedule"
 
 
 def automation_init() -> Dict[str, Any]:
@@ -870,7 +856,10 @@ def automation_job_create(
     script_path = Path(paths["scripts_dir"]) / f"{script_name}.sh"
     script_exists = script_path.exists()
 
-    resolved_backend = _resolve_backend(backend)
+    try:
+        resolved_backend = _resolve_backend(backend)
+    except RuntimeError as exc:
+        return {"result": False, "comment": str(exc)}
     timestamp = datetime.utcnow().isoformat()
 
     job_data: Dict[str, Any] = {
@@ -934,7 +923,10 @@ def automation_job_enable(name: str, backend: str = "auto") -> Dict[str, Any]:
     except ValueError as exc:
         return {"result": False, "comment": str(exc)}
 
-    resolved_backend = _resolve_backend(backend or job_data.get("backend"))
+    try:
+        resolved_backend = _resolve_backend(backend or job_data.get("backend"))
+    except RuntimeError as exc:
+        return {"result": False, "comment": str(exc)}
     job_data["backend"] = resolved_backend
     job_data["enabled"] = True
     job_data["updated_at"] = datetime.utcnow().isoformat()
@@ -981,6 +973,7 @@ def automation_job_disable(name: str) -> Dict[str, Any]:
     except ValueError as exc:
         return {"result": False, "comment": str(exc)}
 
+    job_data["backend"] = "schedule"
     job_data["enabled"] = False
     job_data["updated_at"] = datetime.utcnow().isoformat()
 
@@ -988,7 +981,7 @@ def automation_job_disable(name: str) -> Dict[str, Any]:
         "name": name,
         "ensure": "present",
         "enabled": False,
-        "backend": job_data.get("backend", "cron"),
+        "backend": "schedule",
         "cron": job_data.get("cron", "0 * * * *"),
         "data": job_data,
     }
@@ -1007,7 +1000,7 @@ def automation_job_disable(name: str) -> Dict[str, Any]:
 
     return {
         "result": success,
-        "backend": job_data.get("backend", "cron"),
+        "backend": "schedule",
         "job": job_data,
         "changes": {"init": init_state, "job": job_state},
         "comment": comments,
@@ -1023,7 +1016,7 @@ def automation_job_delete(name: str) -> Dict[str, Any]:
         "name": name,
         "ensure": "absent",
         "enabled": False,
-        "backend": "cron",
+        "backend": "schedule",
         "cron": "* * * * *",
         "data": {"name": name},
     }
@@ -1043,7 +1036,7 @@ def automation_job_delete(name: str) -> Dict[str, Any]:
 
     return {
         "result": success,
-        "backend": job_payload["backend"],
+        "backend": "schedule",
         "removed": not job_file.exists(),
         "job_file": str(job_file),
         "changes": {"init": init_state, "job": job_state},
@@ -1072,17 +1065,20 @@ def automation_job_list() -> Dict[str, Any]:
                 data = {}
 
             name = data.get("name") or job_file.stem
-            backend = data.get("backend", "cron")
+            backend = "schedule"
             enabled = bool(data.get("enabled", False))
             cron_expr = data.get("cron", "")
             script_path = data.get("script_path")
             script_missing = bool(script_path) and not Path(script_path).exists()
 
-            if backend == "schedule":
-                active = bool(schedule_jobs.get(name))
-            else:
-                cron_file = Path(f"/etc/cron.d/saltgoat-automation-{name}")
-                active = cron_file.exists()
+            active = bool(schedule_jobs.get(name))
+
+            legacy_cron_file = Path(f"/etc/cron.d/saltgoat-automation-{name}")
+            if legacy_cron_file.exists():
+                try:
+                    legacy_cron_file.unlink()
+                except OSError:
+                    pass
 
             jobs.append(
                 {

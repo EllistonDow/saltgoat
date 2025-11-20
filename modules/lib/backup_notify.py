@@ -23,9 +23,6 @@ HOSTNAME = socket.getfqdn()
 REACTOR_DIR = Path(os.environ.get("SALTGOAT_REACTOR_DIR", "/opt/saltgoat-reactor"))
 LOGGER_SCRIPT = REACTOR_DIR / "logger.py"
 TELEGRAM_COMMON = REACTOR_DIR / "reactor_common.py"
-TELEGRAM_CONFIG = Path(
-    os.environ.get("SALTGOAT_TELEGRAM_CONFIG", "/etc/saltgoat/telegram.json")
-)
 ALERT_LOG = Path(os.environ.get("SALTGOAT_ALERT_LOG", "/var/log/saltgoat/alerts.log"))
 
 
@@ -119,7 +116,7 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
 
     notif.dispatch_webhooks(tag, str(severity), site, plain, html, payload)
 
-    if reactor_common is None or not _path_exists(TELEGRAM_CONFIG):
+    if reactor_common is None:
         _log(f"{tag}/skip", {"reason": "reactor_unavailable"})
         return
 
@@ -127,9 +124,7 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
         _log(f"{tag}/{label}", extra)
 
     try:
-        profiles = reactor_common.load_telegram_profiles(
-            str(TELEGRAM_CONFIG), logger
-        )
+        profiles = reactor_common.load_telegram_profiles(None, logger)
     except Exception as exc:  # pragma: no cover
         logger("error", {"message": str(exc)})
         notif.queue_failure(

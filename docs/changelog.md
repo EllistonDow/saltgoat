@@ -1,6 +1,35 @@
 # [1.3.19] - 2025-11-04
 
+## [1.9.1] - 2025-11-20
+
+### Changes
+- 修改 49 个文件: README.md, core/install.sh, core/optimize.sh, docs/backup-restic.md, docs/changelog.md 等
+
+
 # [1.3.19] - 2025-11-04
+
+# [1.3.19] - 2025-11-04
+
+# [1.3.19] - 2025-11-04
+
+## [1.9.0] - 2025-11-20
+
+### Changes
+- Magento & Automation 计划任务全面移除 Cron 兜底，所有计划任务统一依赖 Salt Schedule；`saltgoat magetools cron` / `optional.magento-schedule` 会在 `salt-minion` 不可用时直接报错提示修复。
+- Telegram 配置完全改为 Pillar (`telegram`, `telegram_topics`)；删除 `/etc/saltgoat/telegram.json`、`scripts/setup-telegram-topics.py` 以及相关引用，所有通知脚本/Reactors/CLI 直接读取 Pillar。
+- Restic/XtraBackup/资源告警/Fail2ban/API Watch/smoke-suite/goat_pulse 等通知路径统一迁移到新的 Pillar 数据，`reactor_common` 提供加载与广播能力；文档同步更新为 Pillar-only 方案。
+- Salt automation 任务和 Service Autoheal、Backup Reactor、Restic/CLI 通知等均更新为不依赖本地 JSON，并增加 Pillar 取值校验，提升诊断日志。
+
+## [1.8.10] - 2025-11-20
+
+### Changes
+- 将 `saltgoat optimize` / `saltgoat optimize magento` 的实现统一收敛到 `core/optimize.sh`，删除重复的 `modules/optimization/optimize.sh` 并直接在核心入口里调用，避免 CLI 需要额外按需加载。
+- 修正 `salt/pillar/magento-optimize.sls` 的多站点示例结构，所有站点都放入 `sites:` 映射并提供 `php_pool` 占位值，自动化同步时不再因为重复键覆盖。
+- README（optimization 模块）更新，提醒 `saltgoat optimize*` 由核心脚本提供，方便排查调用来源。
+- `saltgoat magetools backup restic install` 直接读取经过 Salt 渲染的 `secrets.restic_sites.*` 并与顶层 `restic_sites.*` 合并，自动继承 `repo`/`repo_owner`/`paths` 等设置并修复目录属主，Dropbox 等路径不再默认落在 root。
+- Telegram 配置全面迁移到 Pillar（`telegram` + `telegram_topics`），所有脚本/Reactors 不再读取 `/etc/saltgoat/telegram.json`；原 `scripts/setup-telegram-topics.py` 也同步移除。
+- Magento 及 Automation 模块彻底移除系统 Cron 兜底，所有计划任务仅依赖 Salt Schedule；若 `salt-minion` 未运行将直接报错并提示修复，不再静默写入 `/etc/cron.d/`。
+- `optional.mysql-backup` 以及 CLI `saltgoat magetools xtrabackup mysql dump` 会在 `backup_dir` 位于 `/home/<user>/...` 且 `repo_owner` 沿用默认值时自动改用该 `<user>`，并在创建目录/文件后执行 `chown`，保证 XtraBackup 和逻辑备份都能直接写入 Dropbox 等用户目录。
 
 ## [1.8.5] - 2025-11-19
 
@@ -35,7 +64,7 @@
 
 ### Changes
 - 自动化 PHP-FPM 池与 Schedule：启用站点自动探测、收敛 `core.php-fpm-pools` 并扩展 Restic/备份任务，新增站点无需手工配置即可获得独立池与备份任务。
-- RabbitMQ 与通知增强：修复 `rabbitmq-salt check` 误报、同步新增站点的 API Watch/Restic/XtraBackup，初始化 Telegram 话题并生成 `/etc/saltgoat/telegram.json`，确保告警/备份推送到对应线程。
+- RabbitMQ 与通知增强：修复 `rabbitmq-salt check` 误报、同步新增站点的 API Watch/Restic/XtraBackup，初始化 Telegram 话题并写入 Pillar `telegram_topics`，确保告警/备份推送到对应线程。
 - 运行时改进：新增 `php_fpm_pool_service` 以便单独执行 state、为 beacon 添加 `validate: False` 降噪，并把 `SCRIPT_STATIC_VERSION` 提升到 1.8.0 以对齐本次发布。
 
 ## [1.7.10] - 2025-11-16
@@ -455,7 +484,7 @@
 ## [1.4.5] - 2025-11-04
 
 ### Changes
-- 修改 5 个文件: salt/pillar/telegram-topics.sls, scripts/__pycache__/goat_pulse.cpython-312.pyc, scripts/goat_pulse.py, scripts/setup-telegram-topics.py, scripts/smoke-suite.sh
+- 修改 5 个文件: salt/pillar/telegram-topics.sls, scripts/__pycache__/goat_pulse.cpython-312.pyc, scripts/goat_pulse.py, scripts/smoke-suite.sh, docs/telegram-topics.md
 
 
 ## [1.4.4] - 2025-11-04

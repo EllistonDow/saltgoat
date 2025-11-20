@@ -29,7 +29,7 @@ _CALLER: Optional[Caller] = None
 _CACHE: Optional[Dict[str, object]] = None
 _TAG_RE = re.compile(r"<[^>]+>")
 _MD_SPECIAL_RE = re.compile(r"([_\*\[\]\(\)~`>#+\-=|{}.!])")
-TELEGRAM_TOPICS_PATH = Path(__file__).resolve().parents[2] / "salt" / "pillar" / "telegram-topics.sls"
+# Telegram 话题完全来自 Pillar `telegram_topics`
 QUEUE_DIR = Path("/var/log/saltgoat/notify-queue")
 FALLBACK_NOTIFICATIONS_PATH = Path(
     os.environ.get(
@@ -328,50 +328,25 @@ def dispatch_webhooks(
 
 
 @lru_cache
-def _load_topics_from_file() -> Dict[str, int]:
-    if not TELEGRAM_TOPICS_PATH.exists():
-        return {}
-    try:
-        import yaml  # type: ignore
-    except Exception:
-        yaml = None  # type: ignore
-
-    try:
-        raw = TELEGRAM_TOPICS_PATH.read_text(encoding="utf-8")
-    except Exception:
-        return {}
-
-    if yaml is not None:
-        try:
-            data = yaml.safe_load(raw) or {}
-        except Exception:
-            return {}
-    else:
-        data = {}
-        current_tag = None
-        for line in raw.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("saltgoat/"):
-                parts = stripped.split(":")
-                if len(parts) == 2:
-                    data.setdefault("telegram_topics", {})[parts[0]] = int(parts[1])
-        if not data:
-            return {}
-
-    topics = data.get("telegram_topics")
+def _load_topics() -> Dict[str, int]:
+    topics = pillar_get("telegram_topics", {}) or {}
+    normalized: Dict[str, int] = {}
     if isinstance(topics, dict):
-        normalized: Dict[str, int] = {}
         for key, value in topics.items():
+            if not key:
+                continue
             try:
                 normalized[str(key)] = int(value)
             except Exception:
-                continue
-        return normalized
-    return {}
+                try:
+                    normalized[str(key)] = int(str(value))
+                except Exception:
+                    continue
+    return normalized
 
 
 def get_thread_id(tag: str) -> Optional[int]:
-    topics = _load_topics_from_file()
+    topics = _load_topics()
     if not topics:
         return None
     if tag in topics:

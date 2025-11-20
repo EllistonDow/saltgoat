@@ -1,5 +1,5 @@
 {#-
-  Manage a SaltGoat automation job (Salt schedule preferred, cron fallback).
+  Manage a SaltGoat automation job (Salt Schedule only).
 -#}
 
 include:
@@ -12,11 +12,14 @@ include:
 {% set logs_dir = automation.get('logs_dir', default_cfg.get('logs_dir', base_dir + '/logs')) %}
 {% set owner = automation.get('owner', default_cfg.get('owner', 'root')) %}
 {% set group = automation.get('group', default_cfg.get('group', owner)) %}
-{% set cron_user = automation.get('cron_user', default_cfg.get('cron_user', owner)) %}
 {% set job_cfg = automation.get('job', {}) %}
 {% set salt_minion_service = salt['file.file_exists']('/lib/systemd/system/salt-minion.service') or salt['file.file_exists']('/etc/systemd/system/salt-minion.service') %}
 
-{% if not job_cfg %}
+{% if not salt_minion_service %}
+saltgoat-automation-job-salt-minion-required:
+  test.fail_without_changes:
+    - comment: 'automation.job requires salt-minion to manage Salt Schedule entries'
+{% elif not job_cfg %}
 saltgoat-automation-job-missing:
   test.fail_without_changes:
     - comment: 'automation.job state requires automation:job pillar data'
@@ -26,7 +29,6 @@ saltgoat-automation-job-missing:
 {% set job_file = job_cfg.get('file', jobs_dir + '/' + job_name + '.json') %}
 {% set ensure = job_cfg.get('ensure', 'present') %}
 {% set cron_expr = job_cfg.get('cron', job_data.get('cron', '0 * * * *')) %}
-{% set backend = job_cfg.get('backend', job_data.get('backend', 'cron')) %}
 {% set enabled = job_cfg.get('enabled', job_data.get('enabled', False)) %}
 {% set splay = job_cfg.get('splay', job_data.get('splay', 0)) %}
 {% set cron_file = '/etc/cron.d/saltgoat-automation-' + job_name %}
@@ -35,11 +37,9 @@ saltgoat-automation-job-missing:
 {{ job_file }}:
   file.absent
 
-{% if salt_minion_service %}
 saltgoat-automation-job-schedule-absent-{{ job_name }}:
   schedule.absent:
     - name: {{ job_name }}
-{% endif %}
 
 {{ cron_file }}:
   file.absent
@@ -57,7 +57,6 @@ saltgoat-automation-job-schedule-absent-{{ job_name }}:
       - file: {{ jobs_dir }}
 
 {% if enabled %}
-{% if backend == 'schedule' %}
 saltgoat-automation-job-schedule-{{ job_name }}:
   schedule.present:
     - name: {{ job_name }}
@@ -79,32 +78,11 @@ saltgoat-automation-job-schedule-{{ job_name }}:
       - schedule: saltgoat-automation-job-schedule-{{ job_name }}
 
 {% else %}
-{{ cron_file }}:
-  file.managed:
-    - user: root
-    - group: root
-    - mode: 644
-    - contents: |
-        # SaltGoat automation job: {{ job_name }}
-        {{ cron_expr }} {{ cron_user }} salt-call --local saltgoat.automation_job_run name="{{ job_name }}" >/dev/null 2>&1
-    - require:
-      - file: {{ job_file }}
-
-{% if salt_minion_service %}
-saltgoat-automation-job-schedule-cleanup-{{ job_name }}:
-  schedule.absent:
-    - name: {{ job_name }}
-{% endif %}
-{% endif %}
-
-{% else %}
-{% if salt_minion_service %}
 saltgoat-automation-job-schedule-disabled-{{ job_name }}:
   schedule.absent:
     - name: {{ job_name }}
     - require:
       - file: {{ job_file }}
-{% endif %}
 
 {{ cron_file }}:
   file.absent

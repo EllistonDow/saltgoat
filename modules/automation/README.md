@@ -1,6 +1,6 @@
 # SaltGoat 自动化模块
 
-SaltGoat 的自动化模块围绕自定义 Salt Execution Module 与 Runner 构建，提供脚本模板、计划任务、日志管理的统一入口。所有命令默认运行在本机 `salt-call --local` 上：当检测到 `salt-minion` 可用时，任务会注册为 Salt Schedule；否则自动降级至 `/etc/cron.d/saltgoat-automation-*` 确保仍能按计划执行。
+SaltGoat 的自动化模块围绕自定义 Salt Execution Module 与 Runner 构建，提供脚本模板、计划任务、日志管理的统一入口。所有命令默认运行在本机 `salt-call --local` 上，并直接对 Salt Schedule 进行读写——如果 `salt-minion` 未运行，命令会立即报错，提示先恢复 Minion。
 
 ## 📦 目录布局
 
@@ -47,7 +47,7 @@ sudo saltgoat automation templates security-scan
 ## 🧠 设计要点
 
 - **自动同步模块**：命令执行前会调用 `saltutil.sync_modules` 与 `saltutil.sync_runners`，确保 `salt/_modules/saltgoat.py` 与 `salt/runners/saltgoat.py` 立即生效。
-- **Schedule 首选，Cron 兜底**：当 `salt-minion` 服务存在且可执行 `schedule.list` 时，计划任务注册为 Salt Schedule；否则会在 `/etc/cron.d/` 下生成同名 cron 文件。
+- **Salt Schedule-only**：计划任务仅注册到 Salt Schedule；请确保 `salt-minion` 服务运行且可执行 `schedule.list`。
 - **配置即状态**：任务定义持久化为 JSON，`automation_job_run` 会更新 `last_run`/`last_retcode`/`last_duration` 字段，方便外部集成读取。
 - **日志聚合**：每次任务执行都会将 stdout/stderr 追加到 `logs/<job>_YYYYMMDD.log`，可配合 `automation logs cleanup` 设置保留期。
 
@@ -61,6 +61,6 @@ sudo saltgoat automation templates security-scan
 
 ## ⚠️ 使用提示
 
-- 建议在具备 `salt-minion` 的环境下运行，享受 Salt Schedule/Event Reactor 带来的状态一致性；缺少时仍会自动降级，后续只需启用 `salt-minion` 并重新 `enable` 即可切换回 Schedule。
+- 建议始终确保 `salt-minion` 运行，以便通过 Salt Schedule/Event Reactor 保持状态一致性；若服务停止，命令会直接报错，修复后重新 `enable` 即可恢复计划任务。
 - 任务脚本默认加上 `set -euo pipefail` 与日志工具函数，可按需扩展。若使用自定义脚本，请确保具有可执行权限以及适当的错误处理。
 - 自动化目录下不应存放敏感凭据，推荐通过 Pillar/环境变量在执行时注入。

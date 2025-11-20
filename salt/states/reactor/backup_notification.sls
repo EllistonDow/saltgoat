@@ -1,6 +1,5 @@
 {# Backup event reactor #}
 {% set log_path = salt['pillar.get']('saltgoat:reactor:backups:log_path', '/var/log/saltgoat/alerts.log') %}
-{% set telegram_cfg_path = '/etc/saltgoat/telegram.json' %}
 {% set parts = tag.split('/') %}
 {% set backup_kind = parts[2] if parts|length > 2 else 'unknown' %}
 {% set backup_status = parts[3] if parts|length > 3 else data.get('status', 'unknown') %}
@@ -103,7 +102,7 @@ backup_event_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.', '
             except Exception:
                 pass
 
-        profiles = reactor_common.load_telegram_profiles("{{ telegram_cfg_path }}", log)
+        profiles = reactor_common.load_telegram_profiles(None, log)
         if not profiles:
             log("skip", {"reason": "no_profiles"})
             notif.queue_failure("telegram", TELEGRAM_TAG, payload, "no_profiles", {"thread": thread_id})

@@ -2,7 +2,7 @@
 
 ## 📋 功能概述
 
-系统优化模块提供全面的系统性能优化功能，包括自动调优、性能测试、基准测试、网络速度测试等。
+系统优化模块提供全面的系统性能优化功能，包括自动调优、性能测试、基准测试、网络速度测试等。Magento 专用优化 CLI 已整合进 `core/optimize.sh`，`saltgoat optimize` / `saltgoat optimize magento` 直接由核心脚本提供，避免重复实现。
 
 ## 🚀 使用方法
 
@@ -154,7 +154,6 @@ Magento2优化完成
 
 ```
 modules/optimization/
-├── optimize.sh            # 主优化脚本
 ├── auto-tune.sh          # 自动调优脚本
 ├── benchmark.sh          # 基准测试脚本
 ├── speedtest.sh          # 网络测试脚本

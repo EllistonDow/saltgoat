@@ -100,6 +100,8 @@ sudo saltgoat magetools backup restic install \
 5. 根据仓库路径自动选择属主与 `ProtectHome` 策略，确保 Dropbox 等路径具备写权限。
 6. 首次执行一次备份；如失败会提示使用 `run --site bank` 手动调试。
 
+> 💡 **Pillar 即配置源**：从 1.8.10 起，`install` 会优先读取经过 Salt 渲染的 `secrets.restic_sites.<site>`（或顶层 `restic_sites.<site>`）并自动合并两者。也就是说，你只需在 `salt/pillar/secret/*.sls` 中维护一次 repo/path/repo_owner/service_user，哪怕值里含 `{{ pillar.get(...) }}` 这类 Jinja 表达式，CLI 也能识别并按需 `mkdir/chown`。只有在 Pillar 缺失字段时才需要手动传入 `--repo/--repo-owner/--paths`。
+
 不带 `--repo` 时遵循以下默认：
 - 存在 `~/Dropbox` → `/home/<user>/Dropbox/<site>/restic-backups`
 - 否则 → `/var/backups/restic/<site>`
@@ -147,13 +149,13 @@ sudo saltgoat magetools backup restic install \
 ### 3.2 通知与事件
 
 - 无论是 systemd timer 还是手动 `run`，都会发送 `saltgoat/backup/restic/(success|failure)` 事件；配合默认的 `reactor/backup_notification.sls` 会在 `/var/log/saltgoat/alerts.log` 中追加 `[BACKUP]` 记录。
-- 为了即时推送，CLI 与定时服务还会检查 `/etc/saltgoat/telegram.json`，使用 `/opt/saltgoat-reactor/reactor_common.py` 直接广播 Telegram 消息（同时保留 Salt 事件，便于其它自动化继续消费）。
+- 为了即时推送，CLI 与定时服务会调用 `/opt/saltgoat-reactor/reactor_common.py`，直接读取 Pillar `telegram`/`telegram_topics` 的配置广播 Telegram 消息（同时保留 Salt 事件，便于其它自动化继续消费）。
 - 快速自检：
   ```bash
   sudo tail -n 20 /var/log/saltgoat/alerts.log    # 确认出现 [BACKUP] 与 [TELEGRAM] 行
   sudo journalctl -u saltgoat-restic-<site>.service -n 50
   ```
-- 如果日志里看到 `TELEGRAM ... send_failed`，通常与网络、token 或 chat_id 有关；`config_missing/config_empty` 则表示 `/etc/saltgoat/telegram.json` 尚未配置，按模板补齐即可。
+- 如果日志里看到 `TELEGRAM ... send_failed`，通常与网络、token 或 chat_id 有关；`config_missing/config_empty` 则表示 Pillar `telegram` 尚未配置或缺少 `profiles`，按模板补齐即可。
 
 ---
 

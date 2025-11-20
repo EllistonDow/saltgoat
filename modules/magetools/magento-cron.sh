@@ -1,5 +1,5 @@
 #!/bin/bash
-# Magento 2 定时维护任务管理
+# Magento 2 Salt Schedule 任务管理
 # modules/magetools/magento-cron.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -143,12 +143,6 @@ PY
         log_info "使用 'saltgoat magetools cron $SITE_NAME install' 安装 Salt Schedule 任务"
     fi
     
-    if [[ -f /etc/cron.d/magento-maintenance ]]; then
-        echo ""
-        log_info "检测到系统 Cron 计划 (/etc/cron.d/magento-maintenance):"
-        cat /etc/cron.d/magento-maintenance
-    fi
-    
     echo ""
     log_info "salt-minion 服务状态:"
     if systemctl is-active --quiet salt-minion; then
@@ -167,11 +161,12 @@ install_cron_tasks() {
     install_output=$(sudo salt-call --local saltgoat.magento_schedule_install site="$SITE_NAME" 2>&1)
     echo "$install_output"
 
-    if echo "$install_output" | grep -q "'mode': 'cron'"; then
-        log_warning "[WARNING] salt-minion 服务不可用，已回退到系统 Cron 计划 (/etc/cron.d/magento-maintenance)"
-    else
-        log_success "[SUCCESS] Salt Schedule 已配置 Magento 维护任务"
+    if echo "$install_output" | grep -q "Salt Schedule not available"; then
+        log_error "[ERROR] 无法写入 Salt Schedule，请确认 salt-minion 已安装并在本机运行。"
+        exit 1
     fi
+
+    log_success "[SUCCESS] Salt Schedule 已配置 Magento 维护任务"
 
     log_info "使用 'saltgoat magetools cron $SITE_NAME status' 查看详情"
 }
@@ -197,12 +192,6 @@ test_cron_tasks() {
     log_info "测试定时任务..."
     echo ""
     
-    if [[ -f /etc/cron.d/magento-maintenance ]]; then
-        log_warning "当前使用系统 Cron 管理维护计划，Salt Schedule 测试跳过"
-        log_info "可手动执行: saltgoat magetools maintenance $SITE_NAME daily"
-        return 0
-    fi
-
     sync_salt_modules
     local test_jobs=("magento-cron" "magento-daily-maintenance")
     for job in "${test_jobs[@]}"; do
@@ -247,15 +236,6 @@ view_cron_logs() {
         log_warning "[WARNING] 健康检查日志文件不存在"
     fi
     echo ""
-    
-    # 查看系统 cron 日志
-    log_info "3. 系统 Cron 日志:"
-    if [[ -f "/var/log/cron.log" ]]; then
-        log_info "最近5行系统 cron 日志:"
-        tail -5 /var/log/cron.log | grep -i magento || log_info "未找到 Magento 相关日志"
-    else
-        log_warning "[WARNING] 系统 cron 日志文件不存在"
-    fi
 }
 
 # 主程序

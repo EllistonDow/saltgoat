@@ -1,9 +1,31 @@
 # Common helpers for SaltGoat reactor Python snippets.
-import json
 import pathlib
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Iterable, List, Optional
+
+try:
+    import salt.client  # type: ignore
+except Exception:  # pragma: no cover
+    salt = None  # type: ignore
+
+_CALLER = None
+
+
+def _pillar_get(path: str, default: Any = None) -> Any:
+    global _CALLER  # pylint: disable=global-statement
+    if salt is None:  # type: ignore
+        return default
+    if _CALLER is None:
+        try:
+            _CALLER = salt.client.Caller()  # type: ignore
+        except Exception:  # pragma: no cover
+            _CALLER = None
+            return default
+    try:
+        return _CALLER.cmd("pillar.get", path, default)  # type: ignore[union-attr]
+    except Exception:  # pragma: no cover
+        return default
 
 
 def _ensure_list(value: Any) -> List[Any]:
@@ -59,26 +81,20 @@ def _resolve_topic(tag: Optional[str], topics: Dict[str, Any]) -> Optional[Any]:
     return topics.get("*")
 
 
-def load_telegram_profiles(config_path: str, log=None) -> List[Dict[str, Any]]:
-    path = pathlib.Path(config_path)
-    if not path.exists():
+def _load_profiles_from_pillar(log=None) -> List[Dict[str, Any]]:
+    telegram = _pillar_get("telegram", {}) or {}
+    if not isinstance(telegram, dict):
         if log:
-            log("config_missing", {"path": config_path})
+            log("pillar_missing", {"path": "telegram"})
         return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:  # pylint: disable=broad-except
+    profiles_cfg = telegram.get("profiles")
+    if not isinstance(profiles_cfg, dict):
         if log:
-            log("config_error", {"path": config_path, "error": str(exc)})
+            log("profiles_missing", {"path": "telegram:profiles"})
         return []
-
-    if isinstance(data, dict):
-        entries: Iterable[Any] = data.get("entries") or []
-    else:
-        entries = data
-
-    profiles = []
-    for idx, entry in enumerate(entries):
+    global_topics = _normalize_topics(_pillar_get("telegram_topics", {}))
+    profiles: List[Dict[str, Any]] = []
+    for name, entry in profiles_cfg.items():
         if not isinstance(entry, dict):
             continue
         if not entry.get("enabled", True):
@@ -87,13 +103,10 @@ def load_telegram_profiles(config_path: str, log=None) -> List[Dict[str, Any]]:
         if not token:
             continue
         ordered_targets: List[Any] = []
-        for key in ("targets", "chat_ids", "accept_from"):
+        for key in ("targets", "chat_ids", "accept_from", "chat_id"):
             for item in _ensure_list(entry.get(key)):
                 if item not in ordered_targets:
                     ordered_targets.append(item)
-        for item in _ensure_list(entry.get("chat_id")):
-            if item not in ordered_targets:
-                ordered_targets.append(item)
         targets_normalized = []
         for target in ordered_targets:
             normalized = _normalize_target(target)
@@ -101,18 +114,24 @@ def load_telegram_profiles(config_path: str, log=None) -> List[Dict[str, Any]]:
                 targets_normalized.append(normalized)
         if not targets_normalized:
             continue
+        specific_topics = _normalize_topics(entry.get("threads"))
+        combined_topics = dict(global_topics)
+        combined_topics.update(specific_topics)
         profiles.append(
             {
-                "name": entry.get("name") or f"profile{idx + 1}",
+                "name": name or f"profile{len(profiles) + 1}",
                 "token": token,
                 "targets": targets_normalized,
-                "topics": _normalize_topics(entry.get("topics")),
+                "topics": combined_topics,
             }
         )
-
     if not profiles and log:
-        log("config_empty", {"path": config_path})
+        log("profiles_empty", {"path": "telegram:profiles"})
     return profiles
+
+
+def load_telegram_profiles(_config_path: Optional[str] = None, log=None) -> List[Dict[str, Any]]:
+    return _load_profiles_from_pillar(log)
 
 
 def broadcast_telegram(

@@ -18,7 +18,7 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
 
 
 def magento_schedule_uninstall(site: str = "tank") -> Dict[str, Any]:
-    """Remove Magento maintenance schedules and cron entries for the given site."""
+    """Remove Magento maintenance schedules for the given site并清理历史 Cron 文件。"""
     result: Dict[str, Any] = {
         "schedule": {},
         "cron_removed": False,

@@ -17,7 +17,7 @@ sudo saltgoat magetools cron <site> status
 sudo saltgoat magetools cron <site> test
 ```
 
-> 如果目标主机尚未运行 `salt-minion`，`install` 会自动写入 `/etc/cron.d/magento-maintenance` 作为临时替代；待 Minion 就绪后再次执行即可切换回 Salt Schedule。
+> `salt-minion` 是 Salt Schedule 的唯一依赖：执行 `install` 前请确保 `systemctl is-active salt-minion` 返回 `active`，否则任务将无法下发。
 
 ## 功能特性
 
@@ -29,8 +29,7 @@ sudo saltgoat magetools cron <site> test
 - **健康检查** - Magento状态、数据库连接、缓存状态、索引状态
 
 ### ⏰ 定时任务管理
-- **系统 Cron（可选）** - 必要时可手动维护传统 cron 任务
-- **Salt Schedule** - 使用 Salt 原生状态管理（推荐）
+- **Salt Schedule** - 使用 Salt 原生状态管理计划任务，是唯一受支持的下发方式
 - **智能检测** - 自动检测数据库架构更新并执行相应操作
 
 ### 📊 监控与日志
@@ -48,7 +47,7 @@ sudo saltgoat magetools cron <site> <action>
 
 > 若已启用 Telegram ChatOps（`salt/pillar/chatops.sls.sample`），可在授权聊天中发送 `/saltgoat maintenance weekly <site>`、`/saltgoat cache clean <site>` 等命令；需要审批的操作会生成一次性 Token，需管理员 `/saltgoat approve <token>` 后才会真正执行。
 
-> **提示**：若目标主机未安装或未运行 `salt-minion`，上述 `sudo saltgoat magetools cron` 命令会自动改用系统 Cron，在 `/etc/cron.d/magento-maintenance` 写入计划任务；待 `salt-minion` 启用后再次执行 `install` 即可恢复为 Salt Schedule。
+> **提示**：`sudo saltgoat magetools cron` 仅负责封装 Salt Schedule，若 `salt-minion` 未运行会直接报错，请先恢复服务再执行该命令。
 
 ### 维护管理命令
 
@@ -219,7 +218,7 @@ magento_schedule:
       no_compress: true
       site: bank
 ```
-建议复制 `salt/pillar/magento-schedule.sls.sample` 为实际文件后再写入上述配置；执行 `sudo saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule（若 `salt-minion` 不可用则写入 `/etc/cron.d/magento-maintenance`）。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。日常也可以直接运行 `sudo saltgoat magetools schedule auto`，脚本会自动发现 `/var/www/*` 下所有 Magento 站点并调用 `magento_schedule_install`，缺失任务将补齐，已存在的任务会做幂等校验。若 Pillar 未声明 `mysql_dump_jobs` / `api_watchers` / `stats_jobs`，工具会按默认策略回填：数据库 `<site>mage` 每小时导出到 `/var/backups/saltgoat/<site>`（若检测到 `~/Dropbox/<site>/databases` 则优先使用）、API Watch 以 `*/5 * * * *` 轮询订单与会员、统计任务在 06:00 附近错峰生成日/周/月报，周报默认不推送 Telegram，可在 Pillar 中覆盖。
+建议复制 `salt/pillar/magento-schedule.sls.sample` 为实际文件后再写入上述配置；执行 `sudo saltgoat magetools cron <site> install` 后会生成对应的 Salt Schedule。每次导出仍会触发 Salt event 与 Telegram 通知，便于追踪。日常也可以直接运行 `sudo saltgoat magetools schedule auto`，脚本会自动发现 `/var/www/*` 下所有 Magento 站点并调用 `magento_schedule_install`，缺失任务将补齐，已存在的任务会做幂等校验。若 Pillar 未声明 `mysql_dump_jobs` / `api_watchers` / `stats_jobs`，工具会按默认策略回填：数据库 `<site>mage` 每小时导出到 `/var/backups/saltgoat/<site>`（若检测到 `~/Dropbox/<site>/databases` 则优先使用）、API Watch 以 `*/5 * * * *` 轮询订单与会员、统计任务在 06:00 附近错峰生成日/周/月报，周报默认不推送 Telegram，可在 Pillar 中覆盖。
 
 ### 业务事件通知（API Watchers）
 SaltGoat 现在可以轮询 Magento REST API，将“新订单 / 新用户”推送到 Telegram。
@@ -322,7 +321,7 @@ PHP-FPM (php8.3-fpm/www-data)
    ```
    支持 `site` 或 `sites` 字段筛选多个站点；`period` 可选 `daily` / `weekly` / `monthly`；`page_size`、`telegram_thread`、`no_telegram`、`quiet`、`extra_args` 均为可选参数。
 
-2. **安装计划**：执行 `sudo saltgoat magetools cron <site> install`，新任务会与维护/备份计划一起下发到 Salt Schedule（或自动回退 `/etc/cron.d/`）。
+2. **安装计划**：执行 `sudo saltgoat magetools cron <site> install`，新任务会与维护/备份计划一起下发到 Salt Schedule。
 
 3. **查看结果**：报表运行成功后会在 Telegram (如启用) 和 `/var/log/saltgoat/alerts.log` 中生成 `[SUMMARY]` 记录；如需临时运行，可执行 `sudo saltgoat magetools stats --period daily --site <site> --no-telegram --quiet`。
 
@@ -351,7 +350,7 @@ sudo salt-call --local schedule.list --out=yaml | grep -A3 'magento-'
 salt-call --local schedule.modify magento-cron cron '*/10 * * * *'
 ```
 
-> 若 `salt-minion` 当前不可用，上述命令会返回空列表；此时 `sudo saltgoat magetools cron <site> install` 将自动生成 `/etc/cron.d/magento-maintenance` 作为临时替代方案。
+> 若 `salt-minion` 当前不可用，上述命令会返回空列表；请先恢复 `salt-minion` 服务后再执行 `install`，系统不再自动写入 `/etc/cron.d/` 兜底。
 
 ### Salt Beacons 与 Reactor
 SaltGoat 提供事件驱动的维护能力，推荐通过以下命令启用并检查状态：
@@ -377,7 +376,7 @@ sudo saltgoat monitor beacons-status
 
 ### Salt States
 维护系统使用以下 Salt States：
-- `salt/states/optional/magento-schedule.sls` - 定时任务配置（Salt Schedule 优先，自动回退 Cron）
+- `salt/states/optional/magento-schedule.sls` - 定时任务配置（完全基于 Salt Schedule，不再回退 Cron）
 - `salt/states/optional/magento-maintenance/*.sls` - 维护子任务（daily/weekly/monthly/backup/health 等）
 
 ### 权限管理

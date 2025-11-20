@@ -193,7 +193,7 @@ else
     echo "[restic] manual backup failed with rc=$cleanup_rc" >&2
 fi
 
-if [[ -f /etc/saltgoat/telegram.json && -f /opt/saltgoat-reactor/reactor_common.py ]]; then
+if [[ -f /opt/saltgoat-reactor/reactor_common.py ]]; then
     python3 - <<'PY'
 import json
 import os
@@ -278,7 +278,7 @@ def log(label, payload):
         timeout=5,
     )
 
-profiles = reactor_common.load_telegram_profiles("/etc/saltgoat/telegram.json", log)
+profiles = reactor_common.load_telegram_profiles(None, log)
 if not profiles:
     log("skip", {"reason": "no_profiles"})
     sys.exit(0)

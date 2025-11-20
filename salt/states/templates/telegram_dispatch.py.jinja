@@ -18,7 +18,6 @@ except Exception as exc:  # pylint: disable=broad-except
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="SaltGoat Telegram dispatcher")
-    parser.add_argument("--config", required=True, help="Path to telegram.json")
     parser.add_argument("--log-path", required=True, help="Path for alerts log")
     parser.add_argument("--tag", required=True, help="Log tag prefix")
     parser.add_argument("--message", required=True, help="JSON encoded message string")
@@ -57,7 +56,7 @@ def main() -> int:
         except Exception:  # pylint: disable=broad-except
             pass
 
-    profiles = reactor_common.load_telegram_profiles(args.config, log)
+    profiles = reactor_common.load_telegram_profiles(None, log)
     if not profiles:
         log("skip", {"reason": "no_profiles"})
         return 0

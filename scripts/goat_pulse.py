@@ -15,10 +15,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 
-DEFAULT_TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
 
 SERVICES = [
     ("nginx", "nginx"),
@@ -286,59 +286,36 @@ def main() -> None:
     parser.add_argument("--telegram", action="store_true", help="send single snapshot to Telegram General")
     parser.add_argument("--metrics-file", type=Path, help="Write Prometheus textfile metrics to path")
     parser.add_argument("--plain", action="store_true", help="Disable ANSI clear for embedding / doctor")
-    parser.add_argument("--telegram-config", default=str(DEFAULT_TELEGRAM_CONFIG), help="telegram config path")
     args = parser.parse_args()
     metrics_path = Path(args.metrics_file) if args.metrics_file else None
     if args.telegram:
         capture: List[str] = []
         loop(1, True, metrics_path, args.plain, capture)
         body = "\n".join(capture)
-        send_telegram(body, Path(args.telegram_config))
+        send_telegram(body)
         return
     loop(max(1, args.interval), args.once, metrics_path, args.plain)
 
 
-def send_telegram(text: str, config_path: Path) -> None:
+def send_telegram(text: str) -> None:
+    if not TELEGRAM_COMMON.exists():
+        return
+    sys.path.insert(0, str(TELEGRAM_COMMON.parent))
     try:
-        config = json.loads(config_path.read_text(encoding="utf-8"))
+        import reactor_common  # type: ignore
     except Exception:
         return
-    entries = config.get("entries") if isinstance(config, dict) else None
-    if not entries:
-        return
-    entry = entries[0]
-    if not isinstance(entry, dict):
-        return
-    token = entry.get("token")
-    targets = entry.get("targets") or []
-    chat_id = None
-    for target in targets:
-        if isinstance(target, dict) and str(target.get("chat_id", "")).startswith("-100"):
-            chat_id = str(target["chat_id"])
-            break
-    if chat_id is None:
-        for target in targets:
-            if isinstance(target, dict) and target.get("chat_id"):
-                chat_id = str(target["chat_id"])
-                break
-    if not token or not chat_id:
-        return
-    escaped = html.escape(text)
-    payload = {
-        "chat_id": chat_id,
-        "text": f"<b>[INFO] Goat Pulse Digest</b>\n<pre>{escaped}</pre>",
-        "disable_web_page_preview": True,
-        "parse_mode": "HTML",
-    }
-    import urllib.parse
-    import urllib.request
 
-    try:
-        encoded = urllib.parse.urlencode(payload).encode()
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        urllib.request.urlopen(url, data=encoded, timeout=10)
-    except Exception:
-        pass
+    def _log(kind: str, payload: Dict[str, Any]) -> None:
+        print(f"[TELEGRAM {kind}] {payload}")
+
+    profiles = reactor_common.load_telegram_profiles(None, _log)
+    if not profiles:
+        return
+
+    escaped = html.escape(text)
+    message = f"<b>[INFO] Goat Pulse Digest</b>\n<pre>{escaped}</pre>"
+    reactor_common.broadcast_telegram(message, profiles, _log, tag="saltgoat/goat-pulse")
 
 
 if __name__ == "__main__":

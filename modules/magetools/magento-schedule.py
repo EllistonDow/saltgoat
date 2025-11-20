@@ -23,7 +23,6 @@ except Exception:  # pragma: no cover - PyYAML 可能未安装
     yaml = None
 
 BASE_DIR = Path("/var/www")
-CRON_DIR = Path("/etc/cron.d")
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 ENV = os.environ.copy()
 ENV.setdefault("PYTHONWARNINGS", "ignore")
@@ -86,12 +85,6 @@ class SiteRecord:
         token = self.site.strip().lower().replace(" ", "_").replace("-", "_")
         return token or self.site
 
-    @property
-    def cron_paths(self) -> List[Path]:
-        token = self.token
-        specific = CRON_DIR / f"magento-maintenance-{token}"
-        legacy = CRON_DIR / "magento-maintenance"
-        return [specific, legacy]
 
 
 def detect_sites() -> List[SiteRecord]:
@@ -135,49 +128,8 @@ def base_site_name(name: str) -> str:
     return site_label(name).split("-")[0]
 
 
-def ensure_telegram_topics(sites: Iterable[str]) -> None:
-    def load_telegram_from_pillar() -> Dict[str, object]:
-        code, out, _, parsed = run_salt([
-            "pillar.get",
-            "telegram",
-        ], json_out=True)
-        if code != 0:
-            return {}
-        data = parsed.get("local") if isinstance(parsed, dict) else None
-        return data if isinstance(data, dict) else {}
-
-    script = SCRIPTS_DIR / "setup-telegram-topics.py"
-    site_list = sorted({site for site in sites if site})
-    if not site_list:
-        return
-    if not script.exists():
-        warning(f"未找到 Telegram 话题脚本: {script}")
-        return
-    cfg_path = Path("/etc/saltgoat/telegram.json")
-    data: Dict[str, object] = {}
-
-    # 优先读取 Pillar，兼容 secret/telegram.sls
-    data = load_telegram_from_pillar()
-    if not data and cfg_path.exists():
-        try:
-            data = json.loads(cfg_path.read_text(encoding="utf-8"))
-        except Exception:
-            warning("Telegram 配置无法解析，已跳过话题创建。请修复 /etc/saltgoat/telegram.json 或 Pillar 后再运行。")
-            return
-
-    entries = data.get("entries") if isinstance(data, dict) else None
-    if not entries:
-        info("Telegram 配置为空，已跳过话题创建。可在 /etc/saltgoat/telegram.json 或 pillar secret/telegram.sls 中补充 profile。")
-        return
-
-    cmd = ["sudo", "python3", str(script), "--sites", ",".join(site_list)]
-    result = subprocess.run(cmd, text=True, capture_output=True, env=ENV)
-    if result.returncode != 0:
-        warning(f"创建 Telegram 话题失败: {result.stderr.strip() or result.stdout.strip()}")
-    else:
-        for line in result.stdout.splitlines():
-            if line:
-                info(f"  [topics] {line}")
+def ensure_telegram_topics(_: Iterable[str]) -> None:
+    info("Telegram 话题请直接在 Pillar `telegram_topics` 中维护（原 JSON/脚本流程已移除）。")
 
 
 def _job_applies(job: Dict[str, object], site: str) -> bool:
@@ -342,12 +294,6 @@ def show_list(
                 warning(f"  ✗ 缺失 {job}")
                 missing.append(job)
 
-        cron_present = []
-        for cron_file in record.cron_paths:
-            if cron_file.exists():
-                cron_present.append(str(cron_file))
-        if cron_present:
-            info("  检测到 Cron 兜底配置: " + ", ".join(cron_present))
         if missing:
             overall_missing += 1
             warning(f"  共缺失 {len(missing)} 个 Salt Schedule 任务。")
@@ -378,7 +324,6 @@ def run_auto(
         return 0
 
     failures = 0
-    cron_candidates: List[SiteRecord] = []
     results: List[str] = []
     topic_sites: Set[str] = set()
 
@@ -396,13 +341,8 @@ def run_auto(
             comment = str(local.get("comment", "未知错误"))
             error(f"  安装失败: {comment}")
             continue
-        mode = str(local.get("mode", "schedule"))
         comment = str(local.get("comment", "")).strip()
-        if mode == "cron":
-            cron_candidates.append(record)
-            warning(f"  Salt Schedule 不可用，已回退至 Cron: {comment or '查看 /etc/cron.d/。'}")
-        else:
-            success("  Salt Schedule 安装/验证完成。")
+        success("  Salt Schedule 安装/验证完成。")
 
         if comment:
             info(f"  备注: {comment}")
@@ -446,26 +386,6 @@ def run_auto(
             "清理遗留 Salt Schedule 任务: " + ", ".join(sorted(set(removed_jobs)))
         )
 
-    for cron_file in CRON_DIR.glob("magento-maintenance-*"):
-        token = cron_file.name.replace("magento-maintenance-", "")
-        if token not in existing_tokens:
-            try:
-                cron_file.unlink()
-                warning(f"已移除失效的 Cron 计划: {cron_file}")
-            except OSError:
-                warning(f"无法删除 {cron_file}，请手动清理")
-
-    cron_confirmed = []
-    for record in cron_candidates:
-        jobs = expected_job_names(record, config)
-        missing = [job for job in jobs if job not in refreshed_map]
-        if missing:
-            cron_confirmed.append(record.site)
-        else:
-            success(f"站点 {record.site} 的 Salt Schedule 实际存在，已忽略 Cron 回退提示。")
-
-    if cron_confirmed:
-        warning(f"{len(cron_confirmed)} 个站点因 Salt Schedule 不可用而使用 Cron 兜底: {', '.join(cron_confirmed)}。")
     if failures:
         error(f"{failures} 个站点安装失败，请检查日志后重试。")
         return 1

@@ -322,16 +322,7 @@ install_all() {
             printf '%s\n' "$monitor_output"
         fi
 
-        local topics_script="${SCRIPT_DIR}/scripts/setup-telegram-topics.py"
-        if [[ -x "$topics_script" ]]; then
-            log_highlight "同步 Telegram 话题映射..."
-            if topics_output=$(sudo python3 "$topics_script" 2>&1); then
-                printf '%s\n' "$topics_output"
-            else
-                log_warning "Telegram 话题同步失败，可稍后运行 'sudo python3 scripts/setup-telegram-topics.py'"
-                printf '%s\n' "$topics_output"
-            fi
-        fi
+        log_info "如需 Telegram 话题映射，请直接维护 Pillar `telegram_topics`（原同步脚本已停用）。"
 	else
 		log_info "提示: 安装完成后可运行 'sudo saltgoat magetools schedule auto' 规划 Magento Salt Schedule"
 	fi

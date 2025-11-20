@@ -16,6 +16,6 @@ mysql_backup:
   compress: false
   extra_args: ''
   service_user: root
-  repo_owner: root
+  repo_owner: doge
   timer: daily
   randomized_delay: 15m

@@ -36,7 +36,6 @@ HOSTNAME = socket.getfqdn()
 ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
 LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
-TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 PHP_FPM_CONFIG = Path("/etc/php/8.3/fpm/pool.d/www.conf")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -108,11 +107,7 @@ def shell_exists(path: Path) -> bool:
         return False
 
 
-TELEGRAM_AVAILABLE = (
-    shell_exists(LOGGER_SCRIPT)
-    and shell_exists(TELEGRAM_COMMON)
-    and shell_exists(TELEGRAM_CONFIG)
-)
+TELEGRAM_AVAILABLE = shell_exists(LOGGER_SCRIPT) and shell_exists(TELEGRAM_COMMON)
 
 if TELEGRAM_AVAILABLE:
     sys.path.insert(0, str(TELEGRAM_COMMON.parent))
@@ -1149,7 +1144,7 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_messa
         log_to_file("TELEGRAM", f"{tag} {kind}", extra)
 
     try:
-        profiles = reactor_common.load_telegram_profiles(str(TELEGRAM_CONFIG), _log)
+        profiles = reactor_common.load_telegram_profiles(None, _log)
     except Exception as exc:
         _log("error", {"message": str(exc)})
         notif.queue_failure(

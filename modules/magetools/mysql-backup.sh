@@ -173,6 +173,43 @@ print(os.path.abspath(os.path.expanduser(path)))
 PY
 }
 
+infer_repo_owner_for_path() {
+    local candidate="$1"
+    local path="$2"
+    local service_user="$3"
+
+    if [[ -z "$candidate" ]]; then
+        candidate="$service_user"
+    fi
+
+    if [[ "$candidate" == "$service_user" && "$path" == /home/* ]]; then
+        local derived="${path#/home/}"
+        derived="${derived%%/*}"
+        if [[ -n "$derived" ]]; then
+            if id -u "$derived" >/dev/null 2>&1; then
+                candidate="$derived"
+            fi
+        fi
+    fi
+
+    if id -u "$candidate" >/dev/null 2>&1; then
+        :
+    else
+        candidate="$service_user"
+    fi
+
+    printf '%s\n' "$candidate"
+}
+
+ensure_path_owner() {
+    local path="$1"
+    local owner="$2"
+    [[ -z "$owner" ]] && return 0
+    local group
+    group=$(id -gn "$owner" 2>/dev/null || echo "$owner")
+    sudo chown "$owner":"$group" "$path" 2>/dev/null || sudo chown "$owner" "$path" || true
+}
+
 dump_database() {
     ensure_env_exists
 
@@ -277,9 +314,11 @@ EOF
     fi
     backup_dir="$(resolve_path "$backup_dir")"
 
+    local service_user="${MYSQL_BACKUP_SERVICE_USER:-root}"
     if [[ -z "$repo_owner" ]]; then
         repo_owner="$default_repo_owner"
     fi
+    repo_owner="$(infer_repo_owner_for_path "$repo_owner" "$backup_dir" "$service_user")"
 
     if ! command -v mysqldump >/dev/null 2>&1; then
         emit_dump_event "saltgoat/backup/mysql_dump/failure" \
@@ -310,6 +349,7 @@ EOF
     log_info "输出文件: $output_path"
 
     sudo mkdir -p "$backup_dir"
+    ensure_path_owner "$backup_dir" "$repo_owner"
 
     local connect_args=()
     if [[ -n "$mysql_socket" && -S "$mysql_socket" ]]; then
@@ -377,11 +417,7 @@ EOF
     sudo mv "$tmp_output" "$output_path"
 
     sudo chmod 640 "$output_path"
-    if [[ -n "$repo_owner" ]]; then
-        local repo_group
-        repo_group=$(id -gn "$repo_owner" 2>/dev/null || echo "$repo_owner")
-        sudo chown "$repo_owner":"$repo_group" "$output_path" 2>/dev/null || sudo chown "$repo_owner" "$output_path" || true
-    fi
+    ensure_path_owner "$output_path" "$repo_owner"
 
     local size="unknown"
     if size="$(sudo du -h "$output_path" 2>/dev/null | awk '{print $1}')"; then

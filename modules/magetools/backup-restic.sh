@@ -27,6 +27,8 @@ SITE_SECRET_SERVICE_USER=""
 SITE_SECRET_REPO_OWNER=""
 SITE_SECRET_PATHS=()
 SITE_SECRET_TAGS=()
+RESTIC_PILLAR_CACHE=""
+RESTIC_PILLAR_CACHE_STATUS=0
 
 declare -a RUN_PATHS=()
 declare -A RUN_PATHS_SEEN=()
@@ -88,54 +90,19 @@ load_site_defaults() {
     SITE_SECRET_PATHS=()
     SITE_SECRET_TAGS=()
 
-    local secret_dir
-    secret_dir="$(get_secret_pillar_dir)"
-    if ! sudo test -d "$secret_dir" 2>/dev/null; then
+    local defaults_output=""
+    if defaults_output=$(get_site_defaults_from_pillar "$SITE_TOKEN"); then
+        apply_site_defaults_output "$defaults_output"
         return
     fi
 
-    local output
-    output="$(sudo python3 - "$secret_dir" "$SITE_TOKEN" <<'PY'
-import sys, yaml, pathlib, json, base64
+    if defaults_output=$(get_site_defaults_from_files "$SITE_TOKEN"); then
+        apply_site_defaults_output "$defaults_output"
+    fi
+}
 
-secret_dir = pathlib.Path(sys.argv[1])
-site = sys.argv[2]
-
-def deep_merge(base, new):
-    for key, val in new.items():
-        if isinstance(val, dict) and isinstance(base.get(key), dict):
-            deep_merge(base[key], val)
-        else:
-            base[key] = val
-    return base
-
-data = {}
-for sls_file in sorted(secret_dir.glob('*.sls')):
-    try:
-        chunk = yaml.safe_load(sls_file.read_text()) or {}
-    except Exception:
-        continue
-    if isinstance(chunk, dict):
-        deep_merge(data, chunk)
-
-site_cfg = (
-    data.get('secrets', {})
-        .get('restic_sites', {})
-        .get(site)
-)
-
-if not isinstance(site_cfg, dict):
-    raise SystemExit(0)
-
-for key, value in site_cfg.items():
-    if isinstance(value, (list, dict)):
-        encoded = base64.b64encode(json.dumps(value).encode()).decode()
-        print(f"{key}__b64={encoded}")
-    else:
-        print(f"{key}={value}")
-PY
-)" || return
-
+apply_site_defaults_output() {
+    local payload="$1"
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         case "$line" in
@@ -187,7 +154,147 @@ PY
 )
                 ;;
         esac
-    done <<<"$output"
+    done <<<"$payload"
+}
+
+get_site_defaults_from_pillar() {
+    local site="$1"
+
+    if ! load_restic_secrets_from_pillar; then
+        return 1
+    fi
+
+    local output=""
+    if ! output=$(python3 - "$site" "$RESTIC_PILLAR_CACHE" <<'PY'
+import sys, json, base64, copy
+
+site = sys.argv[1]
+raw = sys.argv[2]
+try:
+    data = json.loads(raw)
+except Exception:
+    raise SystemExit(1)
+
+payload = None
+if isinstance(data, dict):
+    payload = data.get("local")
+    if payload is None and data:
+        payload = next(iter(data.values()))
+
+if not isinstance(payload, dict):
+    raise SystemExit(1)
+
+entry = {}
+
+restic_sites = payload.get("restic_sites")
+if isinstance(restic_sites, dict):
+    base = restic_sites.get(site)
+    if isinstance(base, dict):
+        entry.update(copy.deepcopy(base))
+
+secrets = payload.get("secrets")
+if isinstance(secrets, dict):
+    secret_sites = secrets.get("restic_sites")
+    if isinstance(secret_sites, dict):
+        secret_entry = secret_sites.get(site)
+        if isinstance(secret_entry, dict):
+            entry.update(secret_entry)
+
+if not entry:
+    raise SystemExit(1)
+
+for key, value in entry.items():
+    if isinstance(value, (list, dict)):
+        encoded = base64.b64encode(json.dumps(value).encode()).decode()
+        print(f"{key}__b64={encoded}")
+    elif value is not None:
+        print(f"{key}={value}")
+PY
+); then
+        return 1
+    fi
+
+    printf '%s\n' "$output"
+}
+
+load_restic_secrets_from_pillar() {
+    if [[ ${RESTIC_PILLAR_CACHE_STATUS:-0} -eq 1 ]]; then
+        return 0
+    fi
+    if [[ ${RESTIC_PILLAR_CACHE_STATUS:-0} -eq -1 ]]; then
+        return 1
+    fi
+
+    local -a cmd=(salt-call --local --out json pillar.get secrets)
+    if [[ $EUID -ne 0 ]]; then
+        cmd=(sudo "${cmd[@]}")
+    fi
+
+    local output=""
+    if ! output=$("${cmd[@]}" 2>/dev/null); then
+        RESTIC_PILLAR_CACHE=""
+        RESTIC_PILLAR_CACHE_STATUS=-1
+        return 1
+    fi
+
+    RESTIC_PILLAR_CACHE="$output"
+    RESTIC_PILLAR_CACHE_STATUS=1
+    return 0
+}
+
+get_site_defaults_from_files() {
+    local site="$1"
+    local secret_dir
+    secret_dir="$(get_secret_pillar_dir)"
+    if ! sudo test -d "$secret_dir" 2>/dev/null; then
+        return 1
+    fi
+
+    local output=""
+    if ! output=$(sudo python3 - "$secret_dir" "$site" <<'PY'
+import sys, yaml, pathlib, json, base64
+
+secret_dir = pathlib.Path(sys.argv[1])
+site = sys.argv[2]
+
+def deep_merge(base, new):
+    for key, val in new.items():
+        if isinstance(val, dict) and isinstance(base.get(key), dict):
+            deep_merge(base[key], val)
+        else:
+            base[key] = val
+    return base
+
+data = {}
+for sls_file in sorted(secret_dir.glob('*.sls')):
+    try:
+        chunk = yaml.safe_load(sls_file.read_text()) or {}
+    except Exception:
+        continue
+    if isinstance(chunk, dict):
+        deep_merge(data, chunk)
+
+site_cfg = (
+    data.get('secrets', {})
+        .get('restic_sites', {})
+        .get(site)
+)
+
+if not isinstance(site_cfg, dict):
+    raise SystemExit(1)
+
+for key, value in site_cfg.items():
+    if isinstance(value, (list, dict)):
+        encoded = base64.b64encode(json.dumps(value).encode()).decode()
+        print(f"{key}__b64={encoded}")
+    elif value is not None:
+        print(f"{key}={value}")
+PY
+); then
+        return 1
+    fi
+
+    printf '%s\n' "$output"
 }
 
 emit_salt_event() {

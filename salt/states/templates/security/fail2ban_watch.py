@@ -37,7 +37,6 @@ HOSTNAME = socket.getfqdn()
 STATE_FILE = Path("/var/log/saltgoat/fail2ban-state.json")
 LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
-TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
 
 
@@ -49,11 +48,7 @@ def path_exists(path: Path) -> bool:
         return False
 
 
-TELEGRAM_AVAILABLE = (
-    path_exists(LOGGER_SCRIPT)
-    and path_exists(TELEGRAM_COMMON)
-    and path_exists(TELEGRAM_CONFIG)
-)
+TELEGRAM_AVAILABLE = path_exists(LOGGER_SCRIPT) and path_exists(TELEGRAM_COMMON)
 
 if TELEGRAM_AVAILABLE:
     sys.path.insert(0, str(TELEGRAM_COMMON.parent))
@@ -160,7 +155,7 @@ def send_telegram(tag: str, message: str, payload: Dict[str, object]) -> None:
         log_to_file(f"{tag}/{label}", extra)
 
     try:
-        profiles = reactor_common.load_telegram_profiles(str(TELEGRAM_CONFIG), _log)
+        profiles = reactor_common.load_telegram_profiles(None, _log)
     except Exception as exc:
         _log("error", {"message": str(exc)})
         notif.queue_failure("telegram", tag, payload, str(exc), {"thread": payload.get("telegram_thread")})

@@ -40,7 +40,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SECRET_DIR = REPO_ROOT / "salt" / "pillar" / "secret"
 LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
-TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
 TEST_MODE = os.environ.get("MAGENTO_WATCHER_TEST_MODE") == "1"
 RECENT_IDS_LIMIT = 256
@@ -67,13 +66,7 @@ def safe_exists(path: Path) -> bool:
 if TEST_MODE:
     TELEGRAM_AVAILABLE = False
 else:
-    TELEGRAM_AVAILABLE = all(
-        [
-            safe_exists(TELEGRAM_COMMON),
-            safe_exists(LOGGER_SCRIPT),
-            safe_exists(TELEGRAM_CONFIG),
-        ]
-    )
+    TELEGRAM_AVAILABLE = safe_exists(TELEGRAM_COMMON) and safe_exists(LOGGER_SCRIPT)
     if TELEGRAM_AVAILABLE:
         sys.path.insert(0, str(TELEGRAM_COMMON.parent))
         try:
@@ -375,7 +368,7 @@ def telegram_broadcast(
         log_to_file("TELEGRAM", f"{tag} {label}", extra)
 
     try:
-        profiles = reactor_common.load_telegram_profiles(str(TELEGRAM_CONFIG), _log)
+        profiles = reactor_common.load_telegram_profiles(None, _log)
     except Exception as exc:  # pragma: no cover
         log_to_file("TELEGRAM", f"{tag} error", {"message": str(exc)})
         notif.queue_failure(

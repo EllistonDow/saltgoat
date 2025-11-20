@@ -2,7 +2,6 @@
 {% set default_services = ['nginx', 'mysql', 'php8.3-fpm', 'valkey', 'rabbitmq', 'opensearch'] %}
 {% set allowed_services = salt['pillar.get']('saltgoat:reactor:autorestart_services:services', default_services) or default_services %}
 {% set log_path = salt['pillar.get']('saltgoat:reactor:resource_alerts:log_path', '/var/log/saltgoat/alerts.log') %}
-{% set telegram_cfg_path = '/etc/saltgoat/telegram.json' %}
 {% set tag_parts = tag.split('/') %}
 {% set event_minion = data.get('id') or data.get('minion_id') or (tag_parts[2] if tag_parts|length > 2 else '') or data.get('host') or 'minion' %}
 
@@ -42,7 +41,6 @@ service_autoheal_handler_{{ ns.service_name | replace('-', '_') }}:
           --event-b64 '{{ event_b64 }}' \
           --allowed-b64 '{{ allowed_b64 }}' \
           --log-path '{{ log_path }}' \
-          --telegram-config '{{ telegram_cfg_path }}' \
           --minion '{{ event_minion }}'
     - python_shell: True
   {% endif %}

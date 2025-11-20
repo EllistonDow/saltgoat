@@ -22,7 +22,25 @@ mysql_backup_disabled:
 {% set prepare_backup = cfg.get('prepare_backup', False) %}
 {% set compress = cfg.get('compress', False) %}
 {% set service_user = cfg.get('service_user', 'root') %}
-{% set repo_owner = cfg.get('repo_owner', service_user) %}
+{% set repo_owner_explicit = cfg.get('repo_owner') %}
+{% if repo_owner_explicit %}
+  {% set repo_owner = repo_owner_explicit %}
+{% else %}
+  {% set repo_owner = service_user %}
+{% endif %}
+{% if repo_owner == service_user and backup_dir.startswith('/home/') %}
+  {% set path_parts = backup_dir.split('/') %}
+  {% if path_parts|length > 2 %}
+    {% set home_owner = path_parts[2] %}
+    {% if home_owner %}
+      {% set repo_owner = home_owner %}
+    {% endif %}
+  {% endif %}
+{% endif %}
+{% set repo_owner_info = salt['user.info'](repo_owner) %}
+{% if not repo_owner_info %}
+  {% set repo_owner = service_user %}
+{% endif %}
 {% set timer_calendar = cfg.get('timer', 'daily') %}
 {% set timer_delay = cfg.get('randomized_delay', '15m') %}
 {% set mysql_socket = cfg.get('socket', '/var/run/mysqld/mysqld.sock') %}

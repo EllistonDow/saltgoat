@@ -124,6 +124,8 @@ nginx:
       - www.ambitiontattoosupply.com
       listen:
       - port: 80
+      - port: 443
+        ssl: true
       root: /var/www/ambi
       index:
       - index.php
@@ -135,6 +137,67 @@ nginx:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
       magento: true
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/ambitiontattoosupply.com/fullchain.pem
+        key: /etc/letsencrypt/live/ambitiontattoosupply.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    hawk:
+      enabled: true
+      server_name:
+      - hawktattoosupply.com
+      - www.hawktattoosupply.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/hawk
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/hawktattoosupply.com/fullchain.pem
+        key: /etc/letsencrypt/live/hawktattoosupply.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    papa:
+      enabled: true
+      server_name:
+      - papatattoo.com
+      - www.papatattoo.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/papa
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/papatattoo.com/fullchain.pem
+        key: /etc/letsencrypt/live/papatattoo.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
   modsecurity:
     enabled: true
     level: 5

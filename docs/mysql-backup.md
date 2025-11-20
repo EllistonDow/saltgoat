@@ -33,7 +33,7 @@ SaltGoat 提供 `optional.mysql-backup` 可选模块，基于 [Percona XtraBacku
 
    > **自定义备份路径**
    >
-   > 1. 编辑 `salt/pillar/mysql-backup.sls`（如不存在请新建），写入：
+> 1. 编辑 `salt/pillar/mysql-backup.sls`（如不存在请新建），写入：
    >    ```yaml
    >    mysql_backup:
    >      enabled: true
@@ -44,7 +44,7 @@ SaltGoat 提供 `optional.mysql-backup` 可选模块，基于 [Percona XtraBacku
    >      mysql_password: "{{ salt['pillar.get']('mysql_backup_password') }}"
    >      connection_password: "{{ salt['pillar.get']('mysql_password') }}"
    >    ```
-   >    `mysql_backup_password` 建议单独写在 `salt/pillar/secret/mysql-backup.sls` 之类的私有 Pillar 文件，再在 `top.sls` 中按需 include，避免把真实密码提交到仓库。若目录位于 Dropbox 等用户空间，请确保 `service_user`/`repo_owner` 与该目录的属主一致，使 systemd 任务和备份文件都拥有写权限。
+>    `mysql_backup_password` 建议单独写在 `salt/pillar/secret/mysql-backup.sls` 之类的私有 Pillar 文件，再在 `top.sls` 中按需 include，避免把真实密码提交到仓库。自 1.8.10 起，若 `backup_dir` 位于 `/home/<user>/...` 且 `repo_owner` 未明确指定（或仍是和 `service_user` 相同的默认值），Salt 状态和 CLI 会自动把属主切换为该 `<user>`，并在 `mysqldump` / `xtrabackup` 脚本里对目录与文件执行 `chown`，确保 Dropbox 等目录开箱即用。
 > 2. 执行 `sudo saltgoat pillar refresh` 同步最新 Pillar。
    > 3. 重新运行 `sudo saltgoat magetools xtrabackup mysql install`，Salt 状态会依照新的路径创建目录、刷新 `/etc/mysql/mysql-backup.env` 并重启定时器。
 > 4. 之后无论是定时器还是 `sudo saltgoat magetools xtrabackup mysql run` 都会使用新的 `backup_dir`。如需让逻辑导出 (`xtrabackup mysql dump`) 保存到其他位置，可在命令里追加 `--backup-dir /path/to/dir`。
@@ -263,7 +263,7 @@ magento_schedule:
 
 1. 复制 `salt/pillar/magento-schedule.sls.sample` 为 `salt/pillar/magento-schedule.sls`，将上述配置写入并按站点调整。
 2. 执行 `sudo saltgoat pillar refresh`。
-3. 对每个站点运行 `sudo saltgoat magetools cron <site> install`。命令会为该站点的 Salt Schedule（或降级的 `/etc/cron.d/magento-maintenance`）生成 mysqldump 计划。
+3. 对每个站点运行 `sudo saltgoat magetools cron <site> install`。命令会为该站点的 Salt Schedule 生成 mysqldump 计划（需要 `salt-minion` 处于运行状态）。
 4. 后续可通过 `sudo saltgoat magetools cron <site> status` 查看条目。输出会包含中文注释（如“每分钟 / 每小时整点 / 每周日 03:00”）帮助识别频率。
 
 > 若宿主缺少 `salt-minion`，`install` 会自动回退写入系统 Cron，但仍使用同样的站点配置。

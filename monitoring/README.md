@@ -54,7 +54,7 @@ sudo saltgoat monitor config         # 输出当前阈值、目录与已启用�
   Customers: 7
   Generated: 2025-11-02 06:00 UTC
   ```
-- **线程自动化**：运行 `sudo python3 scripts/setup-telegram-topics.py` 会基于 `magento-schedule.sls` 自动为每个站点创建 `orders/customers/summary/mysql-backup/restic-backup` 线程并更新 `/etc/saltgoat/telegram.json`，`saltgoat magetools schedule auto` 会在安装完 Salt Schedule 后调用该脚本，确保新站点的告警话题自动就绪。
+- **线程自动化**：各站点话题统一维护在 Pillar `telegram_topics` 中；如新增/移除站点，只需更新该 Pillar 并 `saltgoat pillar refresh` 即可，所有模块（Restic/XtraBackup/Monitor 等）会自动引用相应 thread_id。
 - **主机级告警**：同一脚本会根据当前主机名创建 `saltgoat/monitor/resources/<host>`、`saltgoat/autoscale/<host>` 话题，资源告警与自愈通知会自动落在对应主机下，便于区分多台节点。
 
 如需在定时任务中生成报告，可在 systemd timer 或 cron 内调用 `sudo saltgoat monitor report <name>`，并将结果发送到集中日志或备份目录。

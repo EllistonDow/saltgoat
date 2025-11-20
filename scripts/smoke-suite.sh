@@ -57,10 +57,7 @@ DOCTOR_TAG="saltgoat/doctor/${HOST_SLUG}"
 
 run_step "Publish doctor report" python3 - "${DOCTOR_REPORT}" "${DOCTOR_TAG}" <<'PY'
 import html
-import json
 import sys
-import urllib.parse
-import urllib.request
 from pathlib import Path
 
 report_path = Path(sys.argv[1])
@@ -70,58 +67,27 @@ if not text:
     print("[WARN] Doctor report empty, skip Telegram")
     sys.exit(0)
 
+sys.path.insert(0, "/opt/saltgoat-reactor")
+try:
+    import reactor_common  # type: ignore
+except Exception as exc:
+    print(f"[WARN] Unable to import reactor_common: {exc}")
+    sys.exit(0)
+
 from modules.lib import notification as notif  # type: ignore
 
-cfg_path = Path("/etc/saltgoat/telegram.json")
-try:
-    config = json.loads(cfg_path.read_text(encoding="utf-8"))
-except Exception as exc:
-    print(f"[WARN] Unable to load Telegram config: {exc}")
-    sys.exit(0)
+def _log(kind, payload):
+    print(f"[TELEGRAM:{kind}] {payload}")
 
-entries = config.get("entries")
-if not isinstance(entries, list) or not entries:
-    print("[WARN] No Telegram profiles configured")
-    sys.exit(0)
-
-entry = entries[0]
-token = entry.get("token")
-targets = entry.get("targets") or []
-chat_id = None
-for target in targets:
-    if isinstance(target, dict):
-        chat = str(target.get("chat_id", ""))
-        if chat.startswith("-100"):
-            chat_id = chat
-            break
-if not chat_id:
-    for target in targets:
-        if isinstance(target, dict) and target.get("chat_id"):
-            chat_id = str(target["chat_id"])
-            break
-
-if not token or not chat_id:
-    print("[WARN] Missing Telegram bot token or chat_id")
+profiles = reactor_common.load_telegram_profiles(None, _log)
+if not profiles:
+    print("[WARN] No Telegram profiles configured via Pillar")
     sys.exit(0)
 
 thread_id = notif.get_thread_id(tag) or notif.get_thread_id("saltgoat/doctor")
-payload = {
-    "chat_id": chat_id,
-    "text": f"<b>[INFO] Doctor Snapshot</b>\n<pre>{html.escape(text)}</pre>",
-    "parse_mode": "HTML",
-    "disable_web_page_preview": True,
-}
-if thread_id:
-    payload["message_thread_id"] = str(thread_id)
-
-data = urllib.parse.urlencode(payload).encode()
-url = f"https://api.telegram.org/bot{token}/sendMessage"
-try:
-    urllib.request.urlopen(url, data=data, timeout=15)
-    print("[INFO] Doctor report sent to Telegram")
-except Exception as exc:
-    print(f"[WARN] Failed to send doctor report: {exc}")
-    sys.exit(1)
+message = f"<b>[INFO] Doctor Snapshot</b>\n<pre>{html.escape(text)}</pre>"
+reactor_common.broadcast_telegram(message, profiles, _log, tag=tag, thread_id=thread_id)
+print("[INFO] Doctor report sent to Telegram")
 PY
 
 log "Smoke suite finished successfully."

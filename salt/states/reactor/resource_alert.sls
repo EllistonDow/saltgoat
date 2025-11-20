@@ -1,6 +1,5 @@
 {# Resource threshold reactor #}
 {% set log_path = salt['pillar.get']('saltgoat:reactor:resource_alerts:log_path', '/var/log/saltgoat/alerts.log') %}
-{% set telegram_cfg_path = '/etc/saltgoat/telegram.json' %}
 {% set tag_parts = tag.split('/') %}
 {% set event_minion = data.get('id') or data.get('minion_id') or (tag_parts[2] if tag_parts|length > 2 else '') or data.get('host') or 'minion' %}
 
@@ -56,7 +55,7 @@ resource_alert_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.',
             except Exception:
                 pass
 
-        profiles = reactor_common.load_telegram_profiles("{{ telegram_cfg_path }}", log)
+        profiles = reactor_common.load_telegram_profiles(None, log)
         if not profiles:
             log("skip", {"reason": "no_profiles"})
             raise SystemExit()

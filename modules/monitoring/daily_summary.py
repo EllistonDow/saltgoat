@@ -28,7 +28,6 @@ MONITOR_DIR = Path("/var/log/saltgoat/monitor")
 ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
 LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
-TELEGRAM_CONFIG = Path("/etc/saltgoat/telegram.json")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -43,11 +42,7 @@ def path_exists(path: Path) -> bool:
         return False
 
 
-TELEGRAM_AVAILABLE = (
-    path_exists(LOGGER_SCRIPT)
-    and path_exists(TELEGRAM_COMMON)
-    and path_exists(TELEGRAM_CONFIG)
-)
+TELEGRAM_AVAILABLE = path_exists(LOGGER_SCRIPT) and path_exists(TELEGRAM_COMMON)
 
 if TELEGRAM_AVAILABLE:
     sys.path.insert(0, str(TELEGRAM_COMMON.parent))
@@ -226,7 +221,7 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_messa
     def _log(kind: str, extra: Dict[str, Any]) -> None:
         log_to_file("TELEGRAM", f"{tag} {kind}", extra)
 
-    profiles = reactor_common.load_telegram_profiles(str(TELEGRAM_CONFIG), _log)
+    profiles = reactor_common.load_telegram_profiles(None, _log)
     if not profiles:
         _log("skip", {"reason": "no_profiles"})
         return

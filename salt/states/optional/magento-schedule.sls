@@ -145,10 +145,13 @@ saltgoat magetools backup restic run --site {{ shquote(job.get('site_override', 
     - mode: 644
     - contents: ''
 
-{% if salt_minion_service %}
-
 {{ legacy_cron_file }}:
   file.absent
+
+{{ cron_file }}:
+  file.absent
+
+{% if salt_minion_service %}
 
 {% for job in base_jobs %}
 magento_schedule_{{ job.name }}:
@@ -308,57 +311,12 @@ saltgoat_daily_summary_job:
     - maxrunning: 1
     - offline: True
 
+{% endif %}
+
 {% else %}
 
-{{ legacy_cron_file }}:
-  file.absent
-
-{{ cron_file }}:
-  file.managed:
-    - user: root
-    - group: root
-    - mode: 644
-    - contents: |
-        # Magento 2 定时维护任务（Salt Schedule 不可用，回退系统 Cron）
-{% for job in base_jobs %}
-        {{ job.cron }} root {{ job.command }}
-{% endfor %}
-
-saltgoat_schedule_auto_cron:
-  file.managed:
-    - name: /etc/cron.d/saltgoat-schedule-auto
-    - user: root
-    - group: root
-    - mode: 644
-    - contents: |
-        # SaltGoat Magento schedule auto convergence
-        30 3 * * * root saltgoat magetools schedule auto >/var/log/saltgoat/schedule-auto.log 2>&1
-
-saltgoat_daily_summary_cron:
-  file.managed:
-    - name: /etc/cron.d/saltgoat-daily-summary
-    - user: root
-    - group: root
-    - mode: 644
-    - contents: |
-        # SaltGoat daily summary report
-        0 6 * * * root saltgoat monitor report daily >/var/log/saltgoat/daily-summary.log 2>&1
-{% for dump_job in mysql_dump_jobs %}
-        {{ dump_job.cron }} root {{ build_dump_cmd(dump_job).strip() }}
-{% endfor %}
-{% for watcher in api_watchers %}
-        {{ watcher.cron }} root saltgoat magetools api watch --site {{ site_name }}{% if watcher.get('kinds') %} --kinds {{ watcher.kinds|join(',') }}{% endif %}
-{% endfor %}
-{% for stats_job in stats_jobs %}
-        {{ stats_job.cron }} root {{ build_stats_cmd(stats_job).strip() }}
-{% endfor %}
-{% for restic_job in restic_jobs %}
-        {{ restic_job.cron }} root {{ build_restic_cmd(restic_job).strip() }}
-{% endfor %}
-
-cron-service-magento:
-  service.running:
-    - name: cron
-    - enable: True
+salt_minion_required:
+  test.fail_without_changes:
+    - comment: "salt-minion service is required for optional.magento-schedule (Salt Schedule only)."
 
 {% endif %}

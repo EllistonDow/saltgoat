@@ -82,12 +82,12 @@ sudo saltgoat monitor enable-beacons
 sudo saltgoat monitor beacons-status
 ```
 
-> **提示**：若在集中式环境运行多台 minion，可使用相同仓库在 master 上运行 `salt-run saltgoat.enable_beacons` 进行远程收敛；缺少 Salt 服务时，SaltGoat 会自动回退到 Cron 方案。
+> **提示**：若在集中式环境运行多台 minion，可使用相同仓库在 master 上运行 `salt-run saltgoat.enable_beacons` 进行远程收敛；若缺少 Salt 服务，相关计划任务会直接报错以提示处理，而不再写入 Cron。
 
 ### 🛠 自动化脚本与计划任务
 
 - `sudo saltgoat automation script <create|list|edit|run|delete>`：生成带日志模板的 Bash 脚本，默认写入 `/srv/saltgoat/automation/scripts/`。
-- `sudo saltgoat automation job <create|list|enable|disable|run|delete>`：注册计划任务。检测到 `salt-minion` 时使用 Salt Schedule（`salt-call schedule.list` 可验证）；否则自动落地 `/etc/cron.d/saltgoat-automation-<job>` 作为兜底。
+- `sudo saltgoat automation job <create|list|enable|disable|run|delete>`：注册 Salt Schedule 任务（需 `salt-minion` 运行）；命令会在缺失 Minion 时立即报错，避免静默降级。
 - `sudo saltgoat automation logs <list|view|tail|cleanup>`：查看与维护 `/srv/saltgoat/automation/logs/`。
 
 命令执行前会自动调用 `saltutil.sync_modules`/`saltutil.sync_runners`，确保 `salt/_modules/saltgoat.py` 与 `salt/states/optional/automation/` 的最新逻辑立即生效。需要集中式下发时，可在 Salt Master 上使用 `salt-run saltgoat.automation_job_create tgt='minion-id' ...` 将同样的自动化策略推广到多台主机。

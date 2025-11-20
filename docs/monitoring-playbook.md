@@ -12,15 +12,9 @@
 
    - 确认输出的 `ADDED_SITES` / `REMOVED_SITES` / `UPDATED` 与预期一致。
    - 观察 `salt/pillar/monitoring.sls` 与 `/etc/saltgoat/runtime/sites.json` 是否同步。
-   - 命令末尾自动触发 `scripts/setup-telegram-topics.py`，确认 Telegram 话题列表已更新。
+   - 检查 `salt/pillar/telegram-topics.sls`（或对应 secret）是否同步了新增站点的线程映射，`saltgoat magetools schedule auto` / `monitor auto-sites` 不会再自动生成脚本。
 
-2. 需要手动回顾差异时，可使用：
-
-   ```bash
-   sudo python3 scripts/setup-telegram-topics.py --dry-run
-   ```
-
-   检查 `to_create` / `to_remove` 项目后再执行正式更新。
+2. 需要手工调整话题时，在 Pillar 中追加或修改对应 `saltgoat/<tag>` → `thread_id`，然后执行 `sudo saltgoat pillar refresh`。
 
 ## 2. Salt Schedule 与自愈任务
 
@@ -108,7 +102,7 @@
 
 2. 如果收不到通知，依次排查：
 
-   - `/etc/saltgoat/telegram.json` 是否包含 profile 与话题 ID。
+   - Pillar `telegram` / `telegram_topics` 是否包含 profile 与话题 ID（可用 `sudo salt-call --local pillar.get telegram` 与 `pillar.get telegram_topics` 检查）。
    - `salt/pillar/telegram-topics.sls` 是否已 `saltgoat pillar refresh`。
    - `salt/pillar/notifications.sls` 中是否设置了过滤标签/最小 severity。
    - `modules/lib/notification.py` `should_send` 的 DEBUG 日志可在 `alerts.log` 查看（过滤 `filtered`）。

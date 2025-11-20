@@ -41,7 +41,7 @@ SaltGoat 提供一套可重复的自动化工具，用于在 Ubuntu 24.04 上安
 ## Important Constraints
 - 仅支持 Ubuntu 24.04（或兼容内核），假设具备 sudo 权限与可访问的 apt 仓库。
 - 禁止将真实凭据/证书提交至仓库；pillar 只存占位符，可通过 `scripts/sync-passwords.sh` 或 `saltgoat pillar refresh` 同步到本机。
-- 需要在缺失 Salt 服务时自动降级到 Cron；若启用 master/minion，必须保证 Beacon/ Reactor 权限安全。
+- 计划任务仅在 Salt Schedule 可用时运行；若缺少 Salt 服务，相关命令必须报错提醒而不是静默降级到 Cron，仍需保证 Beacon/ Reactor 权限安全。
 - 网络/备份依赖外部对象存储（S3 兼容）与 Telegram API，需要在受限环境下提供替代方案或降级。
 
 ## External Dependencies
