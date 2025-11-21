@@ -44,13 +44,6 @@ try:
 except Exception:  # pragma: no cover
     yaml = None  # type: ignore
 
-try:
-    from salt.client import Caller  # type: ignore
-except Exception as exc:  # pragma: no cover - salt not available in tests
-    print(f"[ERROR] Magento API watcher requires salt client libraries: {exc}", file=sys.stderr)
-    sys.exit(2)
-
-
 LOG = lambda msg: print(msg, file=sys.stderr)
 
 STATE_ROOT = Path("/var/lib/saltgoat/magento-watcher")
@@ -58,14 +51,17 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SECRET_DIR = REPO_ROOT / "salt" / "pillar" / "secret"
 LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
-ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
+sys.path.insert(0, str(REPO_ROOT))
+from modules.lib import notification as notif  # type: ignore
+from modules.lib import logging_utils
+from modules.lib import config_loader
+
+ALERT_LOG = logging_utils.alerts_log_path()
+
 TEST_MODE = os.environ.get("MAGENTO_WATCHER_TEST_MODE") == "1"
 RECENT_IDS_LIMIT = 256
 ADMIN_TOKEN_CACHE_FILE = "admin_token.json"
 ADMIN_TOKEN_EXPIRY_BUFFER = 300
-
-sys.path.insert(0, str(REPO_ROOT))
-from modules.lib import notification as notif  # type: ignore
 
 def safe_exists(path: Path) -> bool:
     try:
@@ -290,20 +286,12 @@ def ensure_root() -> None:
         sys.exit(1)
 
 
-if TEST_MODE:
-
-    class _DummyCaller:
-        def cmd(self, *_args: Any, **_kwargs: Any) -> Any:
-            return {}
-
-    CALLER = _DummyCaller()  # type: ignore[assignment]
-else:
+if not TEST_MODE:
     ensure_root()
-    CALLER = Caller()
 
 
 def pillar_get(path: str, default: Any = "") -> Any:
-    value = CALLER.cmd("pillar.get", path, default)
+    value = config_loader.pillar_get(path, default)
     return value if value is not None else default
 
 
@@ -329,10 +317,8 @@ def load_local_secret(site: str) -> Dict[str, Any]:
 
 
 def emit_event(tag: str, data: Dict[str, Any]) -> None:
-    try:
-        CALLER.cmd("event.send", tag, data)
-    except Exception as exc:  # pragma: no cover
-        LOG(f"[WARNING] event.send 失败 ({tag}): {exc}")
+    if not config_loader.fire_event(tag, data):  # pragma: no cover - best-effort
+        LOG(f"[WARNING] event.send 失败 ({tag})")
 
 
 def log_to_file(label: str, tag: str, payload: Dict[str, Any]) -> None:

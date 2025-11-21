@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from . import notification as notif
+from . import logging_utils
 
 
 @dataclass(frozen=True)
@@ -74,7 +75,7 @@ def build_message(
         tag=f"{tag_prefix}/{site_slug}",
         severity=severity,
         parse_mode=parse_mode or notif.get_parse_mode(),
-        log_path=Path(log_path or "/var/log/saltgoat/alerts.log"),
+        log_path=Path(log_path or str(logging_utils.alerts_log_path())),
         html_message=html_message,
         site_slug=site_slug,
         context=context,

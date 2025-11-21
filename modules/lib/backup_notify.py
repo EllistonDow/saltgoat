@@ -18,13 +18,14 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from modules.lib import notification as notif  # type: ignore
+from modules.lib import logging_utils
 
 UNIT_TEST = os.environ.get("SALTGOAT_UNIT_TEST") == "1"
 HOSTNAME = socket.getfqdn()
 REACTOR_DIR = Path(os.environ.get("SALTGOAT_REACTOR_DIR", "/opt/saltgoat-reactor"))
 LOGGER_SCRIPT = REACTOR_DIR / "logger.py"
 TELEGRAM_COMMON = REACTOR_DIR / "reactor_common.py"
-ALERT_LOG = Path(os.environ.get("SALTGOAT_ALERT_LOG", "/var/log/saltgoat/alerts.log"))
+ALERT_LOG = logging_utils.alerts_log_path()
 
 
 def _path_exists(path: Path) -> bool:

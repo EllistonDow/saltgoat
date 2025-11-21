@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -37,7 +38,7 @@ HOSTNAME = socket.getfqdn()
 STATE_FILE = Path("/var/log/saltgoat/fail2ban-state.json")
 LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
 TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
-ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
+ALERT_LOG = Path(os.environ.get("SALTGOAT_ALERT_LOG", "/var/log/saltgoat/alerts.log"))
 
 
 def path_exists(path: Path) -> bool:

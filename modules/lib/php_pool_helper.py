@@ -23,10 +23,13 @@ except Exception:  # pragma: no cover - salt 不可用时降级
     Caller = None  # type: ignore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from modules.lib import logging_utils  # type: ignore
 DEFAULT_PILLAR = REPO_ROOT / "salt" / "pillar" / "magento-optimize.sls"
 RUNTIME_DIR = Path(os.environ.get("SALTGOAT_RUNTIME_DIR", "/etc/saltgoat/runtime"))
 TRACK_FILE_NAME = "multisite-pools.json"
-ALERT_LOG = Path(os.environ.get("SALTGOAT_ALERT_LOG", "/var/log/saltgoat/alerts.log"))
+ALERT_LOG = logging_utils.alerts_log_path()
 HOSTNAME = socket.getfqdn()
 SKIP_SALT_EVENT = os.environ.get("SALTGOAT_SKIP_SALT_EVENT") == "1"
 

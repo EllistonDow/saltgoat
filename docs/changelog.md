@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.9.3] - 2025-11-21
+
+### Changes
+- 修改 15 个文件: README.md, docs/monitoring-playbook.md, modules/lib/backup_notifications.py, modules/lib/backup_notify.py, modules/lib/doctor.py 等
+
+
 ## [1.9.2] - 2025-11-21
 
 ### Changes

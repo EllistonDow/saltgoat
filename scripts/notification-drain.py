@@ -7,7 +7,7 @@ import json
 import socket
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -34,6 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max", type=int, default=0, help="maximum records to process (0 = all)")
     parser.add_argument("--dry-run", action="store_true", help="simulate without deleting files")
     parser.add_argument("--verbose", action="store_true", help="print every record result")
+    parser.add_argument("--json-status", action="store_true", help="print JSON summary of remaining queue")
     parser.add_argument(
         "--alert-threshold",
         type=int,
@@ -66,11 +67,15 @@ def main() -> int:
     queue_dir = Path(args.queue_dir)
     if not queue_dir.exists():
         print(f"Queue directory {queue_dir} does not exist; nothing to do.")
+        if args.json_status:
+            print(json.dumps(build_status([], queue_dir), ensure_ascii=False))
         return 0
 
     files: List[Path] = sorted(queue_dir.glob("*.json"))
     if not files:
         print("Queue is empty.")
+        if args.json_status:
+            print(json.dumps(build_status([], queue_dir), ensure_ascii=False))
         return 0
 
     processed = success = 0
@@ -102,15 +107,16 @@ def main() -> int:
             notification_queue.update_record_metadata(path, record, info)
 
     print(f"Processed {processed} record(s); {'dry-run' if args.dry_run else success} succeeded.")
+    remaining_files = files
     if not args.dry_run:
         failures = processed - success
         if failures:
             print(f"{failures} record(s) still pending.")
+        remaining_files = sorted(queue_dir.glob("*.json"))
         if args.alert_threshold > 0:
-            remaining = len(list(queue_dir.glob("*.json")))
             maybe_send_alert(
                 queue_dir=queue_dir,
-                remaining=remaining,
+                remaining=len(remaining_files),
                 processed=processed,
                 delivered=success,
                 limit=limit,
@@ -119,6 +125,8 @@ def main() -> int:
                 site=args.alert_site,
                 threshold=args.alert_threshold,
             )
+    if args.json_status:
+        print(json.dumps(build_status(remaining_files, queue_dir), ensure_ascii=False, indent=2))
     return 0
 
 
@@ -176,6 +184,20 @@ def maybe_send_alert(
         print("[ALERT] Telegram notification dispatched.")
     except Exception:
         print("[ALERT] Telegram module unavailable; skipped.")
+
+
+def build_status(files: List[Path], queue_dir: Path) -> dict:
+    summary: Dict[str, Any] = {
+        "queue_dir": str(queue_dir),
+        "total": len(files),
+        "by_destination": {},
+    }
+    for path in files:
+        record = load_record(path)
+        destination = (record or {}).get("destination", "unknown")
+        summary["by_destination"].setdefault(destination, 0)
+        summary["by_destination"][destination] += 1
+    return summary
 
 
 if __name__ == "__main__":

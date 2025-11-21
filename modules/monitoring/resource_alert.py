@@ -27,21 +27,19 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from datetime import datetime, timezone
 
-try:
-    from salt.client import Caller  # type: ignore
-except Exception:  # pragma: no cover - salt 不存在时回退纯本地模式
-    Caller = None  # type: ignore
-
 HOSTNAME = socket.getfqdn()
-ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
-LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
-TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
-PHP_FPM_CONFIG = Path("/etc/php/8.3/fpm/pool.d/www.conf")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 from modules.lib import notification as notif  # type: ignore
 from modules.lib import swap_helper  # type: ignore
+from modules.lib import logging_utils
+from modules.lib import config_loader
+
+ALERT_LOG = logging_utils.alerts_log_path()
+LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
+TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
+PHP_FPM_CONFIG = Path("/etc/php/8.3/fpm/pool.d/www.conf")
 PHP_FPM_POOL_DIR = PHP_FPM_CONFIG.parent
 DEFAULT_THRESHOLDS = {
     "memory": {"notice": 78.0, "warning": 85.0, "critical": 92.0},
@@ -936,15 +934,9 @@ def _sites_in_command(command: str) -> Set[str]:
 
 
 def load_site_checks() -> List[Dict[str, Any]]:
-    if Caller is None:
-        return []
-    try:
-        caller = Caller()  # type: ignore[call-arg]
-        sites = caller.cmd("pillar.get", "saltgoat:monitor:sites", [])
-        if isinstance(sites, list):
-            return [site for site in sites if isinstance(site, dict) and site.get("url")]
-    except Exception:
-        return []
+    sites = config_loader.pillar_get("saltgoat:monitor:sites", [])
+    if isinstance(sites, list):
+        return [site for site in sites if isinstance(site, dict) and site.get("url")]
     return []
 
 
@@ -1199,13 +1191,7 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_messa
 
 
 def emit_salt_event(tag: str, payload: Dict[str, Any]) -> None:
-    if Caller is None:
-        return
-    try:
-        caller = Caller()  # type: ignore[call-arg]
-        caller.cmd("event.send", tag, payload)
-    except Exception:
-        pass
+    config_loader.fire_event(tag, payload)
 
 
 def color_severity(level: str) -> str:
@@ -1228,36 +1214,21 @@ def format_html_block(title: str, pairs: List[Tuple[str, str]]) -> Tuple[str, st
 
 
 def get_threshold_overrides() -> Dict[str, Any]:
-    if Caller is None:
-        return {}
-    try:
-        caller = Caller()  # type: ignore[call-arg]
-        # preferred path saltgoat:monitor:thresholds, fallback monitor_thresholds
-        overrides = caller.cmd("pillar.get", "saltgoat:monitor:thresholds", {})
-        if not overrides:
-            overrides = caller.cmd("pillar.get", "monitor_thresholds", {})
-        if isinstance(overrides, dict):
-            return overrides
-    except Exception:
-        pass
-    return {}
+    overrides = config_loader.pillar_get("saltgoat:monitor:thresholds", {})
+    if not overrides:
+        overrides = config_loader.pillar_get("monitor_thresholds", {})
+    return overrides if isinstance(overrides, dict) else {}
 
 
 def get_swap_autoheal_services() -> List[str]:
-    if Caller is None:
-        return list(DEFAULT_SWAP_AUTOHEAL_SERVICES)
     keys = [
         "saltgoat:monitor:swap:autoheal_services",
         "monitor_swap_autoheal_services",
     ]
-    try:
-        caller = Caller()  # type: ignore[call-arg]
-        for key in keys:
-            services = caller.cmd("pillar.get", key, None)
-            if isinstance(services, list):
-                return [str(s).strip() for s in services if str(s).strip()]
-    except Exception:
-        pass
+    for key in keys:
+        services = config_loader.pillar_get(key, None)
+        if isinstance(services, list):
+            return [str(s).strip() for s in services if str(s).strip()]
     return list(DEFAULT_SWAP_AUTOHEAL_SERVICES)
 
 

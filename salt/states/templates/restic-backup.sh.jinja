@@ -258,7 +258,7 @@ payload = {
     "message": message,
 }
 
-LOG_PATH = "/var/log/saltgoat/alerts.log"
+LOG_PATH = os.environ.get("SALTGOAT_ALERT_LOG", "/var/log/saltgoat/alerts.log")
 EVENT_TAG = f"saltgoat/backup/restic/{status}"
 SITE_TAG = f"saltgoat/backup/restic/{site}" if site else None
 TELEGRAM_TAG = SITE_TAG or EVENT_TAG

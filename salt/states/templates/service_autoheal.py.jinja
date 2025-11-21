@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -225,7 +226,7 @@ def main() -> int:
     parser.add_argument("--event-b64", required=False, help="Base64 encoded beacon payload JSON")
     parser.add_argument("--allowed", default="[]", help="JSON list of auto-heal services")
     parser.add_argument("--allowed-b64", required=False, help="Base64 encoded JSON list of auto-heal services")
-    parser.add_argument("--log-path", default="/var/log/saltgoat/alerts.log")
+    parser.add_argument("--log-path", default=os.environ.get("SALTGOAT_ALERT_LOG", "/var/log/saltgoat/alerts.log"))
     parser.add_argument("--minion", default="")
     parser.add_argument("--no-telegram", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

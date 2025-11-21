@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from modules.lib import logging_utils
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UNIT_TEST = os.environ.get("SALTGOAT_UNIT_TEST") == "1"
 
@@ -35,7 +37,7 @@ def gather() -> dict:
             data["goat_pulse"] = f"[ERROR] Goat Pulse failed: {exc}"
     data["disk"] = run(["df", "-h", "/", "/var/lib/mysql"])
     data["ps"] = run(["bash", "-c", "ps -eo pid,comm,%mem,%cpu --sort=-%mem | head -n 6"])
-    alerts = Path("/var/log/saltgoat/alerts.log")
+    alerts = logging_utils.alerts_log_path()
     try:
         data["alerts"] = alerts.read_text()[-2000:] if alerts.exists() else ""
     except PermissionError:

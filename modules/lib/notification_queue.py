@@ -10,10 +10,11 @@ from pathlib import Path
 from typing import Dict, Tuple
 
 from . import notification as notif
+from . import logging_utils
 
 LOGGER_SCRIPT = Path(os.environ.get("SALTGOAT_REACTOR_LOGGER", "/opt/saltgoat-reactor/logger.py"))
 TELEGRAM_COMMON = Path(os.environ.get("SALTGOAT_REACTOR_COMMON", "/opt/saltgoat-reactor/reactor_common.py"))
-ALERT_LOG = Path(os.environ.get("SALTGOAT_ALERT_LOG", "/var/log/saltgoat/alerts.log"))
+ALERT_LOG = logging_utils.alerts_log_path()
 
 
 def _load_reactor_common():

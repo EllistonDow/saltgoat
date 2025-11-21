@@ -25,13 +25,15 @@ except Exception:  # pragma: no cover
 
 HOSTNAME = socket.getfqdn()
 MONITOR_DIR = Path("/var/log/saltgoat/monitor")
-ALERT_LOG = Path("/var/log/saltgoat/alerts.log")
-LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
-TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 from modules.lib import notification as notif  # type: ignore
+from modules.lib import logging_utils
+
+ALERT_LOG = logging_utils.alerts_log_path()
+LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
+TELEGRAM_COMMON = Path("/opt/saltgoat-reactor/reactor_common.py")
 
 
 def path_exists(path: Path) -> bool:
