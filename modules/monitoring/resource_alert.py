@@ -1135,10 +1135,23 @@ def log_to_file(label: str, tag: str, payload: Dict[str, Any]) -> None:
 
 
 def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_message: Optional[str] = None) -> None:
+    severity = str(payload.get("severity", "INFO")).upper()
+    payload["severity"] = severity
+    site_hint = payload.get("site")
+    if not notif.should_send(tag, severity, site_hint):
+        log_to_file(
+            "TELEGRAM",
+            f"{tag} skip",
+            {"reason": "filtered", "severity": severity, "site": site_hint},
+        )
+        return
+
     plain_block = plain_message or notif.html_to_plain(message)
-    notif.dispatch_webhooks(tag, str(payload.get("severity", "INFO")), payload.get("site"), plain_block, message, payload)
+    notif.dispatch_webhooks(tag, severity, site_hint, plain_block, message, payload)
     if not TELEGRAM_AVAILABLE:
         return
+
+    parse_mode = notif.get_parse_mode()
 
     def _log(kind: str, extra: Dict[str, Any]) -> None:
         log_to_file("TELEGRAM", f"{tag} {kind}", extra)
@@ -1152,7 +1165,7 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_messa
             tag,
             payload | {"message": message},
             str(exc),
-            {"thread": payload.get("telegram_thread")},
+            {"thread": payload.get("telegram_thread"), "parse_mode": parse_mode},
         )
         return
     if not profiles:
@@ -1162,7 +1175,7 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_messa
             tag,
             payload | {"message": message},
             "no_profiles",
-            {"thread": payload.get("telegram_thread")},
+            {"thread": payload.get("telegram_thread"), "parse_mode": parse_mode},
         )
         return
     _log("profile_summary", {"count": len(profiles)})
@@ -1172,7 +1185,7 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_messa
             profiles,
             _log,
             tag=tag,
-            parse_mode="HTML",
+            parse_mode=parse_mode,
         )
     except Exception as exc:
         _log("error", {"message": str(exc)})
@@ -1181,7 +1194,7 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_messa
             tag,
             payload | {"message": message},
             str(exc),
-            {"thread": payload.get("telegram_thread")},
+            {"thread": payload.get("telegram_thread"), "parse_mode": parse_mode},
         )
 
 

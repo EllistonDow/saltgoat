@@ -6,6 +6,7 @@ import os
 import re
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -31,6 +32,8 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _MD_SPECIAL_RE = re.compile(r"([_\*\[\]\(\)~`>#+\-=|{}.!])")
 # Telegram 话题完全来自 Pillar `telegram_topics`
 QUEUE_DIR = Path("/var/log/saltgoat/notify-queue")
+WEBHOOK_TIMEOUT = int(os.environ.get("SALTGOAT_WEBHOOK_TIMEOUT", "5"))
+WEBHOOK_WORKERS = max(1, int(os.environ.get("SALTGOAT_WEBHOOK_WORKERS", "4")))
 FALLBACK_NOTIFICATIONS_PATH = Path(
     os.environ.get(
         "SALTGOAT_NOTIFICATIONS_FILE",
@@ -160,13 +163,15 @@ def get_parse_mode() -> str:
 def queue_failure(destination: str, tag: str, payload: Dict[str, object], error: str | None = None, context: Optional[Dict[str, object]] = None) -> None:
     try:
         QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+        ctx = dict(context) if isinstance(context, dict) else {}
         record = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "destination": destination,
             "tag": tag,
             "payload": payload,
             "error": error,
-            "context": context or {},
+            "context": ctx,
+            "attempts": 0,
         }
         path = QUEUE_DIR / f"{int(time.time())}_{os.getpid()}.json"
         path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -281,6 +286,33 @@ def _load_notifications_fallback() -> Dict[str, object]:
     return data.get("notifications", {}) or {}
 
 
+def send_webhook_entry(entry: Dict[str, object], body: Dict[str, object], *, queue_on_failure: bool = True) -> bool:
+    url = entry.get("url") if isinstance(entry, dict) else None
+    if not url:
+        return False
+    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(str(url), data=data, method="POST")
+    headers = entry.get("headers") if isinstance(entry, dict) else None
+    if isinstance(headers, dict):
+        for key, value in headers.items():
+            req.add_header(str(key), str(value))
+    if "Content-Type" not in req.headers:
+        req.add_header("Content-Type", "application/json; charset=utf-8")
+    try:
+        urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT)  # nosec B310
+        return True
+    except Exception as exc:
+        if queue_on_failure:
+            queue_failure(
+                "webhook",
+                body.get("tag", ""),
+                body,
+                str(exc),
+                {"url": entry.get("url"), "headers": entry.get("headers")},
+            )
+        return False
+
+
 def dispatch_webhooks(
     tag: str,
     severity: str,
@@ -302,29 +334,13 @@ def dispatch_webhooks(
         "payload": payload or {},
         "text": plain_message,
     }
-    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    delivered = 0
-    for entry in endpoints:
-        try:
-            req = urllib.request.Request(entry["url"], data=data, method="POST")
-            headers = entry.get("headers") or {}
-            if isinstance(headers, dict):
-                for key, value in headers.items():
-                    req.add_header(str(key), str(value))
-            if "Content-Type" not in req.headers:
-                req.add_header("Content-Type", "application/json; charset=utf-8")
-            urllib.request.urlopen(req, timeout=10)  # nosec B310
-            delivered += 1
-        except Exception as exc:
-            queue_failure(
-                "webhook",
-                tag,
-                body,
-                str(exc),
-                {"url": entry.get("url"), "headers": entry.get("headers")},
-            )
-            continue
-    return delivered
+    max_workers = min(len(endpoints), WEBHOOK_WORKERS)
+    results = []
+    with ThreadPoolExecutor(max_workers=max_workers or 1) as executor:
+        futures = [executor.submit(send_webhook_entry, entry, body) for entry in endpoints]
+        for future in futures:
+            results.append(bool(future.result()))
+    return sum(1 for ok in results if ok)
 
 
 @lru_cache

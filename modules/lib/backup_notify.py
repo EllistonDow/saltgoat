@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import socket
@@ -86,8 +87,8 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
         pass
     now_sec = int(datetime.now(timezone.utc).timestamp())
     msg_hash = json.dumps({"plain": plain, "html": html, "payload": payload}, sort_keys=True)
-    tag_hash = json.dumps(tag, sort_keys=True)
-    key_file = dedup_dir / ("%s.dedup" % abs(hash(tag_hash)) )
+    digest = hashlib.sha256(tag.encode("utf-8")).hexdigest()[:32]
+    key_file = dedup_dir / f"{digest}.dedup"
     try:
         if key_file.exists():
             try:
@@ -120,6 +121,8 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
         _log(f"{tag}/skip", {"reason": "reactor_unavailable"})
         return
 
+    parse_mode = notif.get_parse_mode()
+
     def logger(label: str, extra: Dict[str, object]) -> None:
         _log(f"{tag}/{label}", extra)
 
@@ -132,12 +135,19 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
             tag,
             payload | {"message": html},
             str(exc),
-            {"thread": payload.get("telegram_thread")},
+            {"thread": payload.get("telegram_thread"), "parse_mode": parse_mode},
         )
         return
 
     if not profiles:
         logger("skip", {"reason": "no_profiles"})
+        notif.queue_failure(
+            "telegram",
+            tag,
+            payload | {"message": html},
+            "no_profiles",
+            {"thread": payload.get("telegram_thread"), "parse_mode": parse_mode},
+        )
         return
 
     try:
@@ -147,7 +157,7 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
             logger,
             tag=tag,
             thread_id=payload.get("telegram_thread"),
-            parse_mode=notif.get_parse_mode(),
+            parse_mode=parse_mode,
         )
     except Exception as exc:  # pragma: no cover
         logger("error", {"message": str(exc)})
@@ -156,7 +166,7 @@ def _send(tag: str, plain: str, html: str, payload: Dict[str, object], site: str
             tag,
             payload | {"message": html},
             str(exc),
-            {"thread": payload.get("telegram_thread")},
+            {"thread": payload.get("telegram_thread"), "parse_mode": parse_mode},
         )
 
 

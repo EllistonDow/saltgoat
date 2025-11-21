@@ -20,6 +20,7 @@ base:
     - optional.varnish
     - optional.fail2ban
     - optional.fail2ban-watch
+    - optional.notification-drain
     - optional.webmin
     - optional.phpmyadmin
     - optional.certbot

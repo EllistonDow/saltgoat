@@ -181,6 +181,8 @@ sudo saltgoat magetools cron <site> install       # 下发 Salt Schedule（需 s
 - `sudo saltgoat monitor report daily` 生成日报到 `/var/log/saltgoat/monitor/`
 - `sudo saltgoat monitor alert resources` 即时检查 CPU/内存/磁盘/关键服务并推送 Telegram 告警（触发 Salt 事件 `saltgoat/monitor/resources`）
 - Pillar `notifications.telegram` 决定最小级别/禁用 tag，`notifications.webhook` 则可配置多条 HTTP Endpoint，在 `magento_api_watch`、`resource_alert`、`backup_notify`、`monitor daily` 等脚本触发时同步推送 JSON。
+- 如遇 Webhook/Telegram 阻塞，可运行 `python3 scripts/notification-drain.py --verbose` 重放 `/var/log/saltgoat/notify-queue` 中积压的通知（支持 `--dest webhook|telegram`、`--dry-run`）；生产环境可通过 `optional.notification-drain` 状态部署 systemd timer 周期性清理，并在队列残留≥阈值（默认 500 条）时自动发送 `saltgoat/monitor/notification_queue` 告警。可通过 Pillar `saltgoat:notifications:drain_max`、`drain_alert_threshold`、`drain_alert_tag`/`drain_alert_site` 定制批量与告警参数。
+- 本地/CI 运行通知脚本时，如无 root 权限，可提前设置 `SALTGOAT_ALERT_LOG=/tmp/saltgoat-alerts.log`（或自选路径）；配合新版 `reactor_logger.py` fallback 逻辑，可避免写 `/var/log/saltgoat/alerts.log` 失败并保持日志可读。
 - `sudo saltgoat monitor report daily --no-telegram` 可生成日报而不推送；默认会写日志并发送 Telegram 摘要
 - `sudo saltgoat monitor enable-beacons`：启用 Beacon/Reactors；若缺少 `salt-minion` 会提示并降级。
 - `sudo saltgoat schedule enable`：下发 SaltGoat 自身任务（内存、日志清理等），依赖 Salt Schedule（需确保 `salt-minion` 运行）。

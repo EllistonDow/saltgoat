@@ -21,6 +21,24 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 import html
+
+SALT_SITE_ENV = os.environ.get("SALTGOAT_SALT_SITEPKG")
+SALT_SITE_CANDIDATES = [
+    SALT_SITE_ENV,
+    "/opt/saltstack/salt/lib/python3.10/site-packages",
+    "/usr/lib/python3/dist-packages",
+]
+for _candidate in SALT_SITE_CANDIDATES:
+    if not _candidate:
+        continue
+    try:
+        exists = os.path.isdir(_candidate)
+    except Exception:  # pragma: no cover
+        exists = False
+    if not exists:
+        continue
+    if _candidate not in sys.path:
+        sys.path.insert(0, _candidate)
 try:
     import yaml  # type: ignore
 except Exception:  # pragma: no cover
@@ -367,6 +385,9 @@ def telegram_broadcast(
     def _log(label: str, extra: Dict[str, Any]) -> None:
         log_to_file("TELEGRAM", f"{tag} {label}", extra)
 
+    thread_id = payload.get("telegram_thread")
+    parse_mode = notif.get_parse_mode()
+
     try:
         profiles = reactor_common.load_telegram_profiles(None, _log)
     except Exception as exc:  # pragma: no cover
@@ -376,17 +397,22 @@ def telegram_broadcast(
             tag,
             payload | {"message": message},
             str(exc),
-            {"thread": thread_id},
+            {"thread": thread_id, "parse_mode": parse_mode},
         )
         return
 
     if not profiles:
         _log("skip", {"reason": "no_profiles"})
+        notif.queue_failure(
+            "telegram",
+            tag,
+            payload | {"message": message},
+            "no_profiles",
+            {"thread": thread_id, "parse_mode": parse_mode},
+        )
         return
 
     _log("profile_summary", {"count": len(profiles)})
-    thread_id = payload.get("telegram_thread")
-    parse_mode = notif.get_parse_mode()
     try:
         reactor_common.broadcast_telegram(
             message,
@@ -403,7 +429,7 @@ def telegram_broadcast(
             tag,
             payload | {"message": message},
             str(exc),
-            {"thread": thread_id},
+            {"thread": thread_id, "parse_mode": parse_mode},
         )
 
 

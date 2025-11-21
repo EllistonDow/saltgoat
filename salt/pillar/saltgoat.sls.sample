@@ -6,3 +6,11 @@ phpmyadmin_password: 'ChangeMePhpMyAdmin!'
 ssl_email: 'admin@example.com'
 timezone: 'America/Los_Angeles'
 language: 'en_US.UTF-8'
+
+saltgoat:
+  notifications:
+    queue_dir: /var/log/saltgoat/notify-queue
+    drain_max: 100
+    drain_alert_threshold: 500
+    drain_alert_tag: saltgoat/monitor/notification_queue
+    drain_alert_site: ''

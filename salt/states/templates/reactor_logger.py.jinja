@@ -1,8 +1,10 @@
 # Reactor logging helper
 import datetime
 import json
+import os
 import pathlib
 import sys
+from typing import Optional
 
 
 def main():
@@ -25,13 +27,51 @@ def main():
     line = f"{timestamp} [{label}] tag={tag} payload={json.dumps(payload, ensure_ascii=False)}\n"
 
     try:
-        with log_path.open("a", encoding="utf-8") as fh:
-            fh.write(line)
+        _append_line(log_path, line)
     except Exception as err:  # pylint: disable=broad-except
         sys.stderr.write(f"Failed to append to {log_path}: {err}\n")
-        return 3
+        fallback_path = _fallback_log_path(log_path)
+        if fallback_path is None:
+            return 3
+        try:
+            _append_line(fallback_path, line)
+        except Exception as fallback_err:  # pylint: disable=broad-except
+            sys.stderr.write(f"Fallback append to {fallback_path} failed: {fallback_err}\n")
+            return 3
+        else:
+            sys.stderr.write(f"Appended log line to fallback path {fallback_path}\n")
 
     return 0
+
+
+def _append_line(path: pathlib.Path, line: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(line)
+
+
+def _fallback_log_path(original: pathlib.Path) -> Optional[pathlib.Path]:
+    fallback_env = os.environ.get("SALTGOAT_ALERT_LOG")
+    candidates = []
+    if fallback_env:
+        candidates.append(pathlib.Path(fallback_env))
+    home_dir = pathlib.Path.home()
+    if home_dir:
+        candidates.append(home_dir / ".saltgoat" / "alerts.log")
+    candidates.append(pathlib.Path("/tmp/saltgoat/alerts.log"))
+    for candidate in candidates:
+        try:
+            candidate.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            continue
+        # Avoid infinite recursion if fallback equals original
+        try:
+            if candidate.resolve() == original.resolve():
+                continue
+        except Exception:
+            pass
+        return candidate
+    return None
 
 
 if __name__ == "__main__":

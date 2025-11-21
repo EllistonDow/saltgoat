@@ -53,6 +53,8 @@
      ```
    - 关注 Mattermost（或其它 Webhook 目标）里是否收到 `tag`、`severity`、`plain_message` 等字段；如未收到，检查 `salt/pillar/notifications.sls` 是否 `webhook.enabled: true`、Pillar 已刷新以及目标系统是否允许匿名 POST。
    - 需要发送纯粹的测试消息时，可改用 `python3 scripts/notification-test.py --tag saltgoat/test/ping --severity INFO --text "hello"`，该脚本会使用当前 Pillar/webhook 设置快速推送。
+   - 通道异常导致消息被写入 `/var/log/saltgoat/notify-queue/*.json` 时，可用 `python3 scripts/notification-drain.py --verbose` 重放积压记录，并结合 `--dest`/`--dry-run` 做巡检；若希望无人值守排空，可启用 `optional.notification-drain` 让 systemd timer 每 2 分钟巡检，且当剩余条目 ≥ `saltgoat:notifications:drain_alert_threshold`（默认 500）时，会自动向 `saltgoat/monitor/notification_queue` 发送 WARNING/CRITICAL 告警，相关 tag/批量参数可通过 `saltgoat:notifications:*` Pillar 调整。
+   - 需要在普通用户/CI 环境运行通知脚本时，可设置 `SALTGOAT_ALERT_LOG=/tmp/saltgoat-alerts.log`，并依赖 `reactor_logger.py` 内置的 fallback，避免因为 `/var/log/saltgoat/alerts.log` 权限不足而刷屏告警。
 
 5. 多站点触发的 PHP-FPM 池扩容
 

@@ -299,6 +299,6 @@ except Exception as exc:  # pylint: disable=broad-except
         "severity": payload.get("severity", "INFO"),
         "site": site,
         "message": message,
-    }, str(exc), {"thread": THREAD_ID})
+    }, str(exc), {"thread": THREAD_ID, "parse_mode": "HTML"})
 PY
 fi

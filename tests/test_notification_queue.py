@@ -2,9 +2,11 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from modules.lib import notification
 from modules.lib import backup_notify
+from modules.lib import notification_queue
 
 
 class NotificationQueueTestCase(unittest.TestCase):
@@ -31,6 +33,7 @@ class NotificationQueueTestCase(unittest.TestCase):
             self.assertEqual(data["tag"], "saltgoat/test")
             self.assertEqual(data["payload"]["message"], "hello")
             self.assertEqual(data["context"]["chat_id"], "123")
+            self.assertEqual(data["attempts"], 0)
 
     def test_dispatch_webhooks_queue_on_failure(self) -> None:
         original_cache = notification._CACHE
@@ -122,6 +125,45 @@ class NotificationQueueTestCase(unittest.TestCase):
             notification.get_parse_mode = original_parse_mode  # type: ignore[assignment]
             notification.QUEUE_DIR = original_queue_dir
             queue_dir.cleanup()
+
+
+class NotificationRetryTestCase(unittest.TestCase):
+    def test_retry_webhook_dry_run(self) -> None:
+        record = {
+            "destination": "webhook",
+            "context": {"url": "https://example.com/hook"},
+            "payload": {"tag": "saltgoat/test"},
+        }
+        ok, info = notification_queue.retry_record(record, dry_run=True)
+        self.assertTrue(ok)
+        self.assertEqual(info, "dry-run")
+
+    def test_retry_webhook_invokes_sender(self) -> None:
+        record = {
+            "destination": "webhook",
+            "context": {"url": "https://example.com/hook"},
+            "payload": {"tag": "saltgoat/test"},
+        }
+        with mock.patch.object(notification, "send_webhook_entry", return_value=True) as sender:
+            ok, info = notification_queue.retry_record(record)
+        self.assertTrue(ok)
+        self.assertEqual(info, "sent")
+        sender.assert_called_once()
+
+    def test_update_record_metadata(self) -> None:
+        record = {
+            "destination": "webhook",
+            "context": {"url": "https://example.com/hook"},
+            "payload": {"tag": "saltgoat/test"},
+            "attempts": 1,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "record.json"
+            target.write_text(json.dumps(record), encoding="utf-8")
+            notification_queue.update_record_metadata(target, record, "timeout")
+            stored = json.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual(stored["attempts"], 2)
+            self.assertEqual(stored["last_error"], "timeout")
 
 
 if __name__ == "__main__":

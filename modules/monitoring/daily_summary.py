@@ -213,10 +213,23 @@ def log_to_file(label: str, tag: str, payload: Dict[str, Any]) -> None:
 
 
 def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_message: Optional[str] = None) -> None:
+    severity = str(payload.get("severity", "INFO")).upper()
+    payload["severity"] = severity
+    site_hint = payload.get("site")
+    if not notif.should_send(tag, severity, site_hint):
+        log_to_file(
+            "TELEGRAM",
+            f"{tag} skip",
+            {"reason": "filtered", "severity": severity, "site": site_hint},
+        )
+        return
+
     plain_block = plain_message or message
-    notif.dispatch_webhooks(tag, str(payload.get("severity", "INFO")), payload.get("site"), plain_block, message, payload)
+    notif.dispatch_webhooks(tag, severity, site_hint, plain_block, message, payload)
     if not TELEGRAM_AVAILABLE:
         return
+
+    parse_mode = "MarkdownV2"
 
     def _log(kind: str, extra: Dict[str, Any]) -> None:
         log_to_file("TELEGRAM", f"{tag} {kind}", extra)
@@ -226,7 +239,7 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_messa
         _log("skip", {"reason": "no_profiles"})
         return
     _log("profile_summary", {"count": len(profiles)})
-    reactor_common.broadcast_telegram(message, profiles, _log, tag=tag, parse_mode="MarkdownV2")
+    reactor_common.broadcast_telegram(message, profiles, _log, tag=tag, parse_mode=parse_mode)
 
 
 def emit_event(tag: str, payload: Dict[str, Any]) -> None:
@@ -415,7 +428,17 @@ def main() -> None:
         try:
             telegram_notify(tag, summary_markdown, payload_with_tag, summary_plain)
         except Exception as exc:
-            notif.queue_failure("telegram", tag, payload_with_tag, str(exc))
+            notif.queue_failure(
+                "telegram",
+                tag,
+                payload_with_tag | {"message": summary_markdown},
+                str(exc),
+                {
+                    "thread": payload_with_tag.get("telegram_thread"),
+                    "parse_mode": "MarkdownV2",
+                    "plain": summary_plain,
+                },
+            )
     if not args.quiet:
         print(summary_plain)
 

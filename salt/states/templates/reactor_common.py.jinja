@@ -1,8 +1,30 @@
 # Common helpers for SaltGoat reactor Python snippets.
+import os
 import pathlib
+import sys
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Iterable, List, Optional
+
+try:
+    import yaml  # type: ignore
+except Exception:  # pragma: no cover
+    yaml = None  # type: ignore
+
+_SALT_SITE_ENV = os.environ.get("SALTGOAT_SALT_SITEPKG")
+_SALT_SITE_CANDIDATES = [
+    _SALT_SITE_ENV,
+    "/opt/saltstack/salt/lib/python3.10/site-packages",
+    "/usr/lib/python3/dist-packages",
+]
+for _candidate in _SALT_SITE_CANDIDATES:
+    if not _candidate:
+        continue
+    _path = pathlib.Path(_candidate)
+    if not _path.exists():
+        continue
+    if _candidate not in sys.path:
+        sys.path.insert(0, _candidate)
 
 try:
     import salt.client  # type: ignore
@@ -10,6 +32,7 @@ except Exception:  # pragma: no cover
     salt = None  # type: ignore
 
 _CALLER = None
+_REPO_ROOT: Optional[pathlib.Path] = None
 
 
 def _pillar_get(path: str, default: Any = None) -> Any:
@@ -26,6 +49,95 @@ def _pillar_get(path: str, default: Any = None) -> Any:
         return _CALLER.cmd("pillar.get", path, default)  # type: ignore[union-attr]
     except Exception:  # pragma: no cover
         return default
+
+
+def _discover_repo_root() -> Optional[pathlib.Path]:
+    global _REPO_ROOT  # pylint: disable=global-statement
+    if _REPO_ROOT is not None:
+        return _REPO_ROOT
+    candidates: List[pathlib.Path] = []
+    env_root = os.environ.get("SALTGOAT_REPO_ROOT")
+    if env_root:
+        candidates.append(pathlib.Path(env_root))
+    candidates.extend(
+        [
+            pathlib.Path("/opt/saltgoat"),
+            pathlib.Path("/srv/saltgoat"),
+            pathlib.Path("/home/doge/saltgoat"),
+            pathlib.Path(__file__).resolve().parents[2],
+            pathlib.Path(__file__).resolve().parents[2] / "..",
+        ]
+    )
+    seen: set[pathlib.Path] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except Exception:  # pragma: no cover
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        marker = resolved / "modules" / "lib" / "notification.py"
+        if marker.is_file():
+            _REPO_ROOT = resolved
+            return _REPO_ROOT
+    return None
+
+
+def _load_yaml_dict(path: pathlib.Path) -> Dict[str, Any]:
+    if yaml is None:
+        return {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        return {}
+    try:
+        data = yaml.safe_load(text) or {}
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def _load_local_telegram() -> Dict[str, Any]:
+    root = _discover_repo_root()
+    if root is None:
+        return {}
+    for rel in (
+        "salt/pillar/secret/telegram.sls",
+        "salt/pillar/telegram.sls",
+    ):
+        data = _load_yaml_dict(root / rel)
+        if not data:
+            continue
+        if isinstance(data.get("telegram"), dict):
+            return data["telegram"]
+        if data.get("profiles"):
+            return data
+    return {}
+
+
+def _load_local_topics() -> Dict[str, Any]:
+    root = _discover_repo_root()
+    if root is None:
+        return {}
+    for rel in (
+        "salt/pillar/secret/telegram-topics.sls",
+        "salt/pillar/telegram-topics.sls",
+    ):
+        data = _load_yaml_dict(root / rel)
+        if not data:
+            continue
+        candidate: Optional[Dict[str, Any]] = None
+        wrapper = data.get("telegram_topics")
+        if isinstance(wrapper, dict):
+            candidate = wrapper
+        elif isinstance(data, dict):
+            candidate = data
+        if candidate:
+            return candidate
+    return {}
 
 
 def _ensure_list(value: Any) -> List[Any]:
@@ -84,15 +196,26 @@ def _resolve_topic(tag: Optional[str], topics: Dict[str, Any]) -> Optional[Any]:
 def _load_profiles_from_pillar(log=None) -> List[Dict[str, Any]]:
     telegram = _pillar_get("telegram", {}) or {}
     if not isinstance(telegram, dict):
-        if log:
+        telegram = {}
+    if not telegram.get("profiles"):
+        fallback = _load_local_telegram()
+        if fallback:
+            telegram = fallback
+        elif log:
             log("pillar_missing", {"path": "telegram"})
-        return []
+            return []
     profiles_cfg = telegram.get("profiles")
     if not isinstance(profiles_cfg, dict):
-        if log:
+        fallback = _load_local_telegram()
+        if isinstance(fallback.get("profiles"), dict):
+            profiles_cfg = fallback["profiles"]
+        elif log:
             log("profiles_missing", {"path": "telegram:profiles"})
-        return []
-    global_topics = _normalize_topics(_pillar_get("telegram_topics", {}))
+            return []
+    topics_raw = _pillar_get("telegram_topics", {}) or {}
+    if not isinstance(topics_raw, dict) or not topics_raw:
+        topics_raw = _load_local_topics()
+    global_topics = _normalize_topics(topics_raw)
     profiles: List[Dict[str, Any]] = []
     for name, entry in profiles_cfg.items():
         if not isinstance(entry, dict):
