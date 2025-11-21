@@ -18,11 +18,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-try:
-    from salt.client import Caller  # type: ignore
-except Exception:  # pragma: no cover
-    Caller = None  # type: ignore
-
 HOSTNAME = socket.getfqdn()
 MONITOR_DIR = Path("/var/log/saltgoat/monitor")
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 from modules.lib import notification as notif  # type: ignore
 from modules.lib import logging_utils
+from modules.lib import config_loader
 
 ALERT_LOG = logging_utils.alerts_log_path()
 LOGGER_SCRIPT = Path("/opt/saltgoat-reactor/logger.py")
@@ -245,13 +241,7 @@ def telegram_notify(tag: str, message: str, payload: Dict[str, Any], plain_messa
 
 
 def emit_event(tag: str, payload: Dict[str, Any]) -> None:
-    if Caller is None:
-        return
-    try:
-        caller = Caller()  # type: ignore[call-arg]
-        caller.cmd("event.send", tag, payload)
-    except Exception:
-        pass
+    config_loader.fire_event(tag, payload)
 
 
 def compile_summary() -> Tuple[str, str, Dict[str, Any]]:

@@ -1,5 +1,11 @@
 # [1.3.19] - 2025-11-04
 
+## [1.9.4] - 2025-11-21
+
+### Changes
+- 修改 4 个文件: modules/lib/config_loader.py, modules/lib/logging_utils.py, modules/lib/php_pool_helper.py, modules/monitoring/daily_summary.py
+
+
 ## [1.9.3] - 2025-11-21
 
 ### Changes

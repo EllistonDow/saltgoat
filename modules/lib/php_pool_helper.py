@@ -17,15 +17,11 @@ except ImportError as exc:  # pragma: no cover - dependency missing
     sys.stderr.write(f"[php_pool_helper] Missing PyYAML dependency: {exc}\n")
     raise SystemExit(1)
 
-try:
-    from salt.client import Caller  # type: ignore
-except Exception:  # pragma: no cover - salt 不可用时降级
-    Caller = None  # type: ignore
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 from modules.lib import logging_utils  # type: ignore
+from modules.lib import config_loader  # type: ignore
 DEFAULT_PILLAR = REPO_ROOT / "salt" / "pillar" / "magento-optimize.sls"
 RUNTIME_DIR = Path(os.environ.get("SALTGOAT_RUNTIME_DIR", "/etc/saltgoat/runtime"))
 TRACK_FILE_NAME = "multisite-pools.json"
@@ -124,14 +120,7 @@ def _append_alert(tag: str, payload: Dict[str, object]) -> None:
 def _emit_salt_event(tag: str, payload: Dict[str, object]) -> bool:
     if SKIP_SALT_EVENT:
         return False
-    if Caller is None:
-        return False
-    try:
-        caller = Caller()  # type: ignore[call-arg]
-        caller.cmd("event.send", tag, payload)
-        return True
-    except Exception:
-        return False
+    return config_loader.fire_event(tag, payload)
 
 
 def _build_payload(args: argparse.Namespace, result: Dict[str, object]) -> Dict[str, object]:
