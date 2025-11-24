@@ -1,5 +1,12 @@
 # [1.3.19] - 2025-11-04
 
+## [2.0.0] - 2025-11-24
+
+### Changes
+- Restic 站点仓库全面迁移到 `/home/doge/Dropbox/<site>/restic-backups`，Pillar (`salt/pillar/secret/restic.sls`) 与 CLI 生成的元数据都会指向 Dropbox 目录，并把 `repo_owner` 统一设为 `doge` 方便同步。
+- `salt/pillar/secret/auto.sls` 内置的 Restic 密码改为普通字符串，避免 here-doc 展开触发 `restic key passwd`/CLI 读取失败，确保 `saltgoat magetools backup restic run/install` 在任何站点都能直接获取正确凭据。
+- `/etc/restic/<site>.env` 与 `sites.d/*.env` 随版本自动更新，配合新的仓库位置完成一次手动 `restic check` 验证，后续 Salt Schedule 将直接把每日备份写入 Dropbox。
+
 ## [1.9.4] - 2025-11-21
 
 ### Changes

@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore', message='.*spwd.*')
 
 # 脚本信息
 SCRIPT_NAME="SaltGoat"
-SCRIPT_STATIC_VERSION="1.9.0"
+SCRIPT_STATIC_VERSION="2.0.0"
 
 # 获取脚本实际路径（处理符号链接）
 if [[ -L "${BASH_SOURCE[0]}" ]]; then
