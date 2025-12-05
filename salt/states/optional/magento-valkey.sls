@@ -6,7 +6,7 @@
 # - 仅在配置变更时触发缓存刷新及 Valkey 清理
 
 {% set site_name = pillar.get('site_name') %}
-{% set valkey_password = pillar.get('valkey_password', '') %}
+{% set valkey_password = salt['pillar.get']('auth:valkey:password', pillar.get('valkey_password', '')) %}
 {% set cache_db = pillar.get('cache_db') %}
 {% set page_db = pillar.get('page_db') %}
 {% set session_db = pillar.get('session_db') %}

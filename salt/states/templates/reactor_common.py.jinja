@@ -1,7 +1,10 @@
 # Common helpers for SaltGoat reactor Python snippets.
+import json
 import os
 import pathlib
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Iterable, List, Optional
@@ -33,6 +36,7 @@ except Exception:  # pragma: no cover
 
 _CALLER = None
 _REPO_ROOT: Optional[pathlib.Path] = None
+_TOPIC_CACHE: Optional[Dict[str, Any]] = None
 
 
 def _pillar_get(path: str, default: Any = None) -> Any:
@@ -140,6 +144,86 @@ def _load_local_topics() -> Dict[str, Any]:
     return {}
 
 
+def _topic_cache_paths() -> List[pathlib.Path]:
+    paths: List[pathlib.Path] = []
+    env_path = os.environ.get("SALTGOAT_TOPIC_CACHE")
+    if env_path:
+        paths.append(pathlib.Path(env_path))
+    paths.append(pathlib.Path("/var/lib/saltgoat/telegram-topics.json"))
+    try:
+        home = pathlib.Path.home()
+    except Exception:  # pragma: no cover
+        home = None
+    if home is not None:
+        paths.append(home / ".saltgoat" / "telegram-topics.json")
+    return paths
+
+
+def _load_topic_cache() -> Dict[str, Any]:
+    global _TOPIC_CACHE  # pylint: disable=global-statement
+    if _TOPIC_CACHE is not None:
+        return _TOPIC_CACHE
+    merged: Dict[str, Any] = {"entries": {}}
+    for path in _topic_cache_paths():
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        try:
+            data = json.loads(text)
+        except Exception:
+            continue
+        if isinstance(data, dict):
+            entries = data.get("entries") if isinstance(data.get("entries"), dict) else None
+            if entries is None and all(isinstance(v, dict) for v in data.values()):
+                entries = data
+            if isinstance(entries, dict):
+                merged["entries"].update(entries)
+    _TOPIC_CACHE = merged
+    return _TOPIC_CACHE
+
+
+def _save_topic_cache() -> None:
+    cache = _load_topic_cache()
+    for path in _topic_cache_paths():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            continue
+        else:
+            break
+
+
+def _topic_cache_key(chat_id: str, title: str) -> str:
+    return f"{chat_id.strip()}::{title.strip()}".lower()
+
+
+def _topic_cache_lookup(chat_id: str, title: str) -> Optional[int]:
+    cache = _load_topic_cache()
+    entry = cache.get("entries", {}).get(_topic_cache_key(chat_id, title))
+    if isinstance(entry, dict):
+        thread = entry.get("thread_id")
+        if isinstance(thread, int):
+            return thread
+        try:
+            return int(str(thread))
+        except Exception:
+            return None
+    return None
+
+
+def _topic_cache_store(chat_id: str, title: str, thread_id: int) -> None:
+    cache = _load_topic_cache()
+    cache.setdefault("entries", {})[_topic_cache_key(chat_id, title)] = {
+        "chat_id": chat_id,
+        "title": title,
+        "thread_id": int(thread_id),
+        "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    _save_topic_cache()
+
+
 def _ensure_list(value: Any) -> List[Any]:
     if isinstance(value, (list, tuple, set)):
         return [item for item in value if item not in (None, "")]
@@ -173,14 +257,108 @@ def _normalize_topics(topics: Any) -> Dict[str, Any]:
     for key, value in topics.items():
         if key in (None, ""):
             continue
-        thread = value
-        if thread in (None, "", 0, "0"):
+        if isinstance(value, dict):
+            result[str(key)] = value
             continue
-        try:
-            result[str(key)] = int(thread)
-        except Exception:  # pylint: disable=broad-except
+        thread = _extract_thread_id(value)
+        if thread is not None:
             result[str(key)] = thread
     return result
+
+
+def _extract_thread_id(value: Any) -> Optional[int]:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except Exception:  # pragma: no cover
+            return None
+    if isinstance(value, dict):
+        for key in ("thread_id", "topic_id", "id"):
+            candidate = value.get(key)
+            if candidate in (None, ""):
+                continue
+            try:
+                return int(candidate)
+            except Exception:
+                continue
+    return None
+
+
+def _create_forum_topic(token: str, chat_id: str, title: str, icon_color: Optional[Any] = None, icon_custom_emoji_id: Optional[Any] = None, log=None) -> Optional[int]:
+    payload: Dict[str, Any] = {"chat_id": chat_id, "name": title}
+    if icon_color not in (None, ""):
+        try:
+            payload["icon_color"] = int(icon_color)
+        except Exception:
+            pass
+    if icon_custom_emoji_id not in (None, ""):
+        payload["icon_custom_emoji_id"] = str(icon_custom_emoji_id)
+    data = urllib.parse.urlencode(payload).encode()
+    url = f"https://api.telegram.org/bot{token}/createForumTopic"
+    req = urllib.request.Request(url, data=data)
+    error_desc: Optional[str] = None
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:  # pragma: no cover
+        try:
+            raw = exc.read()
+            error_desc = raw.decode("utf-8", errors="ignore") or str(exc)
+        except Exception:
+            raw = b"{}"
+            error_desc = str(exc)
+    except Exception as exc:  # pragma: no cover
+        if log:
+            log("topic_create_failed", {"chat": chat_id, "title": title, "error": str(exc)})
+        return None
+    try:
+        response = json.loads(raw or b"{}")
+    except Exception:
+        response = {}
+    if not response.get("ok"):
+        if log:
+            log("topic_create_failed", {"chat": chat_id, "title": title, "error": error_desc or response.get("description")})
+        return None
+    result = response.get("result")
+    if not isinstance(result, dict):
+        return None
+    thread = result.get("message_thread_id")
+    if thread in (None, "", 0, "0"):
+        return None
+    try:
+        return int(thread)
+    except Exception:
+        return None
+
+
+def _ensure_topic_thread(value: Dict[str, Any], token: str, chat: str, log=None) -> Optional[int]:
+    title = value.get("title") or value.get("topic") or value.get("name")
+    chat_id = value.get("chat_id") or chat
+    if not title or not chat_id:
+        return None
+    chat_id = str(chat_id)
+    cached = _topic_cache_lookup(chat_id, title)
+    if cached:
+        return cached
+    thread = _create_forum_topic(token, chat_id, title, value.get("icon_color"), value.get("icon_custom_emoji_id"), log)
+    if thread:
+        _topic_cache_store(chat_id, title, thread)
+        return thread
+    return None
+
+
+def _resolve_topic_value(value: Any, token: str, chat: str, log=None) -> Optional[int]:
+    thread = _extract_thread_id(value)
+    if thread is not None:
+        return thread
+    if isinstance(value, dict):
+        thread = _ensure_topic_thread(value, token, chat, log)
+        if thread is not None:
+            value.setdefault("thread_id", thread)
+            return thread
+    return None
 
 
 def _resolve_topic(tag: Optional[str], topics: Dict[str, Any]) -> Optional[Any]:
@@ -294,8 +472,9 @@ def broadcast_telegram(
                 effective_thread = target.get("thread_id")
             if effective_thread in (None, "", 0, "0"):
                 resolved = _resolve_topic(tag, topics)
-                if resolved not in (None, "", 0, "0"):
-                    effective_thread = resolved
+                candidate = _resolve_topic_value(resolved, token, str(chat), log)
+                if candidate not in (None, "", 0, "0"):
+                    effective_thread = candidate
             params = {
                 "chat_id": str(chat),
                 "text": message,

@@ -206,20 +206,40 @@ import reactor_common  # pylint: disable=import-error
 
 REPO_ROOT = os.environ.get("SALTGOAT_REPO_ROOT")
 if not REPO_ROOT:
-    for candidate in (
+    parent_candidates: list[Path] = []
+    try:
+        resolved = Path(__file__).resolve()
+        parent_candidates = list(resolved.parents)
+    except Exception:  # pragma: no cover
+        parent_candidates = []
+    candidates = [
         Path("/opt/saltgoat"),
         Path("/srv/saltgoat"),
         Path("/home/doge/saltgoat"),
-        Path(__file__).resolve().parents[2] / "..",
-    ):
-        candidate = candidate.resolve()
+    ]
+    for idx in (2, 1, 0):
+        if len(parent_candidates) > idx:
+            candidates.append(parent_candidates[idx])
+    for candidate in candidates:
+        try:
+            candidate = candidate.resolve()
+        except Exception:
+            continue
         if (candidate / "modules" / "lib" / "notification.py").is_file():
             REPO_ROOT = str(candidate)
             break
 if not REPO_ROOT:
-    REPO_ROOT = str(Path(__file__).resolve().parents[2])
+    fallback = Path("/opt/saltgoat")
+    try:
+        fallback = Path(__file__).resolve().parents[0]
+    except Exception:
+        pass
+    REPO_ROOT = str(fallback)
 sys.path.insert(0, REPO_ROOT)
 from modules.lib import notification as notif  # type: ignore
+
+def esc(value: str | None) -> str:
+    return notif.escape_markdown_v2(str(value or ""))
 
 status = os.environ.get("EVENT_STATUS", "success")
 repo = os.environ.get("RESTIC_REPOSITORY", "n/a")
@@ -228,7 +248,7 @@ log_file = os.environ.get("LOG_FILE", "")
 tags = os.environ.get("RESTIC_TAGS", "")
 rc = int(os.environ.get("EVENT_RC", "0") or 0)
 host = os.environ.get("HOST_ID", "")
-paths = []
+paths: list[str] = []
 include_file = os.environ.get("RESTIC_INCLUDE_FILE")
 if include_file and os.path.isfile(include_file):
     with open(include_file, "r", encoding="utf-8") as fh:
@@ -237,21 +257,23 @@ if include_file and os.path.isfile(include_file):
             if line:
                 paths.append(line)
 
+status_label = "\\\\[SUCCESS\\\\]" if status == "success" else "\\\\[FAILURE\\\\]"
 message_lines = [
-    f"[SaltGoat] {'SUCCESS' if status == 'success' else 'FAILURE'} backup restic",
-    f"Host: {host or 'ns510140'}",
-    f"Repository/File: {repo or 'n/a'}",
+    f"*\\\\[SaltGoat\\\\]* {status_label} backup restic",
+    f"*Host*: {esc(host or 'ns510140')}",
+    f"*Repository*: {esc(repo or 'n/a')}",
 ]
 if log_file:
-    message_lines.append(f"Log: {log_file}")
+    message_lines.append(f"*Log*: {esc(log_file)}")
 if site:
-    message_lines.append(f"Site: {site}")
+    message_lines.append(f"*Site*: {esc(site)}")
 if paths:
-    message_lines.append(f"Paths: {', '.join(paths)}")
+    joined = ", ".join(paths)
+    message_lines.append(f"*Paths*: {esc(joined)}")
 if tags:
-    message_lines.append(f"Tags: {tags}")
-message_lines.append(f"Return code: {rc}")
-message = "\n".join(message_lines)
+    message_lines.append(f"*Tags*: {esc(tags)}")
+message_lines.append(f"*Return code*: {rc}")
+message = "\\n".join(message_lines)
 payload = {
     "severity": "INFO" if status == "success" else "ERROR",
     "site": site,
@@ -291,7 +313,7 @@ try:
         log,
         tag=TELEGRAM_TAG,
         thread_id=THREAD_ID,
-        parse_mode="HTML",
+        parse_mode="MarkdownV2",
     )
 except Exception as exc:  # pylint: disable=broad-except
     log("error", {"message": str(exc)})
@@ -299,6 +321,6 @@ except Exception as exc:  # pylint: disable=broad-except
         "severity": payload.get("severity", "INFO"),
         "site": site,
         "message": message,
-    }, str(exc), {"thread": THREAD_ID, "parse_mode": "HTML"})
+    }, str(exc), {"thread": THREAD_ID, "parse_mode": "MarkdownV2"})
 PY
 fi

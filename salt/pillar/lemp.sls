@@ -2,11 +2,12 @@
 # 使用 Salt 原生功能进行配置管理
 
 {% set secrets = pillar.get('secrets', {}) %}
-{% set mysql_password = pillar.get('mysql_password', secrets.get('mysql_password', 'ChangeMeRoot!')) %}
-{% set valkey_secret = pillar.get('valkey_password', secrets.get('valkey_password', 'ChangeMeValkey!')) %}
-{% set rabbitmq_secret = pillar.get('rabbitmq_password', secrets.get('rabbitmq_password', 'ChangeMeRabbit!')) %}
-{% set webmin_secret = pillar.get('webmin_password', secrets.get('webmin_password', 'ChangeMeWebmin!')) %}
-{% set phpmyadmin_secret = pillar.get('phpmyadmin_password', secrets.get('phpmyadmin_password', 'ChangeMePhpMyAdmin!')) %}
+{% set auth = pillar.get('auth', {}) %}
+{% set mysql_password = auth.get('mysql', {}).get('root_password', pillar.get('mysql_password', secrets.get('mysql_password', 'ChangeMeRoot!'))) %}
+{% set valkey_secret = auth.get('valkey', {}).get('password', pillar.get('valkey_password', secrets.get('valkey_password', 'ChangeMeValkey!'))) %}
+{% set rabbitmq_secret = auth.get('rabbitmq', {}).get('password', pillar.get('rabbitmq_password', secrets.get('rabbitmq_password', 'ChangeMeRabbit!'))) %}
+{% set webmin_secret = auth.get('webmin', {}).get('password', pillar.get('webmin_password', secrets.get('webmin_password', 'ChangeMeWebmin!'))) %}
+{% set phpmyadmin_secret = auth.get('phpmyadmin', {}).get('password', pillar.get('phpmyadmin_password', secrets.get('phpmyadmin_password', 'ChangeMePhpMyAdmin!'))) %}
 {% set ssl_email = pillar.get('ssl_email', secrets.get('ssl_email', 'ssl@example.com')) %}
 {% set email_accounts = secrets.get('email_accounts', {}) %}
 {% set primary_email = email_accounts.get('primary', {}) %}
@@ -110,6 +111,7 @@ composer:
 # OpenSearch 配置
 opensearch:
   version: '2.19'
+  jvm_heap_gb: 32
 
 # Varnish 配置
 varnish:

@@ -6,7 +6,7 @@
 {% set backup_keep_days = pillar.get('backup_keep_days', 7) %}
 {% set mysql_database = pillar.get('mysql_database', site_name) %}
 {% set mysql_user = pillar.get('mysql_user', 'root') %}
-{% set mysql_password = pillar.get('mysql_password') %}
+{% set mysql_password = salt['pillar.get']('auth:mysql:root_password', pillar.get('mysql_password')) %}
 {% set site_exists = site_path and salt['file.directory_exists'](site_path) %}
 
 {% if not site_name %}

@@ -20,6 +20,32 @@ nginx_repo_prereq:
     - names:
       - ca-certificates
       - curl
+      - gnupg
+
+nginx_keyring_dir:
+  file.directory:
+    - name: /etc/apt/keyrings
+    - mode: 755
+    - user: root
+    - group: root
+    - makedirs: True
+    - require:
+      - pkg: nginx_repo_prereq
+
+nginx_keyring:
+  cmd.run:
+    - name: |
+        set -euo pipefail
+        tmp="$(mktemp)"
+        trap 'rm -f "$tmp"' EXIT
+        curl -fsSL https://nginx.org/keys/nginx_signing.key -o "$tmp"
+        gpg --dearmor --yes --output /etc/apt/keyrings/nginx.gpg "$tmp"
+    - unless: |
+        test -f /etc/apt/keyrings/nginx.gpg \
+        && gpg --show-keys --with-colons /etc/apt/keyrings/nginx.gpg | grep -q '2FD21310B49F6B46'
+    - require:
+      - file: nginx_keyring_dir
+      - pkg: nginx_repo_prereq
 
 nginx_remove_ondrej_repo:
   pkgrepo.absent:
@@ -42,6 +68,7 @@ nginx_repo_mainline:
     - dist: {{ grains['oscodename'] }}
     - refresh: True
     - require:
+      - cmd: nginx_keyring
       - pkg: nginx_repo_prereq
 
 nginx_pkg:

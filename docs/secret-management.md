@@ -7,13 +7,13 @@ SaltGoat 默认把真实密码与访问令牌存放在 `salt/pillar/secret/` 目
 ## 1. Secret 目录结构
 
 ```
-salt/pillar/secret/
-├── README.md           # 本目录说明
-├── .gitkeep            # 保持目录存在
-├── auth.sls.example    # 数据库/服务密码示例
-├── magento_api.sls.example  # Magento API Token / OAuth1 示例
-├── restic.sls.example  # Restic 仓库信息示例
-└── smtp.sls.example    # SMTP/Postfix 凭据示例
+salt/pillar/
+├── auth.sls.sample           # 数据库/服务密码示例（复制到 secret/ 下）
+└── secret/
+    ├── README.md             # 本目录说明
+    ├── magento_api.sls.example  # Magento API Token / OAuth1 示例
+    ├── restic.sls.example    # Restic 仓库信息示例
+    └── smtp.sls.example      # SMTP/Postfix 凭据示例
 
 2025-10：新增 `telegram.sls.example`，用于记录 Telegram Bot Token、群组 chat_id 及话题 `message_thread_id` 映射。
 ```
@@ -27,25 +27,31 @@ salt/pillar/secret/
 1. **复制模板并填写密码**
 
    ```bash
-   cp salt/pillar/secret/auth.sls.example  salt/pillar/secret/auth.sls
+   cp salt/pillar/auth.sls.sample          salt/pillar/secret/auth.sls
    cp salt/pillar/secret/magento_api.sls.example salt/pillar/secret/magento_api.sls
    cp salt/pillar/secret/restic.sls.example salt/pillar/secret/restic.sls
    cp salt/pillar/secret/smtp.sls.example   salt/pillar/secret/smtp.sls
    cp salt/pillar/secret/telegram.sls.example salt/pillar/secret/telegram.sls
    ```
-   > 自 1.8.3 起，`sudo saltgoat install all` 会在检测到缺失时自动生成 `salt/pillar/secret/saltgoat.sls` 等核心文件并写入随机密码；如需集中式或多环境管理，仍可按上述方式复制 `.example` 模板。
+   > 自 1.8.3 起，`sudo saltgoat install all` 会在检测到缺失时自动生成 `salt/pillar/secret/saltgoat.sls`、`salt/pillar/secret/auth.sls` 等核心文件并写入随机密码；如需集中式或多环境管理，仍可按上述方式复制 `.example` 模板。
 
    然后编辑 `.sls` 文件，将占位值（`ChangeMe*`）替换为真实密码。示例：
 
    ```yaml
    # salt/pillar/secret/auth.sls
-   secrets:
-     mysql_password: 'SuperRoot123!'
-     mysql_backup_password: 'BackupOnly123!'
-     valkey_password: 'RedisStrong!'
-     rabbitmq_password: 'Queue123!'
-     webmin_password: 'WebminStrong!'
-     phpmyadmin_password: 'PhpMyAdmin123!'
+   auth:
+     mysql:
+       root_password: 'SuperRoot123!'
+     valkey:
+       password: 'RedisStrong!'
+     rabbitmq:
+       password: 'Queue123!'
+     webmin:
+       password: 'WebminStrong!'
+     phpmyadmin:
+       password: 'PhpMyAdmin123!'
+     opensearch:
+       admin_password: 'OpensearchStrong!'
 
    # salt/pillar/secret/magento_api.sls
    secrets:

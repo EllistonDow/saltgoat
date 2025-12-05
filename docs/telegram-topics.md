@@ -3,7 +3,7 @@
 SaltGoat 目前完全通过 **Pillar** 维护 Telegram Bot 与话题映射，不再生成 `/etc/saltgoat/telegram.json`。所有通知（Restic/XtraBackup、资源告警、Fail2ban、API Watch、`goat_pulse`、`smoke-suite` 等）都会直接读取以下 Pillar：
 
 1. `telegram`：定义 Bot Token、目标 chat_id、可选线程 ID。
-2. `telegram_topics`：为常见事件 tag（例如 `saltgoat/backup/restic/<site>`）指定话题 ID。
+2. `telegram_topics`：为常见事件 tag（例如 `saltgoat/backup/restic/<site>`）指定话题所在群组与标题，SaltGoat 会自动确保话题存在并记录 `message_thread_id`。
 
 ## 1. 配置 Telegram Bot
 
@@ -30,19 +30,26 @@ telegram:
 
 ```yaml
 telegram_topics:
-  saltgoat/backup/restic/ambi: 11111
-  saltgoat/backup/restic/hawk: 11112
-  saltgoat/backup/mysql_dump/ambi: 12221
-  saltgoat/monitor/resources/ns521244: 13331
-  saltgoat/autoscale/ns521244: 13332
-  saltgoat/doctor/ns521244: 14441
+  saltgoat/backup/restic/ambi:
+    chat_id: '-1003210805906'
+    title: '[Restic] ambi'
+    # topic_id: 123456        # 可选：已有话题时可直接写入
+  saltgoat/monitor/resources/ns521244:
+    chat_id: '-1003210805906'
+    title: '[Monitor] ns521244'
+    icon_color: 7322096       # 可选：Telegram 预设颜色（10 进制）
+  saltgoat/doctor/ns521244:
+    chat_id: '-1003210805906'
+    title: '[Doctor] ns521244'
 ```
 
 规则：
 
 - key 为完整 tag 前缀，例如 `saltgoat/backup/restic/<site>`；会匹配子路径（如 `saltgoat/backup/restic/ambi/manual`）。
-- value 为 Telegram `message_thread_id`（数字）。
-- 可使用通配 `saltgoat/doctor` 为所有 doctor 报告提供统一话题。
+- 每个条目需至少提供 `chat_id`（目标群组）与 `title`（期望创建的话题名称）。`topic_id`/`thread_id` 可选，若留空，SaltGoat 会在首次发送通知时自动调用 Telegram `createForumTopic` 创建并缓存该话题。
+- 自动创建后的 ID 会写入 `/var/lib/saltgoat/telegram-topics.json`（若无权限则退回 `~/.saltgoat/telegram-topics.json`），后续所有主机都会复用，不再重复创建。
+- 如已经手动创建话题，可直接在条目中填写 `topic_id` 或 `thread_id`，系统会跳过自动创建。
+- 可使用通配 `saltgoat/doctor` 为所有 doctor 报告提供统一话题；仍需指向能接受消息的 `chat_id`。
 
 ## 3. 刷新 Pillar
 

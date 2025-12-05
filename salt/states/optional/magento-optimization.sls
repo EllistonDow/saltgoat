@@ -10,11 +10,11 @@
 {% set mem_total_mb = salt['grains.get']('mem_total', 0) %}
 {% set mem_total_gb = (mem_total_mb / 1024) | int %}
 
-{% if mem_total_gb >= 256 %}
+{% if mem_total_gb >= 96 %}
   {% set auto_profile = 'enterprise' %}
-{% elif mem_total_gb >= 128 %}
+{% elif mem_total_gb >= 64 %}
   {% set auto_profile = 'high' %}
-{% elif mem_total_gb >= 48 %}
+{% elif mem_total_gb >= 32 %}
   {% set auto_profile = 'medium' %}
 {% elif mem_total_gb >= 16 %}
   {% set auto_profile = 'standard' %}
@@ -46,7 +46,7 @@
       'innodb_thread_concurrency': 8, 'max_connections': 200,
       'tmp_table_size': '32M', 'max_heap_table_size': '32M'
     },
-    'valkey': {'maxmemory': '512mb', 'maxmemory_policy': 'allkeys-lru', 'timeout': 300, 'tcp_keepalive': 60},
+    'valkey': {'maxmemory': '1gb', 'maxmemory_policy': 'allkeys-lru', 'timeout': 300, 'tcp_keepalive': 60},
     'opensearch': {
       'index_buffer_size': '10%', 'queries_cache_size': '5%', 'fielddata_cache_size': '10%',
       'thread_pool_write_queue_size': 500, 'thread_pool_search_queue_size': 500
@@ -69,7 +69,7 @@
       'innodb_thread_concurrency': 12, 'max_connections': 400,
       'tmp_table_size': '64M', 'max_heap_table_size': '64M'
     },
-    'valkey': {'maxmemory': '1gb', 'maxmemory_policy': 'allkeys-lru', 'timeout': 300, 'tcp_keepalive': 60},
+    'valkey': {'maxmemory': '2gb', 'maxmemory_policy': 'allkeys-lru', 'timeout': 300, 'tcp_keepalive': 60},
     'opensearch': {
       'index_buffer_size': '20%', 'queries_cache_size': '10%', 'fielddata_cache_size': '20%',
       'thread_pool_write_queue_size': 1000, 'thread_pool_search_queue_size': 1000
@@ -92,7 +92,7 @@
       'innodb_thread_concurrency': 16, 'max_connections': 500,
       'tmp_table_size': '96M', 'max_heap_table_size': '96M'
     },
-    'valkey': {'maxmemory': '2gb', 'maxmemory_policy': 'allkeys-lru', 'timeout': 300, 'tcp_keepalive': 60},
+    'valkey': {'maxmemory': '4gb', 'maxmemory_policy': 'allkeys-lru', 'timeout': 300, 'tcp_keepalive': 60},
     'opensearch': {
       'index_buffer_size': '25%', 'queries_cache_size': '12%', 'fielddata_cache_size': '25%',
       'thread_pool_write_queue_size': 1500, 'thread_pool_search_queue_size': 1500
@@ -133,7 +133,7 @@
     'php_cli': {},
     'php_pool': {'max_children': 120, 'max_requests': 1000, 'min_spare': 12, 'max_spare': 60},
     'mysql': {
-      'innodb_buffer_pool_size': '64G', 'innodb_buffer_pool_instances': 16,
+      'innodb_buffer_pool_size': '32G', 'innodb_buffer_pool_instances': 16,
       'innodb_log_buffer_size': '128M', 'innodb_flush_log_at_trx_commit': 2,
       'innodb_thread_concurrency': 32, 'max_connections': 800,
       'tmp_table_size': '160M', 'max_heap_table_size': '160M'

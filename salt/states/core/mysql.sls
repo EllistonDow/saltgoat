@@ -2,7 +2,7 @@
 
 
 # 预置变量
-{% set root_pass = pillar.get('mysql_password', 'SaltGoat2024!') %}
+{% set root_pass = salt['pillar.get']('auth:mysql:root_password', pillar.get('mysql_password', 'SaltGoat2024!')) %}
 
 # 清理旧的 Percona 8.0 仓库
 remove_percona_ps80_repo:
@@ -82,7 +82,7 @@ mysql_root_client_config:
 set_mysql_root_password:
   cmd.run:
     - name: |
-        mysql --protocol=socket --socket=/var/run/mysqld/mysqld.sock -uroot <<'SQL'
+        mysql --defaults-extra-file=/root/.my.cnf --protocol=socket --socket=/var/run/mysqld/mysqld.sock <<'SQL'
         ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '{{ root_pass }}';
         FLUSH PRIVILEGES;
         SQL

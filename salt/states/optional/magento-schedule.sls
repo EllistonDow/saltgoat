@@ -311,8 +311,6 @@ saltgoat_daily_summary_job:
     - maxrunning: 1
     - offline: True
 
-{% endif %}
-
 {% else %}
 
 salt_minion_required:

@@ -1,7 +1,8 @@
 telegram_topics:
-  saltgoat/backup/restic:
-    chat_id: 123456789
-    topic_id: 5
-  saltgoat/business/order:
-    chat_id: 123456789
-    topic_id: 2
+  saltgoat/backup/restic/default:
+    chat_id: '-1001234567890'
+    title: '[Restic] default'
+    # topic_id: 12345        # 可选：已存在时填入 message_thread_id
+  saltgoat/business/order/default:
+    chat_id: '-1001234567890'
+    title: '[Order] default'

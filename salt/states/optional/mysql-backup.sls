@@ -45,7 +45,7 @@ mysql_backup_disabled:
 {% set timer_delay = cfg.get('randomized_delay', '15m') %}
 {% set mysql_socket = cfg.get('socket', '/var/run/mysqld/mysqld.sock') %}
 {% set mysql_root_user = cfg.get('connection_user', 'root') %}
-{% set mysql_root_password = cfg.get('connection_password', pillar.get('mysql_password', '')) %}
+{% set mysql_root_password = cfg.get('connection_password', salt['pillar.get']('auth:mysql:root_password', pillar.get('mysql_password', ''))) %}
 {% set metadata_dir = '/etc/mysql/backup.d' %}
 
 {% if not mysql_password %}
@@ -55,7 +55,7 @@ mysql_backup_missing_password:
 {% elif not mysql_root_password %}
 mysql_backup_missing_root_password:
   test.fail_without_changes:
-    - comment: "未提供 mysql_backup:connection_password 或 pillar['mysql_password']，无法连接 MySQL。"
+    - comment: "未提供 mysql_backup:connection_password 或 pillar['auth:mysql:root_password']，无法连接 MySQL。"
 {% else %}
 
 mysql_backup_repo_pkg:

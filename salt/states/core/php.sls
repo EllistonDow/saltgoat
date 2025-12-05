@@ -57,6 +57,23 @@ configure_php:
     - require:
       - pkg: install_php_fpm
 
+# 配置 PHP CLI
+configure_php_cli:
+  file.managed:
+    - name: /etc/php/{{ php_version }}/cli/php.ini
+    - source: salt://core/php.ini
+    - require:
+      - pkg: install_php
+
+# 配置 PHP Apache2 (防止 sessionclean 误读)
+configure_php_apache2:
+  file.managed:
+    - name: /etc/php/{{ php_version }}/apache2/php.ini
+    - source: salt://core/php.ini
+    - onlyif: test -d /etc/php/{{ php_version }}/apache2
+    - require:
+      - pkg: install_php
+
 # 配置 PHP-FPM
 configure_php_fpm:
   file.managed:

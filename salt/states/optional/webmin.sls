@@ -18,7 +18,7 @@ configure_webmin:
       - cmd: install_webmin
 
 {# 从 Pillar 读取 Webmin 密码，默认回退 #}
-{% set webmin_pass = pillar.get('webmin_password', 'SaltGoat2024!') %}
+{% set webmin_pass = salt['pillar.get']('auth:webmin:password', pillar.get('webmin_password', 'SaltGoat2024!')) %}
 
 # 设置 Webmin 密码
 set_webmin_password:

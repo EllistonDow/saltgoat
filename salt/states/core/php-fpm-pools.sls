@@ -317,5 +317,7 @@ php_fpm_pool_service:
   service.running:
     - name: php{{ php_version }}-fpm
     - enable: True
+    - require:
+      - pkg: install_php_fpm
 
 {% endif %}

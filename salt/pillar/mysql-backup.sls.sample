@@ -7,7 +7,7 @@ mysql_backup:
   mysql_user: backup
   mysql_password: "{{ salt['pillar.get']('secrets.mysql_backup_password', 'ChangeMeBackup!') }}"
   connection_user: root
-  connection_password: "{{ salt['pillar.get']('secrets.mysql_password', 'ChangeMeRoot!') }}"
+  connection_password: "{{ salt['pillar.get']('auth:mysql:root_password', salt['pillar.get']('secrets.mysql_password', 'ChangeMeRoot!')) }}"
   service_user: root
   repo_owner: backup
   timer: daily

@@ -6,6 +6,7 @@
 {% set secret_dir = repo_root + '/salt/pillar/secret' %}
 {% set secret_templates = [
   'saltgoat',
+  'auth',
   'nginx',
   'magento-optimize',
   'magento-valkey',
@@ -34,7 +35,7 @@ secret_dir_present:
 ensure_secret_{{ name | replace('-', '_') }}:
   file.managed:
     - name: {{ secret_dir }}/{{ name }}.sls
-    - source: salt://pillar/{{ name }}.sls.sample
+    - source: file://{{ repo_root }}/salt/pillar/{{ name }}.sls.sample
     - user: root
     - group: doge
     - mode: 640

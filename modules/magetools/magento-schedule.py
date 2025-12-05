@@ -26,6 +26,7 @@ BASE_DIR = Path("/var/www")
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 ENV = os.environ.copy()
 ENV.setdefault("PYTHONWARNINGS", "ignore")
+SCHEDULE_FILE = Path("/etc/salt/minion.d/_schedule.conf")
 
 
 def log(level: str, message: str) -> None:
@@ -245,26 +246,45 @@ def parse_schedule_yaml(raw: str) -> Optional[Dict[str, object]]:
         return None
 
 
+def load_schedule_file() -> Dict[str, object]:
+    if yaml is None:
+        return {}
+    if not SCHEDULE_FILE.exists():
+        return {}
+    try:
+        data = yaml.safe_load(SCHEDULE_FILE.read_text())
+    except Exception:
+        return {}
+    if isinstance(data, dict):
+        schedule = data.get("schedule")
+        if isinstance(schedule, dict):
+            return schedule
+    return {}
+
+
 def fetch_schedule_jobs() -> Dict[str, object]:
     _, stdout, _, parsed = run_salt(["schedule.list"], json_out=True)
     local = parsed.get("local") if isinstance(parsed, dict) else None
     if isinstance(local, dict):
         schedule = local.get("schedule")
-        if isinstance(schedule, dict):
+        if isinstance(schedule, dict) and schedule:
             return schedule
     if isinstance(local, str):
         parsed_yaml = parse_schedule_yaml(local)
         if isinstance(parsed_yaml, dict):
             schedule = parsed_yaml.get("schedule")
-            if isinstance(schedule, dict):
+            if isinstance(schedule, dict) and schedule:
                 return schedule
     parsed_yaml = parse_schedule_yaml(stdout)
     if isinstance(parsed_yaml, dict):
         schedule = parsed_yaml.get("local")
         if isinstance(schedule, dict):
             schedule = schedule.get("schedule")
-            if isinstance(schedule, dict):
+            if isinstance(schedule, dict) and schedule:
                 return schedule
+    file_schedule = load_schedule_file()
+    if file_schedule:
+        return file_schedule
     return {}
 
 

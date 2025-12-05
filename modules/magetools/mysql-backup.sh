@@ -383,18 +383,33 @@ EOF
 
     local tmp_output
     tmp_output="$(mktemp "${TMPDIR:-/tmp}/saltgoat-dump.XXXXXX")"
+    local tmp_cnf
+    tmp_cnf="$(mktemp "${TMPDIR:-/tmp}/saltgoat-mysql.cnf.XXXXXX")"
+    {
+        echo "[client]"
+        echo "user=${mysql_user}"
+        echo "password=${mysql_password}"
+        if [[ -n "$mysql_socket" && -S "$mysql_socket" ]]; then
+            echo "socket=${mysql_socket}"
+        else
+            echo "host=${mysql_host}"
+            echo "port=${mysql_port}"
+        fi
+    } >"$tmp_cnf"
+    chmod 600 "$tmp_cnf"
     local dump_rc=0
     if [[ $compress -eq 1 ]]; then
         set +e
-        (set -o pipefail; MYSQL_PWD="$mysql_password" mysqldump --user="$mysql_user" "${connect_args[@]}" "${mysqldump_args[@]}" | gzip -c >"$tmp_output")
+        (set -o pipefail; mysqldump --defaults-extra-file="$tmp_cnf" "${connect_args[@]}" "${mysqldump_args[@]}" | gzip -c >"$tmp_output")
         dump_rc=$?
         set -e
     else
         set +e
-        MYSQL_PWD="$mysql_password" mysqldump --user="$mysql_user" "${connect_args[@]}" "${mysqldump_args[@]}" >"$tmp_output"
+        mysqldump --defaults-extra-file="$tmp_cnf" "${connect_args[@]}" "${mysqldump_args[@]}" >"$tmp_output"
         dump_rc=$?
         set -e
     fi
+    rm -f "$tmp_cnf"
 
     if [[ $dump_rc -ne 0 ]]; then
         rm -f "$tmp_output"

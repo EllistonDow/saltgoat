@@ -14,7 +14,7 @@ SaltGoat 提供 `optional.mysql-backup` 可选模块，基于 [Percona XtraBacku
 
 ## 1. 快速安装与首次备份
 
-1. 确认 Pillar 中存在 `mysql_password`（系统初始即生成）；仓库已附带 `salt/pillar/mysql-backup.sls` 示例，可直接复制该文件并将其中的 `ChangeMeRoot!`/`ChangeMeBackup!` 改成实际密码。
+1. 确认 Pillar 中存在 `auth.mysql.root_password`（`sudo saltgoat install all` 会自动生成）；仓库已附带 `salt/pillar/mysql-backup.sls` 示例，可直接复制该文件并将其中的 `ChangeMeRoot!`/`ChangeMeBackup!` 改成实际密码。
 2. 写入 Pillar 示例（默认路径 `/var/backups/mysql/xtrabackup`，备份账号 `backup`，项目已提供 `salt/pillar/mysql-backup.sls`，记得将其加入 `salt/pillar/top.sls`）：
 
    ```yaml
@@ -42,7 +42,7 @@ SaltGoat 提供 `optional.mysql-backup` 可选模块，基于 [Percona XtraBacku
    >      service_user: doge
    >      mysql_user: backup
    >      mysql_password: "{{ salt['pillar.get']('mysql_backup_password') }}"
-   >      connection_password: "{{ salt['pillar.get']('mysql_password') }}"
+   >      connection_password: "{{ salt['pillar.get']('auth:mysql:root_password', salt['pillar.get']('mysql_password')) }}"
    >    ```
 >    `mysql_backup_password` 建议单独写在 `salt/pillar/secret/mysql-backup.sls` 之类的私有 Pillar 文件，再在 `top.sls` 中按需 include，避免把真实密码提交到仓库。自 1.8.10 起，若 `backup_dir` 位于 `/home/<user>/...` 且 `repo_owner` 未明确指定（或仍是和 `service_user` 相同的默认值），Salt 状态和 CLI 会自动把属主切换为该 `<user>`，并在 `mysqldump` / `xtrabackup` 脚本里对目录与文件执行 `chown`，确保 Dropbox 等目录开箱即用。
 > 2. 执行 `sudo saltgoat pillar refresh` 同步最新 Pillar。
@@ -195,7 +195,7 @@ mysql_backup:
   mysql_user: backup
   mysql_password: "{{ salt['pillar.get']('secrets.mysql_backup_password', 'ChangeMeBackup!') }}"
   connection_user: root
-  connection_password: "{{ salt['pillar.get']('secrets.mysql_password', 'ChangeMeRoot!') }}"
+  connection_password: "{{ salt['pillar.get']('auth:mysql:root_password', salt['pillar.get']('secrets.mysql_password', 'ChangeMeRoot!')) }}"
   service_user: root
   repo_owner: deploy
   timer: daily
@@ -212,7 +212,7 @@ mysql_backup:
 |------|------|
 | `backup_dir` | 备份输出目录（按日期创建子目录） |
 | `mysql_user` / `mysql_password` | 备份专用 MySQL 账号，自动创建 |
-| `connection_*` | 执行 `CREATE USER`/`GRANT` 所用的权限账号，默认读取 `pillar['mysql_password']` |
+| `connection_*` | 执行 `CREATE USER`/`GRANT` 所用的权限账号，默认读取 `pillar['auth']['mysql']['root_password']` |
 | `service_user` | systemd 服务运行用户，默认 root（可改为拥有备份目录权限的账号） |
 | `repo_owner` | 备份完成后给目录做 `chown -R` 的用户，便于 Dropbox/Restic 同步 |
 | `timer` / `randomized_delay` | systemd 定时计划，可填写 `hourly` / `weekly` 或 Cron 表达式 |
@@ -277,7 +277,7 @@ magento_schedule:
 | 问题 | 解决方法 |
 |------|----------|
 | `xtrabackup` 命令不存在 | 确认已安装 `percona-xtrabackup-84`，必要时运行 `apt-cache policy percona-xtrabackup-84` |
-| 备份失败 `access denied` | 检查 `mysql_backup` Pillar 中的 `mysql_password` 是否与 `mysql.user` 中一致；必要时重新生成并 `install` |
+| 备份失败 `access denied` | 检查 `mysql_backup` Pillar 中的 `mysql_password` 是否与 `auth.mysql.root_password` / `mysql.user` 中一致；必要时重新生成并 `install` |
 | systemd 服务一直失败 | 查看 `sudo saltgoat magetools xtrabackup mysql logs`，常见原因是目录权限或 MySQL 账号缺失 |
 | 如何归档/远程存储 | 可将备份输出目录加入 Restic `paths`，或编写脚本上传至 S3/OSS |
 | 如何执行增量备份 | 可在 `extra_args` 中添加 `--incremental-basedir=/path/to/full` + `timer` 定制；目前示例默认为全量 |

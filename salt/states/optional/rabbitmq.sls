@@ -170,7 +170,7 @@ enable_rabbitmq_management:
     - require:
       - cmd: wait_for_rabbitmq
 
-{% set rabbitmq_pass = pillar.get('rabbitmq_password', 'SaltGoat2024!') %}
+{% set rabbitmq_pass = salt['pillar.get']('auth:rabbitmq:password', pillar.get('rabbitmq_password', 'SaltGoat2024!')) %}
 
 create_rabbitmq_admin:
   cmd.run:

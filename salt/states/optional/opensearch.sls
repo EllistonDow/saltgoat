@@ -1,5 +1,13 @@
 {# OpenSearch 固定版本，默认 2.19.4，可通过 pillar saltgoat:versions:opensearch 覆盖 #}
 {% set opensearch_version = salt['pillar.get']('saltgoat:versions:opensearch', '2.19.4') %}
+{% set opensearch_admin_password = salt['pillar.get']('opensearch_admin_password', salt['pillar.get']('opensearch:admin_password', 'ChangeMeOpenSearch!')) %}
+
+set_opensearch_admin_password_env:
+  environ.setenv:
+    - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+    - value: {{ opensearch_admin_password | yaml_dquote }}
+    - require:
+      - cmd: add_opensearch_repository
 
 # 添加 OpenSearch 仓库
 add_opensearch_repository:
@@ -29,6 +37,7 @@ install_opensearch:
     - require:
       - cmd: update_package_list
       - pkg: install_java
+      - environ: set_opensearch_admin_password_env
 
 # 配置 OpenSearch
 configure_opensearch:
@@ -43,6 +52,7 @@ configure_opensearch_jvm:
   file.managed:
     - name: /etc/opensearch/jvm.options
     - source: salt://optional/opensearch-jvm.options
+    - template: jinja
     - require:
       - pkg: install_opensearch
 

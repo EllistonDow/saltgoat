@@ -129,6 +129,24 @@ EOF
     fi
 }
 
+is_stub_certificate() {
+    local cert_path="$1"
+    if [[ ! -f "$cert_path" ]]; then
+        return 1
+    fi
+    if ! command -v openssl >/dev/null 2>&1; then
+        return 1
+    fi
+    local metadata
+    if ! metadata=$(openssl x509 -noout -subject -issuer -in "$cert_path" 2>/dev/null); then
+        return 1
+    fi
+    if grep -qi 'saltgoat\.local' <<<"$metadata"; then
+        return 0
+    fi
+    return 1
+}
+
 ensure_ssl_certificate() {
     local site="$1"
     local override_domain="${2:-}"
@@ -206,10 +224,17 @@ ensure_ssl_certificate() {
         return 0
     fi
 
-    local cert_path="/etc/letsencrypt/live/${primary}/fullchain.pem"
+    local cert_dir="/etc/letsencrypt/live/${primary}"
+    local cert_path="${cert_dir}/fullchain.pem"
+    local key_path="${cert_dir}/privkey.pem"
     if [[ -f "$cert_path" ]]; then
-        log_info "检测到现有证书: ${cert_path}"
-        return 0
+        if is_stub_certificate "$cert_path"; then
+            log_warning "检测到 ${primary} 使用占位自签证书 (${cert_path})，将重新申请 Let's Encrypt。"
+            rm -f "$cert_path" "$key_path" 2>/dev/null || true
+        else
+            log_info "检测到现有证书: ${cert_path}"
+            return 0
+        fi
     fi
 
     log_highlight "未检测到 ${primary} 的证书，尝试自动申请 Let's Encrypt 证书..."

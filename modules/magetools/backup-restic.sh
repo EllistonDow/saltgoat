@@ -30,6 +30,18 @@ SITE_SECRET_TAGS=()
 RESTIC_PILLAR_CACHE=""
 RESTIC_PILLAR_CACHE_STATUS=0
 
+DEFAULT_DROPBOX_ROOT="$(get_local_pillar_value 'saltgoat.dropbox_root' '' 2>/dev/null || true)"
+if [[ -z "$DEFAULT_DROPBOX_ROOT" ]]; then
+    if [[ -n "${SUDO_USER:-}" && -d "/home/${SUDO_USER}/Dropbox" ]]; then
+        DEFAULT_DROPBOX_ROOT="/home/${SUDO_USER}/Dropbox"
+    elif [[ -d "$HOME/Dropbox" ]]; then
+        DEFAULT_DROPBOX_ROOT="$HOME/Dropbox"
+    else
+        DEFAULT_DROPBOX_ROOT=""
+    fi
+fi
+DEFAULT_DROPBOX_ROOT="${DEFAULT_DROPBOX_ROOT%/}"
+
 declare -a RUN_PATHS=()
 declare -A RUN_PATHS_SEEN=()
 declare -a RUN_TAGS=()
@@ -601,8 +613,8 @@ ensure_install_defaults() {
     if [[ -z "$INSTALL_REPO" ]]; then
         if [[ -n "$SITE_SECRET_REPO" ]]; then
             INSTALL_REPO="$SITE_SECRET_REPO"
-        elif [[ -d "$HOME/Dropbox" ]]; then
-            INSTALL_REPO="$HOME/Dropbox/${INSTALL_SITE}/restic-backups"
+        elif [[ -n "$DEFAULT_DROPBOX_ROOT" ]]; then
+            INSTALL_REPO="${DEFAULT_DROPBOX_ROOT}/${INSTALL_SITE}/restic-backups"
         else
             INSTALL_REPO="/var/backups/restic/${INSTALL_SITE}"
         fi

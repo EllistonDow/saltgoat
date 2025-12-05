@@ -21,6 +21,7 @@ except ImportError as exc:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PILLAR_DIR = REPO_ROOT / "salt" / "pillar"
+SECRET_DIR = PILLAR_DIR / "secret"
 UNIT_TEST = os.environ.get("SALTGOAT_UNIT_TEST") == "1"
 
 
@@ -128,15 +129,66 @@ def detect_prometheus_port() -> str:
     return "9090"
 
 
+def deep_merge(base: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+    for key, value in new.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def load_secret_data() -> Dict[str, Any]:
+    data: Dict[str, Any] = {}
+    if not SECRET_DIR.exists():
+        return data
+    for path in sorted(SECRET_DIR.glob("*.sls")):
+        chunk = read_yaml(path)
+        if chunk:
+            deep_merge(data, chunk)
+    return data
+
+
+def secret_lookup(path: str) -> str:
+    if not SECRET_DATA:
+        return ""
+    cursor: Any = SECRET_DATA
+    parts = [part for part in path.replace(":", ".").split(".") if part]
+    for part in parts:
+        if isinstance(cursor, dict) and part in cursor:
+            cursor = cursor[part]
+        else:
+            return ""
+    if isinstance(cursor, (dict, list)):
+        return ""
+    return str(cursor)
+
+
+SECRET_DATA = load_secret_data()
+SECRET_KEY_MAP = {
+    "mysql_password": ["auth.mysql.root_password", "mysql_password", "secrets.mysql_password"],
+    "valkey_password": ["auth.valkey.password", "valkey_password", "secrets.valkey_password"],
+    "rabbitmq_password": ["auth.rabbitmq.password", "rabbitmq_password", "secrets.rabbitmq_password"],
+    "webmin_password": ["auth.webmin.password", "webmin_password", "secrets.webmin_password"],
+    "phpmyadmin_password": ["auth.phpmyadmin.password", "phpmyadmin_password", "secrets.phpmyadmin_password"],
+    "opensearch_admin_password": ["auth.opensearch.admin_password", "opensearch_admin_password"],
+}
+
+
 def build_services() -> List[ServiceEntry]:
     services: List[ServiceEntry] = []
     ip = get_ip()
     host = socket.getfqdn()
 
-    saltgoat_cfg = read_yaml(PILLAR_DIR / "saltgoat.sls")
+    saltgoat_secret = SECRET_DIR / "saltgoat.sls"
+    saltgoat_cfg = read_yaml(saltgoat_secret) or read_yaml(PILLAR_DIR / "saltgoat.sls")
 
     def pillar_value(key: str, default: str = "") -> str:
-        value = saltgoat_cfg.get(key, default)
+        for secret_path in SECRET_KEY_MAP.get(key, [key]):
+            value = secret_lookup(secret_path)
+            if value:
+                return value
+        value = saltgoat_cfg.get(key, default) if isinstance(saltgoat_cfg, dict) else default
         return str(value) if value is not None else default
 
     # MySQL

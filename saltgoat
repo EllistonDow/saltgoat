@@ -460,6 +460,10 @@ pillar_file_path() {
     echo "${SCRIPT_DIR}/salt/pillar/saltgoat.sls"
 }
 
+pillar_secret_file_path() {
+    echo "$(get_secret_pillar_dir)/saltgoat.sls"
+}
+
 pillar_show() {
     local pillar_file
     pillar_file="$(pillar_file_path)"
@@ -498,16 +502,40 @@ pillar_backup() {
 }
 
 pillar_init() {
+    local force=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--force)
+                force=1
+                shift
+                ;;
+            *)
+                log_error "未知参数: $1"
+                log_info "使用: saltgoat pillar init [--force]"
+                return 1
+                ;;
+        esac
+    done
+
     local pillar_file
     pillar_file="$(pillar_file_path)"
+    local secret_file
+    secret_file="$(pillar_secret_file_path)"
 
-    if [[ -f "$pillar_file" ]]; then
+    if sudo test -f "$secret_file" 2>/dev/null && [[ $force -ne 1 ]]; then
+        log_warning "检测到已存在的机密 Pillar: ${secret_file#"${SCRIPT_DIR}/"}，默认跳过重新初始化。"
+        log_info "如需重新生成，请执行: saltgoat pillar init --force"
+        return 0
+    fi
+
+    if [[ -f "$pillar_file" && $force -ne 1 ]]; then
         log_warning "Pillar 文件已存在: $pillar_file"
-        read -r -p "是否覆盖现有文件? (y/N): " reply
-        if [[ ! "$reply" =~ ^[Yy]$ ]]; then
-            log_info "已取消 Pillar 初始化"
-            return 0
-        fi
+        log_info "如需覆盖，请执行: saltgoat pillar init --force"
+        return 0
+    fi
+
+    if [[ $force -eq 1 ]]; then
+        log_warning "已启用 --force，现有 Pillar 将被覆盖。"
     fi
 
     local mysql_pass valkey_pass rabbitmq_pass webmin_pass phpmyadmin_pass
@@ -598,10 +626,10 @@ case "$1" in
                 install_all "${@:3}"
                 ;;
             "core")
-                install_core
+                install_core "${@:3}"
                 ;;
             "optional")
-                install_optional
+                install_optional "${@:3}"
                 ;;
             *)
                 log_error "未知的安装选项: $2"
@@ -617,7 +645,7 @@ case "$1" in
                 pillar_show
                 ;;
             "init")
-                pillar_init
+                pillar_init "${@:3}"
                 ;;
             "refresh")
                 pillar_refresh

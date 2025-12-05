@@ -72,7 +72,7 @@ resource_alert_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.',
         mem_crit = 90.0
 
         def bump(level: str):
-            nonlocal severity
+            global severity
             if severity_rank.get(level, 0) > severity_rank.get(severity, 0):
                 severity = level
 
@@ -83,6 +83,10 @@ resource_alert_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.',
                 return None
 
         load_info = payload.get("load") or payload.get("avg")
+        if not isinstance(load_info, dict):
+            candidate_keys = ("1m", "5m", "15m")
+            if any(key in payload for key in candidate_keys):
+                load_info = {key: payload.get(key) for key in candidate_keys}
         if isinstance(load_info, dict):
             load1 = as_float(load_info.get("1m") or load_info.get("1") or load_info.get("1min"))
             load5 = as_float(load_info.get("5m") or load_info.get("5") or load_info.get("5min"))
@@ -134,6 +138,11 @@ resource_alert_telegram_{{ data.get('_stamp', '')|replace(':', '_')|replace('.',
 
         if not details:
             details.append("Payload: {}".format(json.dumps(payload, ensure_ascii=False)))
+
+        min_notice = severity_rank.get("NOTICE", 1)
+        if severity_rank.get(severity, 0) < min_notice:
+            log("skip", {"reason": "below_notice", "severity": severity, "host": host, "tag": tag})
+            raise SystemExit()
 
         lines = [
             "[SaltGoat] {} resource alert".format(severity),

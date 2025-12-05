@@ -1,9 +1,29 @@
-# SaltGoat Magento 2.4.8 OpenSearch JVM 优化配置
-# Medium 级别 (48GB+): 8GB 堆内存 (64GB 服务器的 12.5%)
+{#- OpenSearch JVM options (dynamic heap sizing).
+    优先遵循 Pillar `opensearch:jvm_heap_gb`（或 `saltgoat:opensearch:jvm_heap_gb`）覆盖，
+    否则按照物理内存的 25% 计算，并限制在 16~32GB 之间，且不超过 50% 实际内存。
+-#}
+{% set heap_override = salt['pillar.get']('opensearch:jvm_heap_gb', salt['pillar.get']('saltgoat:opensearch:jvm_heap_gb', None)) %}
+{% set total_mem_mb = grains.get('mem_total', 65536) or 65536 %}
+{% set total_mem_gb = (total_mem_mb // 1024) or 1 %}
+{% if heap_override %}
+    {% set heap_gb = heap_override | int %}
+{% else %}
+    {% set derived = (total_mem_gb * 25) // 100 %}
+    {% if derived < 1 %}{% set derived = 1 %}{% endif %}
+    {% set heap_gb = derived %}
+    {% if heap_gb < 16 %}{% set heap_gb = 16 %}{% endif %}
+    {% if heap_gb > 32 %}{% set heap_gb = 32 %}{% endif %}
+    {% set half_mem = (total_mem_gb // 2) or 1 %}
+    {% if heap_gb > half_mem %}{% set heap_gb = half_mem %}{% endif %}
+{% endif %}
+{% if heap_gb < 4 %}{% set heap_gb = 4 %}{% endif %}
 
-# JVM 堆内存设置 (Medium 级别: 8GB)
--Xms8g
--Xmx8g
+# SaltGoat OpenSearch JVM 优化配置
+# 自动推导堆大小 = {{ heap_gb }}G（总内存: {{ total_mem_gb }}G{% if heap_override %}, Pillar 覆盖{% else %}, 25% 取值 + 16~32G clamp{% endif %}）
+
+# JVM 堆内存设置
+-Xms{{ heap_gb }}g
+-Xmx{{ heap_gb }}g
 
 # GC 设置
 -XX:+UseG1GC

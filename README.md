@@ -95,7 +95,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    ```
 2. **初始化 Pillar（凭据/变量）**
    ```bash
-   sudo saltgoat pillar init          # 生成 salt/pillar/saltgoat.sls（附带随机密码）
+   sudo saltgoat pillar init          # 首次生成 salt/pillar/saltgoat.sls（附带随机密码，若需重置请加 --force）
    sudo saltgoat pillar show          # 审核并按需修改
    # 参考 *.sample 文件快速复制模板
    cp salt/pillar/magento-optimize.sls.sample salt/pillar/magento-optimize.sls
@@ -104,7 +104,7 @@ SaltGoat 把 Salt 状态、事件驱动自动化与一套 CLI 工具整合在一
    # 秘钥模板位于 salt/pillar/secret/*.sls.example，复制后填入真实密码
    # 其它 Pillar 也提供 *.sample 文件，可按需复制后修改
    ```
-> 💡 **无需担心遗漏**：若跳过此步骤，`sudo saltgoat install all` 会在首次运行时自动生成 `salt/pillar/secret/saltgoat.sls` 并写入随机强密码，同时刷新 Pillar 缓存；`pillar init` 仍可帮助你在安装前审阅和覆盖默认值。
+> 💡 **无需担心遗漏**：若跳过此步骤，`sudo saltgoat install all` 会在首次运行时自动生成 `salt/pillar/secret/saltgoat.sls` 并写入随机强密码，同时刷新 Pillar 缓存；`pillar init` 仅在首次部署时需要，若已生成可通过 `saltgoat pillar init --force` 显式重置。
 > ⚠️ **权限提示**  
    > 除 `help`、`git`、`lint`、`format` 等只读命令外，SaltGoat 会访问 `/etc`、`/var/lib/saltgoat` 以及 Salt Caller 接口。请默认使用 `sudo saltgoat …`，CLI 也会在需要时自动尝试用 sudo 重新执行。
 

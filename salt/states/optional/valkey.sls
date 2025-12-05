@@ -64,7 +64,7 @@ create_valkey_dirs:
       - user: create_valkey_user
 
 {# 从 Pillar 读取 Valkey 密码，默认回退 #}
-{% set valkey_pass = pillar.get('valkey_password', 'SaltGoat2024!') %}
+{% set valkey_pass = salt['pillar.get']('auth:valkey:password', pillar.get('valkey_password', 'SaltGoat2024!')) %}
 
 # 配置 Valkey（可选，使用命令行参数）
 configure_valkey:
@@ -109,8 +109,8 @@ create_valkey_service:
 
         [Service]
         Type=simple
-        ExecStart=/usr/local/bin/valkey-server --port 6379 --requirepass {{ valkey_pass }} --databases 100 --daemonize no --pidfile /var/run/valkey/valkey.pid --logfile /var/log/valkey/valkey.log --dir /var/lib/valkey --maxmemory 256mb --maxmemory-policy allkeys-lru
-        ExecStop=/usr/local/bin/valkey-cli -a {{ valkey_pass }} shutdown
+        ExecStart=/usr/local/bin/valkey-server /etc/valkey/valkey.conf
+        ExecStop=/usr/local/bin/valkey-cli -p 6379 -a {{ valkey_pass }} shutdown
         TimeoutStopSec=0
         User=valkey
         Group=valkey

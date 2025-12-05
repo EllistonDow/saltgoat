@@ -14,7 +14,7 @@
    - 观察 `salt/pillar/monitoring.sls` 与 `/etc/saltgoat/runtime/sites.json` 是否同步。
    - 检查 `salt/pillar/telegram-topics.sls`（或对应 secret）是否同步了新增站点的线程映射，`saltgoat magetools schedule auto` / `monitor auto-sites` 不会再自动生成脚本。
 
-2. 需要手工调整话题时，在 Pillar 中追加或修改对应 `saltgoat/<tag>` → `thread_id`，然后执行 `sudo saltgoat pillar refresh`。
+2. 需要手工调整话题时，在 Pillar 中追加或修改对应 `saltgoat/<tag>` 的 `chat_id`/`title`（必要时也可直接填入 `topic_id`），然后执行 `sudo saltgoat pillar refresh`；若未提供 `topic_id`，SaltGoat 会在首次发消息时自动创建并缓存线程。
 
 ## 2. Salt Schedule 与自愈任务
 
@@ -43,6 +43,7 @@
    - `resource_alert.py` 现在会查询 `http://127.0.0.1:9200/_cluster/stats`，当 JVM heap > 85% 或 < 55% 时动态调节缓存占比，并把结果写入 `/etc/saltgoat/runtime/opensearch-autotune.json`。
    - 每次自动调节都会触发 `state.apply optional.magento-optimization`，从 runtime JSON 合并新的 `indices.memory.index_buffer_size`、`indices.queries.cache.size`、`indices.fielddata.cache.size`，随后由 Salt 负责重启 OpenSearch。
    - 可通过 `sudo cat /etc/saltgoat/runtime/opensearch-autotune.json` 或 Telegram `saltgoat/autoscale/<host>` 话题查看最近动作；命令行输出也会附带 `[AUTOSCALE] Adjusted OpenSearch caches …`。
+   - `/etc/opensearch/jvm.options` 由 `optional.opensearch` 自动渲染：默认读取主机物理内存，按 25% 计算并限制在 16~32GB 且不超过总内存的一半；如需固定值，可在 Pillar 设置 `opensearch:jvm_heap_gb`（或 `saltgoat:opensearch:jvm_heap_gb`）覆盖。
 
 4. Webhook / Mattermost 联动
 
@@ -104,7 +105,7 @@
 
 2. 如果收不到通知，依次排查：
 
-   - Pillar `telegram` / `telegram_topics` 是否包含 profile 与话题 ID（可用 `sudo salt-call --local pillar.get telegram` 与 `pillar.get telegram_topics` 检查）。
+  - Pillar `telegram` / `telegram_topics` 是否包含 profile 与话题定义（可用 `sudo salt-call --local pillar.get telegram` 与 `pillar.get telegram_topics` 检查，未配置 `topic_id` 时 SaltGoat 会自动创建话题）。
    - `salt/pillar/telegram-topics.sls` 是否已 `saltgoat pillar refresh`。
    - `salt/pillar/notifications.sls` 中是否设置了过滤标签/最小 severity。
    - `modules/lib/notification.py` `should_send` 的 DEBUG 日志可在 `alerts.log` 查看（过滤 `filtered`）。

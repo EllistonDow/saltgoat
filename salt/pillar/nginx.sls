@@ -1,12 +1,15 @@
 nginx:
   package: nginx
   service: nginx
-  default_site: true
+  default_site: false
+  client_max_body_size: 64m
+  gzip: true
   sites:
     bdgy:
       enabled: true
       server_name:
-      - www.bdgy.com
+      - bdgyoo.com
+      - www.bdgyoo.com
       listen:
       - port: 80
       - port: 443
@@ -22,12 +25,6 @@ nginx:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
       magento: true
-      csp:
-        enabled: true
-        policy: 'default-src ''self''; script-src ''self'' ''unsafe-inline'' ''unsafe-eval''
-          https:; style-src ''self'' ''unsafe-inline'' https:; img-src ''self'' data:
-          https:; font-src ''self'' data: https:; connect-src ''self'' https:; frame-ancestors
-          ''self'';'
       ssl:
         enabled: true
         cert: /etc/letsencrypt/live/bdgyoo.com/fullchain.pem
@@ -51,7 +48,6 @@ nginx:
       php:
         enabled: true
         fastcgi_pass: unix:/run/php/php8.3-fpm.sock
-        pool: magento-sava
       headers:
         X-Frame-Options: SAMEORIGIN
         X-Content-Type-Options: nosniff
@@ -117,33 +113,6 @@ nginx:
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
-    ambi:
-      enabled: true
-      server_name:
-      - ambitiontattoosupply.com
-      - www.ambitiontattoosupply.com
-      listen:
-      - port: 80
-      - port: 443
-        ssl: true
-      root: /var/www/ambi
-      index:
-      - index.php
-      - index.html
-      php:
-        enabled: true
-        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
-      headers:
-        X-Frame-Options: SAMEORIGIN
-        X-Content-Type-Options: nosniff
-      magento: true
-      ssl:
-        enabled: true
-        cert: /etc/letsencrypt/live/ambitiontattoosupply.com/fullchain.pem
-        key: /etc/letsencrypt/live/ambitiontattoosupply.com/privkey.pem
-        protocols: TLSv1.2 TLSv1.3
-        prefer_server_ciphers: false
-        redirect: true
     hawk:
       enabled: true
       server_name:
@@ -168,6 +137,33 @@ nginx:
         enabled: true
         cert: /etc/letsencrypt/live/hawktattoosupply.com/fullchain.pem
         key: /etc/letsencrypt/live/hawktattoosupply.com/privkey.pem
+        protocols: TLSv1.2 TLSv1.3
+        prefer_server_ciphers: false
+        redirect: true
+    ambi:
+      enabled: true
+      server_name:
+      - ambitiontattoosupply.com
+      - www.ambitiontattoosupply.com
+      listen:
+      - port: 80
+      - port: 443
+        ssl: true
+      root: /var/www/ambi
+      index:
+      - index.php
+      - index.html
+      php:
+        enabled: true
+        fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+      headers:
+        X-Frame-Options: SAMEORIGIN
+        X-Content-Type-Options: nosniff
+      magento: true
+      ssl:
+        enabled: true
+        cert: /etc/letsencrypt/live/ambitiontattoosupply.com/fullchain.pem
+        key: /etc/letsencrypt/live/ambitiontattoosupply.com/privkey.pem
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
@@ -198,13 +194,13 @@ nginx:
         protocols: TLSv1.2 TLSv1.3
         prefer_server_ciphers: false
         redirect: true
-  modsecurity:
-    enabled: true
-    level: 5
-    admin_path: /admin_tattoo
+  ssl_email: ssl@tschenfeng.com
   csp:
     enabled: true
     level: 3
     policy: 'default-src ''self'' http: https: data: blob: ''unsafe-inline''; script-src
       ''self'' ''unsafe-inline'' ''unsafe-eval''; style-src ''self'' ''unsafe-inline'''
-  ssl_email: ssl@tschenfeng.com
+  modsecurity:
+    enabled: true
+    level: 5
+    admin_path: /admin_tattoo

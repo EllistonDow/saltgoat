@@ -119,7 +119,16 @@ get_local_secret_value() {
 import sys, yaml, pathlib
 
 secret_dir = pathlib.Path(sys.argv[1])
-lookup = ['secrets'] + sys.argv[2].split('.')
+raw_key = sys.argv[2]
+
+KEY_MAP = {
+    'mysql_password': 'auth.mysql.root_password',
+    'valkey_password': 'auth.valkey.password',
+    'rabbitmq_password': 'auth.rabbitmq.password',
+    'webmin_password': 'auth.webmin.password',
+    'phpmyadmin_password': 'auth.phpmyadmin.password',
+    'opensearch_admin_password': 'auth.opensearch.admin_password',
+}
 
 def deep_merge(base, new):
     for key, val in new.items():
@@ -138,18 +147,38 @@ for sls_file in sorted(secret_dir.glob('*.sls')):
     if isinstance(chunk, dict):
         deep_merge(data, chunk)
 
-cur = data
-for part in lookup:
-    if isinstance(cur, dict) and part in cur:
-        cur = cur[part]
-    else:
-        cur = ""
+def lookup(path):
+    cur = data
+    for part in [p for p in path.split('.') if p]:
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        else:
+            return ""
+    if isinstance(cur, (dict, list)):
+        return ""
+    return "" if cur is None else str(cur)
+
+candidates = []
+
+def add(path):
+    if path and path not in candidates:
+        candidates.append(path)
+
+mapped = KEY_MAP.get(raw_key)
+if mapped:
+    add(mapped)
+add(raw_key)
+
+for base in list(candidates):
+    add(f"secrets.{base}")
+
+for path in candidates:
+    result = lookup(path)
+    if result:
+        print(result)
         break
-
-if isinstance(cur, (dict, list)):
-    cur = ""
-
-print("" if cur is None else cur)
+else:
+    print("")
 PY
     )
 

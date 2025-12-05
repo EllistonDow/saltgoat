@@ -6,13 +6,13 @@
 {% set php_bin = pillar.get('php_bin', 'php') %}
 {% set composer_bin = pillar.get('composer_bin', 'composer') %}
 {% set valkey_cli = pillar.get('valkey_cli', pillar.get('redis_cli', 'valkey-cli')) %}
-{% set valkey_password = pillar.get('valkey_password', pillar.get('redis_password')) %}
+{% set valkey_password = salt['pillar.get']('auth:valkey:password', pillar.get('valkey_password', pillar.get('redis_password'))) %}
 {% set allow_valkey_flush = pillar.get('allow_valkey_flush', pillar.get('allow_redis_flush', False)) %}
 {% set backup_dir = pillar.get('backup_target_dir') %}
 {% set backup_keep_days = pillar.get('backup_keep_days', 7) %}
 {% set mysql_database = pillar.get('mysql_database', site_name) %}
 {% set mysql_user = pillar.get('mysql_user', 'root') %}
-{% set mysql_password = pillar.get('mysql_password') %}
+{% set mysql_password = salt['pillar.get']('auth:mysql:root_password', pillar.get('mysql_password')) %}
 {% set trigger_restic = pillar.get('trigger_restic', False) %}
 {% set restic_site_override = pillar.get('restic_site_override') %}
 {% set restic_repo_override = pillar.get('restic_repo_override') %}

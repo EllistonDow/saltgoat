@@ -13,6 +13,33 @@
   {%- endif %}
   {%- do normalized.update({name: entries}) %}
 {%- endfor %}
+{%- set primary_profile = salt['pillar.get']('telegram:profiles:primary', {}) %}
+{%- set default_token = primary_profile.get('token', '') %}
+{%- set default_targets = primary_profile.get('chat_ids') or primary_profile.get('targets') or [] %}
+{%- if default_targets and default_targets[0] is mapping %}
+  {%- set default_chat_id = default_targets[0].get('chat_id') %}
+{%- else %}
+  {%- set default_chat_id = default_targets[0] if default_targets else '' %}
+{%- endif %}
+{%- set allowed_chats = salt['pillar.get']('saltgoat:chatops:allowed_chats', []) %}
+{%- if normalized.get('telegram_bot_msg') %}
+  {%- for entry in normalized['telegram_bot_msg'] %}
+    {%- if entry is mapping %}
+      {%- if not entry.get('token') and default_token %}
+        {%- do entry.update({'token': default_token}) %}
+      {%- endif %}
+      {%- if not entry.get('chat_id') and default_chat_id %}
+        {%- do entry.update({'chat_id': default_chat_id}) %}
+      {%- endif %}
+      {%- if not entry.get('accept_from') %}
+        {%- set fallback_accept = allowed_chats if allowed_chats else ([default_chat_id] if default_chat_id else []) %}
+        {%- if fallback_accept %}
+          {%- do entry.update({'accept_from': fallback_accept}) %}
+        {%- endif %}
+      {%- endif %}
+    {%- endif %}
+  {%- endfor %}
+{%- endif %}
 beacons:
 {{ salt['slsutil.serialize']('yaml', normalized, default_flow_style=False) | indent(2, True) }}
 {%- set blacklist = salt['pillar.get']('saltgoat:beacons_blacklist', []) %}

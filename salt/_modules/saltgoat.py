@@ -327,7 +327,7 @@ def magento_schedule_install(site: str = "tank") -> Dict[str, Any]:
     ret["changes"] = state_result
 
     schedule_entries = _schedule_entries()
-    if not (isinstance(schedule_entries, dict) and schedule_entries):
+    if not isinstance(schedule_entries, dict):
         ret["result"] = False
         ret["comment"] = "Salt Schedule not available; please ensure salt-minion is installed and running."
         return ret

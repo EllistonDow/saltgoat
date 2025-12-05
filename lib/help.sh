@@ -669,7 +669,7 @@ show_xtrabackup_help() {
 
     help_subtitle "前置要求"
     help_command "Pillar mysql_backup.*"       "需在 Pillar 中定义账号、目录、定时策略（示例见 docs/mysql-backup.md）"
-    help_command "mysql_password"              "root 凭据默认读取 pillar['mysql_password']"
+    help_command "mysql_password"              "root 凭据默认读取 auth.mysql.root_password（兼容 legacy pillar['mysql_password']）"
     help_command "systemd"                     "安装流程会创建 saltgoat-mysql-backup.{service,timer}"
     help_note "首次执行 install 会自动启用 percona-release pxb-84-lts 仓库，并卸载旧版 PXB 套件。"
     echo ""

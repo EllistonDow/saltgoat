@@ -21,7 +21,7 @@ SaltGoat 使用 [Restic](https://restic.net/) 构建文件级快照，支持本�
 1. 复制并填写密钥模板（不会加入版本控制）：
    ```bash
    cp salt/pillar/secret/restic.sls.example salt/pillar/secret/restic.sls   # 可选：集中管理共享仓库
-   cp salt/pillar/secret/auth.sls.example   salt/pillar/secret/auth.sls     # 其它密钥同理
+   cp salt/pillar/auth.sls.sample           salt/pillar/secret/auth.sls     # 其它密钥同理
    ```
    - 若只使用 CLI 自动生成密码，可跳过 `restic.sls`，脚本会写入 `salt/pillar/secret/auto.sls`。
    - 建议在填写后执行一次 `sudo saltgoat pillar refresh` 验证语法。
