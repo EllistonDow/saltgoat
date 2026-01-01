@@ -28,8 +28,8 @@
     {% set ns.running = running_value %}
   {% endif %}
   {% if not ns.running %}
-    {% set event_b64 = salt['hashutil.base64_encode'](data|json) %}
-    {% set allowed_b64 = salt['hashutil.base64_encode'](allowed_services|json) %}
+    {% set event_b64 = salt['hashutil.base64_b64encode'](data|json) %}
+    {% set allowed_b64 = salt['hashutil.base64_b64encode'](allowed_services|json) %}
 service_autoheal_handler_{{ ns.service_name | replace('-', '_') }}:
   local.cmd.run:
     - tgt: {{ event_minion }}
